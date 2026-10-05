@@ -346,20 +346,56 @@ PastelTerm.history = (() => {
     });
   }
 
+  // One turn: what she asked, then Claude's reply rendered like the reader.
+  function turnCard(turn) {
+    const card = el('article', 'history-turn');
+    card.dataset.turn = String(turn.index);
+    card.append(el('p', 'history-you-label', 'You'), el('div', 'history-you', turn.prompt));
+    if (turn.reply) {
+      const reply = el('div', 'history-reply');
+      reply.append(PastelTerm.markdown.render(turn.reply));
+      card.append(reply);
+    }
+    return card;
+  }
+
+  // The whole conversation in order, newest at the bottom; "Show earlier" pages back through older turns.
   async function renderRepliesBody(session, body) {
-    const result = await window.pastel.history.preview(session.sessionId);
-    if (result.error) return showError(body, result.error);
-    if (!result.replies.length) {
-      body.append(el('p', 'status', result.wholeFile ? 'No text replies in this session.' : 'No text replies in the last 4 MB of this session.'));
+    const first = await window.pastel.history.conversation(session.sessionId);
+    if (first.error) return showError(body, first.error);
+    if (!first.turns.length) {
+      body.append(el('p', 'status', 'No messages in this session yet.'));
       return;
     }
-    for (const reply of result.replies) {
-      const card = el('article', 'history-reply');
-      card.dataset.replyId = reply.id;
-      card.append(PastelTerm.markdown.render(reply.markdown));
-      body.append(card);
-      PastelTerm.diagrams.render(card);
-    }
+    const thread = el('div', 'history-thread');
+    const earlier = el('button', 'flow-button history-earlier', '');
+    earlier.type = 'button';
+    let start = first.start;
+    const updateEarlier = () => {
+      earlier.hidden = start === 0;
+      earlier.textContent = `Show earlier · ${start} more`;
+    };
+    const append = (turns, where) => {
+      const cards = turns.map(turnCard);
+      if (where === 'top') thread.prepend(...cards);
+      else thread.append(...cards);
+      cards.forEach((card) => PastelTerm.diagrams.render(card));
+    };
+    earlier.addEventListener('click', async () => {
+      const scroller = body.closest('.history-preview') ?? body;
+      const fromBottom = scroller.scrollHeight - scroller.scrollTop;
+      const page = await window.pastel.history.conversation(session.sessionId, start);
+      if (page.error) return;
+      start = page.start;
+      append(page.turns, 'top');
+      updateEarlier();
+      scroller.scrollTop = scroller.scrollHeight - fromBottom; // keep her place
+    });
+    append(first.turns, 'bottom');
+    updateEarlier();
+    body.append(earlier, thread);
+    const scroller = body.closest('.history-preview') ?? body;
+    requestAnimationFrame(() => { scroller.scrollTop = scroller.scrollHeight; }); // open at the newest turn
   }
 
   async function doResume(sessionId, note, confirmFork) {

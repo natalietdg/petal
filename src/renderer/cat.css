@@ -1,7 +1,7 @@
 #cat {
   position: absolute;
   right: 28px;
-  bottom: 14px;
+  bottom: calc(var(--composer-height, 0px) + 14px); /* sits above the reply box */
   width: 144px; /* 48x48 sprite pixels at 3px: the cat, her toy and the biggest scene around them */
   height: 144px;
   transform-origin: bottom right;

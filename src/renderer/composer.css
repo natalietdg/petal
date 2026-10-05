@@ -1,0 +1,38 @@
+/* Reply box: same typeface as the reader, so writing feels like part of the page. */
+#composer {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 28px 14px;
+  border-top: 1px solid var(--rule);
+  background: var(--reader-bg);
+}
+#composer-input {
+  flex: 1;
+  resize: none;
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 17px/1.5 var(--body-font, Georgia, serif);
+  outline: none;
+}
+#composer-input:focus { border-color: var(--link); }
+#composer-input::placeholder { color: var(--muted); }
+#composer-send {
+  flex: none;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--link);
+  color: var(--reader-bg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+#composer-send:hover { filter: brightness(1.08); }
+/* History and Workflow cover the reader; the reply box goes with it. */
+#reader-area:has(#history:not([hidden]), #workflow:not([hidden])) #composer { display: none; }

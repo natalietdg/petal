@@ -14,10 +14,13 @@ html, body {
 #reader-area {
   position: relative;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 #reader {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background: var(--reader-bg);
 }

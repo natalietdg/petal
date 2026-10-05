@@ -321,3 +321,17 @@ async function tabsCheck(kit, { win, feed, sessions, activeSession, openTab }) {
 }
 
 module.exports.tabsCheck = tabsCheck;
+
+// Reply box: Enter pastes into the active tab's pty; here the shell runs it, so its output proves delivery.
+async function composerCheck(kit, { win, activeSession }) {
+  const { js, waitFor, log } = kit;
+  const session = activeSession(win.webContents.id);
+  let output = '';
+  const listener = session.pty.onData((data) => { output += data; });
+  await js(`(() => { const box = document.getElementById('composer-input'); box.value = 'echo composer-ok-' + (6 * 7); box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
+  const delivered = await waitFor(() => (/composer-ok-42/.test(output) ? true : null), 8000);
+  const cleared = await js("document.getElementById('composer-input').value === ''");
+  listener.dispose?.();
+  log(`${delivered && cleared ? 'ok' : 'FAIL'} reply box sends to the active tab: delivered=${Boolean(delivered)} cleared=${cleared}`);
+}
+module.exports.composerCheck = composerCheck;

@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('pastel', {
   history: {
     list: () => ipcRenderer.invoke('history:list'),
     preview: (sessionId) => ipcRenderer.invoke('history:preview', { sessionId }),
+    conversation: (sessionId, before) => ipcRenderer.invoke('history:conversation', { sessionId, before }),
     resume: (sessionId, confirmFork = false) => ipcRenderer.invoke('history:resume', { sessionId, confirmFork }),
     send: (sessionId) => ipcRenderer.invoke('history:send', { sessionId }),
     tidy: () => ipcRenderer.invoke('history:tidy'),

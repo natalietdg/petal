@@ -109,6 +109,7 @@ PastelTerm.tabs = (() => {
   return {
     init, create, activate, cycle, requestClose, remove, setUpdate, applyTheme,
     active: () => tabs.get(activeId) ?? null,
+    activeId: () => activeId,
     get: (id) => tabs.get(id) ?? null,
     ids: () => [...tabs.keys()],
   };

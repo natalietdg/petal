@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="scenes/night-beach.css">
   <link rel="stylesheet" href="flow.css">
   <link rel="stylesheet" href="history.css">
+  <link rel="stylesheet" href="composer.css">
   <link rel="stylesheet" href="workflow.css">
 </head>
 <body>
@@ -59,6 +60,10 @@
           <section id="decisions-view" class="prose" hidden></section>
         </div>
       </main>
+      <form id="composer" autocomplete="off">
+        <textarea id="composer-input" rows="1" placeholder="Reply to Claude…" aria-label="Reply to Claude"></textarea>
+        <button id="composer-send" type="submit" aria-label="Send">Send</button>
+      </form>
     </div>
     <div id="divider" role="separator" aria-orientation="horizontal"></div>
     <section id="terminal-pane">
@@ -89,6 +94,7 @@
   <script src="cat.js"></script>
   <script src="flow.js"></script>
   <script src="history.js"></script>
+  <script src="composer.js"></script>
   <script src="workflow.js"></script>
   <script src="app.js"></script>
 </body>

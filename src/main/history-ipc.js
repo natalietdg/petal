@@ -6,7 +6,7 @@ const { BrowserWindow, clipboard, dialog, ipcMain } = require('electron');
 const history = require('./history');
 const flowStore = require('./flow-store');
 const organizer = require('./session-organizer');
-const { writeHandoff } = require('./handoff');
+const { writeHandoff, readTurns } = require('./handoff');
 const links = require('./links-store');
 const tagsStore = require('./tags-store');
 
@@ -74,6 +74,30 @@ function registerHistoryIpc({ sessions, activeSession, openTab, currentTheme }) 
   guarded('history:tag-rename', (_event, { from, to }) => { tagsStore.renameTag(from, to); return { ok: true }; });
 
   guarded('history:preview', (_event, { sessionId }) => history.preview(sessionId));
+
+  // The whole conversation, a page at a time from the end: her prompts and Claude's replies, no tool noise.
+  const TURNS_PER_PAGE = 30;
+  const turnCache = new Map(); // file -> { mtimeMs, turns }, so "Show earlier" doesn't re-read the transcript
+  async function turnsFor(file) {
+    const { mtimeMs } = fs.statSync(file);
+    const cached = turnCache.get(file);
+    if (cached?.mtimeMs === mtimeMs) return cached.turns;
+    const turns = await readTurns(file);
+    turnCache.set(file, { mtimeMs, turns });
+    return turns;
+  }
+  guarded('history:conversation', async (_event, { sessionId, before }) => {
+    const record = history.findRecord(sessionId);
+    if (!record) return { missing: true, turns: [], start: 0, total: 0 };
+    const turns = await turnsFor(record.file);
+    const end = Math.min(before ?? turns.length, turns.length);
+    const start = Math.max(0, end - TURNS_PER_PAGE);
+    return {
+      turns: turns.slice(start, end).map((turn, i) => ({ index: start + i, prompt: turn.prompt, reply: turn.reply.join('\n\n') })),
+      start,
+      total: turns.length,
+    };
+  });
 
   // Another session reads this one: write a clean copy, then type a "read this" line for her to finish.
   guarded('history:send', async (event, { sessionId }) => {
