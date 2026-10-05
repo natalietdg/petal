@@ -1,0 +1,70 @@
+/* Wizard's Room: a calm dark olive wall so brass, red, teal, green glass and wood objects pop. */
+.sc-h-out { fill: #24150E; } .sc-h-void { fill: #1A100B; }
+.sc-h-wall { fill: #42402A; } .sc-h-wall-d { fill: #383622; }
+.sc-h-floor { fill: #5A3519; } .sc-h-floor-d { fill: #3F2412; }
+.sc-h-wood-l { fill: #A26A34; } .sc-h-wood { fill: #774624; } .sc-h-wood-d { fill: #4E2C16; }
+.sc-h-brass-l { fill: #EDC860; } .sc-h-brass { fill: #C79532; } .sc-h-brass-d { fill: #8A6020; } .sc-h-shine { fill: #FFF3B8; }
+.sc-h-red-l { fill: #DE5E3C; } .sc-h-red { fill: #B0322A; } .sc-h-red-d { fill: #78201C; }
+.sc-h-teal-l { fill: #6CCFB8; } .sc-h-teal { fill: #2F8C84; } .sc-h-teal-d { fill: #1D5753; }
+.sc-h-lan-l { fill: #E2F78A; } .sc-h-lan { fill: #8CC94E; } .sc-h-lan-d { fill: #4A7A2E; }
+.sc-h-paper { fill: #F0DDB0; } .sc-h-paper-d { fill: #C6A878; }
+.sc-h-sun { fill: #E8902E; }
+.sc-h-plum-l { fill: #9A5A82; } .sc-h-plum { fill: #6B3A5C; }
+.sc-h-navy-l { fill: #4E6A92; } .sc-h-navy { fill: #2F4060; }
+/* Outlines: a dark tone of each object's own material, so neighbours never blend. */
+.sc-h-o-brass { fill: #3E2608; } .sc-h-o-red { fill: #3A0C0C; } .sc-h-o-wood { fill: #26130A; }
+.sc-h-o-green { fill: #16290C; } .sc-h-o-paper { fill: #3A2A16; }
+.sc-h-stone-l { fill: #9C8F7C; } .sc-h-stone { fill: #786C5C; } .sc-h-stone-d { fill: #4F463B; } .sc-h-soot { fill: #1E0E08; }
+
+/* Moving cells: talisman strands (string, beads, charms), candle flames, glints, lantern glow. */
+:is(.sc-h-s1-s, .sc-h-s2-s, .sc-h-s3-s, .sc-h-s4-s, .sc-h-s5-s) { fill: #C6A878; }
+:is(.sc-h-s1-o, .sc-h-s2-o, .sc-h-s3-o, .sc-h-s4-o, .sc-h-s5-o) { fill: #1E110A; }
+.sc-h-s2-t { fill: #5CC2B0; } .sc-h-s2-T { fill: #23716A; }
+:is(.sc-h-s1-r, .sc-h-s2-r, .sc-h-s3-r, .sc-h-s5-r) { fill: #C73A2E; } .sc-h-s3-R { fill: #78201C; }
+:is(.sc-h-s1-b, .sc-h-s2-b, .sc-h-s3-b, .sc-h-s4-b) { fill: #C79532; }
+:is(.sc-h-s3-y, .sc-h-s4-y) { fill: #EDC860; } .sc-h-s4-B { fill: #8A6020; }
+:is(.sc-h-s1-c, .sc-h-s5-c) { fill: #F0DDB0; }
+.sc-h-fa { fill: #FFC94A; } .sc-h-fb { fill: #FFF2B0; }
+.scene-howl .sc-h-fb { opacity: 0; }
+.sc-h-glint, .sc-h-glint2 { fill: #FFFFFF; opacity: 0; }
+.sc-h-glow { fill: #C8F07A; opacity: 0.13; }
+
+/* While Claude works: strands sway, candles flicker, gems glint and the lantern breathes. */
+#cat.busy .scene-howl [class^="sc-h-s1-"] { animation: h-sway 2.4s steps(1) infinite; }
+#cat.busy .scene-howl [class^="sc-h-s2-"] { animation: h-sway 2.4s steps(1) -0.8s infinite; }
+#cat.busy .scene-howl [class^="sc-h-s3-"] { animation: h-sway 2.4s steps(1) -1.6s infinite; }
+#cat.busy .scene-howl [class^="sc-h-s4-"] { animation: h-sway 2.4s steps(1) -0.4s infinite; }
+#cat.busy .scene-howl [class^="sc-h-s5-"] { animation: h-sway 2.4s steps(1) -1.2s infinite; }
+@keyframes h-sway {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(1px); }
+  50% { transform: translateX(0); }
+  75% { transform: translateX(-1px); }
+}
+#cat.busy .scene-howl .sc-h-fa { animation: h-flame-a 0.6s steps(1) infinite; }
+#cat.busy .scene-howl .sc-h-fb { animation: h-flame-b 0.6s steps(1) infinite; }
+@keyframes h-flame-a { 50% { fill: #FFE07A; } }
+@keyframes h-flame-b { 50% { opacity: 1; } }
+#cat.busy .scene-howl .sc-h-glint { animation: h-glint 2s steps(1) infinite; }
+#cat.busy .scene-howl .sc-h-glint2 { animation: h-glint 2s steps(1) -1s infinite; }
+@keyframes h-glint { 80% { opacity: 0.9; } 90% { opacity: 0; } }
+#cat.busy .scene-howl .sc-h-glow { animation: h-glow 1.8s steps(3) infinite; }
+@keyframes h-glow { 50% { opacity: 0.24; } }
+
+/* The fire spirit: always alive, busy or not. Three flame frames at 0.3s each, a blink every 4s. */
+:is(.sc-h-sp1-F, .sc-h-sp2-F, .sc-h-sp3-F) { fill: #D9481E; }
+:is(.sc-h-sp1-f, .sc-h-sp2-f, .sc-h-sp3-f), .sc-h-sp-lid { fill: #F68E26; }
+:is(.sc-h-sp1-e, .sc-h-sp2-e, .sc-h-sp3-e) { fill: #FFD04A; }
+:is(.sc-h-sp1-h, .sc-h-sp2-h, .sc-h-sp3-h) { fill: #FFF6D6; }
+.sc-h-sp-eye { fill: #FFFFFF; }
+.sc-h-sp-lidline { fill: #24150E; }
+.scene-howl :is([class^="sc-h-sp2-"], [class^="sc-h-sp3-"], .sc-h-sp-lid, .sc-h-sp-lidline) { opacity: 0; }
+.scene-howl [class^="sc-h-sp1-"] { animation: h-spirit-frame 0.9s steps(1) infinite; }
+.scene-howl [class^="sc-h-sp2-"] { animation: h-spirit-frame 0.9s steps(1) -0.6s infinite; }
+.scene-howl [class^="sc-h-sp3-"] { animation: h-spirit-frame 0.9s steps(1) -0.3s infinite; }
+@keyframes h-spirit-frame { 0% { opacity: 1; } 33.333% { opacity: 0; } }
+.scene-howl :is(.sc-h-sp-lid, .sc-h-sp-lidline) { animation: h-spirit-blink 4s steps(1) infinite; }
+@keyframes h-spirit-blink { 0% { opacity: 0; } 92.5% { opacity: 1; } 96.25% { opacity: 0; } }
+.sc-h-fireglow { fill: #FF9A3C; opacity: 0.12; }
+.scene-howl .sc-h-fireglow { animation: h-fireglow 2.4s steps(3) infinite; }
+@keyframes h-fireglow { 50% { opacity: 0.24; } }

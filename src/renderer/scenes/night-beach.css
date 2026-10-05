@@ -1,0 +1,144 @@
+/* Night Window and Beach scene colours and motion. Colours are fixed: they are places, not theme chrome. */
+
+/* Night: city rooftops, warm windows, the milky way, fairy lights, candle and sprout. */
+.sc-nb-city-far { fill: #172452; }
+.sc-nb-city-near { fill: #090E26; }
+.sc-nb-window-lit { fill: #FFC86A; }
+.sc-nb-window-dim { fill: #7D6E58; }
+.sc-nb-milky { fill: #1B2A62; }
+.sc-nb-star { fill: #FFFFFF; }
+.sc-nb-beacon { fill: #FF5A5A; }
+.sc-nb-shoot { fill: #FFFFFF; }
+.sc-nb-trail { fill: #BFD3FF; }
+.sc-nb-trail-faint { fill: #5D72B8; }
+.sc-nb-wire { fill: #4A3A4E; }
+.sc-nb-bulb-gold { fill: #FFD36E; }
+.sc-nb-bulb-rose { fill: #FF9EC4; }
+.sc-nb-bulb-mint { fill: #9FE8C9; }
+.sc-nb-bulb-sky { fill: #A8CCFF; }
+.sc-nb-wax { fill: #F6EBD9; }
+.sc-nb-wax-shade { fill: #D8C3A2; }
+.sc-nb-wick { fill: #3A2A22; }
+.sc-nb-flame { fill: #FFA63D; }
+.sc-nb-flame-tip { fill: #FFF1B0; }
+.sc-nb-pot-rim { fill: #E8A07E; }
+
+/* Beach: sea bands from horizon to shore, foam, wet sand, island, windsurfer, crab shading. */
+.sc-nb-horizon { fill: #2F78A6; }
+.sc-nb-deep { fill: #4E9CC8; }
+.sc-nb-shallow { fill: #C4EAF1; }
+.sc-nb-foam { fill: #FFFFFF; }
+.sc-nb-wet { fill: #DCBC84; }
+.sc-nb-shell { fill: #F4A9B8; }
+.sc-nb-isle { fill: #7FB0A0; }
+.sc-nb-glint { fill: #FFFFFF; }
+.sc-nb-mast { fill: #5A4636; }
+.sc-nb-sail { fill: #FF6F61; }
+.sc-nb-sail-band { fill: #FFD45C; }
+.sc-nb-skin { fill: #F2C29B; }
+.sc-nb-suit { fill: #2B3F73; }
+.sc-nb-board { fill: #FFF6E0; }
+.sc-nb-crab-lit { fill: #FF8A78; }
+.sc-nb-crab-dark { fill: #B23A33; }
+.sc-nb-crab-eye { fill: #FFFFFF; }
+.sc-nb-crab-cheek { fill: #FFB3C1; }
+
+/* Busy-only motion. Moves step in whole sprite pixels so edges stay crisp. */
+#cat.busy .scene-night .scene-moving .sc-nb-bulb-gold { animation: nb-blink 1.6s steps(1) infinite; }
+#cat.busy .scene-night .scene-moving .sc-nb-bulb-rose { animation: nb-blink 1.6s steps(1) infinite 0.4s; }
+#cat.busy .scene-night .scene-moving .sc-nb-bulb-mint { animation: nb-blink 1.6s steps(1) infinite 0.8s; }
+#cat.busy .scene-night .scene-moving .sc-nb-bulb-sky { animation: nb-blink 1.6s steps(1) infinite 1.2s; }
+#cat.busy .scene-night .scene-moving .sc-nb-beacon { animation: nb-blink 2s steps(1) infinite; }
+#cat.busy .scene-night .scene-moving :is(.sc-nb-flame, .sc-nb-flame-tip) { animation: nb-flicker 0.9s steps(1) infinite; }
+#cat.busy .scene-night .scene-moving :is(.sc-nb-shoot, .sc-nb-trail, .sc-nb-trail-faint) { animation: nb-shooting-star 6s steps(1) infinite; }
+@keyframes nb-blink { 50% { opacity: 0.35; } }
+@keyframes nb-flicker { 30% { transform: translateX(1px); } 60% { opacity: 0.7; } }
+/* Visible at the start of each loop, streaks down-left, then gone until the next pass. */
+@keyframes nb-shooting-star {
+  0% { opacity: 1; transform: none; }
+  4% { transform: translate(-1px, 1px); }
+  8% { transform: translate(-2px, 2px); opacity: 0.6; }
+  12%, 100% { opacity: 0; transform: translate(-3px, 3px); }
+}
+
+#cat.busy .scene-beach .scene-moving .sc-nb-glint { animation: nb-blink 1.4s steps(1) infinite; }
+#cat.busy .scene-beach .scene-moving .sc-nb-glint:nth-child(even) { animation-delay: 0.7s; }
+#cat.busy .scene-beach .scene-moving :is(.sc-nb-mast, .sc-nb-sail, .sc-nb-sail-band, .sc-nb-skin, .sc-nb-suit, .sc-nb-board, .sc-ol-surf) {
+  animation: nb-windsurf 8s steps(1) infinite;
+}
+/* Glides out to the right and back, bobbing a pixel on the swell. */
+@keyframes nb-windsurf {
+  0%, 100% { transform: none; }
+  12% { transform: translate(1px, 1px); }
+  25% { transform: translateX(2px); }
+  37% { transform: translate(3px, 1px); }
+  50% { transform: translateX(4px); }
+  62% { transform: translate(3px, 1px); }
+  75% { transform: translateX(2px); }
+  87% { transform: translate(1px, 1px); }
+}
+
+.sc-nb-milky-edge { fill: #141F49; }
+.sc-nb-cloud { fill: #FFFFFF; }
+.sc-nb-cloud-shade { fill: #CFE5F0; }
+.sc-nb-gull { fill: #5B6B7A; }
+
+/* Outline pass: 1px edges in a darkened tone of each object's own material. */
+/* Sakura picnic. */
+.sc-ol-rose { fill: #C9668A; }
+.sc-ol-check { fill: #F2A7B8; }
+.sc-ol-check-d { fill: #E07A92; }
+.sc-ol-cream { fill: #FFF6EE; }
+.sc-ol-check-edge { fill: #A8475F; }
+.sc-ol-wicker { fill: #D2A262; }
+.sc-ol-wicker-l { fill: #E8C48A; }
+.sc-ol-wicker-d { fill: #A87A40; }
+.sc-ol-wicker-edge { fill: #6B4624; }
+.sc-ol-torii { fill: #EE9A86; }
+.sc-ol-torii-d { fill: #D97C68; }
+.sc-ol-torii-edge { fill: #B5604F; }
+.sc-ol-hill-far { fill: #DCEBC6; }
+.sc-ol-ridge-far { fill: #BDD6A0; }
+.sc-ol-hill { fill: #C6DEA6; }
+.sc-ol-ridge { fill: #9EC07E; }
+.sc-ol-fly { fill: #FFD86E; }
+.sc-ol-fly-d { fill: #6B4A2E; }
+/* Seaside. */
+.sc-ol-sun { fill: #E8861A; }
+.sc-ol-cloud { fill: #A9C8DA; }
+.sc-ol-isle { fill: #4F8373; }
+.sc-ol-crab { fill: #6E1F1A; }
+.sc-ol-surf { fill: #3A2C3A; }
+/* Starlit window room. */
+.sc-ol-wood { fill: #6E4E33; }
+.sc-ol-curtain { fill: #9E5C76; }
+.sc-ol-const { fill: #2B3D7C; }
+.sc-ol-pot { fill: #7A3A22; }
+.sc-ol-leaf { fill: #2E5A28; }
+.sc-ol-wax { fill: #9C8466; }
+.sc-ol-book-rose { fill: #E07C8E; }
+.sc-ol-book-blue { fill: #5B7BC8; }
+.sc-ol-book-edge { fill: #3A2A44; }
+.sc-ol-mug { fill: #F4EEE6; }
+.sc-ol-mug-l { fill: #FFFFFF; }
+.sc-ol-mug-d { fill: #D6C9BC; }
+.sc-ol-mug-edge { fill: #8A6E5E; }
+.sc-ol-steam { fill: #DCE4F7; opacity: 0.8; }
+.sc-ol-pillow { fill: #F0C15E; }
+.sc-ol-pillow-l { fill: #FFE09A; }
+.sc-ol-pillow-d { fill: #D9A443; }
+.sc-ol-pillow-edge { fill: #94661C; }
+.sc-ol-knit { fill: #F5DCE3; }
+.sc-ol-knit-d { fill: #E3AFC0; }
+.sc-ol-knit-edge { fill: #A8677E; }
+.sc-ol-seat { fill: #8E9FD0; }
+.sc-ol-seat-l { fill: #B3C1E6; }
+.sc-ol-starrug { fill: #3E4C86; }
+.sc-ol-starrug-edge { fill: #232B55; }
+.sc-ol-gold { fill: #F2D27A; }
+.sc-ol-lamp { fill: #C08A3A; }
+.sc-ol-scope { fill: #5A6FB8; }
+.sc-ol-scope-d { fill: #3E4F8E; }
+.sc-ol-ink { fill: #232845; }
+/* Autumn reading nook. */
+.sc-ol-rug { fill: #7A3029; }

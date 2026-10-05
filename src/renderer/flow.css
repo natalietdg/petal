@@ -1,0 +1,174 @@
+/* Replies | Flow segmented toggle */
+.view-toggle {
+  display: inline-flex;
+  margin: 0 0 30px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  overflow: hidden;
+  font-family: var(--ui-font);
+}
+.view-toggle button {
+  padding: 6px 16px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 14px var(--ui-font);
+  cursor: pointer;
+}
+.view-toggle button[aria-selected="true"] { background: var(--code-bg); color: var(--reader-fg); }
+
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { background: var(--highlight); } 100% { background: transparent; } }
+
+/* Vertical flow: cards on a thin line, one node dot per step. */
+.flow-line {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 28px;
+  border-left: 2px solid var(--rule);
+}
+
+.flow-step {
+  position: relative;
+  margin: 0 0 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--reader-bg);
+}
+.flow-step.waiting { border-color: var(--decide-ink); }
+
+.flow-dot {
+  position: absolute;
+  left: -36px;
+  top: 20px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--reader-bg);
+  border: 2px solid var(--reader-fg);
+}
+.flow-step.waiting .flow-dot { background: var(--decide-ink); border-color: var(--decide-ink); }
+
+.flow-step-head {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: 600 15px var(--ui-font);
+  cursor: pointer;
+}
+.flow-step-n { color: var(--muted); min-width: 1.6em; }
+.flow-step-head:hover .flow-title { text-decoration: underline; text-underline-offset: 3px; }
+
+.flow-waiting {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--decide-pill);
+  color: var(--decide-ink);
+  font: 600 12px var(--ui-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.flow-title { font: 700 1.25em/1.25 var(--ui-font); letter-spacing: -0.014em; text-align: left; }
+.flow-headline { margin: 8px 0 0; font: 500 1em/1.45 var(--ui-font); }
+/* The prompt that led to the outcome, kept quiet under it. */
+.flow-asked { margin: 6px 0 10px; font: 400 0.85em/1.4 var(--ui-font); color: var(--muted); }
+.prose .flow-outcome { margin: 8px 0 0; font-size: 0.92em; }
+.flow-why { margin-top: 8px; font-size: 0.9em; color: var(--muted); }
+.flow-why summary { cursor: pointer; font-family: var(--ui-font); }
+
+.flow-files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.prose .flow-file { font-size: 12px; }
+
+.flow-ledger { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 13px; }
+.flow-ledger-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; padding: 3px 0; }
+.flow-ledger-n { color: var(--muted); font-family: var(--mono-font); }
+.flow-ledger-kind { font: 600 11px var(--ui-font); letter-spacing: 0.05em; color: var(--muted); }
+.flow-actor { padding: 0 8px; border-radius: 999px; font: 600 12px var(--ui-font); }
+.actor-natalie { background: var(--decide-pill); color: var(--decide-ink); }
+.actor-claude { background: var(--next-pill); color: var(--next-ink); }
+.actor-external { background: var(--watch-pill); color: var(--watch-ink); }
+.flow-ledger-what { flex: 1 1 60%; }
+
+.flow-quiet {
+  display: block;
+  margin: 0 0 20px;
+  padding: 6px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: 500 13px var(--ui-font);
+  cursor: pointer;
+}
+
+.prose .flow-final { margin-top: 4px; }
+
+/* Export bar */
+.flow-export { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 22px; font-family: var(--ui-font); }
+.flow-export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.flow-export-status { font-size: 13px; color: var(--muted); }
+.flow-export-preview { flex-basis: 100%; }
+.flow-button {
+  padding: 6px 14px;
+  border: 1px solid var(--next-ink);
+  border-radius: 999px;
+  background: var(--next-pill);
+  color: var(--next-ink);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+
+.flow-empty { margin: 8vh auto 0; max-width: 34em; text-align: center; font-family: var(--ui-font); }
+.flow-empty-title { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+.flow-empty-text { margin: 0 0 18px; color: var(--muted); font-size: 15px; }
+.flow-stale:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--watch-wash);
+  font: 500 14px var(--ui-font);
+}
+
+/* Decisions tab */
+.decision-filter { margin: 4px 0 18px; }
+.decision-list { display: grid; gap: 12px; }
+.decision { padding: 14px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--reader-bg); }
+.decision.superseded { opacity: 0.62; }
+.decision.superseded .decision-what { text-decoration: line-through; text-decoration-thickness: 1px; }
+.decision-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; font: 600 0.8em var(--ui-font); }
+.decision-n, .decision-rec { color: var(--muted); }
+.decision-what { display: block; padding: 0; border: 0; background: none; color: inherit; font: 600 1.05em/1.4 var(--ui-font); text-align: left; cursor: pointer; }
+.decision-what:hover { text-decoration: underline; text-underline-offset: 3px; }
+.decision-waiting { margin-bottom: 16px; }
+
+/* Cards lift slightly on hover and arrive one after another. */
+.flow-step, .decision { transition: transform 160ms ease, box-shadow 160ms ease; animation: rise-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.flow-step:hover, .decision:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgb(0 0 0 / 0.06); }
+.flow-line > :nth-child(2) { animation-delay: 60ms; }
+.flow-line > :nth-child(3) { animation-delay: 120ms; }
+.flow-line > :nth-child(n+4) { animation-delay: 180ms; }
+@media (prefers-reduced-motion: reduce) { .flow-step, .decision { animation: none; transition: none; } }
+/* Quiet outcomes inside flow cards: no boxes, just pills in line. */
+.flow-outcome.callout-done, .flow-outcome.callout-why { margin: 6px 0; }
+
+/* State changes: what · from (struck, muted) → to */
+.change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 10px 0 0; font-family: var(--ui-font); }
+.change-what { font-weight: 600; color: var(--muted); min-width: 9em; }
+.change-states { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.change-from { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.change-arrow { color: var(--muted); }
+.change-to { font-weight: 600; }
+.change-new { padding: 0 0.5em; border-radius: 999px; background: var(--done-pill); color: var(--done-ink); font-size: 0.72em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }

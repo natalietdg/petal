@@ -1,0 +1,129 @@
+/* Floats over the reader's top-right corner, outside its scroll. */
+#sessions-dock {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--ui-font);
+}
+
+/* History sits beside the Sessions pill, quieter so the pill stays the obvious one. */
+.dock-button {
+  padding: 9px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 600 15px var(--ui-font);
+  cursor: pointer;
+}
+.dock-button[aria-pressed="true"] { background: var(--code-bg); border-color: var(--reader-fg); }
+
+.sessions-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border: 1px solid var(--next-ink);
+  border-radius: 999px;
+  background: var(--next-pill);
+  color: var(--next-ink);
+  font: 600 15px var(--ui-font);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.08);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sessions-pill .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.sessions-pill.has-busy .dot {
+  background: var(--decide-ink);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sessions-pill.has-busy .dot { animation: none; }
+}
+
+.sessions-panel {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: min(480px, calc(100vw - 40px));
+  max-height: calc(var(--reader-area-height, 60vh) - 80px);
+  overflow-y: auto;
+  overflow-anchor: none;
+  padding: 14px 8px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  box-shadow: 0 12px 32px rgba(20, 30, 60, 0.14);
+}
+
+.sessions-heading {
+  margin: 0 12px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.session-list { list-style: none; margin: 0; padding: 0; }
+
+.session-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-head:hover,
+.session-row.own .session-head { background: var(--code-bg); }
+
+.session-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.session-own,
+.session-status {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.session-own { background: var(--next-pill); color: var(--next-ink); }
+.session-status { margin-left: auto; }
+.session-status.busy { background: var(--decide-pill); color: var(--decide-ink); }
+.session-status.idle { color: var(--muted); }
+
+.session-meta,
+.session-activity { font-size: 13px; color: var(--muted); }
+.session-activity { color: var(--reader-fg); }
+
+.session-detail { padding: 2px 12px 10px 24px; font-size: 13px; color: var(--muted); }
+.session-recent { margin: 4px 0; padding-left: 1em; }
+.session-recent li + li { margin-top: 3px; }
+.session-subagent { margin: 6px 0 0; }

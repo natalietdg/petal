@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:">
+  <title>Petal</title>
+  <link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/atkinson-hyperlegible-mono/400.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/atkinson-hyperlegible-mono/700.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/atkinson-hyperlegible-next/400.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource/atkinson-hyperlegible-next/700.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/newsreader/opsz.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/newsreader/opsz-italic.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/fraunces/opsz.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/fraunces/opsz-italic.css">
+  <link rel="stylesheet" href="../../node_modules/@fontsource-variable/bricolage-grotesque/opsz.css">
+  <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="tabs.css">
+  <link rel="stylesheet" href="reader.css">
+  <link rel="stylesheet" href="magazine.css">
+  <link rel="stylesheet" href="sessions.css">
+  <link rel="stylesheet" href="cat.css">
+  <link rel="stylesheet" href="scenes/winter.css">
+  <link rel="stylesheet" href="scenes/bakery.css">
+  <link rel="stylesheet" href="scenes/howl.css">
+  <link rel="stylesheet" href="scenes/study.css">
+  <link rel="stylesheet" href="scenes/midcentury.css">
+  <link rel="stylesheet" href="scenes/night-beach.css">
+  <link rel="stylesheet" href="flow.css">
+  <link rel="stylesheet" href="history.css">
+  <link rel="stylesheet" href="workflow.css">
+</head>
+<body>
+  <div id="app">
+    <div id="reader-area">
+      <section id="history" hidden></section>
+      <section id="workflow" hidden></section>
+      <aside id="sessions-dock">
+        <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
+        <button id="history-button" class="dock-button" type="button" aria-pressed="false">History</button>
+        <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
+        <div id="sessions-panel" class="sessions-panel" hidden></div>
+      </aside>
+      <div id="cat"></div>
+      <main id="reader" aria-live="polite">
+        <div class="reader-column">
+          <div class="view-toggle" role="tablist">
+            <button type="button" data-view="replies" aria-selected="true">Replies</button>
+            <button type="button" data-view="flow" aria-selected="false">Flow</button>
+            <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
+          </div>
+          <div id="replies-view">
+            <p id="reader-status" class="status"></p>
+            <article id="latest"></article>
+            <section id="older"></section>
+          </div>
+          <section id="flow-view" class="prose" hidden></section>
+          <section id="decisions-view" class="prose" hidden></section>
+        </div>
+      </main>
+    </div>
+    <div id="divider" role="separator" aria-orientation="horizontal"></div>
+    <section id="terminal-pane">
+      <nav id="tab-strip" role="tablist" aria-label="Sessions"></nav>
+      <div id="terminal"></div>
+    </section>
+  </div>
+  <script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script src="../../node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
+  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="theme.js"></script>
+  <script src="markdown.js"></script>
+  <script src="diagrams.js"></script>
+  <script src="reader.js"></script>
+  <script src="terminal.js"></script>
+  <script src="tabs.js"></script>
+  <script src="layout.js"></script>
+  <script src="sessions-panel.js"></script>
+  <script src="scenes.js"></script>
+  <script src="scenes/winter.js"></script>
+  <script src="scenes/bakery.js"></script>
+  <script src="scenes/howl.js"></script>
+  <script src="scenes/study.js"></script>
+  <script src="scenes/midcentury.js"></script>
+  <script src="cat.js"></script>
+  <script src="flow.js"></script>
+  <script src="history.js"></script>
+  <script src="workflow.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

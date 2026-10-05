@@ -1,0 +1,254 @@
+:root {
+  /* SF Pro is the system font on macOS; not bundled (Apple licence). */
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --mono-font: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  /* Newsreader is drawn for long reading on screens; Fraunces sets the headlines. */
+  --body-font: "Newsreader Variable", "Atkinson Hyperlegible Next", Georgia, serif;
+  --display-font: "Fraunces Variable", "Newsreader Variable", Georgia, serif;
+}
+
+.reader-column {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: 40px 56px 120px;
+  font-family: var(--body-font);
+  font-optical-sizing: auto;
+  font-size: 20px;
+  line-height: 1.6;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  color: var(--reader-fg);
+  font-kerning: normal;
+  text-wrap: pretty;
+  hanging-punctuation: first;
+}
+
+/* Newspaper kicker above the headline, ruled like a masthead. */
+.status {
+  margin: 0 0 22px;
+  padding-bottom: 8px;
+  border-bottom: 3px double var(--rule);
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.prose > :first-child { margin-top: 0; }
+.prose p { margin: 0 0 1em; }
+/* Run-in concept heads ("**Where the time goes:** ...") open a new section. */
+.prose p:has(> strong:first-child):not(:first-child) { margin-top: 1.4em; }
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-family: var(--display-font);
+  font-optical-sizing: auto;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-wrap: balance;
+  margin: 1.1em 0 0.45em;
+}
+.prose h1 { font-size: 1.7em; }
+.prose h2 { font-size: 1.4em; padding-top: 0.7em; border-top: 1px solid var(--rule); }
+.prose h3 { font-size: 1.12em; font-family: var(--body-font); font-weight: 650; }
+/* Back matter (References, Limitations) steps down to small, quiet type. */
+.prose h2.back-matter {
+  margin-top: 2.2em;
+  font-family: var(--ui-font);
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.story-section.back :is(ol, ul) { font-size: 0.86em; color: var(--muted); }
+.story-section.back li + li { margin-top: 0.3em; }
+/* Last thing in a section never adds space below it; the next head's margin owns the gap. */
+.section-body > :last-child { margin-bottom: 0; }
+.story-section + .story-section { margin-top: 1.4em; }
+/* Section wrappers are layout hooks for the magazine looks; elsewhere they vanish. */
+.section-body, .rail { display: contents; }
+/* A paragraph that is only italics ("*Figure 1. ...*") is a caption. */
+.prose p:has(> em:only-child) {
+  margin-top: -0.4em;
+  font-size: 0.84em;
+  color: var(--muted);
+  text-align: center;
+}
+.prose strong { font-weight: 700; }
+.prose a { color: var(--link); text-underline-offset: 3px; }
+.prose ul, .prose ol { padding-left: 1.4em; margin: 0 0 1em; }
+.prose li + li { margin-top: 0.45em; }
+.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
+.prose blockquote { margin: 0 0 1em; padding-left: 1em; border-left: 3px solid var(--rule); }
+
+.prose table {
+  border-collapse: collapse;
+  margin: 0.2em 0 1.25em;
+  font-size: 0.9em;
+  font-variant-numeric: lining-nums tabular-nums;
+  width: 100%;
+  border-top: 2px solid var(--reader-fg);
+  border-bottom: 2px solid var(--reader-fg);
+}
+/* Newspaper tables: horizontal rules only. */
+.prose th, .prose td { border-bottom: 1px solid var(--rule); padding: 0.45em 0.9em 0.45em 0; text-align: left; vertical-align: top; }
+.prose td:first-child { white-space: nowrap; font-weight: 600; }
+.prose th { font-family: var(--ui-font); font-size: 0.82em; font-weight: 600; letter-spacing: 0.04em; }
+
+.prose code {
+  font-family: var(--mono-font);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.12em 0.42em;
+  border-radius: 6px;
+}
+
+.prose pre {
+  background: var(--code-bg);
+  padding: 16px 20px;
+  border-radius: 12px;
+  overflow-x: auto;
+  line-height: 1.55;
+  margin: 0.2em 0 1.25em;
+}
+.prose pre code { background: none; padding: 0; font-size: 14px; }
+/* Wrap long lines (audit logs, traces) rather than hide them behind a sideways scroll. */
+.prose pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.prose mark {
+  background: var(--highlight);
+  color: var(--highlight-ink);
+  padding: 0.05em 0.12em;
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Newest reply reads like a landing page. */
+#latest .headline {
+  font-family: var(--display-font);
+  font-optical-sizing: auto;
+  font-size: 2.3em;
+  line-height: 1.08;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin-bottom: 0.5em;
+}
+/* Standfirst: the paragraph right after the headline, like a news deck. */
+#latest .headline + p {
+  font-size: 1.14em;
+  line-height: 1.5;
+  padding-bottom: 1em;
+  margin-bottom: 1.4em;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* The standfirst already draws a rule; the first section must not add a second. */
+#latest .story-head + .story-section > h2:first-child { border-top: 0; padding-top: 0; margin-top: 0.4em; }
+
+/* The standfirst's run-in label ("Abstract.") in small caps, like a section slug. */
+#latest .headline + p > strong:first-child {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  font-weight: 650;
+}
+/* Drop cap on the lede, the first body paragraph after the standfirst. */
+#latest .lede::first-letter {
+  float: left;
+  font-family: var(--display-font);
+  font-size: 3.4em;
+  line-height: 0.85;
+  font-weight: 600;
+  padding: 0.06em 0.1em 0 0;
+}
+
+/* Semantic callouts: pill label + tinted left border. */
+.callout-done   { --pill: var(--done-pill);   --ink: var(--done-ink);   --wash: var(--done-wash); }
+.callout-why    { --pill: var(--why-pill);    --ink: var(--why-ink);    --wash: var(--why-wash); }
+.callout-watch  { --pill: var(--watch-pill);  --ink: var(--watch-ink);  --wash: var(--watch-wash); }
+.callout-decide { --pill: var(--decide-pill); --ink: var(--decide-ink); --wash: var(--decide-wash); }
+.callout-next   { --pill: var(--next-pill);   --ink: var(--next-ink);   --wash: var(--next-wash); }
+
+/* Quiet callouts (Done, Why, Watch out) sit in the text flow: a pill, no box. */
+.callout { padding: 0; background: none; }
+.callout-watch { padding-left: 0.9em; border-left: 2px solid var(--ink); }
+
+/* Only the two that ask something of her get a box. */
+.callout-decide, .callout-next {
+  background: var(--wash);
+  border-left: 3px solid var(--ink);
+  border-radius: 0 10px 10px 0;
+  padding: 0.55em 0.9em;
+}
+li.callout { list-style-position: inside; margin-left: -1.4em; }
+
+.pill {
+  display: inline-block;
+  font-family: var(--ui-font);
+  margin-right: 0.55em;
+  padding: 0.1em 0.7em;
+  border-radius: 999px;
+  background: var(--pill);
+  color: var(--ink);
+  font-size: 0.74em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: 0.12em;
+}
+
+/* Decide means she must act: the loudest callout. */
+.callout-decide {
+  border-left-width: 6px;
+  padding: 0.8em 1.1em;
+  font-weight: 500;
+}
+.callout-decide .pill { font-size: 0.82em; padding: 0.18em 0.85em; }
+
+/* Next reads as a call-to-action block. */
+.callout-next {
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  padding: 0.9em 1.2em;
+  font-weight: 500;
+}
+
+/* Older replies: collapsed and quieter. */
+#older { margin-top: 3em; }
+.older-reply { border-top: 1px solid var(--rule); padding: 0.7em 0; font-size: 16px; }
+.older-reply summary { color: var(--muted); cursor: pointer; }
+.older-reply[open] summary { margin-bottom: 1em; }
+
+.status code {
+  font-family: var(--mono-font);
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  padding: 0.12em 0.42em;
+  border-radius: 6px;
+}
+
+/* Claude exited: last replies stay, quieter (muted still passes 4.5:1). */
+.reader-column.ended #latest { color: var(--muted); }
+
+.status.empty {
+  margin-top: 18vh;
+  font-size: 22px;
+  line-height: 1.6;
+  color: var(--reader-fg);
+}
+#latest .headline strong { font-weight: inherit; }
+
+/* Mermaid diagrams: centred, never wider than the column. */
+.prose figure.diagram { margin: 1.5em 0; text-align: center; overflow-x: auto; }
+.prose figure.diagram svg { max-width: 100%; height: auto; }
+
+/* Gentle arrival for the newest reply, so the page feels alive, not swapped. */
+@keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#latest { animation: rise-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) { #latest { animation: none; } }
+
+/* Long headlines step down (set by markdown.js from the text length). */
+#latest .headline.headline-long { font-size: 1.75em; }
+#latest .headline.headline-very-long { font-size: 1.35em; line-height: 1.25; }

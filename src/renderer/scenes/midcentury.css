@@ -1,0 +1,43 @@
+/* Mid-Century Lounge: deep walnut and teak, ochre, burnt orange, avocado and teal, warm cream, charcoal accents. */
+.sc-m-out { fill: #2A1C16; }
+/* Edges: each object's 1px outline, its own material at its darkest. */
+.sc-m-teak-o { fill: #341608; } .sc-m-walnut-o { fill: #22140C; } .sc-m-mustard-o { fill: #4A2A08; }
+.sc-m-brass-o { fill: #4A3210; } .sc-m-olive-o { fill: #262A0E; } .sc-m-teal-o { fill: #0C3234; }
+/* Room: teal accent wall, dark walnut floor. */
+.sc-m-wall { fill: #3E7F79; } .sc-m-wall-d { fill: #336B66; }
+.sc-m-floor { fill: #8A5232; } .sc-m-floor-d { fill: #6C3D24; } .sc-m-shadow { fill: #4C2816; }
+/* Wood: red-brown teak lit to deep slat shadow, walnut for the drawers and record player. */
+.sc-m-teak-l { fill: #BE7040; } .sc-m-teak { fill: #934C26; } .sc-m-teak-d { fill: #66301A; } .sc-m-teak-dd { fill: #793A1E; }
+.sc-m-walnut-l { fill: #7A4A30; } .sc-m-walnut { fill: #5A3420; }
+/* Upholstery and accents; charcoal tufts. */
+.sc-m-mustard-l { fill: #EDB43C; } .sc-m-mustard { fill: #D08C1C; } .sc-m-mustard-d { fill: #A26612; } .sc-m-mustard-dd { fill: #2E2A2B; }
+.sc-m-orange-l { fill: #E57B3A; } .sc-m-orange { fill: #C4521E; } .sc-m-orange-d { fill: #8E3614; }
+.sc-m-teal { fill: #217878; }
+.sc-m-olive-l { fill: #A2A848; } .sc-m-olive { fill: #757D2E; } .sc-m-olive-d { fill: #4E561E; }
+.sc-m-cream { fill: #F4E4C1; }
+.sc-m-char-l { fill: #5C5860; } .sc-m-char { fill: #403C44; } .sc-m-char-d { fill: #2A272D; }
+.sc-m-brass-l { fill: #EDBE58; } .sc-m-brass { fill: #BF8C30; } .sc-m-brass-d { fill: #85601E; } .sc-m-bulb { fill: #FFF1C4; }
+.sc-m-vinyl { fill: #141114; } .sc-m-vinyl-l { fill: #34303A; }
+/* Window view at golden hour. */
+.sc-m-sky1 { fill: #EFA855; } .sc-m-sky2 { fill: #F4BE6C; } .sc-m-sky3 { fill: #F7D394; } .sc-m-sun { fill: #FFF2C8; }
+/* Ambient: record glints, music notes. */
+.sc-m-gl1, .sc-m-gl2, .sc-m-gl3, .sc-m-gl4 { fill: #8C8390; opacity: 0; }
+.sc-m-note1, .sc-m-note2 { fill: #F4E4C1; opacity: 0; }
+
+/* The record always turns: one glint steps round the label, 4 positions per turn. */
+#cat .scene-midcentury .sc-m-gl1 { animation: m-glint 1.2s steps(1) infinite; }
+#cat .scene-midcentury .sc-m-gl2 { animation: m-glint 1.2s steps(1) -0.9s infinite; }
+#cat .scene-midcentury .sc-m-gl3 { animation: m-glint 1.2s steps(1) -0.6s infinite; }
+#cat .scene-midcentury .sc-m-gl4 { animation: m-glint 1.2s steps(1) -0.3s infinite; }
+@keyframes m-glint { 0% { opacity: 1; } 25%, 100% { opacity: 0; } }
+/* Notes drift up slowly, one pixel at a time, staggered. */
+#cat .scene-midcentury .sc-m-note1 { animation: m-note 4s steps(4) infinite; }
+#cat .scene-midcentury .sc-m-note2 { animation: m-note 4s steps(4) -2s infinite; }
+@keyframes m-note {
+  0% { transform: translateY(0); opacity: 0.9; }
+  75% { opacity: 0.9; }
+  100% { transform: translateY(-4px); opacity: 0; }
+}
+/* While Claude works the sputnik bulbs glow a touch warmer. */
+#cat.busy .scene-midcentury .sc-m-bulb { animation: m-bulb 1.6s steps(1) infinite; }
+@keyframes m-bulb { 50% { fill: #FFD98A; } }

@@ -1,0 +1,64 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--reader-bg);
+}
+
+#app {
+  display: grid;
+  height: 100%;
+  grid-template-rows: minmax(0, 65fr) auto minmax(0, 35fr);
+}
+
+#reader-area {
+  position: relative;
+  min-height: 0;
+}
+
+#reader {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--reader-bg);
+}
+
+#divider {
+  height: 7px;
+  cursor: row-resize;
+  background: var(--rule);
+}
+
+#terminal-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--term-bg);
+}
+
+#terminal {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 10px 22px 16px;
+}
+
+/* One host per tab; hidden ones keep their xterm alive. */
+.term-host {
+  position: absolute;
+  inset: 0;
+}
+
+.xterm .xterm-viewport {
+  background-color: var(--term-bg) !important;
+}
+
+/* Reader-only collapses the terminal but keeps it focusable, so typing still reaches claude. */
+#app.reader-only {
+  grid-template-rows: minmax(0, 1fr) 0 0 !important;
+}
+
+#app.reader-only #divider,
+#app.reader-only #terminal-pane {
+  height: 0;
+  overflow: hidden;
+}

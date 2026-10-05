@@ -1,0 +1,39 @@
+/* Bakery scene palette: b- prefixed so codes never collide with other scenes. Warm browns, cream and caramel. */
+.sc-b-rod { fill: #5C3A24; }
+.sc-b-ol { fill: #6B4228; }
+/* Outlines: each material's own darkest tone, never pure black. */
+.sc-b-awn-ink { fill: #7A4A26; } .sc-b-shade-ink { fill: #5E3618; } .sc-b-wicker-ink { fill: #5A3518; } .sc-b-wood-ink { fill: #3E2617; }
+.sc-b-caramelL { fill: #E2A866; } .sc-b-caramel { fill: #C98544; } .sc-b-caramelD { fill: #9E622E; }
+.sc-b-creamL { fill: #FFF8E8; } .sc-b-cream { fill: #F4E3C3; } .sc-b-creamD { fill: #D9BE94; }
+
+.sc-b-wall { fill: #EBD6B3; } .sc-b-wallS { fill: #E2CAA2; } .sc-b-wallD { fill: #CDAE83; }
+.sc-b-glow { fill: #F8E8C4; }
+.sc-b-wain { fill: #8A5A3A; } .sc-b-wainD { fill: #6A432B; }
+
+.sc-b-cord { fill: #5C3A24; }
+.sc-b-shadeL { fill: #D99A55; } .sc-b-shade { fill: #B5763C; } .sc-b-shadeD { fill: #85532A; }
+.sc-b-bulb { fill: #FFE6A0; }
+
+.sc-b-crustL { fill: #F2C27E; } .sc-b-crust { fill: #D4914A; } .sc-b-crustD { fill: #A6652E; }
+.sc-b-score { fill: #F8E2B8; } .sc-b-seed { fill: #FFF3D6; }
+.sc-b-sugar { fill: #FFFFFF; }
+.sc-b-whip { fill: #FFFDF6; } .sc-b-whipD { fill: #E9DCC4; }
+
+.sc-b-wickerL { fill: #D8A868; } .sc-b-wicker { fill: #B9844A; } .sc-b-wickerD { fill: #84552E; }
+
+.sc-b-woodL { fill: #B07A4C; } .sc-b-wood { fill: #8E5C36; } .sc-b-woodD { fill: #63402A; }
+.sc-b-frame { fill: #74492D; }
+.sc-b-glass { fill: #F6E7CB; fill-opacity: 0.7; } .sc-b-glassD { fill: #D8BC92; }
+.sc-b-shine { fill: #FFFFFF; fill-opacity: 0.85; }
+
+/* Steam: near-white so it shows against the warm wall in both themes. */
+.sc-b-steam, .sc-b-steam2 { fill: #FFFFFF; }
+
+/* Two wisps rise off the loaf and fade, offset by half a beat; one whole pixel per step. */
+#cat .scene-bakery .scene-moving rect { animation: bakery-steam 2.4s steps(3) infinite; }
+#cat .scene-bakery .scene-moving .sc-b-steam2 { animation-delay: -1.2s; }
+@keyframes bakery-steam {
+  0% { transform: translateY(0); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-3px); opacity: 0; }
+}

@@ -1,0 +1,65 @@
+/* Wizard's Room: a calm dark olive wall so brass, red, teal, green glass and wood objects pop. */
+.sc-hs-out { fill: #24150E; } .sc-hs-void { fill: #1A100B; }
+.sc-hs-wall { fill: #42402A; } .sc-hs-wall-d { fill: #383622; }
+.sc-hs-floor { fill: #5A3519; } .sc-hs-floor-d { fill: #3F2412; }
+.sc-hs-wood-l { fill: #A26A34; } .sc-hs-wood { fill: #774624; } .sc-hs-wood-d { fill: #4E2C16; }
+.sc-hs-brass-l { fill: #EDC860; } .sc-hs-brass { fill: #C79532; } .sc-hs-brass-d { fill: #8A6020; } .sc-hs-shine { fill: #FFF3B8; }
+.sc-hs-red-l { fill: #DE5E3C; } .sc-hs-red { fill: #B0322A; } .sc-hs-red-d { fill: #78201C; }
+.sc-hs-teal-l { fill: #6CCFB8; } .sc-hs-teal { fill: #2F8C84; } .sc-hs-teal-d { fill: #1D5753; }
+.sc-hs-lan-l { fill: #E2F78A; } .sc-hs-lan { fill: #8CC94E; } .sc-hs-lan-d { fill: #4A7A2E; }
+.sc-hs-paper { fill: #F0DDB0; } .sc-hs-paper-d { fill: #C6A878; }
+.sc-hs-sun { fill: #E8902E; }
+.sc-hs-plum-l { fill: #9A5A82; } .sc-hs-plum { fill: #6B3A5C; }
+.sc-hs-navy-l { fill: #4E6A92; } .sc-hs-navy { fill: #2F4060; }
+.sc-hs-stone-l { fill: #9C8F7C; } .sc-hs-stone { fill: #786C5C; } .sc-hs-stone-d { fill: #4F463B; } .sc-hs-soot { fill: #1E0E08; }
+
+/* Moving cells: talisman strands (string, beads, charms), candle flames, glints, lantern glow. */
+:is(.sc-hs-s1-s, .sc-hs-s2-s, .sc-hs-s3-s) { fill: #C6A878; }
+:is(.sc-hs-s1-t, .sc-hs-s2-t, .sc-hs-s3-t) { fill: #5CC2B0; }
+:is(.sc-hs-s1-r, .sc-hs-s2-r, .sc-hs-s3-r) { fill: #C73A2E; }
+.sc-hs-s3-R { fill: #78201C; }
+:is(.sc-hs-s1-b, .sc-hs-s2-b, .sc-hs-s3-b) { fill: #C79532; }
+.sc-hs-s1-y { fill: #FFF3B8; }
+.sc-hs-s2-o { fill: #24150E; }
+.sc-hs-fa { fill: #FFC94A; } .sc-hs-fb { fill: #FFF2B0; }
+.scene-study .sc-hs-fb { opacity: 0; }
+.sc-hs-glint, .sc-hs-glint2 { fill: #FFFFFF; opacity: 0; }
+.sc-hs-glow { fill: #C8F07A; opacity: 0.13; }
+
+/* While Claude works: strands sway, candles flicker, gems glint and the lantern breathes. */
+#cat.busy .scene-study [class^="sc-h-s1-"] { animation: h-sway 2.4s steps(1) infinite; }
+#cat.busy .scene-study [class^="sc-h-s2-"] { animation: h-sway 2.4s steps(1) -0.8s infinite; }
+#cat.busy .scene-study [class^="sc-h-s3-"] { animation: h-sway 2.4s steps(1) -1.6s infinite; }
+@keyframes h-sway {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(1px); }
+  50% { transform: translateX(0); }
+  75% { transform: translateX(-1px); }
+}
+#cat.busy .scene-study .sc-hs-fa { animation: h-flame-a 0.6s steps(1) infinite; }
+#cat.busy .scene-study .sc-hs-fb { animation: h-flame-b 0.6s steps(1) infinite; }
+@keyframes h-flame-a { 50% { fill: #FFE07A; } }
+@keyframes h-flame-b { 50% { opacity: 1; } }
+#cat.busy .scene-study .sc-hs-glint { animation: h-glint 2s steps(1) infinite; }
+#cat.busy .scene-study .sc-hs-glint2 { animation: h-glint 2s steps(1) -1s infinite; }
+@keyframes h-glint { 80% { opacity: 0.9; } 90% { opacity: 0; } }
+#cat.busy .scene-study .sc-hs-glow { animation: h-glow 1.8s steps(3) infinite; }
+@keyframes h-glow { 50% { opacity: 0.24; } }
+
+/* The fire spirit: always alive, busy or not. Three flame frames at 0.3s each, a blink every 4s. */
+:is(.sc-hs-sp1-F, .sc-hs-sp2-F, .sc-hs-sp3-F) { fill: #D9481E; }
+:is(.sc-hs-sp1-f, .sc-hs-sp2-f, .sc-hs-sp3-f), .sc-hs-sp-lid { fill: #F68E26; }
+:is(.sc-hs-sp1-e, .sc-hs-sp2-e, .sc-hs-sp3-e) { fill: #FFD04A; }
+:is(.sc-hs-sp1-h, .sc-hs-sp2-h, .sc-hs-sp3-h) { fill: #FFF6D6; }
+.sc-hs-sp-eye { fill: #FFFFFF; }
+.sc-hs-sp-lidline { fill: #24150E; }
+.scene-study :is([class^="sc-h-sp2-"], [class^="sc-h-sp3-"], .sc-hs-sp-lid, .sc-hs-sp-lidline) { opacity: 0; }
+.scene-study [class^="sc-h-sp1-"] { animation: h-spirit-frame 0.9s steps(1) infinite; }
+.scene-study [class^="sc-h-sp2-"] { animation: h-spirit-frame 0.9s steps(1) -0.6s infinite; }
+.scene-study [class^="sc-h-sp3-"] { animation: h-spirit-frame 0.9s steps(1) -0.3s infinite; }
+@keyframes h-spirit-frame { 0% { opacity: 1; } 33.333% { opacity: 0; } }
+.scene-study :is(.sc-hs-sp-lid, .sc-hs-sp-lidline) { animation: h-spirit-blink 4s steps(1) infinite; }
+@keyframes h-spirit-blink { 0% { opacity: 0; } 92.5% { opacity: 1; } 96.25% { opacity: 0; } }
+.sc-hs-fireglow { fill: #FF9A3C; opacity: 0.12; }
+.scene-study .sc-hs-fireglow { animation: h-fireglow 2.4s steps(3) infinite; }
+@keyframes h-fireglow { 50% { opacity: 0.24; } }

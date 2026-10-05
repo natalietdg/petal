@@ -1,0 +1,62 @@
+/* Winter Fireplace: warm brick and firelight against a cold blue night window. */
+/* Outlines: each material's own darkest tone, never pure black. */
+.sc-w-brick-ink { fill: #4E231C; } .sc-w-wood-ink { fill: #3F2614; } .sc-w-stone-ink { fill: #5B5146; }
+.sc-w-red-ink { fill: #5C141D; } .sc-w-green-ink { fill: #173B21; } .sc-w-candle-ink { fill: #8A7558; }
+.sc-w-log-ink { fill: #1E110A; } .sc-w-pine-ink { fill: #0B231F; } .sc-w-ridge { fill: #18264A; }
+/* Brick: lit top rows, mid, shaded bricks and the shaded right side; warm mortar. */
+.sc-w-brick-l { fill: #C9694C; } .sc-w-brick { fill: #A84D3A; } .sc-w-brick-d { fill: #82392E; }
+.sc-w-mortar { fill: #DCC3A6; } .sc-w-mortar-d { fill: #B39A80; }
+/* Stone surround and hearth. */
+.sc-w-stone-l { fill: #D3C6B2; } .sc-w-stone { fill: #AA9C88; } .sc-w-stone-d { fill: #776B5C; }
+/* Firebox: soot, warm back wall, lit glow behind the fire, angled side walls. */
+.sc-w-soot { fill: #1E1414; } .sc-w-box { fill: #3A211C; } .sc-w-box-lit { fill: #6E3322; } .sc-w-side { fill: #2A1917; }
+.sc-w-iron { fill: #2B2A30; }
+.sc-w-log-l { fill: #8A5632; } .sc-w-log { fill: #5E3720; } .sc-w-logend { fill: #E3BE8A; }
+/* Wood: mantel and window frame. */
+.sc-w-wood-l { fill: #B47C48; } .sc-w-wood { fill: #8C5A33; } .sc-w-wood-d { fill: #5E3A20; }
+/* Stockings, cuffs, garland, wreath and candles. */
+.sc-w-red-l { fill: #E25A60; } .sc-w-red { fill: #CC333B; } .sc-w-red-d { fill: #962531; }
+.sc-w-green-l { fill: #57A866; } .sc-w-green { fill: #3F8C4E; } .sc-w-green-d { fill: #2B6638; }
+.sc-w-cuff { fill: #FFFFFF; } .sc-w-cuff-d { fill: #D5DEE8; }
+.sc-w-leaf-l { fill: #5FA35A; } .sc-w-leaf { fill: #3E7D44; } .sc-w-leaf-d { fill: #275A2F; } .sc-w-berry { fill: #E0353D; }
+.sc-w-candle { fill: #FBF3E2; } .sc-w-candle-d { fill: #D8CAB0; } .sc-w-cf { fill: #FFC94A; }
+/* Night window: deep winter blues, snowy hills, pines. */
+.sc-w-sky1 { fill: #121D3B; } .sc-w-sky2 { fill: #1A2B52; } .sc-w-sky3 { fill: #23396A; } .sc-w-sky4 { fill: #2F4A80; }
+.sc-w-snow { fill: #F4F8FC; } .sc-w-snow-d { fill: #B9CCE2; }
+/* Window view: mountains, moon and frosted glass. */
+.sc-w-mtn { fill: #3E5689; } .sc-w-mtn-d { fill: #314676; } .sc-w-moon { fill: #FFF3C4; } .sc-w-frost { fill: #DCEAF7; opacity: 0.85; }
+.sc-w-pine { fill: #24584E; } .sc-w-pine-d { fill: #173D37; }
+/* Knitted rug. */
+.sc-w-knit { fill: #F3E4C8; } .sc-w-knit-d { fill: #E3C9A0; }
+/* Fire, two frames: red, orange, yellow, white-hot core. It always flickers, like a real fire. */
+.sc-w-fa1, .sc-w-fb1 { fill: #E0492E; } .sc-w-fa2, .sc-w-fb2 { fill: #F38B2A; }
+.sc-w-fa3, .sc-w-fb3 { fill: #FFD25A; } .sc-w-fa4, .sc-w-fb4 { fill: #FFF6CC; }
+.scene-winter :is(.sc-w-fb1, .sc-w-fb2, .sc-w-fb3, .sc-w-fb4) { opacity: 0; }
+.sc-w-glow { fill: #FFB25A; opacity: 0.16; }
+.sc-w-spark, .sc-w-spark2 { fill: #FFD25A; }
+.sc-w-sn1, .sc-w-sn2, .sc-w-sn3 { fill: #FFFFFF; }
+
+/* While Claude works: the fire flickers between frames, sparks rise, snow falls, the glow breathes. */
+#cat .scene-winter .scene-moving :is(.sc-w-fa1, .sc-w-fa2, .sc-w-fa3, .sc-w-fa4) { animation: w-frame-a 0.36s steps(1) infinite; }
+#cat .scene-winter .scene-moving :is(.sc-w-fb1, .sc-w-fb2, .sc-w-fb3, .sc-w-fb4) { animation: w-frame-b 0.36s steps(1) infinite; }
+@keyframes w-frame-a { 50% { opacity: 0; } }
+@keyframes w-frame-b { 50% { opacity: 1; } }
+#cat .scene-winter .sc-w-glow { animation: w-glow 1.5s steps(3) infinite; }
+@keyframes w-glow { 50% { opacity: 0.26; } }
+#cat .scene-winter .sc-w-cf { animation: w-candle 0.9s steps(1) infinite; }
+@keyframes w-candle { 50% { opacity: 0.55; } }
+#cat .scene-winter .sc-w-spark { animation: w-spark 1.2s steps(4) infinite; }
+#cat .scene-winter .sc-w-spark2 { animation: w-spark 1.2s steps(4) -0.6s infinite; }
+@keyframes w-spark {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-4px); opacity: 0; }
+}
+#cat .scene-winter .sc-w-sn1 { animation: w-snow 3s steps(6) infinite; }
+#cat .scene-winter .sc-w-sn2 { animation: w-snow 3s steps(6) -1s infinite; }
+#cat .scene-winter .sc-w-sn3 { animation: w-snow 3s steps(6) -2s infinite; }
+@keyframes w-snow {
+  0% { transform: translate(0, 0); opacity: 1; }
+  50% { transform: translate(1px, 3px); }
+  85% { opacity: 1; }
+  100% { transform: translate(0, 6px); opacity: 0; }
+}

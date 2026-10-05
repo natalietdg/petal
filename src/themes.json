@@ -1,0 +1,197 @@
+{
+  "paleSky": {
+    "label": "Cream",
+    "dark": false,
+    "terminal": {
+      "background": "#F8F1E3",
+      "foreground": "#1E3A6E",
+      "cursor": "#B8386F",
+      "selectionBackground": "#F2C6D9",
+      "ansi": [
+        "#1F2A44",
+        "#AE2D4B",
+        "#2C6A44",
+        "#7A5800",
+        "#2D5896",
+        "#A0306E",
+        "#1C6470",
+        "#4F5A72",
+        "#556079",
+        "#9E2A5E",
+        "#276040",
+        "#6E4F00",
+        "#274E8A",
+        "#8E2C78",
+        "#185A64",
+        "#3A4560"
+      ]
+    },
+    "reader": {
+      "background": "#FBF6EC",
+      "foreground": "#1E3A6E",
+      "muted": "#4A5C7E",
+      "link": "#9A2C66",
+      "codeBackground": "#F0E6D2",
+      "highlight": "#F3E29C",
+      "highlightInk": "#1E3A6E",
+      "rule": "#E2D5BC",
+      "labels": {
+        "done": {
+          "pill": "#CBE6D3",
+          "ink": "#1D5632",
+          "wash": "#E5EFE1"
+        },
+        "why": {
+          "pill": "#DDD5F2",
+          "ink": "#48308A",
+          "wash": "#EEE7EF"
+        },
+        "watch": {
+          "pill": "#F5D9C4",
+          "ink": "#763611",
+          "wash": "#F8E9DA"
+        },
+        "decide": {
+          "pill": "#F5C4D8",
+          "ink": "#851C4C",
+          "wash": "#F7D8E0"
+        },
+        "next": {
+          "pill": "#C4D9F4",
+          "ink": "#1C4585",
+          "wash": "#E2E9F0"
+        }
+      }
+    }
+  },
+  "blush": {
+    "label": "Blush",
+    "dark": false,
+    "terminal": {
+      "background": "#F2DCE5",
+      "foreground": "#243B73",
+      "cursor": "#3A72B0",
+      "selectionBackground": "#C4D9F2",
+      "ansi": [
+        "#22294A",
+        "#AA2E3D",
+        "#2D6841",
+        "#7C5600",
+        "#2F5C9A",
+        "#9A2E72",
+        "#1D6470",
+        "#5A4A62",
+        "#6A5770",
+        "#A02A48",
+        "#285F3C",
+        "#704D00",
+        "#2A5290",
+        "#8A2A80",
+        "#195A66",
+        "#46334E"
+      ]
+    },
+    "reader": {
+      "background": "#F3E0E8",
+      "foreground": "#243B73",
+      "muted": "#5A4D72",
+      "link": "#2A5A9E",
+      "codeBackground": "#E8CEDB",
+      "highlight": "#F3E29C",
+      "highlightInk": "#243B73",
+      "rule": "#DDBFCD",
+      "labels": {
+        "done": {
+          "pill": "#CFE7D6",
+          "ink": "#1D5632",
+          "wash": "#E1E4DF"
+        },
+        "why": {
+          "pill": "#E0D6F2",
+          "ink": "#48308A",
+          "wash": "#EADBED"
+        },
+        "watch": {
+          "pill": "#F6D8C4",
+          "ink": "#763611",
+          "wash": "#F5DCD6"
+        },
+        "decide": {
+          "pill": "#F3BFD4",
+          "ink": "#851C4C",
+          "wash": "#F3C9DA"
+        },
+        "next": {
+          "pill": "#C9DCF4",
+          "ink": "#1C4585",
+          "wash": "#DEDEEE"
+        }
+      }
+    }
+  },
+  "nightPastel": {
+    "label": "Night Pastel",
+    "dark": true,
+    "terminal": {
+      "background": "#1C2233",
+      "foreground": "#BFD6F5",
+      "cursor": "#F2B8CF",
+      "selectionBackground": "#3A4766",
+      "ansi": [
+        "#3A4358",
+        "#F2A2B4",
+        "#A6DAB4",
+        "#EEDB9E",
+        "#9CC2EE",
+        "#E0A8DE",
+        "#9CD8DC",
+        "#C6D0E0",
+        "#8E99B0",
+        "#F7B9C7",
+        "#BDE6C7",
+        "#F5E6B8",
+        "#B6D3F4",
+        "#EABDE8",
+        "#B6E4E7",
+        "#EEF2FA"
+      ]
+    },
+    "reader": {
+      "background": "#1F2638",
+      "foreground": "#BFD6F5",
+      "muted": "#95A3BE",
+      "link": "#F2B8CF",
+      "codeBackground": "#2B3552",
+      "highlight": "#5A4A22",
+      "highlightInk": "#F5E6B8",
+      "rule": "#343E58",
+      "labels": {
+        "done": {
+          "pill": "#24473A",
+          "ink": "#A9DDB8",
+          "wash": "#223739"
+        },
+        "why": {
+          "pill": "#3A3263",
+          "ink": "#CFC0F4",
+          "wash": "#2D2C4E"
+        },
+        "watch": {
+          "pill": "#4B3627",
+          "ink": "#F3C6A2",
+          "wash": "#352E30"
+        },
+        "decide": {
+          "pill": "#5A2F4A",
+          "ink": "#F9BED3",
+          "wash": "#482C45"
+        },
+        "next": {
+          "pill": "#283F63",
+          "ink": "#B8D5F6",
+          "wash": "#24334E"
+        }
+      }
+    }
+  }
+}

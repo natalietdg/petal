@@ -1,0 +1,272 @@
+/* Magazine reading styles, picked from View. Newspaper (reader.css) stays the default.
+   :is(#latest, .prose) carries an id's weight, so these beat reader.css and also style older replies and History. */
+
+/* Pull quotes and sidebars exist in every style; newspaper keeps them plain. */
+.prose blockquote.sidebar {
+  border-left: 0;
+  border-top: 2px solid var(--reader-fg);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.8em 0 0.4em;
+  margin: 1.6em 0;
+  font-size: 0.9em;
+}
+.prose blockquote.sidebar > p:first-child > strong:first-child {
+  font-family: var(--ui-font);
+  font-size: 0.78em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.prose blockquote.sidebar ul { margin-bottom: 0.6em; }
+.prose blockquote.sidebar li + li { margin-top: 0.35em; }
+.prose blockquote.pull-quote {
+  border-left: 0;
+  padding: 0;
+  margin: 1.6em 0;
+  font-family: var(--display-font);
+  font-size: 1.4em;
+  line-height: 1.3;
+}
+
+
+/* ---------- Editorial: a printed feature. Light serif display, Part openers, a margin rail ---------- */
+[data-reading="editorial"] .reader-column { max-width: 66ch; padding: 52px 56px 140px; counter-reset: part; }
+[data-reading="editorial"] .status {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 0;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.18em;
+  font-size: 14px;
+}
+[data-reading="editorial"] .status::before,
+[data-reading="editorial"] .status::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+
+[data-reading="editorial"] .story-head { text-align: center; margin: 1.2em 0 2em; }
+[data-reading="editorial"] :is(#latest, .prose) .headline {
+  font-size: 3.4em;
+  font-weight: 300;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.45em;
+}
+[data-reading="editorial"] :is(#latest, .prose) .headline strong { font-weight: inherit; }
+[data-reading="editorial"] :is(#latest, .prose) .headline + p {
+  max-width: 28em;
+  margin: 0 auto;
+  padding: 0;
+  border-bottom: 0;
+  font-style: italic;
+  font-size: 1.28em;
+  line-height: 1.45;
+}
+[data-reading="editorial"] :is(#latest, .prose) .headline + p > strong:first-child { font-style: normal; }
+/* Byline under the dek. */
+[data-reading="editorial"] .story-head::after {
+  content: "By Claude";
+  display: block;
+  margin-top: 1em;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Two-line sunk drop cap on longer openers, like a printed feature. */
+[data-reading="editorial"] :is(#latest, .prose) .lede::first-letter {
+  float: none;
+  initial-letter: 2;
+  padding: 0;
+  margin-right: 0.08em;
+  font-weight: 300;
+  color: var(--link);
+}
+[data-reading="editorial"] .prose p { hyphens: auto; }
+
+/* Sections open with "Part I", "Part II" above an italic head. */
+[data-reading="editorial"] .prose h2:not(.back-matter) {
+  counter-increment: part;
+  border-top: 0;
+  padding-top: 0;
+  margin: 0.9em 0 0.4em; /* in its own 1.75em: about 32px above, 14px below */
+  font-style: italic;
+  font-weight: 330;
+  font-size: 1.75em;
+  letter-spacing: -0.015em;
+}
+[data-reading="editorial"] .prose h2:not(.back-matter)::before {
+  content: "Part " counter(part, upper-roman);
+  display: block;
+  margin-bottom: 0.5em;
+  font-family: var(--ui-font);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--link);
+}
+[data-reading="editorial"] .prose h2 .h-num { display: none; }
+
+[data-reading="editorial"] .prose blockquote.pull-quote {
+  margin: 1.4em 0;
+  padding: 0.6em 0 0;
+  border-top: 2px solid var(--link);
+  font-style: italic;
+  font-weight: 330;
+  font-size: 1.5em;
+  line-height: 1.25;
+}
+[data-reading="editorial"] .prose blockquote.pull-quote p { margin: 0; }
+[data-reading="editorial"] .prose blockquote.sidebar { border-top-width: 1px; }
+[data-reading="editorial"] .prose .end-mark::after { content: " ∎"; color: var(--link); }
+
+/* Wide window: pull quotes and sidebars move into a margin rail beside the text. */
+@media (min-width: 1200px) {
+  /* Reserve the rail only when the newest reply has something to put in it. */
+  [data-reading="editorial"] .reader-column:has(#latest .rail) { max-width: 1060px; padding-right: calc(56px + 16em); }
+  /* The rail hangs in the right padding beside the section's text; the row grows to fit it. */
+  [data-reading="editorial"] .story-section:has(> .rail) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 0;
+    align-items: start;
+  }
+  [data-reading="editorial"] .story-section > h2 { grid-column: 1; }
+  [data-reading="editorial"] .story-section > .section-body { display: block; grid-column: 1; }
+  [data-reading="editorial"] .story-section > .rail { display: block; grid-column: 2; grid-row: 2; width: 13em; margin-left: 3em; }
+  [data-reading="editorial"] .rail blockquote { margin: 0 0 1.6em; }
+  [data-reading="editorial"] .rail blockquote.pull-quote { font-size: 1.3em; }
+  [data-reading="editorial"] .rail blockquote.sidebar { font-size: 0.82em; }
+}
+
+/* ---------- Lifestyle: oversized grotesk, colour blocks, boxed facts ---------- */
+[data-reading="lifestyle"] .reader-column {
+  --display-font: "Bricolage Grotesque Variable", var(--ui-font);
+  --body-font: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  font-size: 18.5px;
+  line-height: 1.62;
+  font-variant-numeric: normal;
+}
+[data-reading="lifestyle"] .status {
+  display: inline-block;
+  border-bottom: 0;
+  padding: 0.35em 0.9em;
+  border-radius: 999px;
+  background: var(--why-pill);
+  color: var(--why-ink);
+  letter-spacing: 0.08em;
+}
+[data-reading="lifestyle"] :is(#latest, .prose) .headline {
+  font-size: 3.1em;
+  font-weight: 780;
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  margin: 0.25em 0 0.5em;
+}
+[data-reading="lifestyle"] :is(#latest, .prose) .headline + p {
+  font-size: 1.18em;
+  font-weight: 500;
+  line-height: 1.5;
+  border-bottom: 0;
+  background: var(--why-wash);
+  border-radius: 20px;
+  padding: 1em 1.25em;
+  margin-bottom: 1.8em;
+}
+[data-reading="lifestyle"] :is(#latest, .prose) .lede { font-size: 1.1em; }
+[data-reading="lifestyle"] :is(#latest, .prose) .lede::first-letter {
+  float: none;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  font-weight: 700;
+}
+[data-reading="lifestyle"] .prose h2:not(.back-matter) {
+  border-top: 0;
+  padding-top: 0;
+  margin: 1.1em 0 0.45em;
+  font-weight: 760;
+  font-size: 1.55em;
+  letter-spacing: -0.02em;
+}
+/* A small colour block marks each section, like a magazine tab. */
+[data-reading="lifestyle"] .prose h2:not(.back-matter)::before {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.45em;
+  border-radius: 3px;
+  background: var(--link);
+  vertical-align: 0.08em;
+}
+[data-reading="lifestyle"] .prose blockquote.pull-quote {
+  font-weight: 720;
+  font-size: 1.75em;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--link);
+  border-left: 6px solid var(--link);
+  padding-left: 0.7em;
+}
+[data-reading="lifestyle"] .prose blockquote.pull-quote p { margin: 0; }
+[data-reading="lifestyle"] .prose blockquote.sidebar {
+  border: 0;
+  background: var(--next-wash);
+  border-radius: 20px;
+  padding: 1em 1.3em 0.5em;
+}
+[data-reading="lifestyle"] .prose table {
+  border-top: 0;
+  border-bottom: 0;
+  background: var(--code-bg);
+  border-radius: 14px;
+  overflow: hidden;
+}
+[data-reading="lifestyle"] .prose th,
+[data-reading="lifestyle"] .prose td { padding-left: 0.9em; }
+[data-reading="lifestyle"] .prose th { background: var(--done-wash); }
+[data-reading="lifestyle"] .prose .end-mark::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-left: 0.35em;
+  border-radius: 50%;
+  background: var(--link);
+}
+
+
+/* ---------- Lifestyle, structural: colour-block hero and section cards ---------- */
+[data-reading="lifestyle"] .reader-column { max-width: 80ch; }
+[data-reading="lifestyle"] .story-head {
+  background: var(--why-wash);
+  border-radius: 28px;
+  padding: 1.5em 1.5em 1.3em;
+  margin: 0.4em 0 1.2em;
+}
+[data-reading="lifestyle"] :is(#latest, .prose) .headline { font-size: 3.6em; margin-top: 0; }
+[data-reading="lifestyle"] :is(#latest, .prose) .headline + p {
+  background: none;
+  padding: 0;
+  margin: 0;
+  font-size: 1.22em;
+}
+/* Every section is its own card, cycling through the theme's soft colours. */
+[data-reading="lifestyle"] .story-section:not(.back) {
+  border-radius: 24px;
+  padding: 1.2em 1.4em;
+  margin: 0 0 1em;
+  background: var(--done-wash);
+}
+[data-reading="lifestyle"] .story-section:not(.back):nth-of-type(3n+2) { background: var(--next-wash); }
+[data-reading="lifestyle"] .story-section:not(.back):nth-of-type(3n) { background: var(--decide-wash); }
+[data-reading="lifestyle"] .story-section > h2:first-child { margin-top: 0; }
+[data-reading="lifestyle"] .story-section .callout-decide,
+[data-reading="lifestyle"] .story-section blockquote.sidebar { background: var(--reader-bg); }
+
+/* Long headlines step down in the magazine looks too. */
+[data-reading] :is(#latest, .prose) .headline.headline-long { font-size: 2.2em; }
+[data-reading] :is(#latest, .prose) .headline.headline-very-long { font-size: 1.55em; line-height: 1.2; }
