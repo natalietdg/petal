@@ -176,10 +176,16 @@ PastelTerm.scenes = (() => {
       const FALLEN = { '27,39': 'l', '31,39': 'B', '36,39': 'l', '39,39': 'B', '29,38': 'B', '38,38': 'l' };
       const grass = (x, y) => (y >= 38 ? FALLEN[`${x},${y}`] ?? (y === 39 ? 'G' : 'g') : null);
       const butterfly = (left, top) => stamp(left, top, ['w.w', '.d.'], { w: 'ol-fly', d: 'ol-fly-d' });
+      // A red paper lantern (chōchin) hanging from the long branch just above the pet: cream caps, ribbed body.
+      const lantern = outlined(stamp(24, 14, ['.ccc.', 'rRrRr', 'rRrRr', 'rRrRr', 'rRrRr', '.ccc.'], {
+        c: 'ol-lantern-cap', r: 'ol-lantern', R: 'ol-lantern-rib',
+      }), 'ol-lantern-edge');
+      // Its warm light on the blossom and sky around it.
+      const lanternGlow = (x, y) => (inCircle(x, y, 26, 16.5, 5) ? 'ol-lantern-glow' : null);
       return {
         name: 'Cherry Blossom',
         size: [40, 40],
-        paint: layers(butterfly(1, 23), butterfly(35, 3), basket, blanket, grass, trunk, blossom, trunkEdge, branches, torii, hills),
+        paint: layers(lantern, butterfly(1, 23), butterfly(35, 3), basket, blanket, grass, trunk, blossom, trunkEdge, branches, torii, hills, lanternGlow),
         // Anything over the cat's half of the canvas sits in front of her.
         front: (x, y) => x >= 20 && y <= 19,
         moving: [[24, 18, 'b'], [29, 22, 'l'], [21, 26, 'b'], [35, 20, 'l'], [26, 30, 'b'], [17, 24, 'l']],
