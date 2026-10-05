@@ -142,10 +142,3 @@
 .sc-ol-ink { fill: #232845; }
 /* Autumn reading nook. */
 .sc-ol-rug { fill: #7A3029; }
-
-/* Sakura Picnic paper lantern: vermilion body, darker ribs, cream caps, and a breathing warm glow. */
-.sc-ol-lantern { fill: #D23B30; } .sc-ol-lantern-rib { fill: #9E2420; } .sc-ol-lantern-cap { fill: #F4E6C8; }
-.sc-ol-lantern-edge { fill: #5A1612; }
-.sc-ol-lantern-glow { fill: #FFC97A; opacity: 0.22; animation: lantern-breathe 3.4s ease-in-out infinite; }
-@keyframes lantern-breathe { 50% { opacity: 0.34; } }
-[data-theme="dark"] #cat .sc-ol-lantern-glow { opacity: 0.3; }
