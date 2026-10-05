@@ -276,12 +276,13 @@
 .sc-vs { fill: #9DB58A; } .sc-vc { fill: #F4EEDC; } .sc-vd { fill: #6F8A5E; }
 .sc-i { fill: #A9D883; } .sc-j { fill: #EBA07B; } .sc-X { fill: #A9563A; } .sc-W { fill: #4A3324; }
 
-/* While Claude works the scene moves too: petals drift, waves roll, stars twinkle. */
-#cat.busy :is(.scene-cherry, .scene-rug) .scene-moving { animation: petals 3.6s steps(12) infinite; }
-#cat.busy .scene-beach .scene-moving { animation: waves 1.6s steps(2) infinite; }
+/* Every scene always has one gentle motion: petals and leaves drift, waves roll, stars twinkle.
+   The extras (sun rays, crab, windsurfer, fairy lights, lamp) still wait for Claude to be working. */
+#cat :is(.scene-cherry, .scene-rug) .scene-moving { animation: petals 3.6s steps(12) infinite; }
+#cat .scene-beach .scene-moving { animation: waves 1.6s steps(2) infinite; }
 #cat.busy .scene-beach .scene-moving .sc-u { animation: blaze 1.2s steps(1) infinite; }
 @keyframes blaze { 50% { opacity: 0.4; } }
-#cat.busy .scene-night .scene-moving { animation: twinkle 2.4s steps(1) infinite; }
+#cat .scene-night .scene-moving { animation: twinkle 2.4s steps(1) infinite; }
 #cat.busy .scene-night .sc-y { animation: lamp-glow 3.2s ease-in-out infinite; }
 @keyframes lamp-glow { 50% { opacity: 0.45; } }
 @keyframes petals {
