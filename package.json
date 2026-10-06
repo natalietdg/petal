@@ -2,13 +2,17 @@
   "name": "pastel-term",
   "version": "1.0.0",
   "description": "Petal: a calm, readable pastel terminal for Claude Code",
-  "main": "src/main/main.js",
+  "main": "out/main/index.js",
   "scripts": {
-    "start": "electron .",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "postinstall": "electron-rebuild -f -w node-pty",
     "contrast": "node scripts/check-contrast.mjs",
-    "snapshot": "PASTEL_SNAPSHOT=1 electron .",
-    "package": "electron-packager . \"Petal\" --platform=darwin --arch=arm64 --out=dist.noindex --overwrite --asar.unpack=\"**/node_modules/node-pty/**\" --ignore=\"^/dist\" --ignore=\"^/scripts\" --app-bundle-id=local.petal --icon=build/icon.icns"
+    "snapshot": "electron-vite build && PASTEL_SNAPSHOT=1 electron .",
+    "package": "electron-vite build && electron-builder --mac --dir --universal --publish never",
+    "dist": "electron-vite build && electron-builder --mac --publish never"
   },
   "keywords": [],
   "author": "",
@@ -29,9 +33,13 @@
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "@electron/rebuild": "^4.2.0",
-    "electron": "^44.4.5"
+    "@types/node": "^24.19.1",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
   },
   "productName": "Petal",
   "private": true

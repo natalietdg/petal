@@ -1,0 +1,44 @@
+# Petal packaging. `npm run package` builds the .app only; `npm run dist` adds the dmg and zip.
+appId: local.petal
+productName: Petal
+directories:
+  output: dist.noindex # .noindex keeps Spotlight from indexing build output
+  buildResources: build
+files:
+  - out/**
+  - src/renderer/**
+  - package.json
+  - "!**/node_modules/node-pty/prebuilds/win32-*/**"
+  - "!**/node_modules/node-pty/deps/**"
+  - "!**/node_modules/node-pty/src/**"
+  - "!**/node_modules/node-pty/third_party/**"
+  # Stale rebuild output and build intermediates; node-pty loads build/Release/pty.node or prebuilds/.
+  - "!**/node_modules/node-pty/bin/**"
+  - "!**/node_modules/node-pty/build/Release/{obj.target,.deps,node-addon-api}/**"
+  - "!**/node_modules/node-pty/build/Release/.forge-meta"
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+mac:
+  target:
+    - target: dmg
+      arch: universal
+    - target: zip
+      arch: universal
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  # Signing is off until the Developer ID cert is installed: then delete this line and set notarize: true.
+  identity: null
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  # Both slices ship node-pty's prebuilt darwin-x64 and darwin-arm64 binaries unchanged.
+  x64ArchFiles: "**/node_modules/node-pty/prebuilds/darwin-*/**"
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+# Auto-update is stubbed: this only writes latest-mac.yml; nothing publishes or checks for updates yet.
+publish:
+  provider: github
+  owner: natalietdg
+  repo: petal
+  releaseType: draft
