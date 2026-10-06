@@ -16,6 +16,18 @@ import type { Theme } from '../shared/types';
 
 const THEMES = ['paleSky', 'nightPastel'];
 
+const CLAUDE_DIR = path.join(os.homedir(), '.claude');
+
+// The fixture jsonl is written and appended to; it must never land in her real Claude data.
+export function assertFixtureOutsideClaude(file: string): void {
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+  const target = path.join(real(path.dirname(path.resolve(file))), path.basename(file));
+  const claudeDir = real(CLAUDE_DIR);
+  if (target === claudeDir || target.startsWith(`${claudeDir}${path.sep}`)) {
+    throw new Error(`refusing to write the snapshot fixture under ~/.claude: ${file}`);
+  }
+}
+
 async function exportAndPreview(kit: Kit, containerSelector: string, name: string, theme: Theme): Promise<string | null> {
   const { js, waitFor, wait, log, verifiedCapture } = kit;
   await wait(2000); // let the theme-switch re-render of the flow land first
@@ -235,6 +247,7 @@ export async function flowRelaunch(kit: Kit, { fixtureFile, realSessionId }: { f
   log(`${steps && stats.extractions === before ? 'ok' : 'FAIL'} relaunch: stored flow rendered (${steps} cards), jsonl extractions ${stats.extractions - before}, stale note ${await js("Boolean(document.querySelector('#flow-view .flow-stale:not(:empty)'))")}`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-relaunch-paleSky' });
 
+  assertFixtureOutsideClaude(fixtureFile);
   const line = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
   fs.appendFileSync(fixtureFile, line({ type: 'user', uuid: 'fixture-u9', message: { role: 'user', content: 'add a stored flow' } })
     + line({ type: 'assistant', uuid: 'fixture-a9', message: { role: 'assistant', content: [{ type: 'text', text: '**Flows are now stored.**\n\n**Done:** flows save to userData and load instantly' }] } }));

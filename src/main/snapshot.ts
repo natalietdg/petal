@@ -229,6 +229,7 @@ const FIXTURE_STEPS: { prompt: string; edits?: string[]; reply: string | null }[
 ];
 
 function writeFixture(file: string): void {
+  views.assertFixtureOutsideClaude(file);
   const entry = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
   const assistant = (uuid: string, content: unknown) => entry({ type: 'assistant', uuid, message: { role: 'assistant', content } });
   const lines: string[] = [];
