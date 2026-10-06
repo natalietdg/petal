@@ -1,4 +1,5 @@
 // Dev-only render proof: PASTEL_SNAPSHOT=1 drives a real claude in the pty, captures PNGs, quits.
+// main.ts imports this file dynamically, only in snapshot runs, so normal launches never load it.
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -6,10 +7,11 @@ import path from 'node:path';
 import { app, type BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
-import * as sessionsMonitor from './sessions-monitor';
-import { once } from './ipc';
-import type { ReaderFeed } from './reader-feed';
-import type { ActiveSession, OpenTab, TabSessions } from './tab-session';
+import * as sessionsMonitor from '../main/sessions-monitor';
+import { once } from '../main/ipc';
+import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
+import type { ReaderFeed } from '../main/reader-feed';
+import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
 
 export type Log = (line: string) => void;
@@ -64,11 +66,12 @@ interface StepDeps {
 }
 
 const PROMPT = 'say hi in 3 words, then one plain sentence about pastel colours';
-export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
-// PASTEL_SNAPSHOT_FAKE_JSONL=<path>: replay a fixture reply instead of starting a real claude.
-export const fakeTranscript = (): string | null => (isSnapshotRun() && process.env.PASTEL_SNAPSHOT_FAKE_JSONL) || null;
-const outDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
-export const userDataDir = (): string => path.join(outDir(), 'userData');
+const fakeTranscript = fixtureFile;
+const outDir = snapshotOutDir;
+// The fixture feed's busy/idle, which drives the cat and reply-finished.
+export function setFixtureStatus(feed: ReaderFeed, status: 'idle' | 'busy'): void {
+  if (feed.fixture) feed.fixture.status = status;
+}
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitFor<T>(check: () => T | Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -262,7 +265,7 @@ async function captureCatAt({ js, win, log, name, size }: Pick<StepDeps, 'js' | 
 
 async function catFrames({ js, win, capture, log, feed, themes, applyTheme }: StepDeps & { feed: ReaderFeed }): Promise<void> {
   for (const [status, busy] of [['idle', false], ['busy', true]] as const) {
-    feed.fakeStatus = status;
+    setFixtureStatus(feed, status);
     const shown = await waitFor(async () => (await js("document.getElementById('cat').classList.contains('busy')")) === busy || null, 5000);
     const info = await js("(() => { const c = document.getElementById('cat'); return { hidden: c.hidden, tip: c.querySelector('.cat-tip').textContent }; })()");
     log(`${shown ? 'ok' : 'FAIL'} cat ${status}: ${JSON.stringify(info)}`);
@@ -282,7 +285,7 @@ async function catFrames({ js, win, capture, log, feed, themes, applyTheme }: St
     }
   }
   applyTheme('paleSky', { persist: false });
-  feed.fakeStatus = 'idle';
+  setFixtureStatus(feed, 'idle');
 }
 
 async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<StepDeps, 'win'>): Promise<void> {

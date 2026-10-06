@@ -6,6 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { app, Notification } from 'electron';
 import * as configStore from './config-store';
 import { claudePath, cleanEnv } from './claude-cli';
+import { counters, isSnapshotRun } from './snapshot-mode';
 import type { Reply } from '../shared/types';
 
 export const TIMEOUT_MS = 30_000;
@@ -42,10 +43,8 @@ This is a sample reply sent by "Test hook". A real one arrives each time Claude 
 
 const seen = new Set<string>();
 const runs: HookRun[] = [];
-let skippedInSnapshot = 0;
 
 export const hookDir = (): string => path.join(app.getPath('userData'), 'hook');
-const isSnapshotRun = () => process.env.PASTEL_SNAPSHOT === '1';
 const safeName = (id: string) => String(id).replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || 'reply';
 
 function remember(id: string): void {
@@ -127,7 +126,7 @@ export async function runCommand(command: string, { replyId, markdown, sessionId
 
 // Called by the reader once per finished turn. Returns the run promise, or null when nothing ran.
 export function onReplyFinished({ reply, sessionId, title, cwd }: { reply: Reply; sessionId: string; title: string; cwd: string | null }): Promise<HookRun> | null {
-  if (isSnapshotRun()) { skippedInSnapshot += 1; return null; } // snapshot runs never run her command
+  if (isSnapshotRun()) { counters.hookSkippedInSnapshot += 1; return null; } // snapshot runs never run her command
   if (!reply?.id || seen.has(reply.id)) return null;
   remember(reply.id);
   const { command, notify: wantsNotice } = configStore.load().responseHook;
@@ -145,4 +144,4 @@ export function test(): Promise<HookTestResult> {
 }
 
 export const recentRuns = (): HookRun[] => runs.map((run) => ({ ...run }));
-export const stats = (): { skippedInSnapshot: number; runs: number } => ({ skippedInSnapshot, runs: runs.length });
+export const stats = (): { skippedInSnapshot: number; runs: number } => ({ skippedInSnapshot: counters.hookSkippedInSnapshot, runs: runs.length });

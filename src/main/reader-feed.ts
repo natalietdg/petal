@@ -1,9 +1,9 @@
 // Pins the reader to the claude running inside one pty; never any other session.
-import { findClaudeSession, type ClaudeSession } from './claude-session';
+import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude-session';
+import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail } from './transcript';
+import type { FixtureSession } from './snapshot-mode';
 import type { ReaderState, ReaderUpdate, Reply } from '../shared/types';
-
-const TICK_MS = 1000;
 
 // The session the reader follows; a fixture replay only fills sessionId, status and transcript.
 export type FollowedSession = Pick<ClaudeSession, 'sessionId' | 'transcript'> & Partial<ClaudeSession>;
@@ -15,44 +15,44 @@ export interface ReplyFinished {
 }
 
 interface FeedOptions {
-  fakeTranscript?: string | null;
+  fixture?: FixtureSession | null;
   onReplyFinished?: ((finished: ReplyFinished) => void) | null;
 }
 
-// Dev-only: a snapshot run can replay a fixture jsonl instead of a live claude.
-const FAKE_SESSION = { pid: null, session: null };
-
-export class ReaderFeed {
+export class ReaderFeed implements ProcessListener {
   private readonly shellPid: number;
   private readonly onReplyFinished: ((finished: ReplyFinished) => void) | null;
   private finishingId: string | null = null; // reply whose turn just went busy -> idle, reported on the next tick
-  private readonly fakeTranscript: string | null;
-  fakeStatus = 'idle'; // snapshot runs flip this to drive the fixture's busy/idle
+  // Dev-only: a snapshot run replays a fixture jsonl instead of a live claude.
+  readonly fixture: FixtureSession | null;
   private readonly send: (channel: 'reader:replies', update: ReaderUpdate) => void;
   session: FollowedSession | null = null;
   claudePid: number | null = null;
   private tail: TranscriptTail | null = null;
   private replies: Reply[] = [];
   private ticking = false;
-  private readonly timer: NodeJS.Timeout;
 
-  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fakeTranscript = null, onReplyFinished = null }: FeedOptions = {}) {
+  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null }: FeedOptions = {}) {
     this.shellPid = shellPid;
     this.onReplyFinished = onReplyFinished;
-    this.fakeTranscript = fakeTranscript;
+    this.fixture = fixture;
     this.send = send;
     this.emit('none');
-    this.timer = setInterval(() => this.tick(), TICK_MS);
+    subscribe(this);
+  }
+
+  get needsProcesses(): boolean {
+    return !this.fixture;
   }
 
   // Re-resolved every tick: /clear and /resume change the sessionId.
-  private async tick(): Promise<void> {
+  async tick(processes: readonly ProcessRow[]): Promise<void> {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      const { pid, session: found }: { pid: number | null; session: FollowedSession | null } = this.fakeTranscript
-        ? { ...FAKE_SESSION, session: { sessionId: 'snapshot-fixture', status: this.fakeStatus, transcript: this.fakeTranscript } }
-        : await findClaudeSession(this.shellPid);
+      const { pid, session: found }: { pid: number | null; session: FollowedSession | null } = this.fixture
+        ? { pid: null, session: { ...this.fixture } }
+        : findClaudeSession(this.shellPid, processes);
       this.setClaudePid(pid);
       if (found && found.sessionId !== this.session?.sessionId) this.follow(found);
       else if (found) this.refresh(found);
@@ -125,7 +125,7 @@ export class ReaderFeed {
   }
 
   stop(): void {
-    clearInterval(this.timer);
+    unsubscribe(this);
     this.tail?.stop();
   }
 }

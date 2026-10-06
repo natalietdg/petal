@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 export const SESSIONS_DIR = path.join(CLAUDE_DIR, 'sessions');
 
-interface ProcessRow {
+export interface ProcessRow {
   pid: number;
   ppid: number;
   comm: string;
@@ -32,7 +32,7 @@ export interface ClaudeSession extends SessionFile {
 // Claude Code names project folders after the cwd with every non-alphanumeric as '-'.
 const projectSlug = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, '-');
 
-function listProcesses(): Promise<ProcessRow[]> {
+export function listProcesses(): Promise<ProcessRow[]> {
   return new Promise((resolve) => {
     execFile('/bin/ps', ['-Ao', 'pid=,ppid=,comm='], (error, stdout) => {
       if (error) return resolve([]);
@@ -47,7 +47,7 @@ function listProcesses(): Promise<ProcessRow[]> {
 // "claude" or ".../bin/claude"; helpers show up as "claude bg-spare" / "claude bg-pty-host".
 const isClaudeCli = (comm: string) => path.basename(comm) === 'claude';
 
-function descendants(rootPid: number, processes: ProcessRow[]): ProcessRow[] {
+function descendants(rootPid: number, processes: readonly ProcessRow[]): ProcessRow[] {
   const found: ProcessRow[] = [];
   const queue = [rootPid];
   while (queue.length) {
@@ -76,9 +76,9 @@ export function readSessionFile(pid: number): SessionFile | null {
 export const transcriptPath = ({ cwd, sessionId }: { cwd: string; sessionId: string }): string =>
   path.join(CLAUDE_DIR, 'projects', projectSlug(cwd), `${sessionId}.jsonl`);
 
-// { pid, session } for the claude under shellPid. session is null until its file is readable.
-export async function findClaudeSession(shellPid: number): Promise<{ pid: number | null; session: ClaudeSession | null }> {
-  const candidates = descendants(shellPid, await listProcesses()).filter((proc) => isClaudeCli(proc.comm));
+// { pid, session } for the claude under shellPid, from one `ps` listing. session is null until its file is readable.
+export function findClaudeSession(shellPid: number, processes: readonly ProcessRow[]): { pid: number | null; session: ClaudeSession | null } {
+  const candidates = descendants(shellPid, processes).filter((proc) => isClaudeCli(proc.comm));
   for (const proc of candidates) {
     const session = readSessionFile(proc.pid);
     if (session) return { pid: proc.pid, session: { ...session, transcript: transcriptPath(session) } };

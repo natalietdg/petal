@@ -77,6 +77,20 @@ export function load(): OrganizerStore {
   }
 }
 
+// Read-only view for hot paths (every tab label, every reader tick): re-read only when the file changes.
+let readCache: { mtimeMs: number; size: number; store: Readonly<OrganizerStore> } | null = null;
+export function loadCached(): Readonly<OrganizerStore> {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(storeFile());
+  } catch {
+    readCache = null;
+    return {};
+  }
+  if (readCache?.mtimeMs !== stat.mtimeMs || readCache.size !== stat.size) readCache = { mtimeMs: stat.mtimeMs, size: stat.size, store: load() };
+  return readCache.store;
+}
+
 function save(store: OrganizerStore): void {
   writeJsonAtomic(storeFile(), store, 1);
 }

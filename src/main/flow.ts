@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { contentItems, isUserTurn, promptText, commandText, trimTo } from './prompts';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
+import { counters } from './snapshot-mode';
 import type { OutcomeLabel } from '../shared/types';
 
 const LABELS: Record<string, OutcomeLabel> = { 'done': 'done', 'decide': 'decide', 'watch out': 'watch', 'next': 'next', 'why': 'why' };
@@ -123,10 +124,8 @@ function summarise(step: RawStep): FlowStep {
   };
 }
 
-export const stats = { extractions: 0 }; // lets the snapshot prove a stored flow skipped the jsonl
-
 async function extract(file: string): Promise<Flow> {
-  stats.extractions += 1;
+  counters.flowExtractions += 1; // lets the snapshot prove a stored flow skipped the jsonl
   const steps: RawStep[] = [];
   let step: RawStep | null = null;
   let turnOpen = false;

@@ -4,14 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow, Menu, type MenuItem } from 'electron';
 import type { IPty } from 'node-pty';
-import { stats } from './flow';
-import * as flowStore from './flow-store';
-import * as responseHook from './response-hook';
-import { send } from './ipc';
-import { buildResumeCommand, resumeArgs } from './resume-command';
-import type { ReaderFeed } from './reader-feed';
-import type { Kit, TabsDeps } from './snapshot';
-import type { TabSessions } from './tab-session';
+import * as flowStore from '../main/flow-store';
+import * as responseHook from '../main/response-hook';
+import { counters } from '../main/snapshot-mode';
+import { send } from '../main/ipc';
+import { buildResumeCommand, resumeArgs } from '../main/resume-command';
+import type { ReaderFeed } from '../main/reader-feed';
+import { setFixtureStatus, type Kit, type TabsDeps } from './snapshot';
+import type { TabSessions } from '../main/tab-session';
 import type { Theme } from '../shared/types';
 
 const THEMES = ['paleSky', 'nightPastel'];
@@ -45,10 +45,10 @@ async function exportAndPreview(kit: Kit, containerSelector: string, name: strin
 export async function fixtureFlow(kit: Kit): Promise<void> {
   const { js, waitFor, log, themes, applyTheme, verifiedCapture, outDir } = kit;
   applyTheme('paleSky', { persist: false });
-  const before = stats.extractions;
+  const before = counters.flowExtractions;
   await js("PastelTerm.reader.setView('flow')");
   const empty = await waitFor(() => js("Boolean(document.querySelector('#flow-view .flow-empty'))"), 10000);
-  log(`${empty && stats.extractions === before ? 'ok' : 'FAIL'} no stored flow: empty state shown, jsonl extractions ${stats.extractions - before}`);
+  log(`${empty && counters.flowExtractions === before ? 'ok' : 'FAIL'} no stored flow: empty state shown, jsonl extractions ${counters.flowExtractions - before}`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-empty-paleSky' });
   await js("document.querySelector('#flow-view .flow-empty .flow-button').click()");
   await waitFor(() => js("document.querySelectorAll('#flow-view .flow-step').length"), 100_000); // Haiku titling can take up to claude-cli's 90s
@@ -241,10 +241,10 @@ export async function openFromHistory(kit: Kit, { pty, feed, transcript, session
 export async function flowRelaunch(kit: Kit, { fixtureFile, realSessionId }: { fixtureFile: string; realSessionId: string }): Promise<void> {
   const { js, wait, waitFor, log, themes, applyTheme, verifiedCapture } = kit;
   applyTheme('paleSky', { persist: false });
-  const before = stats.extractions;
+  const before = counters.flowExtractions;
   await js("PastelTerm.reader.setView('flow')");
   const steps = await waitFor(() => js("document.querySelectorAll('#flow-view .flow-step').length || null"), 15000);
-  log(`${steps && stats.extractions === before ? 'ok' : 'FAIL'} relaunch: stored flow rendered (${steps} cards), jsonl extractions ${stats.extractions - before}, stale note ${await js("Boolean(document.querySelector('#flow-view .flow-stale:not(:empty)'))")}`);
+  log(`${steps && counters.flowExtractions === before ? 'ok' : 'FAIL'} relaunch: stored flow rendered (${steps} cards), jsonl extractions ${counters.flowExtractions - before}, stale note ${await js("Boolean(document.querySelector('#flow-view .flow-stale:not(:empty)'))")}`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-relaunch-paleSky' });
 
   assertFixtureOutsideClaude(fixtureFile);
@@ -252,7 +252,7 @@ export async function flowRelaunch(kit: Kit, { fixtureFile, realSessionId }: { f
   fs.appendFileSync(fixtureFile, line({ type: 'user', uuid: 'fixture-u9', message: { role: 'user', content: 'add a stored flow' } })
     + line({ type: 'assistant', uuid: 'fixture-a9', message: { role: 'assistant', content: [{ type: 'text', text: '**Flows are now stored.**\n\n**Done:** flows save to userData and load instantly' }] } }));
   const stale = await waitFor(() => js("document.querySelector('#flow-view .flow-stale')?.innerText.includes('continued') || null"), 15000);
-  log(`${stale && stats.extractions === before ? 'ok' : 'FAIL'} after append: stale note shown, nothing auto-updated (extractions ${stats.extractions - before})`);
+  log(`${stale && counters.flowExtractions === before ? 'ok' : 'FAIL'} after append: stale note shown, nothing auto-updated (extractions ${counters.flowExtractions - before})`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-stale-paleSky' });
 
   await js("document.querySelector('#flow-view .flow-stale .flow-button').click()");
@@ -319,7 +319,7 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
   check(echoed && !firstText.includes('echo tab2') && firstText.includes('Petal render check'),
     `"echo tab2" printed in tab 2 only; tab 1 keeps its own output: tab2=${Boolean(echoed)} leakedIntoTab1=${firstText.includes('echo tab2')} tab1Sample=${firstText.includes('Petal render check')}`);
 
-  feed.fakeStatus = 'busy'; // tab 1's claude goes busy while tab 2 is shown
+  setFixtureStatus(feed, 'busy'); // tab 1's claude goes busy while tab 2 is shown
   const dotted = await waitState((s) => s.busyDots.includes(first));
   check(dotted && !dotted.catBusy && !dotted.busyDots.includes(second), `busy dot on tab 1 only, pet idle on tab 2: ${JSON.stringify(dotted?.busyDots)} catBusy=${dotted?.catBusy}`);
 
@@ -328,7 +328,7 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
   check(back && back.shown.join() === first && mainActive() === first, `click on tab 1: reader back on the fixture reply, pet busy: ${JSON.stringify(back)} mainActive=${mainActive()}`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'tabs-first' });
 
-  feed.fakeStatus = 'idle';
+  setFixtureStatus(feed, 'idle');
   send(contents, 'tabs:cycle', 1); // the ⌘⇧] path
   const cycled = await waitState((s) => s.active === second && !s.latest && !s.catBusy);
   check(cycled && cycled.shown.join() === second && mainActive() === second, `next tab: tab 2 shown, reader empty, pet idle: ${JSON.stringify(cycled)}`);
