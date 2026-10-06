@@ -58,12 +58,20 @@ const hills: Shape = (x, y) => {
 const FALLEN: Record<string, CellClass> = { '27,39': 'l', '31,39': 'B', '36,39': 'l', '39,39': 'B', '29,38': 'B', '38,38': 'l' };
 const grass: Shape = (x, y) => (y >= 38 ? FALLEN[`${x},${y}`] ?? (y === 39 ? 'G' : 'g') : null);
 const butterfly = (left: number, top: number): Shape => stamp(left, top, ['w.w', '.d.'], { w: 'ol-fly', d: 'ol-fly-d' });
+// Falling petals in the open air under the branches: 16 two-pixel petals in four waves (pa..pd), each wave on its own timing so they never fall in step.
+const PETALS: [number, number][] = [
+  [2, 18], [10, 17], [16, 19], [24, 18], [13, 23], [5, 24], [21, 22], [18, 27],
+  [9, 29], [26, 25], [1, 30], [14, 31], [22, 30], [7, 21], [19, 15], [11, 26],
+];
+const WAVES = ['pa', 'pb', 'pc', 'pd'];
+const fallingPetals = PETALS.flatMap(([x, y], i): [number, number, CellClass][] => [[x, y, WAVES[i % 4]], [x + 1, y, WAVES[i % 4]]]);
+
 const scene: Scene = {
   name: 'Cherry Blossom',
   size: [40, 40],
   paint: layers(butterfly(1, 23), butterfly(35, 3), basket, blanket, grass, trunk, blossom, trunkEdge, branches, torii, hills),
   // Anything over the cat's half of the canvas sits in front of her.
   front: (x, y) => x >= 20 && y <= 19,
-  moving: [[24, 18, 'b'], [29, 22, 'l'], [21, 26, 'b'], [35, 20, 'l'], [26, 30, 'b'], [17, 24, 'l']],
+  moving: fallingPetals,
 };
 export default scene;
