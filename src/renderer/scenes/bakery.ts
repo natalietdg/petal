@@ -1,7 +1,7 @@
 // Bakery: a cosy brown bread shop. Caramel awning, warm plaster wall under a pendant lamp,
 // wooden shelves of loaves, a basket of baguettes, and a glass case of cream buns. Light from the top-left.
 // Clarity rules: every object is ringed by a 1px outline in a darker tone of its own material.
-import { inCircle, inEllipse, type CellClass, type Scene, type Shape } from './kit';
+import { inCircle, inEllipse, layers, outlined, stamp, type CellClass, type Scene, type Shape } from './kit';
 
 type Inside = (x: number, y: number) => boolean;
 
@@ -12,26 +12,6 @@ const LOW_SHELF = 25;
 const COUNTER_TOP = 29;
 const CHAIR_RAIL = 34;
 const LAMP = { x: 23.5, y: 12 };
-
-// Wraps a shape so every empty cell touching it (4-way) becomes its outline colour.
-const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-function outlined(shape: Shape, ink: CellClass): Shape {
-  return (x, y) => shape(x, y) ?? (NEIGHBOURS.some(([dx, dy]) => shape(x + dx, y + dy)) ? ink : null);
-}
-// Stacks layers front to back: the first one with a colour at (x, y) wins.
-const stack = (...layers: Shape[]): Shape => (x, y) => {
-  for (const layer of layers) {
-    const cell = layer(x, y);
-    if (cell) return cell;
-  }
-  return null;
-};
-
-// Turns a little bitmap into a painter at (left, top); '.' is empty, other letters map through the legend.
-const sprite = (rows: readonly string[], legend: Record<string, CellClass>) => (x: number, y: number, left: number, top: number): CellClass | null => {
-  const ch = rows[y - top]?.[x - left];
-  return ch && ch !== '.' ? legend[ch] : null;
-};
 
 // Awning: 8 caramel and cream stripes of 6, each ending in a rounded scallop with a shaded underside.
 function awningShape(x: number, y: number): CellClass | null {
@@ -65,7 +45,7 @@ const shade = outlined((x, y) => {
   if (y === 11 && x >= 21 && x <= 26) return x === 26 ? 'b-shadeD' : x <= 22 ? 'b-shadeL' : 'b-shade';
   return null;
 }, 'b-shade-ink');
-const lamp = stack(cord, bulb, shade);
+const lamp = layers(cord, bulb, shade);
 
 // A crusty shape: outlined edge, lit top-left, shaded bottom-right.
 function crust(x: number, y: number, inside: Inside, cx: number, cy: number): CellClass | null {
@@ -124,7 +104,7 @@ const baguette = (left: number, top: number): Shape => outlined((x, y) => {
   if (dx < 2 && (y - top + dx) % 3 === 0) return 'b-score';
   return BAGUETTE_TONES[dx];
 }, 'b-ol');
-const baguettes = stack(...BAGUETTES.map(([left, top]) => baguette(left, top)));
+const baguettes = layers(...BAGUETTES.map(([left, top]) => baguette(left, top)));
 
 // Wicker basket: lit rim, woven body that tapers at the bottom, shaded right side.
 function basket(x: number, y: number): CellClass | null {
@@ -138,7 +118,7 @@ function basket(x: number, y: number): CellClass | null {
 const basketInk = outlined(basket, 'b-wicker-ink');
 
 // Cream bun: a golden lid dusted with powdered sugar, a thick band of cream, a golden base.
-const creamBun = sprite([
+const CREAM_BUN = [
   '.oooo.',
   'osLsMo',
   'oLsMDo',
@@ -146,7 +126,9 @@ const creamBun = sprite([
   'oWWWwo',
   'oMMDDo',
   '.oooo.',
-], { o: 'b-ol', L: 'b-crustL', M: 'b-crust', D: 'b-crustD', s: 'b-sugar', W: 'b-whip', w: 'b-whipD' });
+];
+const CREAM_BUN_LEGEND: Record<string, CellClass> = { o: 'b-ol', L: 'b-crustL', M: 'b-crust', D: 'b-crustD', s: 'b-sugar', W: 'b-whip', w: 'b-whipD' };
+const creamBun = (left: number, top: number): Shape => stamp(left, top, CREAM_BUN, CREAM_BUN_LEGEND);
 
 // Croissant: a plump 11x5 crescent with drooping horns, split into rolled segments by dark creases.
 type Span = readonly [number, number];
@@ -174,7 +156,7 @@ const counter = outlined((x, y) => {
   if (y === COUNTER_TOP + 1) return 'b-woodD';
   if (y <= 40) {
     if (x === 1 || x === 26 || y === 40) return 'b-frame';
-    const bun = creamBun(x, y, 3, 33) ?? creamBun(x, y, 10, 33) ?? creamBun(x, y, 17, 33);
+    const bun = creamBun(3, 33)(x, y) ?? creamBun(10, 33)(x, y) ?? creamBun(17, 33)(x, y);
     if (bun) return bun;
     const shine = x - (y - 31);
     if ((shine === 6 || shine === 7 || shine === 16) && y <= 32) return 'b-shine';
@@ -206,12 +188,12 @@ function shelf(top: number, from: number, to: number, brackets: readonly number[
 }
 
 // Front to back. Fill-only layers sit ahead of outlines that must not cut into them.
-const paint = stack(
+const paint = layers(
   awning, lamp,
   boule(5.5, 12, 4.5, 3), panLoaf(11, 9), braid(34, 12.1), boule(44, 12.4, 3, 2.6),
   basket, baguettes,
   shelf(TOP_SHELF, 1, 46, [12, 36]),
-  croissant(28, 20), (x, y) => creamBun(x, y, 40, 18),
+  croissant(28, 20), creamBun(40, 18),
   shelf(LOW_SHELF, 28, 46, [30, 43]),
   boule(20.5, 27, 4.5, 2.4),
   counter, basketInk,

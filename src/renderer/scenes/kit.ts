@@ -20,6 +20,15 @@ export interface Scene {
 }
 
 export type Segment = readonly [x1: number, y1: number, x2: number, y2: number];
+// A round clump [cx, cy, r].
+export type Circle = readonly [cx: number, cy: number, r: number];
+export interface Trunk {
+  cx: number;
+  top: number;
+  bottom: number;
+  sway: number;
+  limbs: readonly Segment[];
+}
 
 export const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -42,6 +51,12 @@ export const stamp = (left: number, top: number, rows: readonly string[], legend
   const ch = rows[y - top]?.[x - left];
   return ch && ch !== '.' ? legend[ch] ?? null : null;
 };
+
+// Turns a little bitmap into cells at (x0, y0); '.' is empty, other letters map through the legend.
+export const sprite = (rows: readonly string[], x0: number, y0: number, legend: Record<string, CellClass>): Cell[] => rows.flatMap((row, dy) => [...row].flatMap((ch, dx): Cell[] => {
+  const cell = legend[ch];
+  return cell ? [[x0 + dx, y0 + dy, cell]] : [];
+}));
 
 // A shape's cells inside a box, for groups that animate (moving, crab).
 export function cellsOf(shape: Shape, x1: number, y1: number, x2: number, y2: number): Cell[] {
@@ -79,4 +94,24 @@ export function onSegments(x: number, y: number, segments: readonly Segment[]): 
     }
     return false;
   });
+}
+
+// A tree trunk that curves, tapers and flares at the roots, lit on its left edge and shaded on its right,
+// with a few dark knots; thick limbs fork off it. Shared by the cherry and the autumn trees.
+export function barkCell(x: number, y: number, { cx, top, bottom, sway, limbs }: Trunk): CellClass | null {
+  const px = x + 0.5;
+  if (y >= top && y <= bottom) {
+    const centre = cx + sway * Math.sin((bottom - y) / 7);
+    const fromBase = bottom - y;
+    const half = fromBase <= 1 ? 3 : fromBase <= 5 ? 2 : 1.5;
+    const offset = px - centre;
+    if (Math.abs(offset) <= half) {
+      if (offset < -half + 1) return 't';
+      if (offset > half - 1 || (x * 3 + y * 7) % 9 === 0) return 'J';
+      return 'k';
+    }
+  }
+  const limb = limbs.find(([x1, y1, x2, y2]) => distanceToSegment(px, y + 0.5, x1, y1, x2, y2) <= 0.9);
+  if (limb) return px < limb[0] + (limb[2] - limb[0]) * ((y - limb[1]) / (limb[3] - limb[1])) ? 't' : 'k';
+  return null;
 }

@@ -1,6 +1,6 @@
 // Winter Fireplace: a brick fireplace with stockings and a crackling fire, and a snowy window behind the pet.
 // Clarity rules: every object is ringed by a 1px outline in a darker tone of its own material, lit top-left.
-import { inCircle, inEllipse, type CellClass, type Cell, type Scene, type Shape } from './kit';
+import { inCircle, inEllipse, layers, outlined, type CellClass, type Cell, type Scene, type Shape } from './kit';
 
 // Layout in sprite pixels on the 48x48 canvas.
 const OPENING = { left: 8, right: 19, top: 25, bottom: 43 };
@@ -9,19 +9,6 @@ const GLASS = { left: 28, right: 46, top: 3, bottom: 20 };
 const ARCH = { cx: 37, cy: 12, r: 9.45 };
 const GROUND = 19; // first row of snowy ground inside the window
 
-// Wraps a shape so every empty cell touching it (4-way) becomes its outline colour.
-const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-function outlined(shape: Shape, ink: CellClass): Shape {
-  return (x, y) => shape(x, y) ?? (NEIGHBOURS.some(([dx, dy]) => shape(x + dx, y + dy)) ? ink : null);
-}
-// Stacks layers front to back: the first one with a colour at (x, y) wins.
-const stack = (...layers: Shape[]): Shape => (x, y) => {
-  for (const layer of layers) {
-    const cell = layer(x, y);
-    if (cell) return cell;
-  }
-  return null;
-};
 const inBox = (x: number, y: number, left: number, right: number, top: number, bottom: number): boolean => x >= left && x <= right && y >= top && y <= bottom;
 
 // Bricks are 6x3 with mortar, every other row offset by half a brick; lit top row, a few darker bricks.
@@ -85,7 +72,7 @@ function stockingShape(left: number, top: number, colour: string, mirrored: bool
   };
   return outlined(shape, `${colour}-ink`);
 }
-const stockings = stack(stockingShape(2, 20, 'w-red', false), stockingShape(19, 20, 'w-green', true));
+const stockings = layers(stockingShape(2, 20, 'w-red', false), stockingShape(19, 20, 'w-green', true));
 
 // Wreath on the chimney breast: a ring of leaves lit top-left, four berries, a red bow at the bottom.
 const WREATH = { cx: 14, cy: 7, outer: 4.4, inner: 2.1 };
@@ -168,7 +155,7 @@ const pine = (cx: number, tipY: number): Shape => outlined((x, y) => {
   if (!cell || cell === '.') return null;
   return ({ s: 'w-snow', P: 'w-pine', p: 'w-pine-d', t: 'w-wood-d' } as Record<string, CellClass>)[cell];
 }, 'w-pine-ink');
-const pines = stack(...PINES.map(([cx, tipY]) => pine(cx, tipY)));
+const pines = layers(...PINES.map(([cx, tipY]) => pine(cx, tipY)));
 
 // Mountains: 45-degree slopes, snow caps, a lit left face and shaded right face, a dark ridge line.
 const PEAKS: readonly (readonly [number, number])[] = [[30, 8], [41, 10], [46, 7]];
@@ -208,7 +195,7 @@ const windowInk: Shape = (x, y) => (inWindow(x, y, 2) && !inWindow(x, y, 1) ? 'w
 const sill = outlined((x, y) => (inBox(x, y, 27, 47, 22, 23) ? (y === 22 ? 'w-wood-l' : 'w-wood-d') : null), 'w-wood-ink');
 
 // Front to back. Fill-only layers sit ahead of outlines that must not cut into them.
-const paint = stack(
+const paint = layers(
   windowPane, sill, windowInk,
   candles, bow, wreath, garland, mantel, garlandInk,
   stockings,

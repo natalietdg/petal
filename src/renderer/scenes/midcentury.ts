@@ -1,6 +1,6 @@
 // Mid-Century Lounge: a mustard couch under a big window, a teak credenza with a spinning record, drawn behind the pet.
 // Clarity rules: light from the window (top left), 2-3 tones per material, each object ringed by a 1px edge in its own darkest tone.
-import { inCircle, inEllipse, type CellClass, type Cell, type Scene, type Shape } from './kit';
+import { inCircle, inEllipse, outlined, stamp, type CellClass, type Cell, type Scene, type Shape } from './kit';
 
 // One letter per colour so the hand-drawn sprites below stay readable. '.' is see-through.
 const LEGEND: Record<string, CellClass> = {
@@ -15,17 +15,7 @@ const LEGEND: Record<string, CellClass> = {
 };
 
 // Stamps a hand-drawn sprite: returns its colour at (x, y), or null when off it or see-through.
-const art = (left: number, top: number, rows: readonly string[]): Shape => (x, y) => {
-  const cell = rows[y - top]?.[x - left];
-  return cell && cell !== '.' ? LEGEND[cell] : null;
-};
-
-// Wraps a shape so every empty cell touching it (4-way) becomes its edge colour.
-const NEIGHBOURS: readonly (readonly [number, number])[] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-function outlined(shape: Shape, edge: CellClass): Shape {
-  return (x, y) => shape(x, y)
-    ?? (NEIGHBOURS.some(([dx, dy]) => shape(x + dx, y + dy)) ? edge : null);
-}
+const art = (left: number, top: number, rows: readonly string[]): Shape => stamp(left, top, rows, LEGEND);
 
 // Layout in sprite pixels on the 48x48 canvas.
 const FLOOR = 33; // first floor row; furniture feet stand on the skirting just above it
