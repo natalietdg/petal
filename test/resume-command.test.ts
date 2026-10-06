@@ -52,3 +52,10 @@ describe('resume command', () => {
     expect(throughShell(args[1])).toBe("id'$(whoami)");
   });
 });
+
+describe('buildStartCommand', () => {
+  it('ends claude options and quotes the prompt, even one starting with a dash or holding quotes', async () => {
+    const { buildStartCommand } = await import('../src/main/resume-command');
+    expect(buildStartCommand("-it's fine")).toBe("claude -- '-it'\\''s fine'\r");
+  });
+});

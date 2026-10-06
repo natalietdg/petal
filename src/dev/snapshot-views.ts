@@ -363,7 +363,7 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   log(`${stripped && !output.includes('strip-\x1b') ? 'ok' : 'FAIL'} reply box strips ESC and control characters before pasting: ${Boolean(stripped)}`);
   listener.dispose();
 
-  // A fresh tab has no Claude: the reply stays in the box with a hint, and nothing is written.
+  // A fresh tab has no Claude: sending starts one with the message (snapshot runs echo instead of launching).
   openTab(win.webContents);
   const fresh = await waitFor(() => {
     const next = activeSession(win.webContents.id);
@@ -373,11 +373,20 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   let freshOutput = '';
   const freshListener = fresh.pty.onData((data) => { freshOutput += data; });
   await wait(2500); // login shell rc files
-  await type("'echo gate-should-not-run'");
-  await wait(1500);
-  const gate = await js("({ hint: !document.getElementById('composer-hint').hidden, text: document.getElementById('composer-hint').textContent, kept: document.getElementById('composer-input').value })");
+  // Empty reader in each look: plain message, no stray kicker pill.
+  for (const look of ['newspaper', 'editorial', 'lifestyle']) {
+    await js(`document.documentElement.dataset.reading = '${look}'`);
+    await wait(300);
+    const shape = await js("(() => { const s = [...document.querySelectorAll('#replies-view .status')].filter((el) => getComputedStyle(el).display !== 'none'); return { shown: s.length, upper: s.some((el) => getComputedStyle(el).textTransform === 'uppercase') }; })()");
+    log(`${shape.shown === 1 && !shape.upper ? 'ok' : 'FAIL'} empty reader in ${look}: ${JSON.stringify(shape)}`);
+    await kit.capture(`empty-${look}`);
+  }
+  await js("document.documentElement.dataset.reading = 'newspaper'");
+  await type("'-start it\\'s fine'");
+  const started = await waitFor(() => (/claude-start -start it's fine/.test(freshOutput) ? true : null), 8000);
+  const emptied = await js("document.getElementById('composer-input').value === ''");
   freshListener.dispose();
-  log(`${gate.hint && gate.kept === 'echo gate-should-not-run' && !freshOutput.includes('gate-should-not-run') ? 'ok' : 'FAIL'} reply box refuses a tab without live Claude: ${JSON.stringify(gate)} written=${freshOutput.includes('gate-should-not-run')}`);
+  log(`${started && emptied ? 'ok' : 'FAIL'} reply box starts Claude in a tab without one: started=${Boolean(started)} emptied=${emptied}`);
   await js("document.getElementById('composer-input').value = ''");
   await js(`document.querySelector('#tab-strip .tab[data-tab-id="${fresh.tabId}"] .tab-close').click()`);
   await waitFor(() => (activeSession(win.webContents.id) === session ? true : null), 8000);

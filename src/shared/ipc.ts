@@ -121,6 +121,7 @@ export interface SendChannels {
   'pty:resize': [request: { tabId: TabId } & TermSize];
   'pty:close': [request: { tabId: TabId }];
   'tab:activate': [request: { tabId: TabId }];
+  'tab:start-claude': [request: { tabId: TabId; prompt: string }];
   'link:open': [url: string];
   'renderer:ready': [info: RendererInfo];
   'look:theme': [id: string];

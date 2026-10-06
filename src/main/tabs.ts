@@ -6,7 +6,8 @@ import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
 import * as history from './history';
-import { fixtureSession } from './snapshot-mode';
+import { fixtureSession, isSnapshotRun } from './snapshot-mode';
+import { buildStartCommand, shellQuote } from './resume-command';
 import { on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { TabId, TermSize } from '../shared/types';
@@ -108,4 +109,11 @@ export function registerTabIpc(): void {
   });
 
   on('tab:activate', (event, { tabId }) => activeTabs.set(event.sender.id, tabId));
+
+  // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.
+  on('tab:start-claude', (event, { tabId, prompt }) => {
+    const session = tabFor(event, tabId);
+    if (!session || typeof prompt !== 'string' || !prompt.trim()) return;
+    session.pty.write(isSnapshotRun() ? `echo claude-start ${shellQuote(prompt)}\r` : buildStartCommand(prompt));
+  });
 }

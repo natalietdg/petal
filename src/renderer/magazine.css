@@ -270,3 +270,24 @@
 /* Long headlines step down in the magazine looks too. */
 [data-reading] :is(#latest, .prose) .headline.headline-long { font-size: 2.2em; }
 [data-reading] :is(#latest, .prose) .headline.headline-very-long { font-size: 1.55em; line-height: 1.2; }
+
+/* Status notices: a hidden or empty one never shows (the looks' display rules would override `hidden`),
+   and the empty-reader message keeps the plain newspaper style instead of becoming a kicker pill. */
+[data-reading] .status[hidden],
+[data-reading] .status:empty { display: none; }
+[data-reading] .status.empty {
+  display: block;
+  margin-top: 18vh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--reader-fg);
+  font: 22px/1.6 var(--body-font);
+  letter-spacing: normal;
+  text-transform: none;
+  font-variant-caps: normal;
+  text-align: left;
+}
+[data-reading] .status.empty::before,
+[data-reading] .status.empty::after { content: none; }

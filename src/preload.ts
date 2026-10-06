@@ -32,6 +32,7 @@ const api = {
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize) => send('pty:start', { tabId, cols, rows }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
+  startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
   resize: (tabId: TabId, { cols, rows }: TermSize) => send('pty:resize', { tabId, cols, rows }),
   closeShell: (tabId: TabId) => send('pty:close', { tabId }),
   activateTab: (tabId: TabId) => send('tab:activate', { tabId }),

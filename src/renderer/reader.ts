@@ -62,7 +62,7 @@ export function update({ state, replies }: ShownUpdate): void {
       ? 'Claude is running. Its replies will appear here.'
       : claudeMissing
         ? 'Claude Code isn’t installed yet. Install it, then run <code>claude</code> below.'
-        : 'Run <code>claude</code> below and replies will appear here.');
+        : 'Type a message below to start Claude, or run <code>claude</code> in the terminal. Replies appear here.');
     return;
   }
   status.classList.remove('empty');
