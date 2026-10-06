@@ -34,5 +34,5 @@
   cursor: pointer;
 }
 #composer-send:hover { filter: brightness(1.08); }
-/* History and Workflow cover the reader; the reply box goes with it. */
-#reader-area:has(#history:not([hidden]), #workflow:not([hidden])) #composer { display: none; }
+/* Hidden while History, Workflow or Customize covers the reader (overlays.ts). */
+#composer[hidden] { display: none; }

@@ -1,7 +1,7 @@
 // Workflow: how her Claude Code setup works and where the day went. Replaces the reader while open; Esc goes back.
 import * as diagrams from './diagrams';
-import * as history from './history';
-import { byId, el, focusTerminal, query } from './dom';
+import * as overlays from './overlays';
+import { byId, el, query } from './dom';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData, TodayRow } from '../main/workflow';
 import type { IpcError } from '../shared/types';
 
@@ -18,7 +18,6 @@ handoffs: HandoffData;
 type Loaded = DataByTab[TabId] | IpcError;
 
 const view = byId('workflow');
-const reader = byId('reader');
 const button = byId('workflow-button');
 const LABELS = ['next', 'done', 'why', 'watch', 'decide'];
 const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<Loaded> }[] = [
@@ -309,30 +308,18 @@ async function show(id: TabId): Promise<void> {
 export async function open(openOptions: OpenOptions = {}): Promise<void> {
   options = openOptions;
   cache = {};
-  if (history.isOpen()) history.close(); // one overlay at a time
-  view.hidden = false;
-  reader.hidden = true;
-  button?.setAttribute('aria-pressed', 'true');
+  overlays.show('workflow');
   await show(tab);
   tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
 }
 
-export function close(): void {
-  view.hidden = true;
-  reader.hidden = false;
-  button?.setAttribute('aria-pressed', 'false');
-  focusTerminal();
-}
-
-export const isOpen = (): boolean => !view.hidden;
+export const close = (): void => overlays.hide('workflow');
+export const isOpen = (): boolean => overlays.isOpen('workflow');
 export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
 
-button?.addEventListener('click', () => toggle());
-// History opening on top would leave this view underneath, so step aside first.
-document.getElementById('history-button')?.addEventListener('click', () => { if (isOpen()) close(); }, true);
+button.addEventListener('click', () => toggle());
 const isTabId = (value: string | undefined): value is TabId => TABS.some((t) => t.id === value);
 tabsBar.addEventListener('click', (event) => {
   const id = (event.target as HTMLElement).dataset.tab;
   if (isTabId(id)) show(id);
 });
-view.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });

@@ -1,8 +1,7 @@
 // Customize: every setting in one place. Replaces the reader while open; Esc or Cmd+, goes back.
 import * as markdown from './markdown';
-import * as history from './history';
-import * as workflow from './workflow';
-import { byId, el, focusTerminal, query } from './dom';
+import * as overlays from './overlays';
+import { byId, el, query } from './dom';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { HookRun } from '../main/response-hook';
 import type { OrganizerStatus } from '../main/session-organizer';
@@ -13,7 +12,6 @@ type SectionId = 'look' | 'formatting' | 'organizer' | 'flowTitles' | 'handoff' 
 type PromptSection = 'organizer' | 'flowTitles';
 
 const view = byId('customize');
-const reader = byId('reader');
 const button = byId('customize-button');
 
 const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
@@ -359,40 +357,22 @@ export async function show(id: SectionId = section): Promise<void> {
 }
 
 export async function open(id?: SectionId): Promise<void> {
-  if (history.isOpen()) history.close(); // one overlay at a time
-  if (workflow.isOpen()) workflow.close();
-  view.hidden = false;
-  reader.hidden = true;
-  button?.setAttribute('aria-pressed', 'true');
+  overlays.show('customize');
   await show(id ?? section);
   tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
 }
 
-export function close(): void {
-  view.hidden = true;
-  // History or Workflow may have opened on top; leave the reader hidden for them.
-  reader.hidden = history.isOpen() || workflow.isOpen();
-  button?.setAttribute('aria-pressed', 'false');
-  focusTerminal();
-}
-
-export const isOpen = (): boolean => !view.hidden;
+export const close = (): void => overlays.hide('customize');
+export const isOpen = (): boolean => overlays.isOpen('customize');
 export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
 
-button?.addEventListener('click', () => toggle());
-// Another overlay opening on top would leave this one underneath, so step aside first.
-for (const id of ['history-button', 'workflow-button']) {
-  document.getElementById(id)?.addEventListener('click', () => { if (isOpen()) close(); }, true);
-}
-window.pastel.onToggleHistory(() => { if (isOpen()) close(); });
+button.addEventListener('click', () => toggle());
 window.pastel.onOpenCustomize(() => (isOpen() ? close() : open()));
 const isSectionId = (value: string | undefined): value is SectionId => SECTIONS.some((s) => s.id === value);
 tabsBar.addEventListener('click', (event) => {
   const id = (event.target as HTMLElement).dataset.section;
   if (isSectionId(id)) show(id);
 });
-// Esc inside a prompt box stays there, so a half-edited prompt isn't lost by accident.
-view.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !(event.target as Element).matches('textarea')) close(); });
 // A menu change while Look or Formatting is open redraws the ticks and the preview.
 const redraw = () => { if (isOpen() && (section === 'look' || section === 'formatting')) show(); };
 for (const subscribe of ['onTheme', 'onReading', 'onCat', 'onScene'] as const) window.pastel[subscribe](redraw);

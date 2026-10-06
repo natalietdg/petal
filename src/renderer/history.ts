@@ -2,7 +2,8 @@
 import * as markdown from './markdown';
 import * as diagrams from './diagrams';
 import * as flow from './flow';
-import { byId, el, focusTerminal, query } from './dom';
+import * as overlays from './overlays';
+import { byId, el, query } from './dom';
 import type { HistoryList, InvokeResult } from '../shared/ipc';
 
 type Session = HistoryList['sessions'][number];
@@ -11,7 +12,6 @@ export type PreviewMode = 'replies' | 'flow' | 'decisions';
 type GroupBy = 'tag' | 'day' | 'project';
 
 const view = byId('history');
-const reader = byId('reader');
 const button = byId('history-button');
 let sessions: Session[] = [];
 let selectedId: string | null = null;
@@ -487,23 +487,15 @@ function setGroupBy(mode: GroupBy): void {
 }
 
 export async function open(): Promise<void> {
-  view.hidden = false;
-  reader.hidden = true;
-  button.setAttribute('aria-pressed', 'true');
+  overlays.show('history');
   const organizing = await refresh();
   renderPreview();
   search.focus();
   if (organizing) tidy();
 }
 
-export function close(): void {
-  view.hidden = true;
-  reader.hidden = false;
-  button.setAttribute('aria-pressed', 'false');
-  focusTerminal(); // the clicked row is gone; keys must reach the shell
-}
-
-export const isOpen = (): boolean => !view.hidden;
+export const close = (): void => overlays.hide('history');
+export const isOpen = (): boolean => overlays.isOpen('history');
 export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
 
 button.addEventListener('click', toggle);
@@ -514,7 +506,6 @@ groupToggle.addEventListener('click', (event) => {
   if (isGroupBy(group)) setGroupBy(group);
 });
 tidyButton.addEventListener('click', tidy);
-view.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
 window.pastel.onToggleHistory(toggle);
 
 export const rerender = (): void => { if (isOpen()) renderPreview(); };

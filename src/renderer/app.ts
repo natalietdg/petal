@@ -13,12 +13,13 @@ import * as history from './history';
 import * as composer from './composer';
 import * as workflow from './workflow';
 import * as customize from './customize';
+import * as overlays from './overlays';
 import { byId } from './dom';
 import type { Tab } from './tabs';
 import type { ReaderUpdate } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -44,12 +45,11 @@ async function start(): Promise<void> {
     cat.setBusy(update.busy);
   };
 
-  // Esc closes the sessions panel instead of reaching claude, only while it is open.
+  // Esc closes the sessions panel or the open overlay instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
-    else if (history.isOpen()) history.close();
-    else if (customize.isOpen()) customize.close();
+    else if (overlays.current()) overlays.hideCurrent();
     else return true;
     return false;
   });

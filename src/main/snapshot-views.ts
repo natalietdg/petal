@@ -395,3 +395,28 @@ export async function customizeScreens(kit: Kit): Promise<void> {
   const hook = responseHook.stats();
   log(`${hook.runs === 0 && hook.skippedInSnapshot >= 1 ? 'ok' : 'FAIL'} reply-finished fired, response hook skipped in snapshot: ${JSON.stringify(hook)}`);
 }
+
+// Overlay manager: History, Workflow and Customize replace each other; Esc closes the open one and brings back the reader and reply box.
+export async function overlaysCheck(kit: Kit): Promise<void> {
+  const { js, wait, log } = kit;
+  const state = () => js(`(() => {
+    const ids = ['history', 'workflow', 'customize'];
+    return {
+      shown: ids.filter((id) => !document.getElementById(id).hidden),
+      pressed: ids.filter((id) => document.getElementById(id + '-button').getAttribute('aria-pressed') === 'true'),
+      reader: !document.getElementById('reader').hidden,
+      composer: getComputedStyle(document.getElementById('composer')).display !== 'none',
+    };
+  })()`);
+  const only = (id: string, s: { shown: string[]; pressed: string[]; reader: boolean; composer: boolean }) =>
+    s.shown.join() === id && s.pressed.join() === id && !s.reader && !s.composer;
+  for (const [step, id] of [["document.getElementById('history-button').click()", 'history'], ["document.getElementById('customize-button').click()", 'customize'], ["document.getElementById('workflow-button').click()", 'workflow']]) {
+    await js(step);
+    await wait(400);
+    const s = await state();
+    log(`${only(id, s) ? 'ok' : 'FAIL'} overlays: ${id} open alone, reader and reply box hidden: ${JSON.stringify(s)}`);
+  }
+  await js("document.querySelector('#workflow-tabs button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  const closed = await state();
+  log(`${!closed.shown.length && !closed.pressed.length && closed.reader && closed.composer ? 'ok' : 'FAIL'} overlays: Esc closes Workflow, reader and reply box back: ${JSON.stringify(closed)}`);
+}
