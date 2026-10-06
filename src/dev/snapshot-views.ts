@@ -2,11 +2,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserWindow, Menu, type MenuItem } from 'electron';
+import { app, BrowserWindow, Menu, type MenuItem } from 'electron';
 import type { IPty } from 'node-pty';
 import * as flowStore from '../main/flow-store';
 import * as responseHook from '../main/response-hook';
-import { counters } from '../main/snapshot-mode';
+import * as closedStore from '../main/closed-store';
+import * as configStore from '../main/config-store';
+import { counters, panelFixture, userDataDir } from '../main/snapshot-mode';
 import { send } from '../main/ipc';
 import { buildResumeCommand, resumeArgs } from '../main/resume-command';
 import type { ReaderFeed } from '../main/reader-feed';
@@ -385,7 +387,7 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
 export async function customizeScreens(kit: Kit): Promise<void> {
   const { js, waitFor, log, wait, themes, applyTheme, verifiedCapture } = kit;
   const menuChecked = (label: string) => Menu.getApplicationMenu()?.items.flatMap((m): MenuItem[] => m.submenu?.items ?? []).find((i) => i.label === label)?.checked;
-  const sections = ['look', 'formatting', 'organizer', 'flowTitles', 'handoff', 'hook'];
+  const sections = ['look', 'formatting', 'sessions', 'organizer', 'flowTitles', 'handoff', 'hook'];
   for (const id of THEMES) {
     applyTheme(id, { persist: false });
     await js("PastelTerm.customize.open('look')");
@@ -453,4 +455,101 @@ export async function errorRepliesCheck(kit: Kit): Promise<void> {
   const { js, log } = kit;
   const reply = await js("window.pastel.config.reset('nope.nothing').then((r) => ({ resolved: true, r }), (e) => ({ resolved: false, r: String(e) }))");
   log(`${reply.resolved && /Unknown setting/.test(reply.r?.error ?? '') ? 'ok' : 'FAIL'} invoke failure resolves as { error }: ${JSON.stringify(reply)}`);
+}
+
+// Sessions panel Close / Recently closed / over-limit, on fixture sessions only. Close goes through sessions:close,
+// which reads the real session files, finds none of these ids, and so never signals anything.
+export async function sessionsCloseCheck(kit: Kit): Promise<void> {
+  const { js, wait, waitFor, log, themes, applyTheme, verifiedCapture } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} sessions close: ${what}`);
+  const userData = app.getPath('userData');
+  if (userData !== userDataDir()) throw new Error(`sessions close check: userData is not the scratch dir (${userData})`);
+
+  const fake = (n: number) => `f1f1f1f1-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const minutesAgo = (m: number) => Date.now() - m * 60_000;
+  panelFixture.sessions = [
+    { pid: 0, sessionId: fake(1), cwd: '/tmp/petal-fixture/reader', kind: 'interactive', status: 'busy', name: 'Reader polish', updatedAt: minutesAgo(1) },
+    { pid: 0, sessionId: fake(2), cwd: '/tmp/petal-fixture/notes', kind: 'interactive', status: 'idle', name: 'Release notes', updatedAt: minutesAgo(40) },
+    { pid: 0, sessionId: fake(3), cwd: '/tmp/petal-fixture/forecast', kind: 'interactive', status: 'idle', name: 'Forecast draft', updatedAt: minutesAgo(190) },
+    { pid: 0, sessionId: fake(4), cwd: '/tmp/petal-fixture/api', kind: 'bg', status: 'busy', name: 'API sweep', updatedAt: minutesAgo(400) },
+  ];
+  configStore.save({ sessions: { maxOpen: 2 } });
+  closedStore.add({ sessionId: fake(2), title: 'Release notes', cwd: '/tmp/petal-fixture/notes', closedAt: minutesAgo(90) }); // live again: hidden
+  closedStore.add({ sessionId: fake(8), title: 'Tab labels', cwd: '/tmp/petal-fixture/tabs', closedAt: minutesAgo(30) });
+  closedStore.add({ sessionId: fake(9), title: 'Scene matrix', cwd: '/tmp/petal-fixture/scenes', closedAt: minutesAgo(5) });
+
+  await js('window.__confirms = 0; window.confirm = () => { window.__confirms += 1; return false; }; true');
+  const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
+  const state = () => js(`(() => {
+    const p = document.getElementById('sessions-panel');
+    return {
+      pill: document.getElementById('sessions-pill').innerText.replace(/\\s+/g, ' ').trim(),
+      pillOver: document.getElementById('sessions-pill').classList.contains('over-limit'),
+      rows: [...p.querySelectorAll('.session-row')].map((r) => r.dataset.sessionId),
+      closeControls: p.querySelectorAll('.session-row > .session-close').length,
+      closeInsideHead: p.querySelectorAll('.session-head .session-close, button button').length,
+      confirm: [...p.querySelectorAll('.session-confirm')].map((c) => c.innerText.replace(/\\s+/g, ' ').trim()),
+      banner: p.querySelector('.sessions-limit-text')?.textContent ?? null,
+      oldestButton: Boolean(p.querySelector('.sessions-limit-close')),
+      closedHeading: p.querySelector('.closed-heading')?.textContent ?? null,
+      closed: [...p.querySelectorAll('.closed-row')].map((r) => r.dataset.sessionId),
+      notes: [...p.querySelectorAll('.session-note')].map((n) => n.textContent),
+      windowConfirms: window.__confirms,
+    };
+  })()`);
+  // any: the probe's shape is built in the script above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const waitState = (test: (s: any) => boolean, ms = 6000) => waitFor(async () => { const s = await state(); return test(s) ? s : null; }, ms);
+  const click = (selector: string) => js(`document.querySelector(${JSON.stringify(selector)}).click()`);
+
+  await panel('expandedIds.clear()');
+  await panel('setOpen(true)');
+  const shown = await waitState((s) => s.rows.length === 4 && s.closed.length === 2);
+  check(shown && shown.closeControls === 4 && shown.closeInsideHead === 0, `every row has its own Close beside the head, no nested buttons: ${JSON.stringify(shown)}`);
+  check(shown && shown.pillOver && shown.pill.endsWith('4 open your limit is 2') && shown.banner === '4 open, your limit is 2' && shown.oldestButton,
+    `over the limit: pill and banner say "4 open, your limit is 2", Close oldest idle offered: ${JSON.stringify({ pill: shown?.pill, banner: shown?.banner })}`);
+  check(shown && shown.closedHeading === 'Recently closed' && shown.closed.join() === [fake(9), fake(8)].join(),
+    `Recently closed lists the closed ones newest first, minus the one live again: ${JSON.stringify(shown?.closed)}`);
+
+  await click(`.session-row[data-session-id="${fake(2)}"] > .session-close`);
+  const asking = await waitState((s) => s.confirm.length === 1);
+  check(asking && asking.confirm[0] === 'Close this Claude? Yes · No' && asking.windowConfirms === 0, `Close asks inline, not with window.confirm: ${JSON.stringify(asking?.confirm)} windowConfirms=${asking?.windowConfirms}`);
+  await wait(2500); // a timer refresh must leave the open confirm in place
+  check((await state()).confirm.length === 1, 'the inline confirm survives a timer refresh');
+  for (const id of THEMES) {
+    applyTheme(id, { persist: false });
+    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: true, name: `sessions-close-confirm-${id}` });
+  }
+  applyTheme('paleSky', { persist: false });
+  await click('.session-confirm .session-no');
+  const dismissed = await waitState((s) => s.confirm.length === 0);
+  check(dismissed && dismissed.rows.length === 4, 'No dismisses the confirm and closes nothing');
+
+  await click('.sessions-limit-close');
+  const oldest = await waitState((s) => s.confirm.length === 1);
+  check(oldest && oldest.confirm[0] === 'Close the oldest idle Claude, “Forecast draft”? Yes · No',
+    `Close oldest idle picks the idle one updated longest ago, never a busy one: ${JSON.stringify(oldest?.confirm)}`);
+  for (const id of THEMES) {
+    applyTheme(id, { persist: false });
+    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: true, name: `sessions-limit-${id}` });
+  }
+  applyTheme('paleSky', { persist: false });
+
+  // Yes: main looks the id up in the real session files, finds nothing, and refuses before any signal.
+  await click('.sessions-limit .session-yes');
+  const refused = await waitState((s) => s.notes.some((n: string) => /not running/.test(n)));
+  check(refused, `Yes on a session that is not live is refused by main: ${JSON.stringify(refused?.notes)}`);
+
+  await click(`.closed-row[data-session-id="${fake(9)}"] .closed-reopen`);
+  const reopened = await waitState((s) => s.notes.some((n: string) => /no longer on disk/.test(n)));
+  check(reopened, `Reopen goes through history:resume (fixture id has no transcript, so it says so): ${JSON.stringify(reopened?.notes)}`);
+  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: true, name: 'sessions-closed-paleSky', scrollTo: '.closed-heading' });
+
+  configStore.save({ sessions: { maxOpen: 8 } });
+  await panel('refresh()');
+  const under = await waitState((s) => !s.pillOver && s.banner === null);
+  check(under, `at or under the limit: no banner, plain pill: ${JSON.stringify(under?.pill)}`);
+
+  panelFixture.sessions = null;
+  await panel('setOpen(false)');
 }

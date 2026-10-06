@@ -142,7 +142,7 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   await wait(1500);
   const pill = (await js("document.getElementById('sessions-pill').innerText")).trim();
   const shell = shellSessionCounts();
-  log(`sessions pill: "${pill}" | kill -0 count: "${shell}" | match=${pill === shell}`);
+  log(`sessions pill: "${pill}" | kill -0 count: "${shell}" | match=${pill.startsWith(shell)}`); // over her limit the pill adds "your limit is N"
   log(`own row marked: ${await js("document.querySelector('.session-row.own .session-own')?.innerText ?? 'none'")}`);
 
   const rows = sessionsMonitor.snapshot({ detailed: true }).rows ?? [];
@@ -329,6 +329,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
   await views.composerCheck(kit, { win, ...tabs });
+  await views.sessionsCloseCheck(kit);
   await views.fixtureFlow(kit);
   await views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION);
   await views.historyScreens(kit);
