@@ -2,18 +2,19 @@
 import * as diagrams from './diagrams';
 import * as overlays from './overlays';
 import { byId, el, query } from './dom';
+import { timeOf } from './format';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData, TodayRow } from '../main/workflow';
 import type { IpcError } from '../shared/types';
 
 type TabId = 'today' | 'setup' | 'time' | 'handoffs';
 interface OpenOptions {
-openTabs?: OpenTab[];
+  openTabs?: OpenTab[];
 }
 interface DataByTab {
-today: TodayData;
-setup: SetupData;
-time: TimeData;
-handoffs: HandoffData;
+  today: TodayData;
+  setup: SetupData;
+  time: TimeData;
+  handoffs: HandoffData;
 }
 type Loaded = DataByTab[TabId] | IpcError;
 
@@ -52,7 +53,6 @@ for (const t of TABS) {
 // ---- small pieces
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
-const timeOf = (ms: number): string => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const statusClass = (status: string): string => `wf-status wf-status-${String(status).replace(/\s+/g, '-')}`;
 const duration = (ms: number): string => (ms < 3_600_000 ? `${Math.max(1, Math.round(ms / 60_000))}m` : `${(ms / 3_600_000).toFixed(1)}h`);
 
