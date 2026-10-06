@@ -2,7 +2,7 @@
 # Installs dist.noindex's Petal into /Applications as soon as no Claude is running inside Petal, then relaunches it.
 # Polls every 20s for up to 6 hours; quitting Petal mid-Claude would cut that session off, so it never forces.
 APP=/Applications/Petal.app
-BUILD="${0:A:h}/../dist.noindex/Petal-darwin-arm64/Petal.app"
+BUILD="${0:A:h}/../dist.noindex/mac-universal/Petal.app" # npm run package output
 
 claude_in_petal() {
   local petal=$(pgrep -f "$APP/Contents/MacOS/Petal" | head -1)
