@@ -2,7 +2,7 @@
 import type { Flow, FlowStep } from './flow';
 import type { LabelColors, Theme } from '../shared/types';
 
-export const EXPORT_CAP = 40;
+const EXPORT_CAP = 40;
 const OUTCOME_TITLES = { done: 'Done', decide: 'Decide', watch: 'Watch out', next: 'Next' };
 
 export interface MermaidExport {

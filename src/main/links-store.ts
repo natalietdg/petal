@@ -14,7 +14,7 @@ export interface Link {
   at: string;
 }
 
-export const KINDS: ReadonlySet<string> = new Set<LinkKind>(['send', 'resume', 'fork']);
+const KINDS: ReadonlySet<string> = new Set<LinkKind>(['send', 'resume', 'fork']);
 const MAX_LINKS = 1000; // oldest drop off; the view only reads the last week
 
 const storeFile = () => path.join(app.getPath('userData'), 'links.json');

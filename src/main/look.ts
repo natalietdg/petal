@@ -28,7 +28,7 @@ export const currentTheme = (): Theme => themes[settings().theme];
 let onChange: () => void = () => {};
 export const onLookChanged = (listener: () => void): void => { onChange = listener; };
 
-export const broadcast = <C extends EventChannel>(channel: C, ...payload: EventArgs<C>) => {
+const broadcast = <C extends EventChannel>(channel: C, ...payload: EventArgs<C>) => {
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, channel, ...payload);
 };
 

@@ -9,7 +9,7 @@ import type { Theme } from '../shared/types';
 import { writeJsonAtomic } from './atomic-file';
 
 // Bump when the extracted shape changes; older files then read as stale, not broken.
-export const FLOW_VERSION = 6; // 6: flow is a list of state changes
+const FLOW_VERSION = 6; // 6: flow is a list of state changes
 const SAFE_ID = /^[A-Za-z0-9._-]{1,128}$/;
 
 export interface StoredFlow {

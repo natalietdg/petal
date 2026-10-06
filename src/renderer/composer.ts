@@ -23,7 +23,7 @@ hint.setAttribute('role', 'status');
 form.prepend(hint);
 
 // C0 controls other than newline and tab could end the bracketed paste early or drive the TUI (ESC above all).
-export const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
+const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
 
 function send(): void {
   const text = stripControls(input.value).trim();

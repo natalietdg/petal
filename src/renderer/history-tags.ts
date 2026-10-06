@@ -16,7 +16,7 @@ export function tagChip(name: string, className = ''): HTMLSpanElement {
 }
 
 // Most-used tags first, so the bar and suggestions lead with the common ones.
-export function tagNames(): string[] {
+function tagNames(): string[] {
   const counts = new Map(Object.keys(state.tagColors).map((n) => [n, 0]));
   for (const s of state.sessions) for (const t of s.tags ?? []) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n);
@@ -103,7 +103,7 @@ function startRename(chip: HTMLElement, name: string): void {
 }
 
 // The selected session's tags, with × and a "+ Tag" field that suggests existing names.
-export function renderPreviewTags(): void {
+function renderPreviewTags(): void {
   const session = selectedSession();
   if (!previewTags || !session) return;
   const chips = session.tags.map((name) => {

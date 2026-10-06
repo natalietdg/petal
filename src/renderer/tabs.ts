@@ -123,6 +123,5 @@ export function applyTheme(next: Theme): void {
 window.pastel.onData(({ tabId, data }) => tabs.get(tabId)?.term.write(data));
 
 export const active = (): Tab | null => (activeId === null ? null : tabs.get(activeId) ?? null);
-export const getActiveId = (): TabId | null => activeId;
 export const get = (id: TabId): Tab | null => tabs.get(id) ?? null;
 export const ids = (): TabId[] => [...tabs.keys()];

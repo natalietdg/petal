@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import { bucket, dayKey, groupsFor, projectOf, titleOf, WEEK_MS, type DashboardInputs, type GroupKey } from './workflow-common';
 
-export const IDLE_GAP_MS = 15 * 60 * 1000; // a longer pause counts as stepping away, not working
+const IDLE_GAP_MS = 15 * 60 * 1000; // a longer pause counts as stepping away, not working
 const MAX_SCAN_BYTES = 200 * 1024 * 1024; // bigger logs are skipped rather than read
 const READ_CHUNK_BYTES = 1024 * 1024;
 const RECURRING_DAYS = 3;
