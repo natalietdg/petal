@@ -14,6 +14,7 @@ const MAX_RUNS = 5; // ring buffer shown on the Customize page
 const STDERR_CHARS = 200;
 const MAX_SEEN = 500; // reply ids remembered for dedupe
 const MAX_REPLY_FILES = 20;
+const NOTIFY_CHARS = 140; // first line of the reply in her notification
 
 export interface HookRun {
   at: string;
@@ -74,7 +75,7 @@ function writeReplyFile(id: string, markdown: string): string {
 }
 
 const firstLine = (markdown: string) => (String(markdown).split('\n').find((l) => l.trim()) ?? '')
-  .replace(/[*_`#>=]/g, '').trim().slice(0, 140);
+  .replace(/[*_`#>=]/g, '').trim().slice(0, NOTIFY_CHARS);
 
 function notify(title: string | null | undefined, markdown: string): void {
   if (!Notification.isSupported()) return;

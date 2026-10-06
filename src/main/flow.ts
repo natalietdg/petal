@@ -83,12 +83,15 @@ function auditLines(text: string): AuditRow[] {
 function callouts(text: string): Outcome[] {
   return text.split('\n').flatMap((line) => {
     const match = CALLOUT.exec(line);
-    return match ? [{ label: LABELS[match[1].toLowerCase()], text: trimTo(match[2].replace(/\*\*/g, ''), 160) }] : [];
+    return match ? [{ label: LABELS[match[1].toLowerCase()], text: trimTo(match[2].replace(/\*\*/g, ''), OUTCOME_CHARS) }] : [];
   });
 }
 
 const FILLER = /^(?:yes|no|ok(?:ay)?|got it|done|right|sure|fair enough)[,.!:]?\s+/i;
 const TITLE_WORDS = 8;
+const OUTCOME_CHARS = 160;
+const EXCERPT_CHARS = 600;
+const HEADLINE_CHARS = 140;
 
 // Short node title: first sentence of the headline, filler dropped, cut at a clause if long.
 function titleFrom(headline: string | undefined): string | null {
@@ -113,8 +116,8 @@ function summarise(step: RawStep): FlowStep {
     index: step.index,
     label: step.label,
     title: titleFrom(headline) ?? trimTo(step.label, 50),
-    excerpt: trimTo(lastReply.replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' '), 600),
-    headline: headline ? trimTo(headline, 140) : null,
+    excerpt: trimTo(lastReply.replace(/```[\s\S]*?```/g, ' ').replace(/\s+/g, ' '), EXCERPT_CHARS),
+    headline: headline ? trimTo(headline, HEADLINE_CHARS) : null,
     outcomes,
     files: [...step.files],
     audit,

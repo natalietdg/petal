@@ -12,6 +12,7 @@ const WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HEAD_BYTES = 32 * 1024;
 const TAIL_BYTES = 64 * 1024;
+const FIRST_PROMPT_CHARS = 160;
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 export interface SessionRecord {
@@ -68,7 +69,7 @@ function buildRecord(file: string, stat: fs.Stats): SessionRecord {
     file,
     cwd: typeof cwd === 'string' ? cwd : null,
     title: trimTo(lastAiTitle(tail.entries) ?? lastAiTitle(head.entries) ?? firstPrompt ?? '', 80),
-    firstPrompt: trimTo(firstPrompt, 160),
+    firstPrompt: trimTo(firstPrompt, FIRST_PROMPT_CHARS),
     lastAt: stat.mtimeMs,
     messages,
     messagesExact: head.covered,

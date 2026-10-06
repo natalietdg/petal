@@ -4,6 +4,10 @@ import path from 'node:path';
 import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
 
+// Organizer schedule bounds; Customize shows the same ranges.
+const INTERVAL_MINUTES = { min: 1, max: 240 };
+const PER_PASS = { min: 1, max: 50 };
+
 export const MODELS = ['haiku', 'sonnet', 'opus'];
 
 export interface Config {
@@ -58,8 +62,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
-      intervalMinutes: intIn(o.intervalMinutes, 1, 240, b.organizer.intervalMinutes),
-      perPass: intIn(o.perPass, 1, 50, b.organizer.perPass),
+      intervalMinutes: intIn(o.intervalMinutes, INTERVAL_MINUTES.min, INTERVAL_MINUTES.max, b.organizer.intervalMinutes),
+      perPass: intIn(o.perPass, PER_PASS.min, PER_PASS.max, b.organizer.perPass),
       model: typeof o.model === 'string' && MODELS.includes(o.model) ? o.model : b.organizer.model,
       prompt: promptOr(o.prompt, d.organizer.prompt),
     },

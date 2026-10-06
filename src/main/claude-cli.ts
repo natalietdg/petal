@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const TIMEOUT_MS = 90_000;
+const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 // Where Claude Code usually lands: the native installer, Homebrew, npm globals.
 const CANDIDATES = [
   path.join(os.homedir(), '.local', 'bin', 'claude'),
@@ -45,7 +46,7 @@ export async function runClaude(input: string, { model = 'haiku' }: { model?: st
   if (!claude) throw new Error('Claude Code is not installed (no `claude` command found).');
   return new Promise((resolve, reject) => {
     const args = ['-p', '--model', model, '--no-session-persistence', '--output-format', 'json', '--tools', ''];
-    const child = execFile(claude, args, { env: cleanEnv(claude), timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, cwd: os.tmpdir() },
+    const child = execFile(claude, args, { env: cleanEnv(claude), timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES, cwd: os.tmpdir() },
       (error, stdout) => (error ? reject(error) : resolve(stdout)));
     child.stdin?.end(input);
   });

@@ -6,6 +6,7 @@ import type { InvokeResult } from '../shared/ipc';
 let previewTags: HTMLDivElement | null = null; // the tag line in the preview header, redrawn on its own
 
 export const UNTAGGED = 'Untagged';
+const BLUR_GRACE_MS = 150; // lets a click on a suggestion land before the field closes
 
 // A pill with the tag's colour as a dot, like Finder.
 export function tagChip(name: string, className = ''): HTMLSpanElement {
@@ -138,7 +139,7 @@ function renderPreviewTags(): void {
     input.addEventListener('change', () => { // picking a suggestion adds it straight away
       if (state.tagColors[input.value]) addTag(session.sessionId, input.value);
     });
-    input.addEventListener('blur', () => setTimeout(() => { if (input.isConnected) renderPreviewTags(); }, 150));
+    input.addEventListener('blur', () => setTimeout(() => { if (input.isConnected) renderPreviewTags(); }, BLUR_GRACE_MS));
     add.replaceWith(input, options);
     input.focus();
   });

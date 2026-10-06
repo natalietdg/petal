@@ -26,6 +26,10 @@ marked.use({
   renderer: { html: ({ text }) => escapeHtml(text) }, // raw HTML shows as text
 });
 
+const HEADLINE_LONG_CHARS = 70;
+const HEADLINE_VERY_LONG_CHARS = 130;
+const LEDE_MIN_CHARS = 160; // a drop cap needs a paragraph long enough to wrap around it
+
 const textOf = (node: Node): string => (node.textContent ?? '').trim();
 const isElement = (node: Node | null | undefined, name: string): node is HTMLElement => node?.nodeName === name;
 
@@ -60,8 +64,8 @@ function tagHeadline(root: HTMLElement): void {
   first.classList.add('headline');
   // A long headline steps down a size so it never fills the screen.
   const length = textOf(first).length;
-  if (length > 130) first.classList.add('headline-very-long');
-  else if (length > 70) first.classList.add('headline-long');
+  if (length > HEADLINE_VERY_LONG_CHARS) first.classList.add('headline-very-long');
+  else if (length > HEADLINE_LONG_CHARS) first.classList.add('headline-long');
 }
 
 const BACK_MATTER = /^(references|limitations|sources)$/i;
@@ -88,7 +92,7 @@ function tagLede(root: HTMLElement): void {
   for (let node = dek.nextElementSibling; node; node = node.nextElementSibling) {
     if (node.nodeName === 'H2' || node.nodeName === 'H3') continue;
     // A drop cap needs room: on a one- or two-line opener it hangs below the text.
-    if (isPlainParagraph(node) && textOf(node).length >= 160) node.classList.add('lede');
+    if (isPlainParagraph(node) && textOf(node).length >= LEDE_MIN_CHARS) node.classList.add('lede');
     return;
   }
 }

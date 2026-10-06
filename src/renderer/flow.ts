@@ -21,6 +21,7 @@ interface ExportBar extends HTMLDivElement {
 
 const TITLES: Record<string, string> = { done: 'Done', decide: 'Decide', watch: 'Watch out', next: 'Next', why: 'Why' };
 const ACTORS = /^(natalie|claude|external)/i;
+const CREATING_RECHECK_MS = 3000;
 type Who = 'natalie' | 'claude' | 'external';
 const whoOf = (actor: string): Who => {
   const who = ACTORS.exec(actor)?.[1]?.toLowerCase();
@@ -146,7 +147,7 @@ function emptyState(container: HTMLElement, options: FlowOptions, creating: bool
     action.textContent = 'Making the flow…';
     setTimeout(async () => {
       if (container.isConnected) render(container, await window.pastel.flow.get(options.target), options);
-    }, 3000);
+    }, CREATING_RECHECK_MS);
   }
   box.append(
     el('p', 'flow-empty-title', creating ? 'Making the flow…' : 'No flow for this session yet'),

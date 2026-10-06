@@ -54,7 +54,10 @@ for (const t of TABS) {
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 const statusClass = (status: string): string => `wf-status wf-status-${String(status).replace(/\s+/g, '-')}`;
-const duration = (ms: number): string => (ms < 3_600_000 ? `${Math.max(1, Math.round(ms / 60_000))}m` : `${(ms / 3_600_000).toFixed(1)}h`);
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const MIN_BAR_PERCENT = 1.5; // a tiny group still shows a sliver
+const duration = (ms: number): string => (ms < HOUR_MS ? `${Math.max(1, Math.round(ms / MINUTE_MS))}m` : `${(ms / HOUR_MS).toFixed(1)}h`);
 
 // Tag colours may be a label name ("next") or a hex; anything else gets a rotating label wash.
 function swatch(color: string | null, index: number): string {
@@ -233,7 +236,7 @@ function renderTime(data: TimeData): HTMLElement[] {
   data.groups.forEach((g, i) => {
     const track = el('span', 'wf-bar-track');
     const fill = el('span', 'wf-bar-fill');
-    fill.style.width = `${Math.max(1.5, (g.activeMs / max) * 100)}%`;
+    fill.style.width = `${Math.max(MIN_BAR_PERCENT, (g.activeMs / max) * 100)}%`;
     fill.style.background = swatch(g.color, i);
     track.append(fill);
     chart.append(el('span', 'wf-bar-name', g.name), track, el('span', 'wf-bar-value', `${duration(g.activeMs)} · ${plural(g.sessions, 'session')}`));

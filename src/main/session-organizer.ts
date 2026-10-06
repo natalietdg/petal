@@ -15,6 +15,7 @@ import type { TagsData } from './tags-store';
 import { writeJsonAtomic } from './atomic-file';
 
 const FIRST_RUN_DELAY_MS = 20_000;
+const MINUTE_MS = 60 * 1000;
 const BUSY_WINDOW_MS = 2 * 60 * 1000; // a Petal session written to this recently is still mid-conversation
 const RECENT_TURNS = 6;
 const PROMPT_CHARS = 500;
@@ -226,7 +227,7 @@ function setTimers({ enabled, intervalMinutes }: Schedule, { firstRun = false } 
   schedule = { enabled, intervalMinutes };
   if (!enabled) return;
   // Timer callbacks get no arguments, so runNow falls back to the configured perPass.
-  timers = [setInterval(() => runNow(), intervalMinutes * 60 * 1000)];
+  timers = [setInterval(() => runNow(), intervalMinutes * MINUTE_MS)];
   if (firstRun) timers.push(setTimeout(() => runNow(), FIRST_RUN_DELAY_MS));
 }
 

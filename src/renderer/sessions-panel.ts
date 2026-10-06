@@ -4,6 +4,7 @@ import type { SessionCounts, SessionRow } from '../main/sessions-monitor';
 
 const OPEN_REFRESH_MS = 2000;
 const COLLAPSED_REFRESH_MS = 5000;
+const MINUTE_MS = 60_000;
 
 const pill = byId('sessions-pill');
 const panel = byId('sessions-panel');
@@ -14,7 +15,7 @@ export const isOpen = (): boolean => !panel.hidden;
 
 function ago(ms: number | null): string {
   if (!ms) return '';
-  const minutes = Math.round((Date.now() - ms) / 60000);
+  const minutes = Math.round((Date.now() - ms) / MINUTE_MS);
   if (minutes < 1) return 'updated just now';
   if (minutes < 60) return `updated ${minutes}m ago`;
   const hours = Math.round(minutes / 60);

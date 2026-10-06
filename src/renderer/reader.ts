@@ -13,6 +13,8 @@ const older = byId('older');
 const status = byId('reader-status');
 const scroller = byId('reader');
 let latestId: string | null | undefined = null;
+const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
+const FLASH_MS = 1600;
 // The conversation reads top to bottom: earlier turns first, the newest reply last.
 status.before(older);
 
@@ -80,7 +82,7 @@ export function update({ state, replies }: ShownUpdate): void {
 let flowTimer: ReturnType<typeof setTimeout> | undefined;
 const scheduleFlowRefresh = (): void => {
   clearTimeout(flowTimer);
-  flowTimer = setTimeout(refreshFlow, 1500);
+  flowTimer = setTimeout(refreshFlow, FLOW_REFRESH_DELAY_MS);
 };
 
 // Links open in the default browser, never inside the app.
@@ -130,7 +132,7 @@ function showReply(replyIds: readonly (string | undefined)[]): void {
   if (target instanceof HTMLDetailsElement) target.open = true;
   target.scrollIntoView({ block: 'start' });
   target.classList.add('flash');
-  setTimeout(() => target.classList.remove('flash'), 1600);
+  setTimeout(() => target.classList.remove('flash'), FLASH_MS);
 }
 
 export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; rerender(); };
