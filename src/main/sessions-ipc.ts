@@ -21,7 +21,9 @@ const snapshotTerminate = (): never => { throw new Error('Snapshot run: no signa
 export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSession }): void {
   handle('sessions:snapshot', (event, { detailed, expandedIds }) => {
     const live = (isSnapshotRun() && panelFixture.sessions) || sessionsMonitor.liveSessions();
-    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: activeSession(event.sender.id)?.feed.session?.sessionId }, live);
+    const fixtureRoot = isSnapshotRun() ? panelFixture.subagentsRoot : null;
+    const subagentsDirOf = fixtureRoot ? (s: { sessionId: string }) => path.join(fixtureRoot, s.sessionId) : sessionsMonitor.subagentsDir;
+    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: activeSession(event.sender.id)?.feed.session?.sessionId }, live, subagentsDirOf);
     const { maxOpen } = configStore.load().sessions;
     if (!detailed) return { ...base, maxOpen };
     return {

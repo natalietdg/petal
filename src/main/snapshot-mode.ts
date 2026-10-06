@@ -26,4 +26,5 @@ export const fixtureSession = (): FixtureSession | null => {
 export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0 };
 
 // Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
-export const panelFixture: { sessions: SessionFile[] | null } = { sessions: null };
+// subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
+export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };

@@ -2,7 +2,7 @@
 // main/ipc.ts and preload.ts only accept channels listed here, so a renamed channel fails typecheck.
 import type { Choice, FlowTarget, IpcError, TabId, TabReaderUpdate, Theme, TermSize } from './types';
 import type { Config, ConfigPatch } from '../main/config-store';
-import type { SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
+import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
 import type { ListedSession } from '../main/history';
 import type { StoredFlow } from '../main/flow-store';
 import type { MermaidExport } from '../main/flow-mermaid';
@@ -34,6 +34,17 @@ export interface SessionsView extends SessionsSnapshot {
   closed?: ClosedSession[];
   oldestIdleId?: string | null;
 }
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// "Sessions · 1 busy · 5 open · 3 agents"; the agents part only when some are active.
+export function sessionsPillText({ busy, total, agents }: SessionCounts): string {
+  const parts = ['Sessions', `${busy} busy`, `${total} open`];
+  if (agents > 0) parts.push(plural(agents, 'agent'));
+  return parts.join(' · ');
+}
+
+export const agentsBadgeText = (count: number): string => plural(count, 'agent');
 
 export type CloseResult = { closed: true } | { closed: false; note: string };
 
