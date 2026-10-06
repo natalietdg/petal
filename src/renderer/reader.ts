@@ -2,6 +2,7 @@ import * as markdown from './markdown';
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { byId, query } from './dom';
+import { timeOf } from './format';
 import type { ReaderState, Reply } from '../shared/types';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
@@ -15,7 +16,7 @@ let latestId: string | null | undefined = null;
 // The conversation reads top to bottom: earlier turns first, the newest reply last.
 status.before(older);
 
-const timeOf = (iso: string | undefined): string => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
 const youBubble = (prompt: string): HTMLDivElement => Object.assign(document.createElement('div'), { className: 'reader-you', textContent: prompt });
 
@@ -24,7 +25,7 @@ function olderTurn(reply: Reply): HTMLElement {
   const turn = document.createElement('article');
   turn.className = 'reply older-turn';
   turn.dataset.replyId = reply.id;
-  const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOf(reply.timestamp) });
+  const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) });
   const body = markdown.render(reply.markdown);
   turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), body);
   diagrams.render(body);
@@ -64,8 +65,8 @@ export function update({ state, replies }: ShownUpdate): void {
   }
   status.classList.remove('empty');
   status.textContent = state === 'ended'
-    ? `Session ended · last reply ${timeOf(newest.timestamp)}`
-    : `Latest reply · ${timeOf(newest.timestamp)}`;
+    ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
+    : `Latest reply · ${timeOfReply(newest.timestamp)}`;
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
   latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown));
   latest.dataset.replyId = newest.id;
