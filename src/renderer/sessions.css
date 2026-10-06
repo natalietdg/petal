@@ -127,3 +127,74 @@
 .session-recent { margin: 4px 0; padding-left: 1em; }
 .session-recent li + li { margin-top: 3px; }
 .session-subagent { margin: 6px 0 0; }
+
+/* Close sits beside the head button, never inside it; confirm, note and detail wrap to full width below. */
+.session-row,
+.closed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.session-row > .session-head { flex: 1; min-width: 0; }
+.session-row > .session-confirm,
+.session-row > .session-note,
+.session-row > .session-detail,
+.closed-row > .session-note { flex-basis: 100%; }
+
+.session-link {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: 600 13px var(--ui-font);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.session-link:hover { color: var(--reader-fg); }
+.session-link:disabled { cursor: default; text-decoration: none; }
+.session-close { margin: 10px 8px 0 0; }
+
+.session-confirm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--watch-pill);
+  color: var(--watch-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.session-confirm > span:first-child { margin-right: 4px; }
+.session-confirm .session-link { color: inherit; }
+.session-sep { opacity: 0.6; }
+
+.session-note { margin: 0 12px 8px; font-size: 13px; color: var(--muted); }
+
+/* Over her limit: a gentle note, never an alarm. */
+.sessions-limit {
+  margin: 0 8px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--code-bg);
+}
+.sessions-limit-text { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.sessions-limit-hint { margin: 0; font-size: 13px; color: var(--muted); }
+.sessions-limit .session-confirm { margin: 0; }
+
+.sessions-pill .pill-limit {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--reader-bg);
+  font-size: 12px;
+}
+
+.closed-heading { margin-top: 14px; }
+.closed-row { align-items: center; gap: 8px; padding: 6px 12px; }
+.closed-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 15px; font-weight: 600; }
+.closed-text .session-meta { font-weight: 400; }
+.closed-reopen { flex-shrink: 0; }

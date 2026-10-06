@@ -6,14 +6,16 @@ import { body, errorLine, page, summary, tabsBar } from './customize-kit';
 import { renderFormatting, renderLook } from './customize-look';
 import { renderFlowTitles, renderHandoff, renderOrganizer } from './customize-prompts';
 import { renderHook } from './customize-hook';
+import { renderSessions } from './customize-sessions';
 
-type SectionId = 'look' | 'formatting' | 'organizer' | 'flowTitles' | 'handoff' | 'hook';
+type SectionId = 'look' | 'formatting' | 'sessions' | 'organizer' | 'flowTitles' | 'handoff' | 'hook';
 
 const button = byId('customize-button');
 
 const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'look', name: 'Look', summary: 'Theme, reading style, pet and scene. Changes apply at once and tick the same menu items.' },
   { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style.' },
+  { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
   { id: 'organizer', name: 'Organizer', summary: 'The background agent that titles, files and tags your recent sessions for History.' },
   { id: 'flowTitles', name: 'Flow titles', summary: 'The prompt that turns each step of a session into the state changes on the Flow view.' },
   { id: 'handoff', name: 'Handoff', summary: 'What Send to Claude writes when one session hands its history to another.' },
@@ -30,7 +32,7 @@ for (const s of SECTIONS) {
 
 let section: SectionId = 'look';
 
-const RENDER: Record<SectionId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, organizer: renderOrganizer, flowTitles: renderFlowTitles, handoff: renderHandoff, hook: renderHook };
+const RENDER: Record<SectionId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, sessions: renderSessions, organizer: renderOrganizer, flowTitles: renderFlowTitles, handoff: renderHandoff, hook: renderHook };
 
 export async function show(id: SectionId = section): Promise<void> {
   section = id;

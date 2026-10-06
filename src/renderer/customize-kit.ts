@@ -42,6 +42,13 @@ export const field = (label: string, control: HTMLElement, hint?: string): HTMLL
   if (hint) row.append(el('span', 'cz-hint', hint));
   return row;
 };
+// Shows whatever main saved, so a clamped or rejected value snaps back at once.
+export function numberInput(value: number, min: number, max: number, onSave: (n: number) => Promise<number>): HTMLInputElement {
+  const input = el('input', 'cz-input cz-number');
+  Object.assign(input, { type: 'number', min: String(min), max: String(max), step: '1', value: String(value) });
+  input.addEventListener('change', async () => { input.value = String(await onSave(Number(input.value))); });
+  return input;
+}
 export const note = (text: string, className = 'cz-note'): HTMLParagraphElement => el('p', className, text);
 
 // A failed save or reset in main shows above the section; the page keeps the last good config.

@@ -1,7 +1,7 @@
 // Customize sections for the agents' prompts: Organizer (schedule + prompt), Flow titles, and the read-only Handoff.
 import { el, isIpcError } from './dom';
 import { timeOf } from './format';
-import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
+import { actionButton, card, field, keepConfig, note, numberInput, page, save } from './customize-kit';
 import type { OrganizerStatus } from '../main/session-organizer';
 
 type PromptSection = 'organizer' | 'flowTitles';
@@ -33,13 +33,6 @@ function promptEditor({ section: key, label, contract }: { section: PromptSectio
   const actions = el('div', 'cz-actions');
   actions.append(saveButton, reset, status);
   return card(label, box, actions, note(contract));
-}
-
-function numberInput(value: number, min: number, max: number, onSave: (n: number) => Promise<number>): HTMLInputElement {
-  const input = el('input', 'cz-input cz-number');
-  Object.assign(input, { type: 'number', min: String(min), max: String(max), step: '1', value: String(value) });
-  input.addEventListener('change', async () => { input.value = String(await onSave(Number(input.value))); });
-  return input;
 }
 
 function lastPassText(organizer: OrganizerStatus | null): string {
