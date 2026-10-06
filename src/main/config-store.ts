@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -7,6 +7,7 @@ import { writeJsonAtomic } from './atomic-file';
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
 const PER_PASS = { min: 1, max: 50 };
+export const MAX_OPEN = { min: 1, max: 50 };
 
 export const MODELS = ['haiku', 'sonnet', 'opus'];
 
@@ -14,6 +15,7 @@ export interface Config {
   organizer: { enabled: boolean; intervalMinutes: number; perPass: number; model: string; prompt: string };
   flowTitles: { prompt: string };
   responseHook: { command: string; notify: boolean };
+  sessions: { maxOpen: number };
 }
 
 type Section = keyof Config;
@@ -38,6 +40,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   organizer: { enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: ORGANIZER_PROMPT },
   flowTitles: { prompt: FLOW_TITLES_PROMPT },
   responseHook: { command: '', notify: false },
+  sessions: { maxOpen: 8 },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -65,6 +68,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const o = raw.organizer ?? {};
   const f = raw.flowTitles ?? {};
   const h = raw.responseHook ?? {};
+  const s = raw.sessions ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -78,6 +82,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       command: typeof h.command === 'string' ? h.command.trim() : b.responseHook.command,
       notify: boolOr(h.notify, b.responseHook.notify),
     },
+    sessions: { maxOpen: intIn(s.maxOpen, MAX_OPEN.min, MAX_OPEN.max, b.sessions.maxOpen) },
   };
 }
 

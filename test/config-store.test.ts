@@ -18,9 +18,10 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has three sections with the documented defaults', () => {
+  it('has four sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions']);
+    expect(d.sessions).toEqual({ maxOpen: 8 });
     expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
     expect(d.organizer.prompt).toMatch(/^You label a Claude Code work session/);
     expect(d.flowTitles.prompt).toMatch(/^You turn a work log into STATE CHANGES/);
@@ -119,7 +120,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -174,5 +175,27 @@ describe('config-store keeps saved values for unusable input', () => {
     config.save({ organizer: { prompt: 'Title sessions in Malay.' } });
     expect(config.save({ organizer: { prompt: 42 } } as never).organizer.prompt).toBe('Title sessions in Malay.');
     expect(config.save({ organizer: { prompt: '  ' } }).organizer.prompt).toBe(config.defaults().organizer.prompt);
+  });
+});
+
+describe('config-store sessions.maxOpen', () => {
+  it('clamps to 1-50 and rounds', () => {
+    expect(config.save({ sessions: { maxOpen: 0 } }).sessions.maxOpen).toBe(1);
+    expect(config.save({ sessions: { maxOpen: 51 } }).sessions.maxOpen).toBe(50);
+    expect(config.save({ sessions: { maxOpen: '12.4' } }).sessions.maxOpen).toBe(12);
+  });
+
+  it('unusable input keeps the saved value, not the default', () => {
+    config.save({ sessions: { maxOpen: 3 } });
+    for (const bad of ['', '  ', 'lots', null, true, undefined]) {
+      expect(config.save({ sessions: { maxOpen: bad } } as never).sessions.maxOpen).toBe(3);
+    }
+  });
+
+  it('an older config.json without the section gets the default, and reset restores it', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ organizer: { perPass: 5 } }));
+    expect(config.load().sessions.maxOpen).toBe(8);
+    config.save({ sessions: { maxOpen: 20 } });
+    expect(config.reset('sessions.maxOpen').sessions.maxOpen).toBe(8);
   });
 });
