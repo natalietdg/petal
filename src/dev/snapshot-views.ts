@@ -562,3 +562,104 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   panelFixture.sessions = null;
   await panel('setOpen(false)');
 }
+
+// Background agents on fixture sessions, with fake subagent transcripts in the scratch dir (never ~/.claude):
+// pill count, per-row badge, the compact list (max 4, "+N more"), and idle agents left out.
+export async function sessionsAgentsCheck(kit: Kit): Promise<void> {
+  const { js, log, waitFor, themes, applyTheme, verifiedCapture } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} sessions agents: ${what}`);
+  const root = path.join(kit.outDir, 'subagents-fixture');
+  assertFixtureOutsideClaude(path.join(root, 'probe.jsonl'));
+  fs.rmSync(root, { recursive: true, force: true });
+
+  const fake = (n: number) => `a9a9a9a9-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const minutesAgo = (m: number) => Date.now() - m * 60_000;
+  const delegated = (text: string) => ({ type: 'user', isSidechain: true, message: { role: 'user', content: text } });
+  const step = (name: string, input: Record<string, string>) => ({ type: 'assistant', isSidechain: true, message: { role: 'assistant', content: [{ type: 'tool_use', name, input }] } });
+  const agent = (session: number, id: string, entries: object[], { description, secondsAgo = 5 }: { description?: string; secondsAgo?: number } = {}) => {
+    const dir = path.join(root, fake(session));
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `agent-${id}.jsonl`);
+    fs.writeFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
+    if (description) fs.writeFileSync(path.join(dir, `agent-${id}.meta.json`), JSON.stringify({ description }));
+    const when = new Date(Date.now() - secondsAgo * 1000);
+    fs.utimesSync(file, when, when);
+  };
+  agent(1, 'aaa1', [delegated('long prompt'), step('Read', { file_path: '/r/sessions-monitor.ts' })], { description: 'Show background agents in Sessions' });
+  agent(1, 'aaa2', [delegated('Sweep the scenes folder for leftover debug logs\nthen report'), step('Grep', { pattern: 'console' })], { secondsAgo: 15 });
+  agent(1, 'aaa3', [step('Bash', { description: 'Run the unit tests' })], { secondsAgo: 70 });
+  agent(1, 'aaa4', [delegated('x')], { description: 'Release notes draft', secondsAgo: 90 });
+  agent(1, 'aaa5', [delegated('x')], { description: 'Fifth agent, past the cap', secondsAgo: 100 });
+  agent(1, 'idle', [delegated('x')], { description: 'Finished an hour ago', secondsAgo: 3600 });
+  agent(2, 'bbb1', [delegated('x'), step('Edit', { file_path: '/r/tabs.css' })], { description: 'Tab labels' });
+
+  panelFixture.subagentsRoot = root;
+  panelFixture.sessions = [
+    { pid: 0, sessionId: fake(1), cwd: '/tmp/petal-fixture/reader', kind: 'interactive', status: 'busy', name: 'Reader polish', updatedAt: minutesAgo(1) },
+    { pid: 0, sessionId: fake(2), cwd: '/tmp/petal-fixture/tabs', kind: 'interactive', status: 'idle', name: 'Tab work', updatedAt: minutesAgo(12) },
+    { pid: 0, sessionId: fake(3), cwd: '/tmp/petal-fixture/notes', kind: 'interactive', status: 'idle', name: 'Quiet one', updatedAt: minutesAgo(50) },
+  ];
+  configStore.save({ sessions: { maxOpen: 8 } });
+
+  const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
+  const text = (sel: string) => `(document.querySelector(${JSON.stringify(sel)})?.innerText ?? '').replace(/\\s+/g, ' ').trim()`;
+  const state = () => js(`(() => {
+    const p = document.getElementById('sessions-panel');
+    const row = (id) => p.querySelector('.session-row[data-session-id="' + id + '"]');
+    const agents = (id) => [...(row(id)?.querySelectorAll('.session-agent') ?? [])].map((a) => a.innerText.replace(/\\s+/g, ' ').trim());
+    return {
+      pill: ${text('#sessions-pill')},
+      pillOver: document.getElementById('sessions-pill').classList.contains('over-limit'),
+      badges: [${[1, 2, 3].map((n) => `row(${JSON.stringify(fake(n))})?.querySelector('.session-agents-badge')?.textContent ?? null`).join(', ')}],
+      agents1: agents(${JSON.stringify(fake(1))}),
+      agents2: agents(${JSON.stringify(fake(2))}),
+      agents3: agents(${JSON.stringify(fake(3))}),
+      listInsideHead: p.querySelectorAll('.session-head .session-agents').length,
+      expanded: p.querySelectorAll('.session-detail').length,
+    };
+  })()`);
+  // any: the probe's shape is built in the script above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const waitState = (test: (s: any) => boolean, ms = 6000) => waitFor(async () => { const s = await state(); return test(s) ? s : null; }, ms);
+
+  await panel('setOpen(false)');
+  await panel('refresh()');
+  const collapsed = await waitState((s) => s.pill.includes('agents'));
+  check(collapsed?.pill === 'Sessions · 1 busy · 3 open · 6 agents', `collapsed pill counts agents across sessions (idle one left out): ${JSON.stringify(collapsed?.pill)}`);
+
+  await panel('expandedIds.clear()');
+  await panel('setOpen(true)');
+  const open = await waitState((s) => s.agents1.length > 0);
+  check(open && open.badges.join() === '5 agents,1 agent,' && open.badges[2] === null, `row badges: ${JSON.stringify(open?.badges)}`);
+  check(open && open.expanded === 0 && open.listInsideHead === 0, 'agent lists show on collapsed rows, outside the head button');
+  check(open && open.agents1.length === 5 && open.agents1[4] === '+1 more', `max 4 per row, then "+N more": ${JSON.stringify(open?.agents1)}`);
+  check(open && open.agents1[0] === 'Show background agents in Sessions · Reading sessions-monitor.ts · just now',
+    `task from the Agent description, latest step, age: ${JSON.stringify(open?.agents1[0])}`);
+  check(open && open.agents1[1] === 'Sweep the scenes folder for leftover debug logs · Searching · just now',
+    `task from the delegated prompt's first line: ${JSON.stringify(open?.agents1[1])}`);
+  check(open && open.agents1[2] === 'Background agent · Run the unit tests · 1m ago', `no prompt or description falls back to "Background agent": ${JSON.stringify(open?.agents1[2])}`);
+  check(open && !open.agents1.some((a: string) => a.includes('Finished an hour ago')), 'an agent idle for more than 2 min is not shown');
+  check(open && open.agents2.join() === 'Tab labels · Editing tabs.css · just now' && open.agents3.length === 0, `second row lists its one agent, quiet row none: ${JSON.stringify([open?.agents2, open?.agents3])}`);
+  for (const id of THEMES) {
+    applyTheme(id, { persist: false });
+    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: true, name: `sessions-agents-${id}` });
+  }
+  applyTheme('paleSky', { persist: false });
+
+  await panel(`expandedIds.add(${JSON.stringify(fake(1))})`);
+  await panel('refresh()');
+  const expanded = await waitState((s) => s.expanded === 1);
+  check(expanded && expanded.agents1.length === 5, 'an expanded row keeps its agent list beside the recent-activity detail');
+  await panel('expandedIds.clear()');
+
+  configStore.save({ sessions: { maxOpen: 2 } });
+  await panel('refresh()');
+  const over = await waitState((s) => s.pillOver);
+  check(over?.pill === 'Sessions · 1 busy · 3 open · 6 agents your limit is 2', `at-limit styling kept with agents in the pill: ${JSON.stringify(over?.pill)}`);
+
+  configStore.save({ sessions: { maxOpen: 8 } });
+  panelFixture.sessions = null;
+  panelFixture.subagentsRoot = null;
+  fs.rmSync(root, { recursive: true, force: true });
+  await panel('setOpen(false)');
+}

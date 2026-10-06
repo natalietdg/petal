@@ -330,6 +330,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
   await views.composerCheck(kit, { win, ...tabs });
   await views.sessionsCloseCheck(kit);
+  await views.sessionsAgentsCheck(kit);
   await views.fixtureFlow(kit);
   await views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION);
   await views.historyScreens(kit);
