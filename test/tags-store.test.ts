@@ -179,8 +179,7 @@ describe('tags-store rename', () => {
     expect(store.load()).toEqual(before);
   });
 
-  // Real bug: a case-only rename finds the tag itself as the "existing" target, then deletes it.
-  it.fails('a case-only rename keeps the tag (tags-store.ts:118-120)', () => {
+  it('a case-only rename keeps the tag', () => {
     store.applyOrganizerTags('s1', ['auth']);
     store.renameTag('auth', 'Auth');
     const d = store.load();
@@ -198,5 +197,18 @@ describe('tags-store files', () => {
     store.renameTag('a', 'c');
     expect(fs.existsSync(path.join(dir, 'tags.json'))).toBe(true);
     expect(tmpLeftovers(dir)).toEqual([]);
+  });
+});
+
+describe('tags-store case-insensitive edits', () => {
+  it('remove and delete match tags regardless of case', () => {
+    store.applyOrganizerTags('s1', ['Auth', 'Infra']);
+    store.removeTag('s1', 'auth');
+    expect(store.load().sessions.s1.tags).toEqual(['Infra']);
+    store.applyOrganizerTags('s2', ['Auth']);
+    store.deleteTag('auth');
+    const d = store.load();
+    expect(Object.keys(d.tags).some((k) => k.toLowerCase() === 'auth')).toBe(false);
+    expect(d.sessions.s2.tags).toEqual([]);
   });
 });

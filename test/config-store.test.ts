@@ -161,3 +161,18 @@ describe('config-store reset', () => {
     expect(() => config.reset('constructor')).toThrow(/Unknown setting/);
   });
 });
+
+describe('config-store keeps saved values for unusable input', () => {
+  it('blank, whitespace or boolean numbers keep the saved value', () => {
+    config.save({ organizer: { intervalMinutes: 30, perPass: 7 } });
+    const c = config.save({ organizer: { intervalMinutes: '   ', perPass: false } } as never);
+    expect(c.organizer.intervalMinutes).toBe(30);
+    expect(c.organizer.perPass).toBe(7);
+  });
+
+  it('a non-text prompt keeps the saved prompt; an empty one resets to the default', () => {
+    config.save({ organizer: { prompt: 'Title sessions in Malay.' } });
+    expect(config.save({ organizer: { prompt: 42 } } as never).organizer.prompt).toBe('Title sessions in Malay.');
+    expect(config.save({ organizer: { prompt: '  ' } }).organizer.prompt).toBe(config.defaults().organizer.prompt);
+  });
+});

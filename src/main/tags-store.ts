@@ -95,7 +95,7 @@ export function addTag(sessionId: string, rawName: unknown): TagsData {
 export function removeTag(sessionId: string, name: string): TagsData {
   const data = load();
   if (!sessionId) return data;
-  data.sessions[sessionId] = { tags: sessionTags(data, sessionId).filter((t) => t !== name), manual: true };
+  data.sessions[sessionId] = { tags: sessionTags(data, sessionId).filter((t) => !sameName(t, name)), manual: true };
   save(data);
   return data;
 }
@@ -103,8 +103,8 @@ export function removeTag(sessionId: string, name: string): TagsData {
 // Gone everywhere, and remembered so the organizer never brings it back.
 export function deleteTag(name: string): TagsData {
   const data = load();
-  delete data.tags[name];
-  for (const entry of Object.values(data.sessions)) entry.tags = (entry.tags ?? []).filter((t) => t !== name);
+  for (const key of Object.keys(data.tags)) if (sameName(key, name)) delete data.tags[key];
+  for (const entry of Object.values(data.sessions)) entry.tags = (entry.tags ?? []).filter((t) => !sameName(t, name));
   if (!isDeleted(data, name)) data.deleted.push(name);
   save(data);
   return data;
@@ -115,7 +115,8 @@ export function renameTag(from: string, rawTo: unknown): TagsData {
   const to = cleanName(rawTo);
   const data = load();
   if (!to || !data.tags[from] || to === from) return data;
-  const target = existingName(data, to) ?? to;
+  // A case-only rename (auth → Auth) targets the new spelling, not the tag itself.
+  const target = sameName(to, from) ? to : existingName(data, to) ?? to;
   if (!data.tags[target]) data.tags[target] = data.tags[from];
   delete data.tags[from];
   for (const entry of Object.values(data.sessions)) {

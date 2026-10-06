@@ -45,11 +45,17 @@ const listeners = new Set<(config: Config) => void>();
 
 export const defaults = (): Config => structuredClone(DEFAULTS);
 
+// Only a real number (or a numeric string from a form field) counts; blanks and booleans keep the saved value.
 const intIn = (value: unknown, min: number, max: number, fallback: number): number => {
-  const n = Math.round(Number(value));
-  return Number.isFinite(n) && value !== '' && value !== null ? Math.min(max, Math.max(min, n)) : fallback;
+  const usable = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '');
+  const n = usable ? Math.round(Number(value)) : NaN;
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
-const promptOr = (value: unknown, fallback: string): string => (typeof value === 'string' && value.trim() ? value.replace(/\s+$/, '') : fallback);
+// A missing or non-text prompt keeps the saved one; an empty one goes back to the default.
+const promptOr = (value: unknown, saved: string, fallback: string): string => {
+  if (typeof value !== 'string') return saved;
+  return value.trim() ? value.replace(/\s+$/, '') : fallback;
+};
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 
 // Numbers are clamped; anything unusable falls back to base (the saved value), an empty prompt to the default.
@@ -65,9 +71,9 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       intervalMinutes: intIn(o.intervalMinutes, INTERVAL_MINUTES.min, INTERVAL_MINUTES.max, b.organizer.intervalMinutes),
       perPass: intIn(o.perPass, PER_PASS.min, PER_PASS.max, b.organizer.perPass),
       model: typeof o.model === 'string' && MODELS.includes(o.model) ? o.model : b.organizer.model,
-      prompt: promptOr(o.prompt, d.organizer.prompt),
+      prompt: promptOr(o.prompt, b.organizer.prompt, d.organizer.prompt),
     },
-    flowTitles: { prompt: promptOr(f.prompt, d.flowTitles.prompt) },
+    flowTitles: { prompt: promptOr(f.prompt, b.flowTitles.prompt, d.flowTitles.prompt) },
     responseHook: {
       command: typeof h.command === 'string' ? h.command.trim() : b.responseHook.command,
       notify: boolOr(h.notify, b.responseHook.notify),
