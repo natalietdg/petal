@@ -341,17 +341,43 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
 
 
 // Reply box: Enter pastes into the active tab's pty; here the shell runs it, so its output proves delivery.
-export async function composerCheck(kit: Kit, { win, activeSession }: TabsDeps & { win: BrowserWindow }): Promise<void> {
-  const { js, waitFor, log } = kit;
+// Only a tab whose Claude is live accepts a reply; ESC and other control characters never reach the pty.
+export async function composerCheck(kit: Kit, { win, activeSession, openTab }: TabsDeps & { win: BrowserWindow }): Promise<void> {
+  const { js, wait, waitFor, log } = kit;
   const session = activeSession(win.webContents.id);
   if (!session) throw new Error('composer check: no active tab');
   let output = '';
   const listener = session.pty.onData((data) => { output += data; });
-  await js(`(() => { const box = document.getElementById('composer-input'); box.value = 'echo composer-ok-' + (6 * 7); box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
+  const type = (text: string) => js(`(() => { const box = document.getElementById('composer-input'); box.value = ${text}; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
+  await type("'echo composer-ok-' + (6 * 7)");
   const delivered = await waitFor(() => (/composer-ok-42/.test(output) ? true : null), 8000);
   const cleared = await js("document.getElementById('composer-input').value === ''");
-  listener.dispose();
   log(`${delivered && cleared ? 'ok' : 'FAIL'} reply box sends to the active tab: delivered=${Boolean(delivered)} cleared=${cleared}`);
+
+  // With ESC kept, the shell would print "strip-" in red; stripped, it prints the literal "[31m".
+  await type("'echo strip-' + String.fromCharCode(27) + '[31mok' + String.fromCharCode(7)");
+  const stripped = await waitFor(() => (/strip-\[31mok/.test(output) ? true : null), 8000);
+  log(`${stripped && !output.includes('strip-\x1b') ? 'ok' : 'FAIL'} reply box strips ESC and control characters before pasting: ${Boolean(stripped)}`);
+  listener.dispose();
+
+  // A fresh tab has no Claude: the reply stays in the box with a hint, and nothing is written.
+  openTab(win.webContents);
+  const fresh = await waitFor(() => {
+    const next = activeSession(win.webContents.id);
+    return next && next !== session ? next : null;
+  }, 8000);
+  if (!fresh) throw new Error('composer check: second tab never opened');
+  let freshOutput = '';
+  const freshListener = fresh.pty.onData((data) => { freshOutput += data; });
+  await wait(2500); // login shell rc files
+  await type("'echo gate-should-not-run'");
+  await wait(1500);
+  const gate = await js("({ hint: !document.getElementById('composer-hint').hidden, text: document.getElementById('composer-hint').textContent, kept: document.getElementById('composer-input').value })");
+  freshListener.dispose();
+  log(`${gate.hint && gate.kept === 'echo gate-should-not-run' && !freshOutput.includes('gate-should-not-run') ? 'ok' : 'FAIL'} reply box refuses a tab without live Claude: ${JSON.stringify(gate)} written=${freshOutput.includes('gate-should-not-run')}`);
+  await js("document.getElementById('composer-input').value = ''");
+  await js(`document.querySelector('#tab-strip .tab[data-tab-id="${fresh.tabId}"] .tab-close').click()`);
+  await waitFor(() => (activeSession(win.webContents.id) === session ? true : null), 8000);
 }
 
 // Customize page: every section in light and dark, a Look change synced to the menu, and no hook runs.

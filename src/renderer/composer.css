@@ -1,5 +1,6 @@
 /* Reply box: same typeface as the reader, so writing feels like part of the page. */
 #composer {
+  position: relative;
   flex: none;
   display: flex;
   align-items: flex-end;
@@ -36,3 +37,19 @@
 #composer-send:hover { filter: brightness(1.08); }
 /* Hidden while History, Workflow or Customize covers the reader (overlays.ts). */
 #composer[hidden] { display: none; }
+/* "Start Claude in this tab first": sits just above the box, never shifts the layout. */
+.composer-hint {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0 0 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--muted);
+  font: 600 13px var(--ui-font);
+  white-space: nowrap;
+}
+.composer-hint[hidden] { display: none; }
