@@ -73,7 +73,6 @@ const api = {
   },
   history: {
     list: () => invoke('history:list'),
-    preview: (sessionId: string) => invoke('history:preview', { sessionId }),
     conversation: (sessionId: string, before?: number) => invoke('history:conversation', { sessionId, before }),
     resume: (sessionId: string, confirmFork = false) => invoke('history:resume', { sessionId, confirmFork }),
     send: (sessionId: string) => invoke('history:send', { sessionId }),

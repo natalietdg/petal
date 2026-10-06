@@ -3,7 +3,7 @@
 import type { Choice, FlowTarget, IpcError, TabId, TabReaderUpdate, Theme, TermSize } from './types';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
-import type { ListedSession, Preview } from '../main/history';
+import type { ListedSession } from '../main/history';
 import type { StoredFlow } from '../main/flow-store';
 import type { MermaidExport } from '../main/flow-mermaid';
 import type { HookRun, HookTestResult } from '../main/response-hook';
@@ -17,7 +17,6 @@ export type Guarded<T> = T | IpcError;
 export interface HistoryList {
   sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[] })[];
   tags: TagsData['tags'];
-  windowDays: number;
   organizing: boolean;
 }
 
@@ -85,7 +84,6 @@ export interface InvokeChannels {
   'workflow:handoffs': { args: []; result: Guarded<HandoffData> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
-  'history:preview': { args: [request: { sessionId: string }]; result: Guarded<Preview> };
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
   'history:resume': { args: [request: { sessionId: string; confirmFork: boolean }]; result: Guarded<ResumeResult> };
   'history:send': { args: [request: { sessionId: string }]; result: Guarded<SendResult> };

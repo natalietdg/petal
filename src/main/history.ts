@@ -4,19 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { readHead, readTail } from './jsonl-window';
 import { promptText, commandText, trimTo } from './prompts';
-import { ReplyCollector } from './replies';
 import { liveSessions } from './sessions-monitor';
+import { SESSION_ID } from './session-id';
 import type { TranscriptEntry } from './transcript-entry';
-import type { Reply } from '../shared/types';
 
-export const WINDOW_DAYS = 7;
+const WINDOW_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const HEAD_BYTES = 32 * 1024;
 const TAIL_BYTES = 64 * 1024;
-// Big tool results can push text replies far from the end, so the preview widens its tail read.
-const PREVIEW_WINDOWS = [64 * 1024, 256 * 1024, 1024 * 1024, 4 * 1024 * 1024];
-const PREVIEW_REPLIES = 3;
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-export const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface SessionRecord {
   sessionId: string;
@@ -32,12 +28,6 @@ export interface SessionRecord {
 export interface ListedSession extends SessionRecord {
   shortCwd: string;
   live: boolean;
-}
-
-export interface Preview {
-  replies: Reply[];
-  wholeFile: boolean;
-  missing?: true;
 }
 
 const cache = new Map<string, { mtimeMs: number; size: number; record: SessionRecord }>();
@@ -102,7 +92,7 @@ function recordFor(file: string): SessionRecord | null {
 const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd ?? '');
 
 export function listSessions(): ListedSession[] {
-  const since = Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const since = Date.now() - WINDOW_DAYS * DAY_MS;
   const live = new Set(liveSessions().map((s) => s.sessionId));
   return sessionFiles()
     .map((file) => { try { return { file, mtime: fs.statSync(file).mtimeMs }; } catch { return null; } }) // deleted mid-scan
@@ -118,22 +108,5 @@ export const findRecord = (sessionId: string | null | undefined): SessionRecord 
   const file = sessionFiles().find((f) => path.basename(f, '.jsonl') === sessionId);
   return file ? recordFor(file) : null;
 };
-
-// Last three assistant replies, reading at most 4MB from the end, never the whole of a big file.
-export function preview(sessionId: string): Preview {
-  const record = findRecord(sessionId);
-  if (!record) return { replies: [], wholeFile: true, missing: true };
-  let replies: Reply[] = [];
-  let wholeFile = false;
-  for (const bytes of PREVIEW_WINDOWS) {
-    const tail = readTail(record.file, bytes);
-    const collector = new ReplyCollector(PREVIEW_REPLIES);
-    for (const entry of tail.entries) collector.add(entry);
-    replies = collector.newestFirst();
-    wholeFile = tail.covered;
-    if (replies.length >= PREVIEW_REPLIES || wholeFile) break;
-  }
-  return { replies, wholeFile };
-}
 
 export const isLive = (sessionId: string): boolean => liveSessions().some((s) => s.sessionId === sessionId);

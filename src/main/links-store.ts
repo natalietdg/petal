@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
+import { SESSION_ID } from './session-id';
 
 export type LinkKind = 'send' | 'resume' | 'fork';
 
@@ -15,7 +16,6 @@ export interface Link {
 
 export const KINDS: ReadonlySet<string> = new Set<LinkKind>(['send', 'resume', 'fork']);
 const MAX_LINKS = 1000; // oldest drop off; the view only reads the last week
-const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const storeFile = () => path.join(app.getPath('userData'), 'links.json');
 const idOrNull = (id: string | null | undefined): string | null => (id && SESSION_ID.test(id) ? id : null); // null = a fresh tab with no session yet
