@@ -312,7 +312,7 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
   openTab(contents); // the ⌘T path
   const opened = await waitState((s) => s.ids.length === 2 && ownTabs().length === 2 && !s.latest);
   const second = opened?.active;
-  check(opened && second !== first && mainActive() === second && opened.shown.join() === second && /run claude/i.test(opened.status),
+  check(opened && second !== first && mainActive() === second && opened.shown.join() === second && /no conversation yet/i.test(opened.status),
     `⌘T opened a second tab with its own pty, shown alone, reader on its empty feed: ${JSON.stringify(opened)} mainActive=${mainActive()}`);
 
   await wait(2500); // login shell rc files
