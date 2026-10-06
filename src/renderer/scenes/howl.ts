@@ -1,6 +1,6 @@
 // Wizard's Room: a crammed treasure-trove bedroom (after Howl's), drawn behind the pet.
 // Maximalist but readable: a calm dark wall, every object ringed by a dark tone of its own material.
-import { distanceToSegment, outlined, type CellClass, type Cell, type Scene, type Shape } from './kit';
+import { distanceToSegment, outlined, type CellClass, type Scene, type Shape } from './kit';
 import { wizardKit, type ShelfItem } from './wizard-kit';
 
 const kit = wizardKit('h');

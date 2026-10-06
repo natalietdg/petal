@@ -35,7 +35,7 @@ const cache = new Map<string, { mtimeMs: number; size: number; record: SessionRe
 
 // Top-level session logs only; subagent logs live in <session>/subagents/.
 function sessionFiles(): string[] {
-  let projects: string[] = [];
+  let projects: string[];
   try {
     projects = fs.readdirSync(PROJECTS_DIR);
   } catch {

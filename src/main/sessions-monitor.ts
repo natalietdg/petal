@@ -55,7 +55,7 @@ function isAlive(pid: number): boolean {
 }
 
 export function liveSessions(): SessionFile[] {
-  let names: string[] = [];
+  let names: string[];
   try {
     names = fs.readdirSync(SESSIONS_DIR).filter((name) => /^\d+\.json$/.test(name));
   } catch {

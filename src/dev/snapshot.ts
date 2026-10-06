@@ -16,6 +16,7 @@ import type { Theme, Themes } from '../shared/types';
 
 export type Log = (line: string) => void;
 // any: executeJavaScript returns whatever the page script builds; each caller knows the shape it asked for.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Js = (code: string) => Promise<any>;
 export type Capture = (name: string) => Promise<void>;
 export type ApplyTheme = (id: string, options?: { persist?: boolean }) => void;

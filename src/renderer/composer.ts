@@ -23,6 +23,7 @@ hint.setAttribute('role', 'status');
 form.prepend(hint);
 
 // C0 controls other than newline and tab could end the bracketed paste early or drive the TUI (ESC above all).
+// eslint-disable-next-line no-control-regex -- stripping C0 controls is the point
 const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
 
 function send(): void {

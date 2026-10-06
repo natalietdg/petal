@@ -294,6 +294,7 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
     };
   })()`);
   // any: the page state probe's shape is built in the script above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const waitState = (test: (s: any) => boolean, ms = 8000) => waitFor(async () => { const s = await state(); return test(s) ? s : null; }, ms);
   const bufferText = (id: string): Promise<string> => js(`(() => {
     const b = PastelTerm.tabs.get(${JSON.stringify(id)}).term.buffer.active;

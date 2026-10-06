@@ -12,34 +12,41 @@
     "contrast": "node scripts/check-contrast.mjs",
     "snapshot": "electron-vite build && PASTEL_SNAPSHOT=1 electron .",
     "package": "electron-vite build && electron-builder --mac --dir --universal --publish never",
-    "dist": "electron-vite build && electron-builder --mac --publish never"
+    "dist": "electron-vite build && electron-builder --mac --publish never",
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@eslint/js": "^10.0.1",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/newsreader": "^5.3.0",
     "@fontsource/atkinson-hyperlegible-mono": "^5.3.0",
     "@fontsource/atkinson-hyperlegible-next": "^5.3.0",
+    "@types/node": "^24.19.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "dompurify": "^3.4.16",
-    "marked": "^18.0.14",
-    "mermaid": "^12.0.0",
-    "node-pty": "^1.1.0"
-  },
-  "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
-    "@types/node": "^24.19.1",
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "marked": "^18.0.14",
+    "mermaid": "^12.0.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.6"
+    "typescript-eslint": "^8.71.1",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.3"
   },
   "productName": "Petal",
   "private": true
