@@ -22,16 +22,17 @@ Audit fixes folded into Phase 1: quoted resume command, async `claudePath`, one 
 - [x] Gate: typecheck, snapshot, 216-combo scene matrix 0 errors. **`npm run typecheck` covers main + renderer (tsconfig.web.json), exit 0. Packaged universal app (arm64 run): 75 ok / 0 FAIL (was 68). Scene matrix on the Vite build: 216 combos, 0 console errors, 0 missing CSS rules, 0 net errors.**
 
 ## Phase 3: structure + quality
-- [ ] File splits and fixes from the code-quality audit:
-  - [ ] Scene helpers deduped into a shared kit; howl and study share a wizard kit
-  - [ ] Split scenes.js, history.js, history-ipc, workflow.js, customize.js, cat.js (art data out), main.js (tab sessions, look)
-  - [ ] Dev snapshot code moves to src/dev and loads only in snapshot runs
-  - [ ] One `ps` poll shared across tabs
-  - [ ] organizer.json cached by mtime
-  - [ ] Dead code: reader.js DETAILS branch, flow.css .flow-headline/.flow-why/.flow-files, history:preview channel + helpers, windowDays, unused exports, scenes.js default W/H
-  - [ ] Magic numbers become named constants
-  - [ ] Shared `el()` / `timeOf` renderer helpers
-  - [ ] Unreferenced build/ art removed (compare.png, dango, leaf)
-- [ ] ESLint (typescript-eslint), Vitest for main-process units, Playwright or the snapshot harness as E2E
-- [ ] GitHub Actions CI: typecheck, lint, tests on every push
-- [ ] Gate: CI green on GitHub
+- [x] File splits and fixes from the code-quality audit:
+  - [x] Scene helpers deduped into a shared kit; howl and study share a wizard kit. **outlined/layers/stamp/sprite/barkCell live only in scenes/kit.ts; scenes/wizard-kit.ts builds hearth, bookcase, sun, lantern, chest, staff, gramophone, strands and glows per class prefix ('h', 'hs'). SVG byte-identical to the Phase 2 commit for all 9 scenes plus none/bogus/toString/__proto__ (13 ids).**
+  - [x] Split scenes, history, history-ipc, workflow, customize, cat (art data out), main (tab sessions, look). **scenes.ts is the registry, one file per scene; renderer history → history-state/-list/-tags/-preview + shell; main history-ipc → history, tags, flow, handoff IPC + history-turns.ts; main workflow → workflow-common/-today/-setup/-time/-handoffs/-frontmatter behind the same exports; customize → kit, look, prompts, hook + shell; cat-art.ts; main.ts → tabs.ts, look.ts, customize-ipc.ts. Public APIs kept.**
+  - [x] Dev snapshot code moves to src/dev and loads only in snapshot runs. **Dynamic import, its own chunk (out/main/chunks/snapshot-*.js); snapshot-mode.ts holds the only seams: scratch userData, the fixture session (replaces fakeTranscript/fakeStatus) and counters (replace flow/hook stats).**
+  - [x] One `ps` poll shared across tabs. **process-poll.ts runs one `ps` per tick for every ReaderFeed; fixture feeds don't trigger it.**
+  - [x] organizer.json cached by mtime. **session-organizer.loadCached() (mtime + size) feeds tab labels.**
+  - [x] Dead code: reader.js DETAILS branch, flow.css .flow-headline/.flow-why/.flow-files, history:preview channel + helpers, windowDays, unused exports, scenes.js default W/H. **DETAILS and default W/H were already gone in Phase 2; the rest removed, plus tabs.getActiveId and links-store's duplicate SESSION_ID (session-id.ts).**
+  - [x] Magic numbers become named constants
+  - [x] Shared `el()` / `timeOf` renderer helpers. **el in dom.ts, timeOf in format.ts (reader, history, workflow, customize).**
+  - [x] Unreferenced build/ art removed (compare.png, dango, leaf)
+  - [x] Renderer-only libraries are devDependencies. **node-pty is the only runtime dependency; app.asar 204 MB → 13 MB, Petal.app 716 MB → 520 MB.**
+- [x] ESLint (typescript-eslint), Vitest for main-process units, the snapshot harness as E2E. **`npm run lint` 0 errors; `npm test` 9 files, 133 passed + 1 expected fail (pins the case-only tag rename bug).**
+- [x] GitHub Actions CI: typecheck, lint, tests on every push. **.github/workflows/ci.yml, macos-latest, Node 22.**
+- [x] Gate: CI green on GitHub. **Typecheck exit 0, lint 0 errors, tests pass, packaged universal app (arm64 run) 75 ok / 0 FAIL with the same assertion set as Phase 2, scene matrix 216 combos with 0 console/net errors, 0 missing CSS rules, rect counts identical to Phase 2. CI run 37422820364 green.**
