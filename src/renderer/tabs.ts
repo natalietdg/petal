@@ -18,6 +18,7 @@ export interface Tab {
 interface Hooks {
   onActivate: (tab: Tab) => void;
   onCreated: (tab: Tab) => void;
+  onScreen: (tab: Tab) => void;
 }
 
 const strip = byId('tab-strip');
@@ -26,7 +27,7 @@ const tabs = new Map<TabId, Tab>();
 let activeId: TabId | null = null;
 let nextNumber = 1;
 let theme: Theme | null = null;
-let hooks: Hooks = { onActivate: () => {}, onCreated: () => {} };
+let hooks: Hooks = { onActivate: () => {}, onCreated: () => {}, onScreen: () => {} };
 
 const newTabButton = el('button', 'tab-new', '+');
 newTabButton.type = 'button';
@@ -62,6 +63,7 @@ export function create(): Tab {
   const tab: Tab = { id, host, term, renderer, refit, element: tabElement(id), update: null };
   strip.insertBefore(tab.element, newTabButton);
   tabs.set(id, tab);
+  term.onWriteParsed(() => hooks.onScreen(tab));
   hooks.onCreated(tab);
   activate(id);
   window.pastel.startShell(id, { cols: term.cols, rows: term.rows });
@@ -121,6 +123,15 @@ export function applyTheme(next: Theme): void {
 }
 
 window.pastel.onData(({ tabId, data }) => tabs.get(tabId)?.term.write(data));
+
+// A tall picker scrolls its top into scrollback in a short pane, so read the buffer's tail, not just the visible rows.
+const SCREEN_TAIL_LINES = 60;
+export function screenLines(tab: Tab): string[] {
+  const buffer = tab.term.buffer.active;
+  const end = buffer.baseY + tab.term.rows;
+  const start = Math.max(0, end - Math.max(SCREEN_TAIL_LINES, tab.term.rows));
+  return Array.from({ length: end - start }, (_, i) => buffer.getLine(start + i)?.translateToString(true) ?? '');
+}
 
 export const active = (): Tab | null => (activeId === null ? null : tabs.get(activeId) ?? null);
 export const get = (id: TabId): Tab | null => tabs.get(id) ?? null;

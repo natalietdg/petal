@@ -1,21 +1,26 @@
-// Tails one Claude Code session log and reports its replies.
+// Tails one Claude Code session log and reports its replies and any question Claude is waiting on.
 import fs from 'node:fs';
 import { ReplyCollector } from './replies';
+import { PendingQuestionTracker } from './pending-question';
 import { parseEntry } from './transcript-entry';
+import type { PendingQuestion } from '../shared/prompt-answer';
 import type { Reply } from '../shared/types';
+
+export type OnTranscript = (replies: Reply[], question: PendingQuestion | null) => void;
 
 const DEBOUNCE_MS = 80;
 
 export class TranscriptTail {
   private readonly file: string;
-  private readonly onReplies: (replies: Reply[]) => void;
+  private readonly onReplies: OnTranscript;
   private offset = 0;
   private partialLine = '';
   private readonly collector = new ReplyCollector();
+  private readonly question = new PendingQuestionTracker();
   private watcher: fs.FSWatcher | null = null;
   private debounceTimer: NodeJS.Timeout | undefined;
 
-  constructor(file: string, onReplies: (replies: Reply[]) => void) {
+  constructor(file: string, onReplies: OnTranscript) {
     this.file = file;
     this.onReplies = onReplies;
     this.poll();
@@ -58,12 +63,14 @@ export class TranscriptTail {
     let changed = false;
     for (const line of lines) {
       try {
-        changed = this.collector.add(parseEntry(line)) || changed;
+        const entry = parseEntry(line);
+        const repliesChanged = this.collector.add(entry);
+        changed = this.question.add(entry) || repliesChanged || changed;
       } catch {
         // Skip malformed lines.
       }
     }
-    if (changed) this.onReplies(this.collector.newestFirst());
+    if (changed) this.onReplies(this.collector.newestFirst(), this.question.current());
   }
 
   stop(): void {

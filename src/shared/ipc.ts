@@ -11,6 +11,7 @@ import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/sessio
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
+import type { PromptAnswerRequest } from './prompt-answer';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -133,6 +134,8 @@ export interface SendChannels {
   'pty:close': [request: { tabId: TabId }];
   'tab:activate': [request: { tabId: TabId }];
   'tab:start-claude': [request: { tabId: TabId; prompt: string }];
+  // A structured choice; main turns it into keystrokes, so the renderer never sends raw keys here.
+  'prompt:answer': [request: PromptAnswerRequest];
   'link:open': [url: string];
   'renderer:ready': [info: RendererInfo];
   'look:theme': [id: string];

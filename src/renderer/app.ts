@@ -14,6 +14,7 @@ import * as composer from './composer';
 import * as workflow from './workflow';
 import * as customize from './customize';
 import * as overlays from './overlays';
+import * as promptDock from './prompt-dock';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -21,11 +22,12 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
-const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], busy: false, sessionId: null, cwd: null };
+const SCREEN_SETTLE_MS = 80;
+const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], busy: false, sessionId: null, cwd: null, question: null };
 
 // Startup reads that fail in main fall back to the defaults, and the reader says which ones.
 const startupProblems: string[] = [];
@@ -50,10 +52,20 @@ async function start(): Promise<void> {
   const focusTerminal = () => tabs.active()?.term.focus();
 
   // The reader and the pet always follow the active tab, from its last update.
+  const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
     reader.update(update);
     cat.setBusy(update.busy);
+    promptDock.showQuestion(tab.id, update.question);
+    readScreen(tab);
+  };
+  // Pickers come and go with pty output; read the active screen once a burst settles.
+  let screenTimer: ReturnType<typeof setTimeout> | undefined;
+  const onScreen = (tab: Tab) => {
+    if (tab !== tabs.active()) return;
+    clearTimeout(screenTimer);
+    screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
   // Esc closes the sessions panel or the open overlay instead of reaching claude, only while one is open.
@@ -65,7 +77,7 @@ async function start(): Promise<void> {
     return false;
   });
 
-  tabs.init({ theme, onActivate: showTab, onCreated: catchEscape });
+  tabs.init({ theme, onActivate: showTab, onCreated: catchEscape, onScreen });
 
   window.pastel.onTheme((next) => {
     themeKit.applyCssVars(next);

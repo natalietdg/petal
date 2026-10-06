@@ -1,4 +1,5 @@
 // Data shapes that cross the IPC boundary between main and the renderer.
+import type { PendingQuestion } from './prompt-answer';
 
 export interface LabelColors {
   pill: string;
@@ -50,6 +51,7 @@ export interface ReaderUpdate {
   busy: boolean;
   sessionId: string | null;
   cwd: string | null;
+  question: PendingQuestion | null; // an AskUserQuestion waiting for her answer
 }
 
 export interface TabReaderUpdate extends ReaderUpdate {

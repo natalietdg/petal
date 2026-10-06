@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels } from './shared/ipc';
 import type { FlowTarget, TabId, TermSize } from './shared/types';
+import type { PromptAnswer } from './shared/prompt-answer';
 
 // Typed against the contract in shared/ipc.ts; ipcRenderer itself is untyped.
 const invoke = <C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>> => ipcRenderer.invoke(channel, ...args);
@@ -33,6 +34,7 @@ const api = {
   startShell: (tabId: TabId, { cols, rows }: TermSize) => send('pty:start', { tabId, cols, rows }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
+  answerPrompt: (tabId: TabId, answer: PromptAnswer) => send('prompt:answer', { tabId, answer }),
   resize: (tabId: TabId, { cols, rows }: TermSize) => send('pty:resize', { tabId, cols, rows }),
   closeShell: (tabId: TabId) => send('pty:close', { tabId }),
   activateTab: (tabId: TabId) => send('tab:activate', { tabId }),

@@ -3,6 +3,7 @@ import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail } from './transcript';
 import type { FixtureSession } from './snapshot-mode';
+import type { PendingQuestion } from '../shared/prompt-answer';
 import type { ReaderState, ReaderUpdate, Reply } from '../shared/types';
 
 // The session the reader follows; a fixture replay only fills sessionId, status and transcript.
@@ -30,6 +31,7 @@ export class ReaderFeed implements ProcessListener {
   claudePid: number | null = null;
   private tail: TranscriptTail | null = null;
   private replies: Reply[] = [];
+  private pendingQuestion: PendingQuestion | null = null;
   private ticking = false;
 
   constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null }: FeedOptions = {}) {
@@ -76,9 +78,11 @@ export class ReaderFeed implements ProcessListener {
     this.tail?.stop();
     this.session = session;
     this.replies = [];
+    this.pendingQuestion = null;
     this.emit('live');
-    this.tail = new TranscriptTail(session.transcript, (replies) => {
+    this.tail = new TranscriptTail(session.transcript, (replies, question) => {
       this.replies = replies;
+      this.pendingQuestion = question;
       this.emit('live');
     });
   }
@@ -115,13 +119,19 @@ export class ReaderFeed implements ProcessListener {
     this.tail?.stop();
     this.tail = null;
     this.session = null;
+    this.pendingQuestion = null;
     this.emit('ended');
+  }
+
+  // What the reader may offer to answer: only while this tab's claude is live.
+  get question(): PendingQuestion | null {
+    return this.session ? this.pendingQuestion : null;
   }
 
   private emit(state: ReaderState): void {
     const busy = state === 'live' && this.session?.status === 'busy';
     const { sessionId = null, cwd = null } = this.session ?? {};
-    this.send('reader:replies', { state, replies: this.replies, busy, sessionId, cwd });
+    this.send('reader:replies', { state, replies: this.replies, busy, sessionId, cwd, question: state === 'live' ? this.question : null });
   }
 
   stop(): void {

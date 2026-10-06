@@ -6,14 +6,18 @@ import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
 import * as history from './history';
-import { fixtureSession, isSnapshotRun } from './snapshot-mode';
+import { fixtureSession, isSnapshotRun, promptWrites } from './snapshot-mode';
+import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
+import type { PromptAnswer } from '../shared/prompt-answer';
 import type { TabId, TermSize } from '../shared/types';
 
 // A tab opened from History waits this long after its shell's first output before typing the resume command.
 const PENDING_COMMAND_DELAY_MS = 150;
+// The picker reads one keypress per chunk; 30ms measured fine, 120ms leaves room for a busy machine.
+const PROMPT_KEY_GAP_MS = 120;
 
 export const sessions: TabSessions = new Map();
 const activeTabs = new Map<number, TabId>(); // webContents.id -> tabId shown in that window
@@ -74,6 +78,26 @@ function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId
   });
 }
 
+// A double click must not type a second answer into whatever comes after the prompt.
+const ANSWER_SETTLE_MS = 1000;
+const answering = new WeakMap<TabSession, { until: number; toolUseId: string | null }>();
+
+// Types an answer into the tab's claude; a question must still be the one pending in its transcript.
+function answerPrompt(session: TabSession, answer: PromptAnswer): void {
+  const pending = session.feed.question;
+  const toolUseId = answer.kind === 'question' ? answer.toolUseId : null;
+  if (toolUseId !== null && toolUseId !== pending?.toolUseId) return;
+  const last = answering.get(session);
+  if (last && (Date.now() < last.until || (toolUseId !== null && last.toolUseId === toolUseId))) return;
+  const keys = keysFor(answer, pending?.questions ?? null);
+  if (!keys) return;
+  answering.set(session, { until: Date.now() + keys.length * PROMPT_KEY_GAP_MS + ANSWER_SETTLE_MS, toolUseId });
+  if (isSnapshotRun()) { promptWrites.push(keys); return; }
+  keys.forEach((key, i) => setTimeout(() => {
+    if (sessions.has(tabKey(session.contentsId, session.tabId))) session.pty.write(key);
+  }, i * PROMPT_KEY_GAP_MS));
+}
+
 function closeSession({ pty, feed }: TabSession): void {
   feed.stop();
   try { pty.kill(); } catch { /* already exited */ }
@@ -109,6 +133,11 @@ export function registerTabIpc(): void {
   });
 
   on('tab:activate', (event, { tabId }) => activeTabs.set(event.sender.id, tabId));
+
+  on('prompt:answer', (event, { tabId, answer }) => {
+    const session = tabFor(event, tabId);
+    if (session && (answer?.kind === 'question' || answer?.kind === 'permission')) answerPrompt(session, answer);
+  });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.
   on('tab:start-claude', (event, { tabId, prompt }) => {

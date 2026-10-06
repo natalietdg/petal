@@ -4,12 +4,15 @@ export interface ToolInput {
   notebook_path?: string;
   description?: string;
   command?: string;
+  questions?: unknown; // AskUserQuestion; validated in pending-question.ts
 }
 
 export interface ContentItem {
   type: string;
   text?: string;
   name?: string;
+  id?: string;
+  tool_use_id?: string;
   input?: ToolInput;
 }
 

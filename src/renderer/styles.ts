@@ -24,5 +24,6 @@ import './scenes/night-beach.css';
 import './flow.css';
 import './history.css';
 import './composer.css';
+import './prompt-dock.css';
 import './workflow.css';
 import './customize.css';
