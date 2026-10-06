@@ -1,0 +1,40 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.291
+           Haiku 4.5 · Claude Demo
+ ▘▘   ▝▝   /…/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/paste-test
+
+
+❯ Use the AskUserQuestion tool to ask me to pick a fruit: apple or pear. Then reply with only the   
+  fruit I chose.                                                                                    
+
+⏺ User answered Claude's questions:
+  ⎿  · Which fruit do you prefer? → Pear
+
+⏺ Pear.
+ 
+✻ Baked for 3s · done 9:02 PM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                              
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts · ← 2 agents

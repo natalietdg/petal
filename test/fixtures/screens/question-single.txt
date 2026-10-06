@@ -1,0 +1,39 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.291
+           Haiku 4.5 · Claude Demo
+ ▘▘   ▝▝   /…/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/paste-test
+
+
+❯ Use the AskUserQuestion tool to ask me to pick a fruit: apple or pear. Then reply with only the   
+  fruit I chose.                                                                                    
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Fruit choice 
+
+Which fruit would you prefer?
+
+❯ 1. Apple
+     A crisp, sweet red or green fruit
+  2. Pear
+     A soft, juicy fruit with a sweet flavor
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                              
+
+
+

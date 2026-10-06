@@ -1,0 +1,39 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.291
+           Haiku 4.5 · Claude Demo
+ ▘▘   ▝▝   /…/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/paste-test
+
+
+❯ Use the Edit tool to change hello to bye in /private/tmp/claude-501/-Users-demouser0000/091d078c- 
+  ab24-4c62-aeac-05a980d6184f/scratchpad/probe/x.txt. Read it first with the Read tool.             
+
+⏺ Reading /private/tmp/claude-501/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpa
+  d/probe/x.txt
+  ⎿  /private/tmp/claude-501/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/pro
+     be/x.txt
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ Read file
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Read(/private/tmp/claude-501/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/p
+ robe/x.txt)
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, allow reading from /private/tmp/claude-501/-Users-demouser0000/091d078c-ab24-4c62-aeac-05
+      a980d6184f/scratchpad/probe during this session
+   3. No
+
+ Esc to cancel · Tab to amend
+
+
+
+
+
+
+
+
+                                                              
+
+
+

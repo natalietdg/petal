@@ -1,0 +1,39 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.291
+           Haiku 4.5 · Claude Demo
+ ▘▘   ▝▝   /…/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/paste-test
+
+
+❯ Use the AskUserQuestion tool once with two questions: first pick a fruit (apple or pear), second  
+  pick a colour (red or blue). Then reply with only my two choices.                                 
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Fruit  ☒ Colour  ✔ Submit  →
+
+Review your answers
+
+ ● Which fruit do you prefer?
+   → Pear
+ ● Which colour do you prefer?
+   → Red
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
+
+
+
+
+
+
+
+
+
+
+
+
+                                                              
+
+
+

@@ -1,0 +1,39 @@
+
+▗ ▗   ▖ ▖  Claude Code v2.1.291
+           Haiku 4.5 · Claude Demo
+ ▘▘   ▝▝   /…/-Users-demouser0000/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/paste-test
+
+
+❯ Use the AskUserQuestion tool once with two questions. First (multiSelect true): which fruits do I 
+  like, options apple, pear, plum. Second (single select): which colour, options red or blue. Then  
+  reply with only my answers.                                                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Fruits  ☐ Colour  ✔ Submit  →
+
+Which fruits do you like?
+
+❯ 1. [ ] Apple
+         A crisp, sweet fruit
+  2. [ ] Pear
+         A soft, juicy fruit
+  3. [ ] Plum
+         A small, tangy fruit
+  4. [ ] Type something
+     Next
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+                                                             
+
+
+
