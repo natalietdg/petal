@@ -430,11 +430,13 @@ PastelTerm.history = (() => {
   function preview_(sessionId) {
     if (sessionId === selectedId) return;
     selectedId = sessionId;
+    previewMode = 'replies'; // a newly picked session always opens on its replies
     for (const r of document.querySelectorAll('.history-row')) r.classList.toggle('selected', r.dataset.sessionId === sessionId);
     renderPreview();
   }
 
   function select(sessionId) {
+    if (sessionId !== selectedId) previewMode = 'replies';
     selectedId = sessionId;
     renderList();
     renderPreview();
