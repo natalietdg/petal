@@ -26,6 +26,7 @@
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (PastelTerm.sessionsPanel.isOpen()) PastelTerm.sessionsPanel.setOpen(false);
     else if (PastelTerm.history.isOpen()) PastelTerm.history.close();
+    else if (PastelTerm.customize.isOpen()) PastelTerm.customize.close();
     else return true;
     return false;
   });

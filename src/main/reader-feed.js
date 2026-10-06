@@ -8,8 +8,10 @@ const TICK_MS = 1000;
 const FAKE_SESSION = { pid: null, session: null };
 
 class ReaderFeed {
-  constructor(shellPid, send, { fakeTranscript = null } = {}) {
+  constructor(shellPid, send, { fakeTranscript = null, onReplyFinished = null } = {}) {
     this.shellPid = shellPid;
+    this.onReplyFinished = onReplyFinished;
+    this.finishingId = null; // reply whose turn just went busy -> idle, reported on the next tick
     this.fakeTranscript = fakeTranscript;
     this.fakeStatus = 'idle';
     this.send = send;
@@ -49,6 +51,7 @@ class ReaderFeed {
   }
 
   follow(session) {
+    this.finishingId = null;
     this.tail?.stop();
     this.session = session;
     this.replies = [];
@@ -62,13 +65,30 @@ class ReaderFeed {
   // Same session: pick up new lines, and re-emit when busy/idle flips (drives the cat).
   refresh(found) {
     const statusChanged = found.status !== this.session.status;
+    const turnEnded = this.session.status === 'busy' && found.status === 'idle';
     this.session = { ...this.session, status: found.status };
     this.tail.poll();
     if (statusChanged) this.emit('live');
+    this.reportFinished();
+    if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
+  }
+
+  // One tick after the turn ends, so its last transcript lines are in; fires once per finished turn.
+  reportFinished() {
+    const id = this.finishingId;
+    this.finishingId = null;
+    const reply = id && this.replies.find((r) => r.id === id);
+    if (!reply || !this.onReplyFinished) return;
+    try {
+      this.onReplyFinished({ reply, sessionId: this.session.sessionId, cwd: this.session.cwd ?? null });
+    } catch (error) {
+      console.error('[petal] reply-finished handler failed:', error); // never stops the reader ticking
+    }
   }
 
   // Claude exited: keep its last replies on screen, marked as ended.
   end() {
+    this.finishingId = null;
     this.tail.stop();
     this.tail = null;
     this.session = null;

@@ -60,4 +60,4 @@ async function writeHandoff(record) {
   return { file, turns: turns.length };
 }
 
-module.exports = { writeHandoff, readTurns };
+module.exports = { writeHandoff, readTurns, toMarkdown };

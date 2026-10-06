@@ -31,13 +31,16 @@
   <link rel="stylesheet" href="history.css">
   <link rel="stylesheet" href="composer.css">
   <link rel="stylesheet" href="workflow.css">
+  <link rel="stylesheet" href="customize.css">
 </head>
 <body>
   <div id="app">
     <div id="reader-area">
       <section id="history" hidden></section>
       <section id="workflow" hidden></section>
+      <section id="customize" hidden></section>
       <aside id="sessions-dock">
+        <button id="customize-button" class="dock-button" type="button" aria-pressed="false">Customize</button>
         <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
         <button id="history-button" class="dock-button" type="button" aria-pressed="false">History</button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
@@ -96,6 +99,7 @@
   <script src="history.js"></script>
   <script src="composer.js"></script>
   <script src="workflow.js"></script>
+  <script src="customize.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

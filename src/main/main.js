@@ -1,8 +1,10 @@
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
 const themes = require('../themes.json');
 const { spawnShell } = require('./pty');
-const { buildMenu, CAT_CHOICES } = require('./menu');
+const { buildMenu, CAT_CHOICES, SCENE_CHOICES, READING_CHOICES } = require('./menu');
 const { loadSettings, saveSettings } = require('./settings');
 const { ReaderFeed } = require('./reader-feed');
 const sessionsMonitor = require('./sessions-monitor');
@@ -10,6 +12,8 @@ const { registerHistoryIpc } = require('./history-ipc');
 const snapshot = require('./snapshot');
 const organizer = require('./session-organizer');
 const { registerWorkflowIpc } = require('./workflow-ipc');
+const configStore = require('./config-store');
+const responseHook = require('./response-hook');
 
 const DEFAULT_THEME = 'paleSky';
 
@@ -104,6 +108,10 @@ function toggleHistory() {
   BrowserWindow.getFocusedWindow()?.webContents.send('history:toggle');
 }
 
+function openSettings() {
+  (focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents)?.send('customize:open');
+}
+
 // The renderer creates the tab and starts its shell; a pending command is typed into it.
 function openTab(contents, { command } = {}) {
   if (!contents || contents.isDestroyed()) return;
@@ -129,6 +137,7 @@ function refreshMenu() {
     onCycleTab: (delta) => sendToFocused('tabs:cycle', delta),
     onToggleReader: toggleReaderOnly,
     onToggleHistory: toggleHistory,
+    onOpenSettings: openSettings,
   });
 }
 
@@ -150,7 +159,9 @@ function startSession(sender, { tabId, cols, rows }) {
   // Snapshot runs replay the fixture in the window's first tab only, so later tabs stay distinct.
   const fakeTranscript = tabsOf(contentsId).length ? null : snapshot.fakeTranscript();
   const pty = spawnShell({ cols, rows });
-  const feed = new ReaderFeed(pty.pid, (channel, update) => send(channel, { ...update, tabId, label: labelFor(update) }), { fakeTranscript });
+  // Fire and forget: the hook never holds up the reader.
+  const onReplyFinished = ({ reply, sessionId, cwd }) => responseHook.onReplyFinished({ reply, sessionId, cwd, title: labelFor({ sessionId, cwd }) });
+  const feed = new ReaderFeed(pty.pid, (channel, update) => send(channel, { ...update, tabId, label: labelFor(update) }), { fakeTranscript, onReplyFinished });
   const session = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
@@ -216,6 +227,61 @@ function registerIpc() {
   ipcMain.on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
+
+  registerCustomizeIpc();
+}
+
+// Her active Claude Code output style, read-only; null when unset or unreadable.
+function outputStyle() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8')).outputStyle ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const HANDOFF_SAMPLE = {
+  record: { title: 'Fix the reader session', cwd: '~/CascadeProjects/pastel-term', sessionId: '<session id>', file: '~/.claude/projects/<folder>/<session id>.jsonl' },
+  turns: [{ prompt: 'why did the reader switch sessions?', reply: ['**The reader now follows only the claude inside this window.**'] }],
+};
+
+// Everything the Customize page shows, in one read.
+function customizeState() {
+  const magazinePath = path.join(os.homedir(), '.claude', 'output-styles', 'magazine.md');
+  return {
+    config: configStore.load(),
+    defaults: configStore.defaults(),
+    models: configStore.MODELS,
+    look: { theme: settings.theme, reading: settings.reading, cat: settings.cat, scene: settings.scene },
+    choices: {
+      themes: Object.entries(themes).map(([id, theme]) => [id, theme.label]),
+      reading: READING_CHOICES,
+      cats: CAT_CHOICES,
+      scenes: SCENE_CHOICES,
+    },
+    outputStyle: outputStyle(),
+    magazinePath: fs.existsSync(magazinePath) ? magazinePath : null,
+    organizer: organizer.status(),
+    hookRuns: responseHook.recentRuns(),
+    hookDir: responseHook.hookDir(),
+    configFile: path.join(app.getPath('userData'), 'config.json'),
+    handoffSample: require('./handoff').toMarkdown(HANDOFF_SAMPLE.record, HANDOFF_SAMPLE.turns),
+  };
+}
+
+// Look setters reuse the menu's apply* paths, so checkmarks and every window stay in sync.
+function registerCustomizeIpc() {
+  const valid = (choices, id) => choices.some(([choice]) => choice === id);
+  ipcMain.handle('config:get', () => customizeState());
+  ipcMain.handle('config:save', (_event, patch) => configStore.save(patch));
+  ipcMain.handle('config:reset', (_event, keyPath) => configStore.reset(keyPath));
+  ipcMain.handle('config:test-hook', () => responseHook.test());
+  ipcMain.handle('config:hook-runs', () => responseHook.recentRuns());
+  ipcMain.handle('config:organizer', () => organizer.status());
+  ipcMain.on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
+  ipcMain.on('look:reading', (_event, id) => { if (valid(READING_CHOICES, id)) applyReading(id); });
+  ipcMain.on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });
+  ipcMain.on('look:scene', (_event, id) => { if (valid(SCENE_CHOICES, id)) applyScene(id); });
 }
 
 app.whenReady().then(() => {

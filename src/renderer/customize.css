@@ -1,0 +1,121 @@
+/* Customize replaces the reader while open; the dock stays on top. */
+#customize {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+}
+#customize[hidden] { display: none; }
+
+.customize-pane { max-width: 1040px; margin: 0 auto; padding: 72px 40px 60px; }
+.customize-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 18px; }
+.customize-title { margin: 0; font: 600 2em/1.1 var(--display-font); letter-spacing: -0.02em; }
+.customize-tabs { margin: 0; flex-wrap: wrap; }
+.cz-summary { max-width: 46em; margin: 0 0 18px; font: 500 1.2em/1.4 var(--body-font); }
+.customize-body { display: flex; flex-direction: column; gap: 18px; }
+
+.cz-card { padding: 14px 16px 14px; border: 1px solid var(--rule); border-radius: 14px; }
+.cz-card-title { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.cz-note { margin: 10px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.cz-empty { margin: 0; font-size: 14px; color: var(--muted); }
+.cz-note code, .cz-list code { font: 12px var(--mono-font); }
+
+/* Look: one chip per menu item, ticked like a radio. */
+.cz-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.cz-chip {
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.cz-chip[aria-checked="true"] { background: var(--next-pill); border-color: var(--next-ink); color: var(--next-ink); }
+
+/* Formatting table: the active reading style's column is tinted. */
+.cz-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cz-table th, .cz-table td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.cz-table th { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cz-table code { padding: 0.1em 0.4em; border-radius: 5px; background: var(--code-bg); font: 12px var(--mono-font); }
+.cz-shape { font-weight: 600; white-space: nowrap; }
+.cz-table td.cz-current { background: var(--why-wash); padding-left: 8px; }
+
+/* Live preview: a small reader column in the current reading style. */
+.cz-preview.reader-column { max-width: none; margin: 8px 0 0; padding: 20px 24px; border-radius: 10px; background: var(--reader-bg); box-shadow: inset 0 0 0 1px var(--rule); font-size: 16px; }
+/* Newspaper styles its headline and dek on #latest only; the preview mirrors them. */
+.cz-preview .headline { font-family: var(--display-font); font-size: 1.9em; line-height: 1.1; font-weight: 620; letter-spacing: -0.02em; margin-bottom: 0.5em; }
+.cz-preview .headline + p { font-size: 1.1em; padding-bottom: 0.8em; border-bottom: 1px solid var(--rule); }
+
+/* Settings rows: label, control, hint. */
+.cz-fields { display: grid; gap: 10px; }
+.cz-field { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 4px 14px; font-size: 14px; }
+.cz-label { font-size: 13px; font-weight: 600; }
+.cz-hint { grid-column: 2; font-size: 12px; color: var(--muted); }
+.cz-field input[type="checkbox"] { justify-self: start; width: 18px; height: 18px; accent-color: var(--next-ink); }
+.cz-input {
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 14px var(--ui-font);
+}
+.cz-number { width: 7em; justify-self: start; }
+select.cz-input { justify-self: start; }
+.cz-command { font-family: var(--mono-font); font-size: 13px; }
+.cz-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 11em;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 13px/1.5 var(--mono-font);
+  resize: vertical;
+}
+
+.cz-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.cz-status { font-size: 13px; color: var(--muted); }
+.cz-last-pass { margin: 0; }
+.cz-quiet-button, .cz-example {
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.flow-button:disabled { opacity: 0.6; cursor: default; }
+.cz-examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.cz-example { font: 12px var(--mono-font); border-radius: 8px; background: var(--code-bg); }
+
+.cz-list, .cz-steps { margin: 0; padding-left: 1.3em; font-size: 14px; line-height: 1.5; }
+.cz-list li + li, .cz-steps li + li { margin-top: 0.35em; }
+.cz-pre { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--code-bg); overflow-x: auto; }
+.cz-pre code { font: 12.5px/1.5 var(--mono-font); white-space: pre-wrap; }
+
+/* Recent hook runs, newest first. */
+.cz-runs { display: flex; flex-direction: column; }
+.cz-run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 13px; }
+.cz-run:first-child { border-top: 0; }
+.cz-run-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cz-run-err { flex-basis: 100%; font: 12px var(--mono-font); color: var(--muted); white-space: pre-wrap; }
+.cz-badge { padding: 1px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+.cz-ok { background: var(--done-pill); color: var(--done-ink); }
+.cz-fail { background: var(--decide-pill); color: var(--decide-ink); }
+
+@media (max-width: 700px) {
+  .customize-pane { padding: 64px 16px 40px; }
+  .cz-field { grid-template-columns: minmax(0, 1fr); }
+  .cz-hint { grid-column: 1; }
+}
+
+/* The preview is too narrow for Editorial's margin rail: keep sidebars and pull quotes in the text flow. */
+[data-reading] .cz-preview .story-section { display: block; }
+[data-reading] .cz-preview .story-section > .section-body, [data-reading] .cz-preview .story-section > .rail { display: contents; }

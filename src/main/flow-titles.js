@@ -1,12 +1,11 @@
 // State changes per step, written by Claude (Haiku) in one call per flow. Falls back to the audit log on any failure.
 const { runClaude } = require('./claude-cli');
+const configStore = require('./config-store');
 
-const PROMPT = `You turn a work log into STATE CHANGES. For each step you get what the user asked and the reply.
-List what is now different in the world: a setting, a file, an app, a design, a rule, a decision. Each change is
-{"what": the thing that changed (2-4 words), "from": its old state or "" if new, "to": its new state (max 6 words)}.
-A step that only answered a question, explained, or asked back changed nothing: give it "changes": [].
-Also give a 3-6 word outcome title. Plain words, sentence case, no trailing periods. Never restate the request.
-Answer with JSON only: {"steps":[{"i":<index>,"t":"<title>","changes":[{"what":"","from":"","to":""}]}]}`;
+// Fixed in code so an edited prompt can never break parseSteps.
+const CONTRACT = 'Answer with JSON only: {"steps":[{"i":<index>,"t":"<title>","changes":[{"what":"","from":"","to":""}]}]}';
+
+const promptText = () => `${configStore.load().flowTitles.prompt}\n${CONTRACT}`;
 
 // Pulls {"steps":[...]} out of the reply even if the model wraps it in prose or a fence.
 function parseSteps(stdout) {
@@ -28,7 +27,7 @@ async function writeTitles(steps) {
   if (!wanted.length) return { ok: true, count: 0 };
   const payload = wanted.map((s) => ({ i: s.index, asked: s.label, reply: s.excerpt }));
   try {
-    const answers = parseSteps(await runClaude(`${PROMPT}\n\nSteps:\n${JSON.stringify(payload)}`));
+    const answers = parseSteps(await runClaude(`${promptText()}\n\nSteps:\n${JSON.stringify(payload)}`));
     let count = 0;
     for (const step of wanted) {
       const answer = answers.get(step.index);
@@ -47,4 +46,4 @@ async function writeTitles(steps) {
   }
 }
 
-module.exports = { writeTitles };
+module.exports = { writeTitles, promptText };

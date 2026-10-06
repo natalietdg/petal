@@ -264,6 +264,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.fixtureFlow(kit);
   await views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION);
   await views.historyScreens(kit);
+  await views.customizeScreens(kit);
 }
 
 async function run({ win, sessions, activeSession, openTab, themes, applyTheme }) {

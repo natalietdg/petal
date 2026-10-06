@@ -6,12 +6,11 @@ const { app } = require('electron');
 const history = require('./history');
 const tagsStore = require('./tags-store');
 const { runClaude } = require('./claude-cli');
+const configStore = require('./config-store');
 const { promptText, commandText } = require('./prompts');
 const { assistantText } = require('./replies');
 
 const FIRST_RUN_DELAY_MS = 20_000;
-const INTERVAL_MS = 10 * 60 * 1000;
-const MAX_PER_PASS = 12;
 const BUSY_WINDOW_MS = 2 * 60 * 1000; // a Petal session written to this recently is still mid-conversation
 const RECENT_TURNS = 6;
 const PROMPT_CHARS = 500;
@@ -27,6 +26,9 @@ const storeFile = () => path.join(app.getPath('userData'), 'organizer.json');
 let timers = [];
 let running = null; // the pass in flight, shared by every caller
 let openSessionIds = () => [];
+let schedule = null; // { enabled, intervalMinutes } the timers were set for
+let lastPass = null; // { at, titled, failed, due } shown on the Customize page
+let unsubscribe = null; // stops listening for config edits
 
 function load() {
   try {
@@ -83,13 +85,14 @@ function buildDigest({ first, count, recent }) {
 
 const quoted = (names) => (names.length ? names.map((n) => `"${n}"`).join(', ') : '(none yet)');
 
-function promptFor(digest, cwd, projects, tags) {
-  return `You label a Claude Code work session so it can be found later.
+// Her editable instructions first, then the fixed JSON contract parseLabel relies on.
+function promptFor(instructions, digest, cwd, projects, tags) {
+  return `${instructions}
+
 Answer with JSON only, no prose:
-{"title": "3-7 word outcome-focused title, sentence case, no trailing period",
- "project": "short project or area name, reusing one of these existing names when it fits: ${quoted(projects)}",
- "status": "done" | "in progress" | "blocked",
- "tags": ["1-3 short topic tags, 1-2 words each. Reuse these existing tags whenever one fits; invent a new one only when none does: ${quoted(tags)}"]}
+{"title": "<title>", "project": "<project>", "status": "done" | "in progress" | "blocked", "tags": ["<tag>"]}
+Existing projects: ${quoted(projects)}
+Existing tags: ${quoted(tags)}
 
 Folder: ${cwd ?? 'unknown'}
 Session:
@@ -122,12 +125,12 @@ function needsLabel(session, store, tags, openIds) {
   return !(openIds.has(session.sessionId) && Date.now() - session.lastAt < BUSY_WINDOW_MS);
 }
 
-async function labelOne(session, store) {
+async function labelOne(session, store, { prompt, model }) {
   const { mtimeMs } = fs.statSync(session.file); // before reading, so later writes count as a change
   const turns = await readDigestTurns(session.file);
   if (!turns.first) throw new Error('No prompts in transcript');
   const hints = tagsStore.names().slice(0, MAX_TAG_HINTS); // deleted names are never in this list
-  const { tags: suggested, ...label } = parseLabel(await runClaude(promptFor(buildDigest(turns), session.cwd, projectNames(store), hints)));
+  const { tags: suggested, ...label } = parseLabel(await runClaude(promptFor(prompt, buildDigest(turns), session.cwd, projectNames(store), hints), { model }));
   const previous = store[session.sessionId];
   const unchanged = previous && previous.mtimeMs === mtimeMs; // tag-only backfill keeps the title she already saw
   store[session.sessionId] = unchanged ? previous : { ...label, mtimeMs, at: new Date().toISOString() };
@@ -137,6 +140,7 @@ async function labelOne(session, store) {
 
 async function pass(limit) {
   if (!require('./claude-cli').claudePath()) return { titled: 0, failed: 0, due: 0, skipped: 'no claude' };
+  const settings = configStore.load().organizer; // read per pass, so edits apply to the next one
   const store = load();
   const tags = tagsStore.load();
   const openIds = new Set(openSessionIds());
@@ -144,7 +148,7 @@ async function pass(limit) {
   const result = { titled: 0, failed: 0, due: due.length };
   for (const session of due) { // one at a time: never fan out CLI calls
     try {
-      await labelOne(session, store);
+      await labelOne(session, store, settings);
       result.titled += 1;
     } catch (error) {
       result.failed += 1; // retried next pass
@@ -154,22 +158,45 @@ async function pass(limit) {
   return result;
 }
 
-function runNow({ limit = MAX_PER_PASS } = {}) {
-  running ??= pass(limit).finally(() => { running = null; });
+function runNow({ limit = configStore.load().organizer.perPass } = {}) {
+  running ??= pass(limit)
+    .then((result) => { lastPass = { at: new Date().toISOString(), ...result }; return result; })
+    .finally(() => { running = null; });
   return running;
 }
 
 const isRunning = () => Boolean(running);
 
-function start({ openSessionIds: getOpenIds } = {}) {
-  if (timers.length) return;
-  if (getOpenIds) openSessionIds = getOpenIds;
-  timers = [setTimeout(runNow, FIRST_RUN_DELAY_MS), setInterval(runNow, INTERVAL_MS)];
-}
-
-function stop() {
+function clearTimers() {
   for (const timer of timers) clearTimeout(timer); // clearTimeout clears intervals too
   timers = [];
 }
 
-module.exports = { start, stop, runNow, load, isRunning };
+// firstRun: the delayed pass at launch; a reschedule after an edit only resets the interval.
+function setTimers({ enabled, intervalMinutes }, { firstRun = false } = {}) {
+  clearTimers();
+  schedule = { enabled, intervalMinutes };
+  if (!enabled) return;
+  timers = [setInterval(runNow, intervalMinutes * 60 * 1000)];
+  if (firstRun) timers.push(setTimeout(runNow, FIRST_RUN_DELAY_MS));
+}
+
+function start({ openSessionIds: getOpenIds } = {}) {
+  if (schedule) return;
+  if (getOpenIds) openSessionIds = getOpenIds;
+  setTimers(configStore.load().organizer, { firstRun: true });
+  unsubscribe = configStore.onChange(({ organizer }) => {
+    if (schedule && (organizer.enabled !== schedule.enabled || organizer.intervalMinutes !== schedule.intervalMinutes)) setTimers(organizer);
+  });
+}
+
+function stop() {
+  clearTimers();
+  unsubscribe?.();
+  unsubscribe = null;
+  schedule = null;
+}
+
+const status = () => ({ lastPass, running: isRunning(), schedule });
+
+module.exports = { start, stop, runNow, load, isRunning, status, promptFor };

@@ -335,3 +335,48 @@ async function composerCheck(kit, { win, activeSession }) {
   log(`${delivered && cleared ? 'ok' : 'FAIL'} reply box sends to the active tab: delivered=${Boolean(delivered)} cleared=${cleared}`);
 }
 module.exports.composerCheck = composerCheck;
+
+// Customize page: every section in light and dark, a Look change synced to the menu, and no hook runs.
+async function customizeScreens(kit) {
+  const { js, waitFor, log, wait, themes, applyTheme, verifiedCapture } = kit;
+  const { Menu } = require('electron');
+  const menuChecked = (label) => Menu.getApplicationMenu().items.flatMap((m) => m.submenu?.items ?? []).find((i) => i.label === label)?.checked;
+  const sections = ['look', 'formatting', 'organizer', 'flowTitles', 'handoff', 'hook'];
+  for (const id of THEMES) {
+    applyTheme(id, { persist: false });
+    await js("PastelTerm.customize.open('look')");
+    for (const section of sections) {
+      await js(`PastelTerm.customize.show(${JSON.stringify(section)}).then(() => { document.getElementById('customize').scrollTop = 0; })`);
+      const shown = await waitFor(() => js(`document.querySelector('#customize-tabs [aria-selected="true"]')?.dataset.section === ${JSON.stringify(section)} && document.querySelectorAll('#customize-body .cz-card').length`), 5000);
+      log(`${shown ? 'ok' : 'FAIL'} customize ${section} ${id}: ${shown} cards`);
+      await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `customize-${section}-${id}` });
+    }
+    await js("PastelTerm.customize.show('formatting')");
+    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `customize-formatting-preview-${id}`, scrollTo: '.cz-preview' });
+    await js('PastelTerm.customize.close()');
+  }
+  applyTheme('paleSky', { persist: false });
+
+  // Reading chip -> applyReading: page, renderer and menu tick all agree, then back to newspaper.
+  await js("PastelTerm.customize.open('look')");
+  await js("[...document.querySelectorAll('.cz-chip')].find((c) => c.textContent === 'Magazine · Editorial').click()");
+  const synced = await waitFor(async () => (await js('document.documentElement.dataset.reading')) === 'editorial' && menuChecked('Magazine · Editorial'), 5000);
+  log(`${synced ? 'ok' : 'FAIL'} reading chip applies live and ticks the View menu: ${JSON.stringify({ reading: await js('document.documentElement.dataset.reading'), menu: menuChecked('Magazine · Editorial') })}`);
+  await js("PastelTerm.customize.show('formatting').then(() => { document.getElementById('customize').scrollTop = 0; })");
+  await wait(300);
+  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'customize-formatting-editorial-paleSky', scrollTo: '.cz-preview' });
+  await js("PastelTerm.customize.show('look')");
+  await js("[...document.querySelectorAll('.cz-chip')].find((c) => c.textContent === 'Newspaper').click()");
+  await waitFor(async () => (await js('document.documentElement.dataset.reading')) === 'newspaper', 5000);
+
+  // Esc on the page closes it and brings the reader back.
+  await js("document.querySelector('#customize-tabs button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  const closed = await js("({ customize: document.getElementById('customize').hidden, reader: !document.getElementById('reader').hidden })");
+  log(`${closed.customize && closed.reader ? 'ok' : 'FAIL'} Esc closes Customize: ${JSON.stringify(closed)}`);
+
+  // The fixture's busy -> idle flip (cat frames) fires reply-finished; the hook must count it and not run.
+  const responseHook = require('./response-hook');
+  const hook = responseHook.stats();
+  log(`${hook.runs === 0 && hook.skippedInSnapshot >= 1 ? 'ok' : 'FAIL'} reply-finished fired, response hook skipped in snapshot: ${JSON.stringify(hook)}`);
+}
+module.exports.customizeScreens = customizeScreens;

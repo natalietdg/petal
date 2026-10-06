@@ -1,4 +1,4 @@
-// One-shot calls to the local Claude CLI (Haiku, no tools, no saved session), shared by flows and the organizer.
+// One-shot calls to the local Claude CLI (Haiku unless told otherwise, no tools, no saved session), shared by flows and the organizer.
 const { execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -38,11 +38,11 @@ function cleanEnv(claude = claudePath()) {
   return env;
 }
 
-function runClaude(input) {
+function runClaude(input, { model = 'haiku' } = {}) {
   const claude = claudePath();
   if (!claude) return Promise.reject(new Error('Claude Code is not installed (no `claude` command found).'));
   return new Promise((resolve, reject) => {
-    const args = ['-p', '--model', 'haiku', '--no-session-persistence', '--output-format', 'json', '--tools', ''];
+    const args = ['-p', '--model', model, '--no-session-persistence', '--output-format', 'json', '--tools', ''];
     const child = execFile(claude, args, { env: cleanEnv(claude), timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, cwd: os.tmpdir() },
       (error, stdout) => (error ? reject(error) : resolve(stdout)));
     child.stdin.end(input);

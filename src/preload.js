@@ -38,6 +38,21 @@ contextBridge.exposeInMainWorld('pastel', {
   openLink: (url) => ipcRenderer.send('link:open', url),
   reportReady: (info) => ipcRenderer.send('renderer:ready', info),
   onToggleHistory: (callback) => subscribe('history:toggle', callback),
+  onOpenCustomize: (callback) => subscribe('customize:open', callback),
+  look: {
+    setTheme: (id) => ipcRenderer.send('look:theme', id),
+    setReading: (id) => ipcRenderer.send('look:reading', id),
+    setCat: (id) => ipcRenderer.send('look:cat', id),
+    setScene: (id) => ipcRenderer.send('look:scene', id),
+  },
+  config: {
+    get: () => ipcRenderer.invoke('config:get'),
+    save: (patch) => ipcRenderer.invoke('config:save', patch),
+    reset: (keyPath) => ipcRenderer.invoke('config:reset', keyPath),
+    testHook: () => ipcRenderer.invoke('config:test-hook'),
+    hookRuns: () => ipcRenderer.invoke('config:hook-runs'),
+    organizer: () => ipcRenderer.invoke('config:organizer'),
+  },
   workflow: {
     today: (openTabs) => ipcRenderer.invoke('workflow:today', { openTabs }),
     setup: () => ipcRenderer.invoke('workflow:setup'),

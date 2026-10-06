@@ -12,7 +12,7 @@ const SCENE_CHOICES = [
 // Ids match the data-reading values styled in renderer/magazine.css.
 const READING_CHOICES = [['newspaper', 'Newspaper'], ['editorial', 'Magazine · Editorial'], ['lifestyle', 'Magazine · Lifestyle']];
 
-function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory }) {
+function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onOpenSettings }) {
   const themeItems = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -44,7 +44,22 @@ function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, c
   }));
 
   const template = [
-    { role: 'appMenu' },
+    {
+      label: 'Petal', // macOS titles the first menu with the app name either way
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: onOpenSettings },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
     {
       label: 'Shell',
       submenu: [
@@ -78,4 +93,4 @@ function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, c
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-module.exports = { buildMenu, CAT_CHOICES };
+module.exports = { buildMenu, CAT_CHOICES, SCENE_CHOICES, READING_CHOICES };
