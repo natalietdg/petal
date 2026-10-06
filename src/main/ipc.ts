@@ -1,31 +1,13 @@
 // Typed wrappers over ipcMain and webContents.send, checked against the contract in shared/ipc.ts.
-import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron';
-import type { IpcError } from '../shared/types';
-import type { EventArgs, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels } from '../shared/ipc';
+import { ipcMain, type IpcMainEvent, type WebContents } from 'electron';
+import { guard, type InvokeHandler } from './ipc-guard';
+import type { EventArgs, EventChannel, InvokeArgs, InvokeChannel, SendChannel, SendChannels } from '../shared/ipc';
 
-export function handle<C extends InvokeChannel>(
-  channel: C,
-  handler: (event: IpcMainInvokeEvent, ...args: InvokeArgs<C>) => InvokeResult<C> | Promise<InvokeResult<C>>,
-): void {
+// Every invoke handler is wrapped by guard(); see ipc-guard.ts for what a failure returns.
+export function handle<C extends InvokeChannel>(channel: C, handler: InvokeHandler<C>): void {
+  const guarded = guard(channel, handler);
   // ipcMain hands over untyped args; the contract is what both sides agreed to send.
-  ipcMain.handle(channel, (event, ...args) => handler(event, ...(args as InvokeArgs<C>)));
-}
-
-// One bad session must never blank a pane: a thrown error comes back as an inline { error } message.
-type GuardedChannel = { [C in InvokeChannel]: IpcError extends InvokeResult<C> ? C : never }[InvokeChannel];
-
-export function handleGuarded<C extends GuardedChannel>(
-  channel: C,
-  handler: (event: IpcMainInvokeEvent, ...args: InvokeArgs<C>) => InvokeResult<C> | Promise<InvokeResult<C>>,
-): void {
-  handle(channel, async (event, ...args) => {
-    try {
-      return await handler(event, ...args);
-    } catch (error) {
-      console.error(`[petal] ${channel} failed:`, error);
-      return { error: (error as Error).message || String(error) } as InvokeResult<C>; // GuardedChannel ensures IpcError is part of this result
-    }
-  });
+  ipcMain.handle(channel, (event, ...args) => guarded(event, ...(args as InvokeArgs<C>)));
 }
 
 export function on<C extends SendChannel>(channel: C, listener: (event: IpcMainEvent, ...args: SendChannels[C]) => void): void {

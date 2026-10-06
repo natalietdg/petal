@@ -1,7 +1,7 @@
 // IPC for the Workflow dashboard. Every handler is read-only.
 import * as workflow from './workflow';
 import * as links from './links-store';
-import { handleGuarded } from './ipc';
+import { handle } from './ipc';
 import type { OrganizerStore } from './session-organizer';
 import type { TabSessions } from './tab-session';
 
@@ -25,14 +25,14 @@ export function registerWorkflowIpc({ sessions, history, organizer }: WorkflowIp
 
   const inputs = () => ({ sessions: history.listSessions(), labels: organizer.load(), tags: workflow.loadTags() });
 
-  // One failing section shows a line in its tab, never a blank view.
-  handleGuarded('workflow:today', (_event, { openTabs } = {}) => {
+  // One failing section shows a line in its tab, never a blank view (see ipc-guard.ts).
+  handle('workflow:today', (_event, { openTabs } = {}) => {
     const data = inputs();
     return workflow.todayData({ ...data, openTabs: Array.isArray(openTabs) ? openTabs : openTabsFromMain(data.labels) });
   });
-  handleGuarded('workflow:setup', () => workflow.setupData());
-  handleGuarded('workflow:time', () => workflow.timeData(inputs()));
-  handleGuarded('workflow:handoffs', () => {
+  handle('workflow:setup', () => workflow.setupData());
+  handle('workflow:time', () => workflow.timeData(inputs()));
+  handle('workflow:handoffs', () => {
     const { sessions: list, labels } = inputs();
     return workflow.handoffData({ links: links.load(), sessions: list, labels });
   });

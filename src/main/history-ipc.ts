@@ -9,7 +9,7 @@ import * as organizer from './session-organizer';
 import { writeHandoff, readTurns, type Turn } from './handoff';
 import * as links from './links-store';
 import * as tagsStore from './tags-store';
-import { handle, handleGuarded, send } from './ipc';
+import { handle, send } from './ipc';
 import { buildResumeCommand } from './resume-command';
 import type { ActiveSession, OpenTab, TabSessions } from './tab-session';
 import type { FlowExportRequest, MermaidResult } from '../shared/ipc';
@@ -73,15 +73,15 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   });
 
   // Joins the pass already running, if any, and resolves when it ends.
-  handleGuarded('history:tidy', () => organizer.runNow());
+  handle('history:tidy', () => organizer.runNow());
 
   // Her tag edits; each returns only { ok } and the view re-reads the list.
-  handleGuarded('history:tag-add', (_event, { sessionId, name }) => { tagsStore.addTag(sessionId, name); return { ok: true }; });
-  handleGuarded('history:tag-remove', (_event, { sessionId, name }) => { tagsStore.removeTag(sessionId, name); return { ok: true }; });
-  handleGuarded('history:tag-delete', (_event, { name }) => { tagsStore.deleteTag(name); return { ok: true }; });
-  handleGuarded('history:tag-rename', (_event, { from, to }) => { tagsStore.renameTag(from, to); return { ok: true }; });
+  handle('history:tag-add', (_event, { sessionId, name }) => { tagsStore.addTag(sessionId, name); return { ok: true }; });
+  handle('history:tag-remove', (_event, { sessionId, name }) => { tagsStore.removeTag(sessionId, name); return { ok: true }; });
+  handle('history:tag-delete', (_event, { name }) => { tagsStore.deleteTag(name); return { ok: true }; });
+  handle('history:tag-rename', (_event, { from, to }) => { tagsStore.renameTag(from, to); return { ok: true }; });
 
-  handleGuarded('history:preview', (_event, { sessionId }) => history.preview(sessionId));
+  handle('history:preview', (_event, { sessionId }) => history.preview(sessionId));
 
   // The whole conversation, a page at a time from the end: her prompts and Claude's replies, no tool noise.
   const TURNS_PER_PAGE = 30;
@@ -94,7 +94,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     turnCache.set(file, { mtimeMs, turns });
     return turns;
   }
-  handleGuarded('history:conversation', async (_event, { sessionId, before }) => {
+  handle('history:conversation', async (_event, { sessionId, before }) => {
     const record = history.findRecord(sessionId);
     if (!record) return { missing: true, turns: [], start: 0, total: 0 };
     const turns = await turnsFor(record.file);
@@ -108,7 +108,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   });
 
   // Another session reads this one: write a clean copy, then type a "read this" line for her to finish.
-  handleGuarded('history:send', async (event, { sessionId }) => {
+  handle('history:send', async (event, { sessionId }) => {
     const session = own(event);
     const record = history.findRecord(sessionId);
     if (!session || !record) return { note: 'That session is no longer on disk.' };
@@ -122,7 +122,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   });
 
   // Never parses the jsonl: returns the stored flow, or { empty } so the view can offer "Create flow".
-  handleGuarded('flow:get', (event, { target }) => {
+  handle('flow:get', (event, { target }) => {
     const resolved = resolveTarget(event, target);
     if (!resolved) return null;
     const stored = flowStore.load(resolved.sessionId);
@@ -130,7 +130,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     return { ...stored, stale: flowStore.isStale(stored, resolved.file) };
   });
 
-  handleGuarded('flow:create', async (event, { target }) => {
+  handle('flow:create', async (event, { target }) => {
     const resolved = resolveTarget(event, target);
     if (!resolved) return null;
     const stored = await flowStore.create({ ...resolved, transcriptFile: resolved.file, theme: currentTheme() });
