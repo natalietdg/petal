@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
+import { writeJsonAtomic } from './atomic-file';
 
 export interface SessionTags {
   tags?: string[];
@@ -40,11 +41,7 @@ export function load(): TagsData {
 }
 
 function save(data: TagsData): void {
-  const file = storeFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
-  fs.renameSync(tmp, file); // atomic swap: readers never see a half-written file
+  writeJsonAtomic(storeFile(), data, 1);
 }
 
 // The existing spelling of a tag, so "Auth" and "auth" stay one tag.

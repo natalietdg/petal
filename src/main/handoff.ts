@@ -6,6 +6,7 @@ import { app } from 'electron';
 import { promptText, commandText } from './prompts';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
+import { writeFileAtomic } from './atomic-file';
 
 // Keep the newest turns only, so the copy stays small enough to read into another session.
 const MAX_CHARS = 120 * 1024;
@@ -67,8 +68,7 @@ export function toMarkdown(record: HandoffRecord, turns: Turn[]): string {
 // Writes <userData>/handoffs/<sessionId>.md and returns its path.
 export async function writeHandoff(record: HandoffRecord): Promise<{ file: string; turns: number }> {
   const turns = await readTurns(record.file);
-  fs.mkdirSync(handoffsDir(), { recursive: true });
   const file = path.join(handoffsDir(), `${record.sessionId}.md`);
-  fs.writeFileSync(file, toMarkdown(record, turns));
+  writeFileAtomic(file, toMarkdown(record, turns));
   return { file, turns: turns.length };
 }

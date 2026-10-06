@@ -6,6 +6,7 @@ import { flowFor, type FlowStep, type Outcome } from './flow';
 import { toMermaid, type MermaidExport } from './flow-mermaid';
 import { writeTitles } from './flow-titles';
 import type { Theme } from '../shared/types';
+import { writeJsonAtomic } from './atomic-file';
 
 // Bump when the extracted shape changes; older files then read as stale, not broken.
 export const FLOW_VERSION = 6; // 6: flow is a list of state changes
@@ -80,10 +81,7 @@ async function createNow({ sessionId, title, cwd, transcriptFile, theme }: Creat
     titledBy: titling.ok ? 'claude-haiku' : 'rules',
     mermaid: { latest: toMermaid(flow, theme), all: toMermaid(flow, theme, { all: true }) },
   };
-  fs.mkdirSync(flowsDir(), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(stored));
-  fs.renameSync(tmp, file); // atomic swap: readers never see a half-written flow
+  writeJsonAtomic(file, stored);
   return stored;
 }
 

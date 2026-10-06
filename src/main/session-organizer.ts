@@ -12,6 +12,7 @@ import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import type { ListedSession } from './history';
 import type { TagsData } from './tags-store';
+import { writeJsonAtomic } from './atomic-file';
 
 const FIRST_RUN_DELAY_MS = 20_000;
 const BUSY_WINDOW_MS = 2 * 60 * 1000; // a Petal session written to this recently is still mid-conversation
@@ -77,11 +78,7 @@ export function load(): OrganizerStore {
 }
 
 function save(store: OrganizerStore): void {
-  const file = storeFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 1));
-  fs.renameSync(tmp, file); // atomic swap: History never reads a half-written file
+  writeJsonAtomic(storeFile(), store, 1);
 }
 
 const squash = (text: unknown, max: number): string => String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, max);

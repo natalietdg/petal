@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
+import { writeJsonAtomic } from './atomic-file';
 
 export interface Settings {
   theme: string;
@@ -36,6 +37,5 @@ export function loadSettings(): Settings {
 }
 
 export function saveSettings(settings: Settings): void {
-  fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
-  fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2));
+  writeJsonAtomic(settingsFile(), settings, 2);
 }

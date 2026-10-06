@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
+import { writeJsonAtomic } from './atomic-file';
 
 export const MODELS = ['haiku', 'sonnet', 'opus'];
 
@@ -79,11 +80,7 @@ export function load(): Config {
 }
 
 function write(config: Config): Config {
-  const file = configFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2));
-  fs.renameSync(tmp, file); // atomic swap: a reader never sees half a file
+  writeJsonAtomic(configFile(), config, 2);
   for (const listener of listeners) listener(config);
   return config;
 }

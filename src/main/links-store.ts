@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
+import { writeJsonAtomic } from './atomic-file';
 
 export type LinkKind = 'send' | 'resume' | 'fork';
 
@@ -31,11 +32,7 @@ export function load(): Link[] {
 }
 
 function save(links: Link[]): void {
-  const file = storeFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(links, null, 1));
-  fs.renameSync(tmp, file); // atomic swap: the view never reads a half-written file
+  writeJsonAtomic(storeFile(), links, 1);
 }
 
 // Never throws: a failed log write must not break the send or resume it records.
