@@ -7,6 +7,7 @@ import path from 'node:path';
 import { app, type BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
+import { promptsCheck } from './snapshot-prompts';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -329,6 +330,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
   await views.composerCheck(kit, { win, ...tabs });
+  await promptsCheck(kit, { win, ...tabs });
   await views.sessionsCloseCheck(kit);
   await views.sessionsAgentsCheck(kit);
   await views.fixtureFlow(kit);
