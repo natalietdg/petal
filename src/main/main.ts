@@ -214,7 +214,7 @@ function registerIpc(): void {
   handle('cat:get', () => settings.cat);
   handle('scene:get', () => settings.scene);
   handle('reading:get', () => settings.reading);
-  handle('claude:installed', () => Boolean(claudePath()));
+  handle('claude:installed', async () => Boolean(await claudePath()));
 
   handle('sessions:snapshot', (event, { detailed, expandedIds }) => sessionsMonitor.snapshot({
     detailed,

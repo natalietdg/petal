@@ -5,7 +5,7 @@ import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { app, Notification } from 'electron';
 import * as configStore from './config-store';
-import { cleanEnv } from './claude-cli';
+import { claudePath, cleanEnv } from './claude-cli';
 import type { Reply } from '../shared/types';
 
 export const TIMEOUT_MS = 30_000;
@@ -83,17 +83,17 @@ function notify(title: string | null | undefined, markdown: string): void {
 }
 
 // Resolves with the run record; never rejects, so callers can fire and forget.
-export function runCommand(command: string, { replyId, markdown, sessionId, title, cwd, test = false, timeoutMs = TIMEOUT_MS }: RunOptions): Promise<HookRun> {
+export async function runCommand(command: string, { replyId, markdown, sessionId, title, cwd, test = false, timeoutMs = TIMEOUT_MS }: RunOptions): Promise<HookRun> {
   const started = Date.now();
   const base = { at: new Date(started).toISOString(), title: title || null, test };
   let replyFile: string;
   try {
     replyFile = writeReplyFile(replyId, markdown);
   } catch (error) {
-    return Promise.resolve(record({ ...base, exitCode: null, ms: 0, stderr: `Could not write the reply file: ${(error as Error).message}` }));
+    return record({ ...base, exitCode: null, ms: 0, stderr: `Could not write the reply file: ${(error as Error).message}` });
   }
   const dir = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
-  const env = { ...cleanEnv(), PETAL_SESSION_ID: sessionId ?? '', PETAL_SESSION_TITLE: title ?? '', PETAL_CWD: dir, PETAL_REPLY_FILE: replyFile };
+  const env = { ...cleanEnv(await claudePath()), PETAL_SESSION_ID: sessionId ?? '', PETAL_SESSION_TITLE: title ?? '', PETAL_CWD: dir, PETAL_REPLY_FILE: replyFile };
 
   return new Promise((resolve) => {
     let stderr = '';

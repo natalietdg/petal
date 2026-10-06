@@ -176,7 +176,7 @@ async function labelOne(session: ListedSession, store: OrganizerStore, { prompt,
 }
 
 async function pass(limit: number): Promise<PassResult> {
-  if (!claudePath()) return { titled: 0, failed: 0, due: 0, skipped: 'no claude' };
+  if (!(await claudePath())) return { titled: 0, failed: 0, due: 0, skipped: 'no claude' };
   const settings = configStore.load().organizer; // read per pass, so edits apply to the next one
   const store = load();
   const tags = tagsStore.load();
