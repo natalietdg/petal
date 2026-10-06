@@ -215,6 +215,11 @@ async function catFrames({ js, win, capture, log, feed, themes, applyTheme }) {
     if (status === 'busy') {
       applyTheme('paleSky', { persist: false });
       await verifiedCapture({ js, capture, log, theme: themes.paleSky, panelOpen: false, name: 'busy-paleSky' });
+      // Full conversation: earlier turns sit above the newest reply, each with her message.
+      const convo = await js("({ turns: document.querySelectorAll('#older .older-turn').length, bubbles: document.querySelectorAll('#reader .reader-you').length, olderFirst: Boolean(document.getElementById('older').compareDocumentPosition(document.getElementById('latest')) & Node.DOCUMENT_POSITION_FOLLOWING) })");
+      log(`${convo.turns > 0 && convo.olderFirst ? 'ok' : 'FAIL'} full conversation in the reader: ${JSON.stringify(convo)}`);
+      await js("document.getElementById('reader').scrollTop = 0");
+      await capture('conversation-top');
     }
   }
   applyTheme('paleSky', { persist: false });
@@ -343,7 +348,7 @@ async function run({ win, sessions, activeSession, openTab, themes, applyTheme }
 
   const replyText = await waitFor(async () => (await js("document.getElementById('latest').innerText")).trim(), 90000);
   log(`reader reply: ${JSON.stringify(replyText)}`);
-  log(`older replies shown: ${await js("document.querySelectorAll('.older-reply').length")}`);
+  log(`earlier turns shown: ${await js("document.querySelectorAll('.older-turn').length")}`);
   const body = await js(`(() => { const p = document.querySelector('#latest p:not(.headline)'); return p ? getComputedStyle(p).fontFamily : 'no body paragraph'; })()`);
   log(`body font-family: ${body}; check Next=${await js(`document.fonts.check('400 19px "Atkinson Hyperlegible Next"')`)}`);
   log(`reader transcript file: ${path.basename(session.transcript)}`);

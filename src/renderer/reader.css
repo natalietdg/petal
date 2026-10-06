@@ -216,10 +216,14 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 }
 
 /* Older replies: collapsed and quieter. */
-#older { margin-top: 3em; }
-.older-reply { border-top: 1px solid var(--rule); padding: 0.7em 0; font-size: 16px; }
-.older-reply summary { color: var(--muted); cursor: pointer; }
-.older-reply[open] summary { margin-bottom: 1em; }
+/* Earlier turns sit above the newest reply, a touch smaller, each under a hairline. */
+#older { margin-bottom: 2.4em; }
+.older-turn { border-top: 1px solid var(--rule); padding: 1.1em 0 0.4em; font-size: 0.92em; }
+.older-time { margin: 0 0 0.6em; font: 600 11px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+/* In earlier turns, headlines and heroes stay modest so the newest reply stands out. */
+#reader #older .headline { font-size: 1.3em; line-height: 1.25; }
+#reader #older .story-head { background: none; padding: 0; margin: 0 0 0.8em; border: 0; text-align: left; }
+#reader #older .story-head::after { content: none; }
 
 .status code {
   font-family: var(--mono-font);

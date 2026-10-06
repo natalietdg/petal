@@ -3,31 +3,24 @@ PastelTerm.reader = (() => {
   const older = document.getElementById('older');
   const status = document.getElementById('reader-status');
   const scroller = document.getElementById('reader');
-  const openOlderIds = new Set();
   let latestId = null;
+  // The conversation reads top to bottom: earlier turns first, the newest reply last.
+  status.before(older);
 
   const timeOf = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
-  function summaryText(markdownText) {
-    const firstLine = markdownText.split('\n').find((line) => line.trim()) ?? '';
-    const plain = firstLine.replace(/[*_`#>=]/g, '').trim();
-    return plain.length > 90 ? `${plain.slice(0, 90)}…` : plain;
-  }
+  const youBubble = (prompt) => Object.assign(document.createElement('div'), { className: 'reader-you', textContent: prompt });
 
-  function olderReply(reply) {
-    const details = document.createElement('details');
-    details.className = 'reply older-reply';
-    details.dataset.replyId = reply.id;
-    details.open = openOlderIds.has(reply.id);
-    details.addEventListener('toggle', () => {
-      if (details.open) openOlderIds.add(reply.id); else openOlderIds.delete(reply.id);
-    });
-    const summary = document.createElement('summary');
-    summary.textContent = `${timeOf(reply.timestamp)} · ${summaryText(reply.markdown)}`;
+  // An earlier turn in full: her message, then Claude's whole reply.
+  function olderTurn(reply) {
+    const turn = document.createElement('article');
+    turn.className = 'reply older-turn';
+    turn.dataset.replyId = reply.id;
+    const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOf(reply.timestamp) });
     const body = PastelTerm.markdown.render(reply.markdown);
-    details.append(summary, body);
+    turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), body);
     PastelTerm.diagrams.render(body);
-    return details;
+    return turn;
   }
 
   const column = document.querySelector('.reader-column');
@@ -65,12 +58,11 @@ PastelTerm.reader = (() => {
       ? `Session ended · last reply ${timeOf(newest.timestamp)}`
       : `Latest reply · ${timeOf(newest.timestamp)}`;
     // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
-    const asked = newest.prompt ? [Object.assign(document.createElement('div'), { className: 'reader-you', textContent: newest.prompt })] : [];
-    latest.replaceChildren(...asked, PastelTerm.markdown.render(newest.markdown));
+    latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), PastelTerm.markdown.render(newest.markdown));
     latest.dataset.replyId = newest.id;
-    older.replaceChildren(...rest.map(olderReply));
+    older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
     PastelTerm.diagrams.render(latest);
-    if (newest.id !== latestId) scroller.scrollTop = 0; // new reply: jump to it
+    if (newest.id !== latestId) status.scrollIntoView({ block: 'start' }); // new reply: bring it into view
     latestId = newest.id;
     if (view === 'flow') scheduleFlowRefresh();
   }
