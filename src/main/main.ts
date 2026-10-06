@@ -61,8 +61,8 @@ function createWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
   win.once('ready-to-show', () => (snapshot.isSnapshotRun() ? win.showInactive() : win.show()));
-  // The renderer is still plain global scripts, served as static files from the app root.
-  win.loadFile(path.join(app.getAppPath(), 'src', 'renderer', 'index.html'));
+  // electron-vite builds the renderer next to main: out/renderer/index.html.
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   const contentsId = win.webContents.id;
   win.on('closed', () => {

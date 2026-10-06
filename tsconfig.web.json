@@ -1,0 +1,9 @@
+{
+  // Renderer: DOM, bundled by Vite. Node types are here only because shared/ipc.ts imports payload types from main.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/renderer/**/*.ts", "src/shared/**/*.ts", "src/preload.ts"]
+}
