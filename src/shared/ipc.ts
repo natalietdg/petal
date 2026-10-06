@@ -10,6 +10,7 @@ import type { HookRun, HookTestResult } from '../main/response-hook';
 import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/session-organizer';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { TagsData } from '../main/tags-store';
+import type { ClosedSession } from '../main/closed-store';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -26,6 +27,15 @@ export interface ConversationPage {
   total: number;
   missing?: true;
 }
+
+// The Sessions panel: live counts and rows, her limit, and (when open) what can be reopened.
+export interface SessionsView extends SessionsSnapshot {
+  maxOpen: number;
+  closed?: ClosedSession[];
+  oldestIdleId?: string | null;
+}
+
+export type CloseResult = { closed: true } | { closed: false; note: string };
 
 export type SendResult = { note: string } | { ok: true; file: string };
 
@@ -69,7 +79,8 @@ export interface InvokeChannels {
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: []; result: Guarded<boolean> };
-  'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsSnapshot> };
+  'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
+  'sessions:close': { args: [sessionId: string]; result: Guarded<CloseResult> };
 
   'config:get': { args: []; result: Guarded<CustomizeState> };
   'config:save': { args: [patch: ConfigPatch]; result: Guarded<Config> };

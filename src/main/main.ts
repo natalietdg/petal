@@ -2,8 +2,8 @@
 import path from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
-import * as sessionsMonitor from './sessions-monitor';
 import { registerHistoryIpc } from './history-ipc';
+import { registerSessionsIpc } from './sessions-ipc';
 import { isSnapshotRun, userDataDir } from './snapshot-mode';
 import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
@@ -90,11 +90,7 @@ function registerIpc(): void {
 
   handle('claude:installed', async () => Boolean(await claudePath()));
 
-  handle('sessions:snapshot', (event, { detailed, expandedIds }) => sessionsMonitor.snapshot({
-    detailed,
-    expandedIds,
-    ownSessionId: activeSession(event.sender.id)?.feed.session?.sessionId,
-  }));
+  registerSessionsIpc({ activeSession });
 
   on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);

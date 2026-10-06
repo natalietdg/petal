@@ -2,6 +2,7 @@
 // loaded only in those runs; these are the seams it drives: a scratch userData, a fixture session, and counters.
 import os from 'node:os';
 import path from 'node:path';
+import type { SessionFile } from './claude-session';
 
 export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
 export const snapshotOutDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
@@ -23,3 +24,6 @@ export const fixtureSession = (): FixtureSession | null => {
 
 // What the app did or skipped, so the harness can prove it (a stored flow skips the jsonl, the hook never runs).
 export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0 };
+
+// Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
+export const panelFixture: { sessions: SessionFile[] | null } = { sessions: null };

@@ -45,7 +45,7 @@ export interface SnapshotOptions {
 }
 
 // Session files outlive their process; signal 0 only checks it exists.
-function isAlive(pid: number): boolean {
+export function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -67,7 +67,7 @@ export function liveSessions(): SessionFile[] {
     .sort((a, b) => Number(b.status === 'busy') - Number(a.status === 'busy') || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
-const shortCwd = (cwd: string) => (cwd.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd);
+export const shortCwd = (cwd: string): string => (cwd.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd);
 
 function activeSubagents(session: SessionFile): SubagentRow[] {
   const dir = path.join(path.dirname(transcriptPath(session)), session.sessionId, 'subagents');
@@ -86,9 +86,17 @@ function activeSubagents(session: SessionFile): SubagentRow[] {
   }
 }
 
+// The idle session updated longest ago, offered by "Close oldest idle"; busy or unknown status never is.
+export function oldestIdle(sessions: readonly SessionFile[]): SessionFile | null {
+  let oldest: SessionFile | null = null;
+  for (const s of sessions) {
+    if (s.status === 'idle' && (!oldest || (s.updatedAt ?? 0) < (oldest.updatedAt ?? 0))) oldest = s;
+  }
+  return oldest;
+}
+
 // Collapsed pill needs counts only; the open panel reads jsonl tails.
-export function snapshot({ detailed, expandedIds = [], ownSessionId = null }: SnapshotOptions): SessionsSnapshot {
-  const sessions = liveSessions();
+export function snapshot({ detailed, expandedIds = [], ownSessionId = null }: SnapshotOptions, sessions: SessionFile[] = liveSessions()): SessionsSnapshot {
   const counts = { total: sessions.length, busy: sessions.filter((s) => s.status === 'busy').length };
   if (!detailed) return { counts };
 

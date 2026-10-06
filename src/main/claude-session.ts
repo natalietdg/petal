@@ -45,7 +45,14 @@ export function listProcesses(): Promise<ProcessRow[]> {
 }
 
 // "claude" or ".../bin/claude"; helpers show up as "claude bg-spare" / "claude bg-pty-host".
-const isClaudeCli = (comm: string) => path.basename(comm) === 'claude';
+export const isClaudeCli = (comm: string): boolean => path.basename(comm) === 'claude';
+
+// The command name of one pid (`ps -o comm=`), or null when it has no process.
+export function processCommand(pid: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile('/bin/ps', ['-o', 'comm=', '-p', String(pid)], (error, stdout) => resolve(error ? null : stdout.trim() || null));
+  });
+}
 
 function descendants(rootPid: number, processes: readonly ProcessRow[]): ProcessRow[] {
   const found: ProcessRow[] = [];
