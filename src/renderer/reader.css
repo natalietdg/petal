@@ -252,3 +252,18 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 /* Long headlines step down (set by markdown.js from the text length). */
 #latest .headline.headline-long { font-size: 1.75em; }
 #latest .headline.headline-very-long { font-size: 1.35em; line-height: 1.25; }
+
+/* Her message above the reply, like the History conversation view. */
+.reader-you {
+  margin: 0 0 1.4em auto;
+  max-width: 80%;
+  width: fit-content;
+  padding: 0.6em 1em;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--code-bg);
+  font: 0.86em/1.5 var(--ui-font);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 9em;
+  overflow-y: auto;
+}

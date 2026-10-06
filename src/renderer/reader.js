@@ -64,7 +64,9 @@ PastelTerm.reader = (() => {
     status.textContent = state === 'ended'
       ? `Session ended · last reply ${timeOf(newest.timestamp)}`
       : `Latest reply · ${timeOf(newest.timestamp)}`;
-    latest.replaceChildren(PastelTerm.markdown.render(newest.markdown));
+    // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
+    const asked = newest.prompt ? [Object.assign(document.createElement('div'), { className: 'reader-you', textContent: newest.prompt })] : [];
+    latest.replaceChildren(...asked, PastelTerm.markdown.render(newest.markdown));
     latest.dataset.replyId = newest.id;
     older.replaceChildren(...rest.map(olderReply));
     PastelTerm.diagrams.render(latest);

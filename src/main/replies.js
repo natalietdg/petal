@@ -1,5 +1,5 @@
 // Groups Claude Code jsonl entries into replies: all assistant text between two user prompts.
-const { contentItems, isUserTurn } = require('./prompts');
+const { contentItems, isUserTurn, promptText } = require('./prompts');
 
 const MAX_REPLIES = 20;
 
@@ -16,12 +16,14 @@ class ReplyCollector {
     this.maxReplies = maxReplies;
     this.replies = [];
     this.turnOpen = false;
+    this.lastPrompt = '';
   }
 
   // Returns true when the visible replies changed.
   add(entry) {
     if (isUserTurn(entry)) {
       this.turnOpen = false;
+      this.lastPrompt = promptText(entry) || this.lastPrompt; // what she asked, shown above the reply
       return false;
     }
     const text = assistantText(entry);
@@ -30,7 +32,8 @@ class ReplyCollector {
     if (this.turnOpen) {
       this.replies[this.replies.length - 1].markdown += `\n\n${text}`;
     } else {
-      this.replies.push({ id: entry.uuid, timestamp: entry.timestamp, markdown: text });
+      this.replies.push({ id: entry.uuid, timestamp: entry.timestamp, markdown: text, prompt: this.lastPrompt });
+      this.lastPrompt = '';
       this.turnOpen = true;
       if (this.replies.length > this.maxReplies) this.replies.shift();
     }
