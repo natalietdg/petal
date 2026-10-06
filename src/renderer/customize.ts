@@ -1,12 +1,12 @@
 // Customize: every setting in one place. Replaces the reader while open; Esc or Cmd+, goes back.
 import * as markdown from './markdown';
 import * as overlays from './overlays';
-import { byId, el, query } from './dom';
+import { byId, el, isIpcError, query } from './dom';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { HookRun } from '../main/response-hook';
 import type { OrganizerStatus } from '../main/session-organizer';
 import type { CustomizeState } from '../shared/ipc';
-import type { Choice } from '../shared/types';
+import type { Choice, IpcError } from '../shared/types';
 
 type SectionId = 'look' | 'formatting' | 'organizer' | 'flowTitles' | 'handoff' | 'hook';
 type PromptSection = 'organizer' | 'flowTitles';
@@ -38,10 +38,12 @@ view.innerHTML = `
       <div id="customize-tabs" class="view-toggle customize-tabs" role="tablist" aria-label="Customize sections"></div>
     </div>
     <p id="customize-summary" class="cz-summary"></p>
+    <p id="customize-error" class="wf-error" role="alert" hidden></p>
     <div id="customize-body" class="customize-body"></div>
   </div>`;
 const tabsBar = query(view, '#customize-tabs');
 const summary = query(view, '#customize-summary');
+const errorLine = query(view, '#customize-error');
 const body = query(view, '#customize-body');
 for (const s of SECTIONS) {
   const b = el('button', null, s.name);
@@ -68,10 +70,19 @@ const field = (label: string, control: HTMLElement, hint?: string): HTMLLabelEle
 };
 const note = (text: string, className = 'cz-note'): HTMLParagraphElement => el('p', className, text);
 
-async function save(patch: ConfigPatch): Promise<Config> {
-  state.config = await window.pastel.config.save(patch);
+// A failed save or reset in main shows above the section; the page keeps the last good config.
+function report(text: string): void {
+  errorLine.textContent = text;
+  errorLine.hidden = false;
+}
+
+function keepConfig(result: Config | IpcError, what: string): Config {
+  if (isIpcError(result)) report(`Couldn’t ${what}: ${result.error}`);
+  else state.config = result;
   return state.config;
 }
+
+const save = async (patch: ConfigPatch): Promise<Config> => keepConfig(await window.pastel.config.save(patch), 'save this setting');
 
 // ---- Look: chips that call the same apply* functions as the menus.
 function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void): HTMLDivElement {
@@ -194,7 +205,7 @@ function promptEditor({ section: key, label, contract }: { section: PromptSectio
     status.textContent = 'Saved. Used from the next run.';
   });
   const reset = actionButton('Reset to default', async () => {
-    state.config = await window.pastel.config.reset(`${key}.prompt`);
+    keepConfig(await window.pastel.config.reset(`${key}.prompt`), 'reset the prompt');
     box.value = state.config[key].prompt;
     status.textContent = 'Back to the default prompt.';
   }, 'cz-quiet-button');
@@ -236,8 +247,9 @@ function renderOrganizer(): HTMLElement[] {
     tidy.disabled = true;
     last.textContent = 'Tidying…';
     const result = await window.pastel.history.tidy();
-    state.organizer = await window.pastel.config.organizer();
-    last.textContent = 'error' in result ? `Tidy failed: ${result.error}` : lastPassText(state.organizer);
+    const organizer = await window.pastel.config.organizer();
+    if (!isIpcError(organizer)) state.organizer = organizer;
+    last.textContent = isIpcError(result) ? `Tidy failed: ${result.error}` : lastPassText(state.organizer);
     tidy.disabled = false;
   });
   const actions = el('div', 'cz-actions');
@@ -316,8 +328,10 @@ function renderHook(): HTMLElement[] {
     test.disabled = true;
     status.textContent = 'Running…';
     const result = await window.pastel.config.testHook();
-    status.textContent = 'skipped' in result ? `Not run: ${result.skipped}.` : `Exit ${result.exitCode ?? '–'}${result.timedOut ? ' (timed out)' : ''} in ${result.ms} ms.`;
-    runs.replaceChildren(runsList(await window.pastel.config.hookRuns()));
+    if (isIpcError(result)) status.textContent = `Test failed: ${result.error}`;
+    else status.textContent = 'skipped' in result ? `Not run: ${result.skipped}.` : `Exit ${result.exitCode ?? '–'}${result.timedOut ? ' (timed out)' : ''} in ${result.ms} ms.`;
+    const recent = await window.pastel.config.hookRuns();
+    if (!isIpcError(recent)) runs.replaceChildren(runsList(recent));
     test.disabled = false;
   });
 
@@ -347,8 +361,11 @@ export async function show(id: SectionId = section): Promise<void> {
   section = id;
   for (const b of tabsBar.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-selected', String(b.dataset.section === id));
   summary.textContent = SECTIONS.find((s) => s.id === id)?.summary ?? '';
+  errorLine.hidden = true;
   try {
-    state = await window.pastel.config.get();
+    const result = await window.pastel.config.get();
+    if (isIpcError(result)) throw new Error(result.error);
+    state = result;
     body.replaceChildren(...RENDER[id]());
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

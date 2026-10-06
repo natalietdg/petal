@@ -14,9 +14,11 @@ import * as composer from './composer';
 import * as workflow from './workflow';
 import * as customize from './customize';
 import * as overlays from './overlays';
-import { byId } from './dom';
+import themes from '../themes.json';
+import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
-import type { ReaderUpdate } from '../shared/types';
+import type { Guarded } from '../shared/ipc';
+import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
 const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays };
@@ -24,6 +26,14 @@ export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
 const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], busy: false, sessionId: null, cwd: null };
+
+// Startup reads that fail in main fall back to the defaults, and the reader says which ones.
+const startupProblems: string[] = [];
+function orDefault<T>(result: Guarded<T>, fallback: T, what: string): T {
+  if (!isIpcError(result)) return result;
+  startupProblems.push(`${what} (${result.error})`);
+  return fallback;
+}
 
 async function start(): Promise<void> {
   // Glyph metrics are measured at open(); fonts must be ready first.
@@ -34,7 +44,8 @@ async function start(): Promise<void> {
   await Promise.all(fonts.map((font) => document.fonts.load(font)));
   const fontsLoaded = fonts.every((font) => document.fonts.check(font));
 
-  const theme = await window.pastel.getTheme();
+  const fallbackTheme: Theme = themes.paleSky;
+  const theme = orDefault(await window.pastel.getTheme(), fallbackTheme, 'the theme');
   themeKit.applyCssVars(theme);
   const focusTerminal = () => tabs.active()?.term.focus();
 
@@ -64,12 +75,13 @@ async function start(): Promise<void> {
     if (reader.currentView() === 'flow') reader.refreshFlow();
   });
   const setReading = (id: string) => { document.documentElement.dataset.reading = id; };
-  setReading(await window.pastel.getReading());
-  reader.setClaudeMissing(!(await window.pastel.claudeInstalled()));
+  setReading(orDefault(await window.pastel.getReading(), 'newspaper', 'the reading style'));
+  reader.setClaudeMissing(!orDefault(await window.pastel.claudeInstalled(), true, 'whether Claude Code is installed'));
   window.pastel.onReading(setReading);
-  cat.setCat(await window.pastel.getCat());
+  cat.setCat(orDefault(await window.pastel.getCat(), 'mika', 'the pet'));
   window.pastel.onCat((id) => cat.setCat(id));
-  cat.setScene(await window.pastel.getScene());
+  cat.setScene(orDefault(await window.pastel.getScene(), 'none', 'the scene'));
+  if (startupProblems.length) reader.showNotice(`Couldn’t read ${startupProblems.join(', ')}; using the defaults.`);
   window.pastel.onScene((id) => cat.setScene(id));
   window.pastel.onReplies((update) => {
     tabs.setUpdate(update.tabId, update);

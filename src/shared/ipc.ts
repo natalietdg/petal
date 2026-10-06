@@ -63,31 +63,31 @@ export interface CustomizeState {
 
 type Ok = { ok: true };
 
-// renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle.
+// renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle. Every reply can be { error } (main/ipc-guard.ts).
 export interface InvokeChannels {
-  'theme:get': { args: []; result: Theme };
-  'cat:get': { args: []; result: string };
-  'scene:get': { args: []; result: string };
-  'reading:get': { args: []; result: string };
-  'claude:installed': { args: []; result: boolean };
-  'sessions:snapshot': { args: [options: SnapshotOptions]; result: SessionsSnapshot };
+  'theme:get': { args: []; result: Guarded<Theme> };
+  'cat:get': { args: []; result: Guarded<string> };
+  'scene:get': { args: []; result: Guarded<string> };
+  'reading:get': { args: []; result: Guarded<string> };
+  'claude:installed': { args: []; result: Guarded<boolean> };
+  'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsSnapshot> };
 
-  'config:get': { args: []; result: CustomizeState };
-  'config:save': { args: [patch: ConfigPatch]; result: Config };
-  'config:reset': { args: [keyPath: string]; result: Config };
-  'config:test-hook': { args: []; result: HookTestResult };
-  'config:hook-runs': { args: []; result: HookRun[] };
-  'config:organizer': { args: []; result: OrganizerStatus };
+  'config:get': { args: []; result: Guarded<CustomizeState> };
+  'config:save': { args: [patch: ConfigPatch]; result: Guarded<Config> };
+  'config:reset': { args: [keyPath: string]; result: Guarded<Config> };
+  'config:test-hook': { args: []; result: Guarded<HookTestResult> };
+  'config:hook-runs': { args: []; result: Guarded<HookRun[]> };
+  'config:organizer': { args: []; result: Guarded<OrganizerStatus> };
 
   'workflow:today': { args: [request?: { openTabs?: OpenTab[] }]; result: Guarded<TodayData> };
   'workflow:setup': { args: []; result: Guarded<SetupData> };
   'workflow:time': { args: []; result: Guarded<TimeData> };
   'workflow:handoffs': { args: []; result: Guarded<HandoffData> };
 
-  'history:list': { args: []; result: HistoryList };
+  'history:list': { args: []; result: Guarded<HistoryList> };
   'history:preview': { args: [request: { sessionId: string }]; result: Guarded<Preview> };
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
-  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean }]; result: ResumeResult };
+  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean }]; result: Guarded<ResumeResult> };
   'history:send': { args: [request: { sessionId: string }]; result: Guarded<SendResult> };
   'history:tidy': { args: []; result: Guarded<PassResult> };
   'history:tag-add': { args: [request: { sessionId: string; name: string }]; result: Guarded<Ok> };
@@ -97,9 +97,9 @@ export interface InvokeChannels {
 
   'flow:get': { args: [request: { target: FlowTarget }]; result: Guarded<FlowView | null> };
   'flow:create': { args: [request: { target: FlowTarget }]; result: Guarded<(StoredFlow & { stale: false }) | null> };
-  'flow:mermaid': { args: [request: FlowExportRequest]; result: MermaidResult | null };
-  'flow:copy-mermaid': { args: [request: FlowExportRequest]; result: { ok: boolean } };
-  'flow:save-mermaid': { args: [request: FlowExportRequest]; result: { ok: boolean; canceled?: true; filePath?: string } };
+  'flow:mermaid': { args: [request: FlowExportRequest]; result: Guarded<MermaidResult | null> };
+  'flow:copy-mermaid': { args: [request: FlowExportRequest]; result: Guarded<{ ok: boolean }> };
+  'flow:save-mermaid': { args: [request: FlowExportRequest]; result: Guarded<{ ok: boolean; canceled?: true; filePath?: string }> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.

@@ -416,6 +416,10 @@ async function doResume(sessionId: string, note: HTMLElement, confirmFork: boole
     close();
     return;
   }
+  if ('error' in result) {
+    note.textContent = `Couldn’t open it: ${result.error}`;
+    return;
+  }
   if ('confirm' in result) {
     const again = el('button', 'flow-button', 'Open anyway');
     again.type = 'button';
@@ -434,7 +438,7 @@ async function doSend(sessionId: string, note: HTMLElement): Promise<void> {
     close(); // back to the terminal, where the "read this" line is waiting for her question
     return;
   }
-  note.textContent = 'note' in result ? result.note : result.error;
+  note.textContent = 'error' in result ? result.error : result.note;
 }
 
 // Preview without re-rendering the list, so hovering never steals the row under the mouse.
@@ -456,6 +460,10 @@ export function select(sessionId: string): void {
 // Re-reads the list; returns whether a background pass is running.
 async function refresh(): Promise<boolean> {
   const result = await window.pastel.history.list();
+  if ('error' in result) {
+    list.replaceChildren(el('p', 'history-error', `Couldn’t list sessions: ${result.error}`));
+    return false;
+  }
   sessions = result.sessions;
   tagColors = result.tags;
   for (const name of [...tagFilter]) if (!tagColors[name]) tagFilter.delete(name); // a deleted tag can't stay a filter

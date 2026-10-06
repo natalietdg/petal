@@ -446,3 +446,10 @@ export async function overlaysCheck(kit: Kit): Promise<void> {
   const closed = await state();
   log(`${!closed.shown.length && !closed.pressed.length && closed.reader && closed.composer ? 'ok' : 'FAIL'} overlays: Esc closes Workflow, reader and reply box back: ${JSON.stringify(closed)}`);
 }
+
+// Invoke failures come back as { error } instead of rejecting; an unknown setting is a safe one to provoke (nothing is written).
+export async function errorRepliesCheck(kit: Kit): Promise<void> {
+  const { js, log } = kit;
+  const reply = await js("window.pastel.config.reset('nope.nothing').then((r) => ({ resolved: true, r }), (e) => ({ resolved: false, r: String(e) }))");
+  log(`${reply.resolved && /Unknown setting/.test(reply.r?.error ?? '') ? 'ok' : 'FAIL'} invoke failure resolves as { error }: ${JSON.stringify(reply)}`);
+}

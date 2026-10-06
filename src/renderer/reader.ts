@@ -134,10 +134,13 @@ export function showReply(replyIds: readonly (string | undefined)[]): void {
 
 export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; rerender(); };
 
-// Shown above the replies when a startup read from main failed.
+// A standing line above the replies, for startup reads from main that failed; reply updates leave it alone.
+const notice = Object.assign(document.createElement('p'), { className: 'status reader-notice', hidden: true });
+notice.setAttribute('role', 'alert');
+older.before(notice);
 export function showNotice(text: string): void {
-  showMessage('');
-  status.textContent = text;
+  notice.textContent = text;
+  notice.hidden = false;
 }
 
 export const currentView = (): ReaderView => view;

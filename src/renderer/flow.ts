@@ -1,6 +1,6 @@
 // Renders a session's "flow of outcomes": step cards on a thin line, plus the Mermaid export bar.
 import * as diagrams from './diagrams';
-import { el } from './dom';
+import { el, isIpcError } from './dom';
 import type { AuditRow, FlowStep, Outcome, StateChange } from '../main/flow';
 import type { FlowView, Guarded } from '../shared/ipc';
 import type { FlowTarget } from '../shared/types';
@@ -88,6 +88,10 @@ function exportBar(target: FlowTarget): ExportBar {
   async function prepare(): Promise<void> {
     const result = await window.pastel.flow.mermaid(target, all);
     if (!result) return;
+    if (isIpcError(result)) {
+      status.textContent = `Couldn’t export the chart: ${result.error}`;
+      return;
+    }
     const valid = await diagrams.validate(result.source);
     bar.dataset.valid = String(valid);
     if (!valid) {
@@ -98,10 +102,15 @@ function exportBar(target: FlowTarget): ExportBar {
       ? `Chart shows the latest ${result.exported} of ${result.total} steps.`
       : `Chart covers all ${result.total} steps.`;
     actions.replaceChildren(
-      button('Copy', async () => { status.textContent = (await window.pastel.flow.copyMermaid(target, all)).ok ? 'Copied Mermaid source.' : 'Copy failed.'; }),
+      button('Copy', async () => {
+        const copied = await window.pastel.flow.copyMermaid(target, all);
+        if (isIpcError(copied)) status.textContent = `Copy failed: ${copied.error}`;
+        else status.textContent = copied.ok ? 'Copied Mermaid source.' : 'Copy failed.';
+      }),
       button('Save .mmd', async () => {
         const saved = await window.pastel.flow.saveMermaid(target, all);
-        if (saved.ok) status.textContent = `Saved ${saved.filePath}`;
+        if (isIpcError(saved)) status.textContent = `Couldn’t save: ${saved.error}`;
+        else if (saved.ok) status.textContent = `Saved ${saved.filePath}`;
       }),
       button('Preview', () => diagrams.renderSource(preview, result.source)),
       ...(result.capped ? [button('Export all', () => { all = true; prepare(); })] : []),

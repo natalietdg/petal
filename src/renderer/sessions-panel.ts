@@ -1,5 +1,5 @@
 // Docked, read-only monitor of every live Claude session. The reader stays pinned to this pty.
-import { byId, el } from './dom';
+import { byId, el, isIpcError } from './dom';
 import type { SessionCounts, SessionRow } from '../main/sessions-monitor';
 
 const OPEN_REFRESH_MS = 2000;
@@ -77,8 +77,13 @@ new ResizeObserver(() => area.style.setProperty('--reader-area-height', `${area.
 export async function refresh(): Promise<void> {
   const open = isOpen();
   const result = await window.pastel.getSessions({ detailed: open, expandedIds: [...expandedIds] });
-  renderPill(result.counts);
-  if (open && result.rows) renderPanel(result.rows);
+  if (isIpcError(result)) {
+    pill.replaceChildren(el('span', 'dot'), el('span', '', 'Sessions · unavailable'));
+    if (open) panel.replaceChildren(el('p', 'sessions-heading', `Couldn’t read Claude sessions: ${result.error}`));
+  } else {
+    renderPill(result.counts);
+    if (open && result.rows) renderPanel(result.rows);
+  }
   schedule();
 }
 

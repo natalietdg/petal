@@ -330,6 +330,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.historyScreens(kit);
   await views.customizeScreens(kit);
   await views.overlaysCheck(kit);
+  await views.errorRepliesCheck(kit);
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {
