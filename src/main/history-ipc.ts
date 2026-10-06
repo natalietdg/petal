@@ -10,6 +10,7 @@ import { writeHandoff, readTurns, type Turn } from './handoff';
 import * as links from './links-store';
 import * as tagsStore from './tags-store';
 import { handle, handleGuarded, send } from './ipc';
+import { buildResumeCommand } from './resume-command';
 import type { ActiveSession, OpenTab, TabSessions } from './tab-session';
 import type { FlowExportRequest, MermaidResult } from '../shared/ipc';
 import type { FlowTarget, Theme } from '../shared/types';
@@ -28,8 +29,6 @@ interface HistoryIpcDeps {
   currentTheme: () => Theme;
 }
 
-// POSIX single-quote escaping: the cwd can never break out of the quotes.
-export const shellQuote = (text: unknown): string => `'${String(text).replace(/'/g, `'\\''`)}'`;
 const slug = (text: unknown) => String(text || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'session';
 
 export function registerHistoryIpc({ sessions, activeSession, openTab, currentTheme }: HistoryIpcDeps): void {
@@ -189,7 +188,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     if (history.isLive(sessionId) && !confirmFork) {
       return { confirm: 'This session is still running in another terminal. Opening it here as well forks it.' };
     }
-    const command = `cd ${shellQuote(record.cwd)} && claude --resume ${sessionId}\r`;
+    const command = buildResumeCommand(record.cwd, record.sessionId); // the id from disk, not the renderer's string
     links.addLink({ from: session.feed.session?.sessionId ?? null, to: sessionId, kind: confirmFork ? 'fork' : 'resume' });
     if (session.feed.claudePid) {
       openTab(event.sender, { command });

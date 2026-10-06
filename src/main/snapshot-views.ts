@@ -8,6 +8,7 @@ import { stats } from './flow';
 import * as flowStore from './flow-store';
 import * as responseHook from './response-hook';
 import { send } from './ipc';
+import { buildResumeCommand, resumeArgs } from './resume-command';
 import type { ReaderFeed } from './reader-feed';
 import type { Kit, TabsDeps } from './snapshot';
 import type { TabSessions } from './tab-session';
@@ -167,14 +168,14 @@ export async function resumeRoundTrip(kit: Kit, { pty, feed, transcript }: { pty
   const other = await js("window.pastel.history.list().then(({ sessions }) => sessions.find((s) => s.live)?.sessionId ?? null)");
   if (other) {
     const answer = await js(`window.pastel.history.resume(${JSON.stringify(other)})`);
-    log(`${answer.confirm && !transcript().includes(`--resume ${other}`) ? 'ok' : 'FAIL'} live elsewhere asks first: ${JSON.stringify(answer)}`);
+    log(`${answer.confirm && !transcript().includes(resumeArgs(other)) ? 'ok' : 'FAIL'} live elsewhere asks first: ${JSON.stringify(answer)}`);
   }
 
   const before = transcript().length;
   await js(`PastelTerm.history.open().then(() => PastelTerm.history.select(${JSON.stringify(first.sessionId)}))`);
   await waitFor(() => js("Boolean(document.querySelector('.resume-button'))"), 10000);
   await js("document.querySelector('.resume-button').click()");
-  const expected = `cd '${first.cwd}' && claude --resume ${first.sessionId}`;
+  const expected = buildResumeCommand(first.cwd ?? '', first.sessionId).trimEnd();
   const typed = await waitFor(() => transcript().slice(before).includes(expected) || null, 10000);
   log(`${typed ? 'ok' : 'FAIL'} pty received exactly: ${expected}`);
 
@@ -183,7 +184,7 @@ export async function resumeRoundTrip(kit: Kit, { pty, feed, transcript }: { pty
   log(`${resumed && history ? 'ok' : 'FAIL'} resumed session ${resumed?.sessionId} (original ${first.sessionId}); reader shows its history: ${Boolean(history)}`);
 
   const blocked = await js(`window.pastel.history.resume(${JSON.stringify(first.sessionId)})`);
-  const typedTwice = (transcript().match(new RegExp(`--resume ${first.sessionId}`, 'g')) ?? []).length > 1;
+  const typedTwice = transcript().split(resumeArgs(first.sessionId)).length - 1 > 1;
   log(`${blocked.ok && blocked.focused === false && !typedTwice ? 'ok' : 'FAIL'} same session again just focuses this tab: ${JSON.stringify(blocked)} typedTwice=${typedTwice}`);
   await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'resume-after' });
   await exitClaude();
@@ -202,7 +203,7 @@ export async function openFromHistory(kit: Kit, { pty, feed, transcript, session
   await js("PastelTerm.history.open()");
   await waitFor(() => js(`Boolean(document.querySelector('.history-row[data-session-id="${first}"]'))`), 10000);
   await js(`document.querySelector('.history-row[data-session-id="${first}"]').click()`);
-  const typed = await waitFor(() => transcript().slice(before).includes(`claude --resume ${first}`) || null, 10000);
+  const typed = await waitFor(() => transcript().slice(before).includes(`claude ${resumeArgs(first ?? '')}`) || null, 10000);
   const resumed = await waitFor(() => (feed.session?.sessionId === first ? feed.session : null), 40000);
   log(`${typed && resumed ? 'ok' : 'FAIL'} row click on a free tab resumed here: typed=${Boolean(typed)} following=${feed.session?.sessionId}`);
   const focused = await js("document.activeElement?.classList.contains('xterm-helper-textarea') ?? false");
