@@ -126,7 +126,24 @@
 .session-detail { padding: 2px 12px 10px 24px; font-size: 13px; color: var(--muted); }
 .session-recent { margin: 4px 0; padding-left: 1em; }
 .session-recent li + li { margin-top: 3px; }
-.session-subagent { margin: 6px 0 0; }
+
+/* Active background agents, listed under the row whether or not it is expanded. */
+.session-agents-badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--next-pill);
+  color: var(--next-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+.session-agents { min-width: 0; list-style: none; margin: 0 12px 8px 24px; padding: 0; font-size: 13px; }
+.session-agent { display: flex; gap: 6px; min-width: 0; padding: 2px 0; color: var(--muted); }
+.session-agent + .session-agent { border-top: 1px dashed var(--rule); }
+.agent-task { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--reader-fg); }
+.agent-activity { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-since { flex-shrink: 0; }
+.agent-more { font-style: italic; }
 
 /* Close sits beside the head button, never inside it; confirm, note and detail wrap to full width below. */
 .session-row,
@@ -139,6 +156,7 @@
 .session-row > .session-confirm,
 .session-row > .session-note,
 .session-row > .session-detail,
+.session-row > .session-agents,
 .closed-row > .session-note { flex-basis: 100%; }
 
 .session-link {

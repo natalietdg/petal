@@ -1,13 +1,14 @@
 // Docked monitor of every live Claude session. The reader stays pinned to this pty.
 // Each row can close its Claude after an inline confirm; recently closed ones can be reopened.
 import { byId, el, isIpcError } from './dom';
-import type { SessionCounts, SessionRow } from '../main/sessions-monitor';
+import type { SessionCounts, SessionRow, SubagentRow } from '../main/sessions-monitor';
 import type { ClosedSession } from '../main/closed-store';
-import type { SessionsView } from '../shared/ipc';
+import { agentsBadgeText, sessionsPillText, type SessionsView } from '../shared/ipc';
 
 const OPEN_REFRESH_MS = 2000;
 const COLLAPSED_REFRESH_MS = 5000;
 const MINUTE_MS = 60_000;
+const AGENTS_SHOWN = 4;
 
 const pill = byId('sessions-pill');
 const panel = byId('sessions-panel');
@@ -21,13 +22,15 @@ const notes = new Map<string, string>();
 
 export const isOpen = (): boolean => !panel.hidden;
 
-function sinceText(ms: number | null, verb: string): string {
+// "updated 5m ago"; with no verb, just "5m ago".
+function sinceText(ms: number | null, verb = ''): string {
   if (!ms) return '';
   const minutes = Math.round((Date.now() - ms) / MINUTE_MS);
-  if (minutes < 1) return `${verb} just now`;
-  if (minutes < 60) return `${verb} ${minutes}m ago`;
   const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${verb} ${hours}h ago` : `${verb} ${Math.round(hours / 24)}d ago`;
+  const ago = minutes < 1 ? 'just now'
+    : minutes < 60 ? `${minutes}m ago`
+      : hours < 48 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  return verb ? `${verb} ${ago}` : ago;
 }
 
 const overLimit = ({ total }: SessionCounts, maxOpen: number): boolean => total > maxOpen;
@@ -37,7 +40,7 @@ function renderPill({ counts, maxOpen }: SessionsView): void {
   const over = overLimit(counts, maxOpen);
   pill.classList.toggle('has-busy', counts.busy > 0);
   pill.classList.toggle('over-limit', over);
-  pill.replaceChildren(el('span', 'dot'), el('span', '', `Sessions · ${counts.busy} busy · ${counts.total} open`));
+  pill.replaceChildren(el('span', 'dot'), el('span', '', sessionsPillText(counts)));
   if (over) pill.append(el('span', 'pill-limit', `your limit is ${maxOpen}`));
 }
 
@@ -79,10 +82,25 @@ function rowDetail(row: SessionRow): HTMLDivElement {
   const recent = el('ul', 'session-recent');
   detail.append(recent);
   for (const line of lines) recent.append(el('li', '', line));
-  for (const agent of row.subagents) {
-    detail.append(el('p', 'session-subagent', `Subagent ${agent.id.slice(0, 6)} · ${agent.activity}`));
-  }
   return detail;
+}
+
+// Under every row with active agents, expanded or not: task · what it is doing now · when it last wrote.
+function agentList(agents: SubagentRow[]): HTMLUListElement {
+  const list = el('ul', 'session-agents');
+  for (const agent of agents.slice(0, AGENTS_SHOWN)) {
+    const item = el('li', 'session-agent');
+    item.dataset.agentId = agent.id;
+    item.append(
+      el('span', 'agent-task', agent.task),
+      el('span', 'agent-activity', `· ${agent.activity ?? 'Working'}`),
+      el('span', 'agent-since', `· ${sinceText(agent.updatedAt)}`),
+    );
+    list.append(item);
+  }
+  const more = agents.length - AGENTS_SHOWN;
+  if (more > 0) list.append(el('li', 'session-agent agent-more', `+${more} more`));
+  return list;
 }
 
 function renderRow(row: SessionRow): HTMLLIElement {
@@ -95,6 +113,11 @@ function renderRow(row: SessionRow): HTMLLIElement {
   const title = el('span', 'session-title');
   title.append(el('span', 'session-name', row.name));
   if (row.isOwn) title.append(el('span', 'session-own', 'this window'));
+  if (row.subagents.length) {
+    const badge = el('span', 'session-agents-badge', agentsBadgeText(row.subagents.length));
+    badge.title = 'Background agents active in the last 2 min';
+    title.append(badge);
+  }
   title.append(el('span', `session-status ${row.status}`, row.status));
 
   const meta = el('span', 'session-meta', [row.cwd, row.kind === 'bg' ? 'background' : '', sinceText(row.updatedAt, 'updated')].filter(Boolean).join(' · '));
@@ -116,6 +139,7 @@ function renderRow(row: SessionRow): HTMLLIElement {
   if (confirming?.where === 'row' && confirming.sessionId === row.sessionId) item.append(confirmLine(row.sessionId, 'Close this Claude?'));
   const note = notes.get(row.sessionId);
   if (note) item.append(el('p', 'session-note', note));
+  if (row.subagents.length) item.append(agentList(row.subagents));
   if (expandedIds.has(row.sessionId)) item.append(rowDetail(row));
   return item;
 }
