@@ -68,14 +68,13 @@ function floor(x: number, y: number): CellClass | null {
 
 // Croissant: a fat crescent split into rolled segments, its horns curling down at each end.
 const CROISSANT = [
-  '...oooooo...',
-  '.ooRRRRRRoo.',
-  'oRRDRRRRDRRo',
-  'oRDMMRRMMDRo',
-  'oMDDooooDDMo',
-  'oDDo....oDDo',
-  'oDo......oDo',
-  '.o........o.',
+  '...oooo...',
+  '.ooRRRRoo.',
+  'oRDRRRRDRo',
+  'oDRMDDMRDo',
+  'oMDooooDMo',
+  'oDo....oDo',
+  '.o......o.',
 ];
 // Round loaf with two pale score cuts.
 const LOAF = [
@@ -104,8 +103,8 @@ const PASTRY: Record<string, CellClass> = {
   c: 'b-cherry', i: 'b-icing', I: 'b-icingD', S: 'b-sponge', d: 'b-spongeD', J: 'b-jam', j: 'b-jamD',
 };
 const pastries = layers(
-  stamp(2, 19, CROISSANT, PASTRY),
-  stamp(14, 19, CROISSANT, PASTRY),
+  stamp(2, 20, CROISSANT, PASTRY),
+  stamp(14, 20, CROISSANT, PASTRY),
   stamp(3, 28, LOAF, PASTRY),
   stamp(15, 27, CAKE, PASTRY),
 );
@@ -121,13 +120,18 @@ function glass(x: number, y: number): CellClass {
 const CRACK = ['22,19', '24,19', '23,20', '22,21', '21,22', '24,21', '25,22'];
 const crack: Shape = (x, y) => (CRACK.includes(`${x},${y}`) ? 'b-glassCrack' : null);
 
+// Base of two full-width planks, each a lit top row over a flat body, split by a dark seam.
+const PLANK_ROWS: readonly CellClass[] = ['b-woodL', 'b-wood', 'b-woodInk', 'b-woodL', 'b-wood', 'b-woodD'];
+const plank = (row: number): CellClass => PLANK_ROWS[row] ?? 'b-wood';
+
 // The display case in clean flat wood: lit top and left edges, shaded right and bottom edges, glowing glass.
 function caseBody(x: number, y: number): CellClass | null {
   const { left, right, top, glassTop, shelf, glassBottom, base } = CASE;
   if (x < left || x > right || y < top || y > base) return null;
-  if (y === top || y === glassBottom + 1) return 'b-woodL';
-  if (y === base || x === right) return 'b-woodD';
-  if (y === top + 1 || y > glassBottom) return 'b-wood';
+  if (y > glassBottom) return plank(y - glassBottom - 1);
+  if (y === top) return 'b-woodL';
+  if (x === right) return 'b-woodD';
+  if (y === top + 1) return 'b-wood';
   if (x === left) return 'b-woodL';
   if (y === glassBottom) return 'b-wood';
   if (y === glassTop) return 'b-tube';
