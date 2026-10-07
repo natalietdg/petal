@@ -1,7 +1,7 @@
 // Her look: theme, cat, scene and reading style. Every change saves, redraws the menu ticks and reaches every window.
 import { BrowserWindow } from 'electron';
 import themesJson from '../themes.json';
-import { CAT_CHOICES } from './menu';
+import { CAT_CHOICES, isReadingChoice } from './menu';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { handle, send } from './ipc';
 import type { EventArgs, EventChannel } from '../shared/ipc';
@@ -18,6 +18,7 @@ export function settings(): Settings {
     // A retired or renamed cat (orange, tabby) in an old settings file becomes Mika, so the menu shows a tick.
     if (!CAT_CHOICES.some(([id]) => id === current?.cat)) current.cat = 'mika';
     if (!themes[current.theme]) current.theme = DEFAULT_THEME;
+    if (!isReadingChoice(current.reading)) current.reading = 'newspaper';
   }
   return current;
 }

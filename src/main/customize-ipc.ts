@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
-import { CAT_CHOICES, SCENE_CHOICES, READING_CHOICES } from './menu';
+import { CAT_CHOICES, SCENE_CHOICES, READING_CHOICES, isReadingChoice } from './menu';
 import * as organizer from './session-organizer';
 import * as configStore from './config-store';
 import * as responseHook from './response-hook';
@@ -62,7 +62,7 @@ export function registerCustomizeIpc(): void {
   handle('config:hook-runs', () => responseHook.recentRuns());
   handle('config:organizer', () => organizer.status());
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
-  on('look:reading', (_event, id) => { if (valid(READING_CHOICES, id)) applyReading(id); });
+  on('look:reading', (_event, id) => { if (isReadingChoice(id)) applyReading(id); });
   on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });
   on('look:scene', (_event, id) => { if (valid(SCENE_CHOICES, id)) applyScene(id); });
 }
