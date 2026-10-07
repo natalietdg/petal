@@ -1,76 +1,60 @@
-/* Bakery scene palette: b- prefixed so codes never collide with other scenes.
-   After hours: deep browns, charcoal, oxblood brick, muted brass, warm amber light, a pink and teal neon. */
+/* Corner Bakery palette, b- prefixed. Soot browns, near-black and dirty teal;
+   the case glow and the pink neon are the only bright, saturated values. */
 
-/* Outlines: each material's own darkest tone, never pure black. */
-.sc-b-ol { fill: #3A1F10; }
-.sc-b-wood-ink { fill: #1F140D; } .sc-b-metal-ink { fill: #17171A; } .sc-b-wicker-ink { fill: #2E1B0D; }
-.sc-b-paper-ink { fill: #3B2E22; } .sc-b-stickerT-ink { fill: #173E3C; } .sc-b-stickerM-ink { fill: #4A3610; }
+/* Room: sooty ceiling, dark brick on black mortar, a water stain and grime drips, cracked tiles. */
+.sc-b-ceilD { fill: #0E0C0C; } .sc-b-ceil { fill: #191515; }
+.sc-b-brick { fill: #45302A; } .sc-b-brickD { fill: #2E211E; }
+.sc-b-mortar { fill: #161212; } .sc-b-soot { fill: #1C1615; }
+.sc-b-stain { fill: #20231F; } .sc-b-tide { fill: #6A6852; } .sc-b-grime { fill: #1A1412; }
+.sc-b-tile { fill: #2B3331; } .sc-b-tileD { fill: #1A1F1E; }
+.sc-b-crack { fill: #070808; } .sc-b-grout { fill: #121514; }
+.sc-b-spill { fill: #6E5530; }
 
-/* Room: charcoal beam, grimy brick on dark mortar, worn floorboards. */
-.sc-b-beamD { fill: #141113; } .sc-b-beam { fill: #221D1E; }
-.sc-b-brick { fill: #573127; } .sc-b-brickR { fill: #652A27; } .sc-b-brickD { fill: #432722; }
-.sc-b-chip { fill: #66402F; }
-.sc-b-mortar { fill: #1F1918; } .sc-b-mortarL { fill: #342B27; }
-.sc-b-grime { fill: #2C1E1A; }
-.sc-b-floor { fill: #3B2A20; } .sc-b-floorD { fill: #261A13; }
+/* The case: steel frame, worn wood top, peeling teal kick panel. */
+.sc-b-steel { fill: #3A3D40; } .sc-b-steelD { fill: #121315; }
+.sc-b-woodL { fill: #6B4A33; } .sc-b-wood { fill: #432C1E; }
+.sc-b-paint { fill: #2F5752; } .sc-b-bare { fill: #3B2A1E; } .sc-b-flap { fill: #6E9A90; }
 
-/* Worn dark wood with pale scuffs. */
-.sc-b-woodL { fill: #6E4B33; } .sc-b-wood { fill: #523524; } .sc-b-woodD { fill: #3A2519; }
-.sc-b-scuff { fill: #7A5B44; }
-.sc-b-frame { fill: #3E281B; }
+/* Lit glass: the brightest values in the scene. */
+.sc-b-tube { fill: #FFF8E0; }
+.sc-b-glass { fill: #F5DA9E; } .sc-b-glassD { fill: #E6C27E; }
+.sc-b-shelf { fill: #A9814C; }
+.sc-b-glint { fill: #FFFBEE; } .sc-b-glassCrack { fill: #5E4428; }
 
-/* Pendants and the espresso machine: charcoal steel, muted brass, amber bulbs. */
-.sc-b-cord { fill: #141113; }
-.sc-b-metalL { fill: #66666C; } .sc-b-metal { fill: #45454B; } .sc-b-metalD { fill: #2E2E33; }
-.sc-b-brass { fill: #B08D4E; } .sc-b-brassD { fill: #7A6233; }
-.sc-b-bulb { fill: #FFD98A; }
-.sc-b-recess { fill: #1D1A1A; }
-.sc-b-cup { fill: #E2D9C8; } .sc-b-cupD { fill: #A99D88; }
+/* Pastries: dark outline, golden crust, pale scores; a cake slice with cherry and jam. */
+.sc-b-ol { fill: #3A1C0C; }
+.sc-b-rim { fill: #F2B35E; } .sc-b-crust { fill: #C9792F; } .sc-b-crustD { fill: #84431A; }
+.sc-b-score { fill: #F8DCA6; }
+.sc-b-cherry { fill: #C8223A; }
+.sc-b-icing { fill: #FFF4F0; } .sc-b-icingD { fill: #E9CFCB; }
+.sc-b-sponge { fill: #F0C66E; } .sc-b-spongeD { fill: #C99A45; }
+.sc-b-jam { fill: #D9476B; } .sc-b-jamD { fill: #A82E4E; }
 
-/* Lamplight pools: see-through amber laid over whatever they fall on. */
-.sc-b-glowA { fill: #FFB54D; fill-opacity: 0.26; }
-.sc-b-glowB { fill: #FFB54D; fill-opacity: 0.15; }
+/* Neon sign and its glow on the brick. */
+.sc-b-neon, .sc-b-neonK { fill: #FF4FA0; }
+.sc-b-halo { fill: #FF4FA0; fill-opacity: 0.16; }
 
-/* Bread, lit low from above: bright rim, warm body, deep shadowed underside. */
-.sc-b-rim { fill: #E8A95C; } .sc-b-crust { fill: #B06A2F; } .sc-b-crustD { fill: #6F3D1A; }
-.sc-b-score { fill: #E9C48C; }
-.sc-b-sugar { fill: #F1E8D8; }
-.sc-b-whip { fill: #EDE2CC; } .sc-b-whipD { fill: #B9A88C; }
-.sc-b-wickerL { fill: #A9783F; } .sc-b-wicker { fill: #84592C; } .sc-b-wickerD { fill: #5C3C1C; }
+/* Drainpipe: grimy steel, iron clamps, rust bleeding from the joints. */
+.sc-b-pipeL { fill: #5B605E; } .sc-b-pipe { fill: #343937; } .sc-b-clamp { fill: #24282A; } .sc-b-rust { fill: #6A3A1E; }
 
-/* Glass case: dim warm interior with a faint shine. */
-.sc-b-glass { fill: #3C2A20; } .sc-b-glassD { fill: #2C1E16; }
-.sc-b-shine { fill: #D9C6A8; fill-opacity: 0.45; }
-
-/* Chalkboard menu. */
-.sc-b-slate { fill: #262C29; } .sc-b-smudge { fill: #353D39; }
-.sc-b-chalk { fill: #D9D6CB; } .sc-b-chalkD { fill: #8F9690; } .sc-b-chalkP { fill: #E39AB8; }
-
-/* Window: night street, rain-wet kerb, neon sign and its halo on the glass. */
-.sc-b-night { fill: #141A26; } .sc-b-city { fill: #0C1018; } .sc-b-cityWin { fill: #8C6A3A; }
-.sc-b-wet { fill: #1E2633; } .sc-b-wetLit { fill: #5A3A4E; }
-.sc-b-neon { fill: #FF6FB0; } .sc-b-neonT { fill: #5FE0D2; }
-.sc-b-halo { fill: #FF6FB0; fill-opacity: 0.22; }
-.sc-b-rain, .sc-b-rain2, .sc-b-rain3 { fill: #A9BCD0; fill-opacity: 0.55; }
-
-/* Peeling poster and stickers. */
-.sc-b-paper { fill: #A89676; } .sc-b-paperD { fill: #C9BB9C; } .sc-b-tape { fill: #D8CFB8; }
-.sc-b-print { fill: #7A2B28; } .sc-b-printD { fill: #4E1C1B; }
-.sc-b-stickerT { fill: #3F9C95; } .sc-b-stickerM { fill: #C2922F; }
-
-/* Steam: pale and soft so it reads against the dark brick. */
-.sc-b-steam, .sc-b-steam2 { fill: #F2E6D6; }
+/* Window: wet night street, stickers on the glass. */
+.sc-b-frame { fill: #26292B; } .sc-b-sill { fill: #33302C; }
+.sc-b-sky { fill: #142226; } .sc-b-city { fill: #0A0F11; } .sc-b-cityWin { fill: #8A6A34; }
+.sc-b-wet { fill: #1B2B2F; } .sc-b-wetLit { fill: #3E6A66; }
+.sc-b-stickP { fill: #C0587E; } .sc-b-stickY { fill: #C9A23A; } .sc-b-stickT { fill: #4E9C92; }
+.sc-b-rain, .sc-b-rain2, .sc-b-rain3 { fill: #A8C4C8; fill-opacity: 0.6; }
+.sc-b-steam, .sc-b-steam2 { fill: #C8D4D2; fill-opacity: 0.7; }
 
 /* Motion, always on and in whole-pixel steps. */
-#cat .scene-bakery .sc-b-steam, #cat .scene-bakery .sc-b-steam2 { animation: bakery-steam 2.4s steps(3) infinite; }
+#cat .scene-bakery :is(.sc-b-steam, .sc-b-steam2) { animation: bakery-steam 2.4s steps(3) infinite; }
 #cat .scene-bakery .sc-b-steam2 { animation-delay: -1.2s; }
 @keyframes bakery-steam {
   0% { transform: translateY(0); opacity: 0; }
-  25% { opacity: 0.8; }
+  25% { opacity: 1; }
   100% { transform: translateY(-3px); opacity: 0; }
 }
 
-/* Rain runs down the glass, three staggered sets. */
+/* Rain runs down the glass in three staggered sets. */
 #cat .scene-bakery .sc-b-rain { animation: bakery-rain 1.2s steps(4) infinite; }
 #cat .scene-bakery .sc-b-rain2 { animation: bakery-rain 1.2s steps(4) -0.4s infinite; }
 #cat .scene-bakery .sc-b-rain3 { animation: bakery-rain 1.2s steps(4) -0.8s infinite; }
@@ -80,16 +64,14 @@
   100% { transform: translateY(4px); opacity: 0; }
 }
 
-/* Lamplight breathes slowly. */
-#cat .scene-bakery :is(.sc-b-glowA, .sc-b-glowB) { animation: bakery-breathe 4s steps(4) infinite; }
-@keyframes bakery-breathe { 50% { opacity: 0.6; } }
-
-/* Neon holds steady, then stutters now and then. */
-#cat .scene-bakery :is(.sc-b-neon, .sc-b-neonT, .sc-b-halo) { animation: bakery-flicker 6s steps(1) infinite; }
-@keyframes bakery-flicker {
-  0%, 80% { opacity: 1; }
-  82% { opacity: 0.3; }
-  84% { opacity: 1; }
-  87% { opacity: 0.2; }
-  90%, 100% { opacity: 1; }
+/* The sign hums; its K is on the blink. */
+#cat .scene-bakery :is(.sc-b-neon, .sc-b-halo) { animation: bakery-hum 6s steps(1) infinite; }
+@keyframes bakery-hum { 0%, 88% { opacity: 1; } 90% { opacity: 0.55; } 92%, 100% { opacity: 1; } }
+#cat .scene-bakery .sc-b-neonK { animation: bakery-blink 3.2s steps(1) infinite; }
+@keyframes bakery-blink {
+  0%, 55% { opacity: 1; }
+  57% { opacity: 0.15; }
+  60% { opacity: 1; }
+  63%, 72% { opacity: 0.15; }
+  74%, 100% { opacity: 1; }
 }
