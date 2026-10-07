@@ -8,12 +8,12 @@ import * as flowStore from '../main/flow-store';
 import * as responseHook from '../main/response-hook';
 import * as closedStore from '../main/closed-store';
 import * as configStore from '../main/config-store';
-import { counters, panelFixture, userDataDir } from '../main/snapshot-mode';
+import { counters, fixtureFile, panelFixture, userDataDir } from '../main/snapshot-mode';
 import { send } from '../main/ipc';
 import { buildResumeCommand, resumeArgs } from '../main/resume-command';
 import type { ReaderFeed } from '../main/reader-feed';
 import { setFixtureStatus, type Kit, type TabsDeps } from './snapshot';
-import type { TabSessions } from '../main/tab-session';
+import type { TabSession, TabSessions } from '../main/tab-session';
 import type { Theme } from '../shared/types';
 
 const THEMES = ['paleSky', 'nightPastel'];
@@ -351,8 +351,8 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   if (!session) throw new Error('composer check: no active tab');
   let output = '';
   const listener = session.pty.onData((data) => { output += data; });
-  const type = (text: string) => js(`(() => { const box = document.getElementById('composer-input'); box.value = ${text}; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true; })()`);
-  await type("'echo composer-ok-' + (6 * 7)");
+  const type = (text: string) => js(`(() => { const box = document.getElementById('composer-input'); box.value = ${text}; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return [...document.querySelectorAll('#latest .reader-you.pending')].map((b) => b.textContent); })()`);
+  const echoedAtOnce: string[] = await type("'echo composer-ok-' + (6 * 7)");
   const delivered = await waitFor(() => (/composer-ok-42/.test(output) ? true : null), 8000);
   const cleared = await js("document.getElementById('composer-input').value === ''");
   log(`${delivered && cleared ? 'ok' : 'FAIL'} reply box sends to the active tab: delivered=${Boolean(delivered)} cleared=${cleared}`);
@@ -362,6 +362,7 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   const stripped = await waitFor(() => (/strip-\[31mok/.test(output) ? true : null), 8000);
   log(`${stripped && !output.includes('strip-\x1b') ? 'ok' : 'FAIL'} reply box strips ESC and control characters before pasting: ${Boolean(stripped)}`);
   listener.dispose();
+  await echoCheck(kit, session, echoedAtOnce);
 
   // A fresh tab has no Claude: sending starts one with the message (snapshot runs echo instead of launching).
   openTab(win.webContents);
@@ -390,6 +391,59 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   await js("document.getElementById('composer-input').value = ''");
   await js(`document.querySelector('#tab-strip .tab[data-tab-id="${fresh.tabId}"] .tab-close').click()`);
   await waitFor(() => (activeSession(win.webContents.id) === session ? true : null), 8000);
+}
+
+// Reply-box sends show in the reader at once, then the log's copy replaces each one: never two bubbles.
+async function echoCheck(kit: Kit, session: TabSession, echoedAtOnce: string[]): Promise<void> {
+  const { js, waitFor, log } = kit;
+  const file = fixtureFile();
+  if (!file) throw new Error('echo check: needs the fixture tab');
+  assertFixtureOutsideClaude(file);
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} ${what}`);
+  const first = 'echo composer-ok-42';
+  const second = 'echo strip-[31mok';
+  const bubbles = () => js(`[...document.querySelectorAll('#reader .reader-you')].map((b) => ({ text: b.textContent, pending: b.classList.contains('pending') }))`);
+  const count = (shown: { text: string }[], text: string) => shown.filter((b) => b.text.includes(text)).length;
+  check(JSON.stringify(echoedAtOnce) === JSON.stringify([first]), `sent message shows in the reader in the same frame as the send: ${JSON.stringify(echoedAtOnce)}`);
+  const both = await bubbles();
+  const pendingNow = both.filter((b: { pending: boolean }) => b.pending).map((b: { text: string }) => b.text);
+  check(JSON.stringify(pendingNow) === JSON.stringify([first, second]), `two sends show as two pending bubbles, in order: ${JSON.stringify(pendingNow)}`);
+  check(await js("Boolean(document.querySelector('#latest .reader-writing'))"), 'writing line shows under a message on its way');
+  check((await js("document.getElementById('reader-status').textContent")).startsWith('You'), `status names her turn: ${await js("document.getElementById('reader-status').textContent")}`);
+  await kit.capture('reply-echo-pending');
+  const unknownTab = await js("window.pastel.paste('no-such-tab', 'x')");
+  check(unknownTab?.sent === false, `a send that reaches no pty says so, so its echo is taken back: ${JSON.stringify(unknownTab)}`);
+
+  const line = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
+  fs.appendFileSync(file, line({ type: 'user', uuid: 'echo-u1', message: { role: 'user', content: first } }));
+  const one = await waitFor(async () => {
+    const shown = await bubbles();
+    return shown.filter((b: { pending: boolean }) => b.pending).length === 1 ? shown : null;
+  }, 5000);
+  check(one && count(one, first) === 1 && !one.find((b: { text: string; pending: boolean }) => b.text === first)?.pending,
+    `first message in the log replaces its echo, no duplicate: ${JSON.stringify(one)}`);
+
+  fs.appendFileSync(file, line({ type: 'user', uuid: 'echo-u2', message: { role: 'user', content: second } }));
+  const settled = await waitFor(async () => {
+    const shown = await bubbles();
+    return shown.some((b: { pending: boolean }) => b.pending) ? null : shown;
+  }, 5000);
+  check(settled && count(settled, first) === 1 && count(settled, second) === 1, `both messages in the log: each shown once, none pending: ${JSON.stringify(settled)}`);
+
+  setFixtureStatus(session.feed, 'busy');
+  const writingWhileBusy = await waitFor(async () => (await js("Boolean(document.querySelector('#latest .reader-writing'))")) || null, 5000);
+  check(writingWhileBusy, 'writing line shows while Claude is busy and no text has landed');
+  fs.appendFileSync(file, line({ type: 'assistant', uuid: 'echo-a1', message: { role: 'assistant', content: [{ type: 'text', text: 'Both messages arrived.' }] } }));
+  const answered = await waitFor(async () => {
+    const state = await js(`({ reply: document.getElementById('latest').innerText.includes('Both messages arrived.'), writingAfter: Boolean(document.querySelector('#latest .prose ~ .reader-writing')), bubbles: [...document.querySelectorAll('#latest .reader-you')].map((b) => b.textContent) })`);
+    return state.reply ? state : null;
+  }, 5000);
+  check(answered && answered.writingAfter && answered.bubbles.length === 1 && count(answered.bubbles.map((text: string) => ({ text })), first) === 1,
+    `reply lands under one bubble with both messages, writing line below it while busy: ${JSON.stringify(answered)}`);
+  await kit.capture('reply-echo-answered');
+  setFixtureStatus(session.feed, 'idle');
+  const quiet = await waitFor(async () => (await js("Boolean(document.querySelector('#reader .reader-writing'))")) ? null : true, 5000);
+  check(quiet, 'writing line goes once Claude is idle');
 }
 
 // Customize page: every section in light and dark, a Look change synced to the menu, and no hook runs.

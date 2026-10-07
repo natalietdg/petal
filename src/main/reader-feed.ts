@@ -1,10 +1,10 @@
 // Pins the reader to the claude running inside one pty; never any other session.
 import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude-session';
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
-import { TranscriptTail } from './transcript';
+import { TranscriptTail, type TranscriptView } from './transcript';
 import type { FixtureSession } from './snapshot-mode';
 import type { PendingQuestion } from '../shared/prompt-answer';
-import type { ReaderState, ReaderUpdate, Reply } from '../shared/types';
+import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
 // The session the reader follows; a fixture replay only fills sessionId, status and transcript.
 export type FollowedSession = Pick<ClaudeSession, 'sessionId' | 'transcript'> & Partial<ClaudeSession>;
@@ -31,6 +31,8 @@ export class ReaderFeed implements ProcessListener {
   claudePid: number | null = null;
   private tail: TranscriptTail | null = null;
   private replies: Reply[] = [];
+  private waiting: WaitingPrompt[] = [];
+  private promptCount = 0;
   private pendingQuestion: PendingQuestion | null = null;
   private ticking = false;
 
@@ -69,7 +71,7 @@ export class ReaderFeed implements ProcessListener {
     if (pid === this.claudePid) return;
     const exited = this.claudePid && !pid;
     this.claudePid = pid;
-    if (pid && !this.session) this.replies = []; // a new claude starts clean
+    if (pid && !this.session) this.clearTranscript(); // a new claude starts clean
     if (!this.session) this.emit(pid ? 'live' : exited && this.replies.length ? 'ended' : 'none');
   }
 
@@ -77,14 +79,24 @@ export class ReaderFeed implements ProcessListener {
     this.finishingId = null;
     this.tail?.stop();
     this.session = session;
-    this.replies = [];
-    this.pendingQuestion = null;
+    this.clearTranscript();
     this.emit('live');
-    this.tail = new TranscriptTail(session.transcript, (replies, question) => {
-      this.replies = replies;
-      this.pendingQuestion = question;
-      this.emit('live');
-    });
+    this.tail = new TranscriptTail(session.transcript, (view) => this.show(view));
+  }
+
+  private show({ replies, waiting, promptCount, question }: TranscriptView): void {
+    this.replies = replies;
+    this.waiting = waiting;
+    this.promptCount = promptCount;
+    this.pendingQuestion = question;
+    this.emit('live');
+  }
+
+  private clearTranscript(): void {
+    this.replies = [];
+    this.waiting = [];
+    this.promptCount = 0;
+    this.pendingQuestion = null;
   }
 
   // Same session: pick up new lines, and re-emit when busy/idle flips (drives the cat).
@@ -120,6 +132,7 @@ export class ReaderFeed implements ProcessListener {
     this.tail = null;
     this.session = null;
     this.pendingQuestion = null;
+    this.waiting = [];
     this.emit('ended');
   }
 
@@ -131,7 +144,10 @@ export class ReaderFeed implements ProcessListener {
   private emit(state: ReaderState): void {
     const busy = state === 'live' && this.session?.status === 'busy';
     const { sessionId = null, cwd = null } = this.session ?? {};
-    this.send('reader:replies', { state, replies: this.replies, busy, sessionId, cwd, question: state === 'live' ? this.question : null });
+    const live = state === 'live';
+    this.send('reader:replies', {
+      state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, question: live ? this.question : null,
+    });
   }
 
   stop(): void {

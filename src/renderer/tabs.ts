@@ -1,6 +1,7 @@
 // Session tabs: each tab owns one xterm and one pty in main; only the active one is shown.
 import * as terminal from './terminal';
 import { toXterm } from './theme';
+import * as pendingEcho from './pending-echo';
 import { byId, el, query } from './dom';
 import type { Terminal } from '@xterm/xterm';
 import type { TabId, TabReaderUpdate, Theme } from '../shared/types';
@@ -13,6 +14,7 @@ export interface Tab {
   refit: () => void;
   element: HTMLDivElement;
   update: TabReaderUpdate | null;
+  pending: pendingEcho.PendingEcho[]; // reply-box sends not yet in Claude's log
 }
 
 interface Hooks {
@@ -60,7 +62,7 @@ export function create(): Tab {
   const host = el('div', 'term-host');
   stage.append(host);
   const { term, renderer, refit } = terminal.create(host, theme, id);
-  const tab: Tab = { id, host, term, renderer, refit, element: tabElement(id), update: null };
+  const tab: Tab = { id, host, term, renderer, refit, element: tabElement(id), update: null, pending: [] };
   strip.insertBefore(tab.element, newTabButton);
   tabs.set(id, tab);
   term.onWriteParsed(() => hooks.onScreen(tab));
@@ -112,6 +114,7 @@ export function setUpdate(id: TabId, update: TabReaderUpdate): void {
   const tab = tabs.get(id);
   if (!tab) return;
   tab.update = update;
+  tab.pending = pendingEcho.reconcile(tab.pending, update);
   tab.element.classList.toggle('busy', Boolean(update.busy));
   query(tab.element, '.tab-label').textContent = update.label;
   tab.element.title = update.label;
@@ -131,6 +134,17 @@ export function screenLines(tab: Tab): string[] {
   const end = buffer.baseY + tab.term.rows;
   const start = Math.max(0, end - Math.max(SCREEN_TAIL_LINES, tab.term.rows));
   return Array.from({ length: end - start }, (_, i) => buffer.getLine(start + i)?.translateToString(true) ?? '');
+}
+
+// Shown in the reader at once; returns its key so a failed send can take it back.
+export function addPending(tab: Tab, text: string): number | null {
+  if (!tab.update || !pendingEcho.echoes(text)) return null;
+  tab.pending = pendingEcho.add(tab.pending, text, tab.update);
+  return tab.pending.at(-1)?.key ?? null;
+}
+
+export function removePending(tab: Tab, key: number): void {
+  tab.pending = pendingEcho.remove(tab.pending, key);
 }
 
 export const active = (): Tab | null => (activeId === null ? null : tabs.get(activeId) ?? null);

@@ -135,6 +135,9 @@ export interface InvokeChannels {
 
   'repos:list': { args: [request: { tabId: TabId }]; result: Guarded<ReposList> };
   'repos:open': { args: [request: { tabId: TabId; path: string }]; result: Guarded<RepoOpenResult> };
+
+  // The reply box's send: answered, so a send that never reached the pty can be taken back.
+  'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.

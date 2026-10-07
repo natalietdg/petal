@@ -33,6 +33,7 @@ const api = {
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize) => send('pty:start', { tabId, cols, rows }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
+  paste: (tabId: TabId, data: string) => invoke('pty:paste', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
   answerPrompt: (tabId: TabId, answer: PromptAnswer) => send('prompt:answer', { tabId, answer }),
   resize: (tabId: TabId, { cols, rows }: TermSize) => send('pty:resize', { tabId, cols, rows }),

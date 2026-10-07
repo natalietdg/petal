@@ -10,6 +10,7 @@ import * as views from './snapshot-views';
 import { promptsCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { reposCheck } from './snapshot-repos';
+import { latencyCheck } from './snapshot-latency';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -348,7 +349,8 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.overlaysCheck(kit);
   await views.errorRepliesCheck(kit);
   await reposCheck(kit, { win, ...tabs });
-  await printLookCheck(kit, win); // last: it replaces the reader's reply with its own long sample
+  await printLookCheck(kit, win); // replaces the reader's reply with its own long sample
+  await latencyCheck(kit, { feed, file: fakeTranscript() ?? '' }); // last: it appends turns to the fixture
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {

@@ -3,7 +3,7 @@
 import * as tabs from './tabs';
 import * as repos from './repos';
 import { parseRepoCommand } from '../shared/repo-match';
-import { byId, focusTerminal } from './dom';
+import { byId, focusTerminal, isIpcError } from './dom';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -28,13 +28,21 @@ const clear = (): void => {
   fit();
 };
 
+const refreshReader = (tabId: string): void => { window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: tabId })); };
+
 async function send(): Promise<void> {
   const text = stripControls(input.value).trim();
   const tab = tabs.active();
   if (!text || !tab) return;
   if (tab.update?.state === 'live') {
-    window.pastel.write(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
+    const echo = tabs.addPending(tab, text);
+    refreshReader(tab.id);
     clear();
+    const result = await window.pastel.paste(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
+    if (echo !== null && (isIpcError(result) || !result.sent)) {
+      tabs.removePending(tab, echo);
+      refreshReader(tab.id);
+    }
     return;
   }
   const repoQuery = parseRepoCommand(text);

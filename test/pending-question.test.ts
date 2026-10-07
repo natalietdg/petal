@@ -79,7 +79,7 @@ describe('TranscriptTail reports the pending question', () => {
   it('reports it with the replies, and again when the answer arrives', () => {
     const file = writeJsonl(path.join(tempDir(), 's.jsonl'), [userEntry('pick a fruit'), assistantEntry('Let me ask.'), ask('toolu_9')]);
     const seen: (PendingQuestion | null)[] = [];
-    const tail = new TranscriptTail(file, (_replies, question) => seen.push(question));
+    const tail = new TranscriptTail(file, ({ question }) => { seen.push(question); });
     expect(seen.at(-1)?.toolUseId).toBe('toolu_9');
     writeJsonl(file, [userEntry('pick a fruit'), assistantEntry('Let me ask.'), ask('toolu_9'), result('toolu_9')]);
     tail.poll();
