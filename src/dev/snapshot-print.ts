@@ -89,6 +89,7 @@ export async function printLookCheck(kit: Kit, win: BrowserWindow): Promise<void
   const { js, wait, waitFor, log, themes, applyTheme, capture } = kit;
   const menuChecked = (label: string) => Menu.getApplicationMenu()?.items.flatMap((m): MenuItem[] => m.submenu?.items ?? []).find((i) => i.label === label)?.checked;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} print look: ${what}`);
+  const capturedHashes = new Set<string>();
 
   // Customize chip -> applyReading: page attribute and View menu tick agree.
   await js("PastelTerm.customize.open('look')");
@@ -130,15 +131,20 @@ export async function printLookCheck(kit: Kit, win: BrowserWindow): Promise<void
     const tops: number[] = [];
     for (const [name, target] of shots(id)) {
       tops.push(await scrollReaderTo(js, target));
-      await freshFrame(js, win);
-      await capture(name);
+      // A busy machine can still return the last frame: repaint and recapture, at most 3 tries.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await freshFrame(js, win);
+        await capture(name);
+        if (!capturedHashes.has(hashOf(kit.outDir, name))) break;
+      }
+      capturedHashes.add(hashOf(kit.outDir, name));
     }
     check(new Set(tops).size === tops.length, `${id} captures at distinct scroll positions: ${JSON.stringify(tops)}`);
   }
 
   // Each capture must be its own frame, not a stale repaint of the one before.
   const files = fs.readdirSync(kit.outDir).filter((f) => f.startsWith('snapshot-print-'));
-  const hashes = new Set(files.map((f) => crypto.createHash('sha1').update(fs.readFileSync(path.join(kit.outDir, f))).digest('hex')));
+  const hashes = new Set(files.map((f) => sha1(path.join(kit.outDir, f))));
   check(files.length === 10 && hashes.size === files.length, `${files.length} captures, ${hashes.size} distinct images`);
 
   // Back to the defaults for anything after this step.
@@ -148,4 +154,7 @@ export async function printLookCheck(kit: Kit, win: BrowserWindow): Promise<void
   check(reset, 'back to Newspaper');
 }
 
-const hexToRgb = (hex: string): string => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
+const sha1 = (file: string): string => crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex');
+const hashOf = (outDir: string, name: string): string => sha1(path.join(outDir, `snapshot-${name}.png`));
+
+const hexToRgb =(hex: string): string => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
