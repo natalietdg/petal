@@ -374,7 +374,7 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
   const freshListener = fresh.pty.onData((data) => { freshOutput += data; });
   await wait(2500); // login shell rc files
   // Empty reader in each look: plain message, no stray kicker pill.
-  for (const look of ['newspaper', 'editorial', 'lifestyle']) {
+  for (const look of ['newspaper', 'editorial', 'lifestyle', 'print']) {
     await js(`document.documentElement.dataset.reading = '${look}'`);
     await wait(300);
     const shape = await js("(() => { const s = [...document.querySelectorAll('#replies-view .status')].filter((el) => getComputedStyle(el).display !== 'none'); return { shown: s.length, upper: s.some((el) => getComputedStyle(el).textTransform === 'uppercase') }; })()");

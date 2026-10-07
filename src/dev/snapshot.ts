@@ -8,6 +8,7 @@ import { app, type BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck } from './snapshot-prompts';
+import { printLookCheck } from './snapshot-print';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -339,6 +340,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.customizeScreens(kit);
   await views.overlaysCheck(kit);
   await views.errorRepliesCheck(kit);
+  await printLookCheck(kit, win); // last: it replaces the reader's reply with its own long sample
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {
