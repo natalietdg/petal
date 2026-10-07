@@ -21,6 +21,7 @@ import './scenes/howl.css';
 import './scenes/study.css';
 import './scenes/midcentury.css';
 import './scenes/night-beach.css';
+import './scenes/starlit.css';
 import './flow.css';
 import './history.css';
 import './composer.css';
