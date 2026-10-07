@@ -276,8 +276,8 @@
 .sc-vs { fill: #9DB58A; } .sc-vc { fill: #F4EEDC; } .sc-vd { fill: #6F8A5E; }
 .sc-i { fill: #A9D883; } .sc-j { fill: #EBA07B; } .sc-X { fill: #A9563A; } .sc-W { fill: #4A3324; }
 
-/* Every scene always has one gentle motion: petals and leaves drift, waves roll, stars twinkle.
-   The extras (sun rays, crab, windsurfer, fairy lights, lamp) still wait for Claude to be working. */
+/* Every scene always moves: petals and leaves drift, waves roll, stars twinkle, lights glow.
+   Working speeds the lights up and adds extras (crab, windsurfer, shooting star). */
 #cat .scene-rug .scene-moving { animation: petals 3.6s steps(12) infinite; }
 /* Sakura petals: four waves, each its own pink, pace and start, falling in whole sprite pixels. */
 .scene-cherry .sc-pa { fill: #EE9DB5; } .scene-cherry .sc-pb { fill: #F4B6C8; }
@@ -294,9 +294,13 @@
   100% { transform: translate(-9px, 15px); opacity: 0; }
 }
 #cat .scene-beach .scene-moving { animation: waves 1.6s steps(2) infinite; }
+/* Resting: the sun's rays shimmer slowly; working: they blaze. */
+#cat .scene-beach .scene-moving .sc-u { animation: blaze 3.2s steps(1) infinite; }
 #cat.busy .scene-beach .scene-moving .sc-u { animation: blaze 1.2s steps(1) infinite; }
 @keyframes blaze { 50% { opacity: 0.4; } }
 #cat .scene-night .scene-moving { animation: twinkle 2.4s steps(1) infinite; }
+/* Resting: the lamp breathes in two steps on the twinkle's 1.2s beat; working: a faster, smooth glow. */
+#cat .scene-night .sc-y { animation: lamp-glow 4.8s steps(2) infinite; }
 #cat.busy .scene-night .sc-y { animation: lamp-glow 3.2s ease-in-out infinite; }
 @keyframes lamp-glow { 50% { opacity: 0.45; } }
 @keyframes petals {
