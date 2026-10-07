@@ -96,16 +96,28 @@ export function planetFor(date: Date): Planet {
   return PLANETS[index] ?? 'mars';
 }
 
-// Huge, low-contrast discs on the left behind the galaxy, cropped by the dome; (dx, dy) is from the centre.
+// Huge, glowing discs on the left behind the galaxy, cropped by the dome; (dx, dy) is from the centre.
 const PLANET_CENTRE = { cx: 5, cy: 8 };
 type Painter = (dx: number, dy: number) => CellClass | null;
-// The face is lit toward the galaxy, so a soft highlight sits lower right of centre.
-const lit = (dx: number, dy: number, size: number): boolean => Math.hypot(dx - size * 0.25, dy - size * 0.25) < size * 0.5;
-// A plain disc with a dim limb; `face` paints the markings, `name` prefixes every class.
-const disc = (name: Planet, r: number, face: (dx: number, dy: number) => string): Painter => (dx, dy) => {
+// Light comes from the galaxy, to the right of and a little below the planet's centre.
+const LIGHT = (() => {
+  const [lx, ly] = [GALAXY.cx - PLANET_CENTRE.cx, GALAXY.cy - PLANET_CENTRE.cy];
+  const length = Math.hypot(lx, ly);
+  return { x: lx / length, y: ly / length };
+})();
+// Shading ramp: a bright rim on the lit edge, then lit, body and shade toward the cropped side.
+function shade(dx: number, dy: number, r: number): string {
   const d = Math.hypot(dx, dy);
-  if (d > r) return null;
-  return `pl-${name}-${d > r - 1.5 ? 'limb' : face(dx, dy)}`;
+  const facing = (dx * LIGHT.x + dy * LIGHT.y) / Math.max(d, 0.001);
+  if (d > r - 1.2) return facing > 0.35 ? 'rim' : 'limb';
+  const fromLight = Math.hypot(dx - LIGHT.x * r * 0.4, dy - LIGHT.y * r * 0.4);
+  return fromLight < r * 0.42 ? 'lit' : fromLight < r * 0.85 ? 'body' : 'shade';
+}
+// A disc whose `face` paints markings (null leaves the shading ramp); `name` prefixes every class.
+const disc = (name: Planet, r: number, face: (dx: number, dy: number) => string | null): Painter => (dx, dy) => {
+  if (Math.hypot(dx, dy) > r) return null;
+  const ramp = shade(dx, dy, r);
+  return `pl-${name}-${ramp === 'rim' || ramp === 'limb' ? ramp : face(dx, dy) ?? ramp}`;
 };
 // A ring as an annulus of a tilted ellipse (plus an optional inner ring): the near half draws over the body.
 const ring = (name: Planet, rx: number, ry: number, tilt: number, body: Painter, inner = true): Painter => (dx, dy) => {
@@ -125,49 +137,43 @@ const PAINTERS: Record<Planet, Painter> = {
       if (inEllipse(dx, dy, cx + 0.6, cy + 0.6, rx * 0.6, ry * 0.6)) return 'crater-lit';
       if (inEllipse(dx, dy, cx, cy, rx, ry)) return 'crater';
     }
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    return null;
   }),
   venus: disc('venus', 18, (dx, dy) => {
     const wave = dy + Math.sin(dx / 3) * 1.2;
     if ((wave > -6 && wave < -4) || (wave > 3 && wave < 5) || wave > 12) return 'band';
-    if (wave > 8 && wave < 9.5) return 'haze';
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    return wave > 8 && wave < 9.5 ? 'haze' : null;
   }),
   earth: disc('earth', 18, (dx, dy) => {
     if (dy > 15 || dy < -15) return 'ice';
     const wisps: readonly Blob[] = [[3, -9, 5, 0.8], [12, 3, 3, 0.7], [-4, 3, 4, 0.8], [6, 12, 4, 0.7], [-6, -4, 3, 0.7]];
     if (wisps.some(([cx, cy, rx, ry]) => inEllipse(dx, dy, cx, cy, rx, ry))) return 'cloud';
     if (inEllipse(dx, dy, 8, -2, 4, 6) || inEllipse(dx, dy, 11, 6, 3, 3)) return inEllipse(dx, dy, 9, 1, 2, 2) ? 'desert' : 'land';
-    if (inEllipse(dx, dy, -2, 9, 3, 4)) return 'land';
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    return inEllipse(dx, dy, -2, 9, 3, 4) ? 'land' : null;
   }),
   mars: disc('mars', 18, (dx, dy) => {
     if (inEllipse(dx, dy, 3, 18, 9, 5)) return 'cap';
-    if (inEllipse(dx, dy, 6, 5, 4.5, 2) || inEllipse(dx, dy, 1, 9, 5, 1.6) || inEllipse(dx, dy, 12, 1, 2, 3)) return 'sea';
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    const sea = inEllipse(dx, dy, 6, 5, 4.5, 2) || inEllipse(dx, dy, 1, 9, 5, 1.6) || inEllipse(dx, dy, 12, 1, 2, 3);
+    return sea ? 'sea' : null;
   }),
   jupiter: disc('jupiter', 18, (dx, dy) => {
     if (inEllipse(dx, dy, 8, 7.5, 3, 1.6)) return 'spot';
     if ((dy > -4 && dy < -1.5) || (dy > 3 && dy < 5.5)) return 'belt';
     if ((dy > -9 && dy < -7.5) || (dy > 10 && dy < 11.5)) return 'belt-d';
-    if (dy > 14 || dy < -13) return 'pole';
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    return dy > 14 || dy < -13 ? 'pole' : null;
   }),
   // Saturn sits a little lower so its rings cross open sky.
-  saturn: (dx, dy) => ring('saturn', 22, 7, -0.35, disc('saturn', 12, (bx, by) => {
-    if ((by > -4 && by < -2.5) || (by > 3 && by < 4.5)) return 'band';
-    return lit(bx, by, 12) ? 'lit' : 'body';
-  }))(dx + 1, dy - 4),
-  uranus: ring('uranus', 7, 21, 0.1, disc('uranus', 15, (dx, dy) => {
-    if ((dy > -5 && dy < -3.5) || (dy > 5 && dy < 6.5)) return 'band';
-    return lit(dx, dy, 15) ? 'lit' : 'body';
-  }), false),
+  saturn: (dx, dy) => ring('saturn', 22, 7, -0.35, disc('saturn', 12, (_bx, by) => (
+    (by > -4 && by < -2.5) || (by > 3 && by < 4.5) ? 'band' : null
+  )))(dx + 1, dy - 4),
+  uranus: ring('uranus', 7, 21, 0.1, disc('uranus', 15, (_dx, dy) => (
+    (dy > -5 && dy < -3.5) || (dy > 5 && dy < 6.5) ? 'band' : null
+  )), false),
   neptune: disc('neptune', 18, (dx, dy) => {
     if (inEllipse(dx, dy, 7, 8.5, 3, 1.4)) return 'spot';
     if (inEllipse(dx, dy, 2.5, 9.5, 1.4, 0.7)) return 'cloud';
     if ((dy > 1 && dy < 3) || dy > 13.5) return 'belt';
-    if ((dy > -5 && dy < -3) || (dy > 4.5 && dy < 6)) return 'band';
-    return lit(dx, dy, 18) ? 'lit' : 'body';
+    return (dy > -5 && dy < -3) || (dy > 4.5 && dy < 6) ? 'band' : null;
   }),
 };
 
