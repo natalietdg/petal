@@ -1,25 +1,26 @@
-/* Starlit Window: deep space through a big window. Colours are fixed: they are places, not theme chrome. */
-/* Sky, indigo at the top to violet at the sill. */
-.sc-st-sky1 { fill: #0B0A2A; } .sc-st-sky2 { fill: #15113F; } .sc-st-sky3 { fill: #221756; } .sc-st-sky4 { fill: #321D6B; }
-/* Milky way: dust haze, brighter core, a dark dust lane. */
-.sc-st-band { fill: #30276E; } .sc-st-band-core { fill: #54459E; } .sc-st-band-hi { fill: #9A8AD8; } .sc-st-lane { fill: #120C30; }
-/* Nebulae: rose and magenta, and teal. */
-.sc-st-neb-rose { fill: #E07FC0; } .sc-st-neb-magenta { fill: #A8459A; } .sc-st-neb-plum { fill: #5E2A78; }
-.sc-st-neb-teal-l { fill: #6FD3D0; } .sc-st-neb-teal { fill: #2E8A9C; } .sc-st-neb-teal-d { fill: #1E4F72; }
-/* Stars, planet, ring, moon. */
-.sc-st-star { fill: #FFFFFF; } .sc-st-star-dim { fill: #9C93D6; }
-.sc-st-planet-l { fill: #FFD9B0; } .sc-st-planet { fill: #E9A88A; } .sc-st-planet-band { fill: #C98078; } .sc-st-planet-d { fill: #8E4E6E; }
-.sc-st-ring { fill: #F3E6FF; } .sc-st-ring-d { fill: #B3A0D8; }
-.sc-st-moon { fill: #F4F0FF; } .sc-st-moon-d { fill: #3A3170; }
-/* Room: brass rod and telescope, plum velvet curtains, sill, star jar, indigo rug. */
-.sc-st-rod { fill: #C99A48; } .sc-st-sill { fill: #D2AE84; }
-.sc-st-curtain-l { fill: #A584C4; } .sc-st-curtain { fill: #8A68AE; } .sc-st-curtain-d { fill: #6E4E94; } .sc-st-curtain-o { fill: #3E2A5E; }
-.sc-st-brass-l { fill: #F2D27A; } .sc-st-brass { fill: #C99A48; } .sc-st-brass-d { fill: #8E6A2A; }
-.sc-st-jar { fill: #CFE0F5; } .sc-st-jar-glow { fill: #FFE59A; } .sc-st-jar-o { fill: #5B6B8E; }
-.sc-st-rug { fill: #3A2F78; } .sc-st-rug-o { fill: #221A4E; }
+/* Starlit Window: a clear night through a four-pane window. Colours are fixed: they are places, not theme chrome. */
+/* Sky, navy up top, a little lighter toward the sill. */
+.sc-st-sky1 { fill: #0D0B2C; } .sc-st-sky2 { fill: #17123F; } .sc-st-sky3 { fill: #241A55; }
+/* Milky way: haze, body, bright core. */
+.sc-st-band { fill: #2C2468; } .sc-st-band-core { fill: #4A3D92; } .sc-st-band-hi { fill: #8C7DD0; }
+/* Full moon and its halo. */
+.sc-st-moon { fill: #FFF6D6; } .sc-st-moon-d { fill: #D8BE7E; } .sc-st-moon-c { fill: #E8D5A2; } .sc-st-halo { fill: #2F2A6A; }
+/* Stars in three brightnesses. */
+.sc-st-star { fill: #FFFFFF; } .sc-st-star-mid { fill: #C9C0FF; } .sc-st-star-dim { fill: #6C62B4; }
+/* Painted window frame and sill. */
+.sc-st-frame-l { fill: #FFF8EC; } .sc-st-frame { fill: #EADCC6; } .sc-st-frame-d { fill: #BFA684; } .sc-st-frame-o { fill: #4A3428; }
+.sc-st-sill-l { fill: #F6EAD6; } .sc-st-sill { fill: #C7AE8C; }
+/* Curtains and brass rod. */
+.sc-st-rod { fill: #C99A48; }
+.sc-st-curtain-l { fill: #9C7CC0; } .sc-st-curtain { fill: #8466AC; } .sc-st-curtain-d { fill: #634A8A; } .sc-st-curtain-o { fill: #3E2A5E; }
+/* Potted plant on the sill. */
+.sc-st-leaf { fill: #5FA86A; } .sc-st-leaf-d { fill: #3C7A4C; } .sc-st-plant-o { fill: #1C3324; }
+.sc-st-pot-l { fill: #E08A5E; } .sc-st-pot { fill: #C46A44; } .sc-st-pot-d { fill: #8E4630; }
+/* Rug. */
+.sc-st-rug-l { fill: #4E43A0; } .sc-st-rug { fill: #3A2F78; } .sc-st-rug-o { fill: #221A4E; }
 /* Moving: twinkling stars, sparkle arms, the shooting star. */
 .sc-st-tw1, .sc-st-tw2, .sc-st-tw3, .sc-st-shoot { fill: #FFFFFF; }
-.sc-st-spark1, .sc-st-spark2, .sc-st-spark3 { fill: #CDBBFF; }
+.sc-st-spark1, .sc-st-spark2, .sc-st-spark3 { fill: #B8A8F0; }
 .sc-st-trail { fill: #D7CCFF; } .sc-st-trail-faint { fill: #7A6CC0; }
 
 /* Always on, gently: stars twinkle in three staggered groups. */
@@ -27,8 +28,8 @@
 #cat .scene-starlit :is(.sc-st-tw2, .sc-st-spark2) { animation: st-twinkle 3s steps(1) -1s infinite; }
 #cat .scene-starlit :is(.sc-st-tw3, .sc-st-spark3) { animation: st-twinkle 3s steps(1) -2s infinite; }
 @keyframes st-twinkle { 0%, 60% { opacity: 1; } 61%, 85% { opacity: 0.2; } }
-/* A shooting star streaks down-left at the start of each loop, then waits for the next pass. */
-#cat .scene-starlit :is(.sc-st-shoot, .sc-st-trail, .sc-st-trail-faint) { animation: st-shooting-star 6s steps(1) infinite; }
+/* A shooting star streaks down-left across the top-right pane, then waits for the next pass. */
+#cat .scene-starlit :is(.sc-st-shoot, .sc-st-trail, .sc-st-trail-faint) { animation: st-shooting-star 8s steps(1) infinite; }
 @keyframes st-shooting-star {
   0% { opacity: 1; transform: none; }
   3% { transform: translate(-2px, 2px); }
@@ -36,12 +37,3 @@
   9% { opacity: 0.6; transform: translate(-6px, 6px); }
   12%, 100% { opacity: 0; transform: translate(-8px, 8px); }
 }
-/* The planet drifts a pixel and back; the nebula cores breathe. */
-#cat .scene-starlit :is(.sc-st-planet-l, .sc-st-planet, .sc-st-planet-band, .sc-st-planet-d, .sc-st-ring, .sc-st-ring-d) {
-  animation: st-drift 24s steps(1) infinite;
-}
-@keyframes st-drift { 50% { transform: translateX(1px); } }
-#cat .scene-starlit .sc-st-neb-rose { animation: st-glow-rose 7s ease-in-out infinite; }
-#cat .scene-starlit .sc-st-neb-teal-l { animation: st-glow-teal 7s ease-in-out -3.5s infinite; }
-@keyframes st-glow-rose { 50% { fill: #F6A6DA; } }
-@keyframes st-glow-teal { 50% { fill: #9CEBE4; } }
