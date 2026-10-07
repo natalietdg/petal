@@ -28,7 +28,7 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
-    note('Also in the menus: Theme (⌘1–3), View for reading style (⇧⌘1–4), Pet and Pet › Scene.'),
+    note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
   ];
 }
 

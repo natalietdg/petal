@@ -12,7 +12,7 @@ export const SCENE_CHOICES: readonly Choice[] = [
   ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['bakery', 'Corner Bakery'], ['howl', "Wizard's Loft"], ['study', "Wizard's Study"],
   ['midcentury', 'Vinyl Lounge'],
 ];
-// Ids match the data-reading values styled in renderer/magazine.css and print.css; order sets ⌘⇧1–4.
+// Ids match the data-reading values styled in renderer/magazine.css and print.css; order sets ⌥⌘1–4.
 export const READING_CHOICES: readonly Choice[] = [
   ['newspaper', 'Newspaper'], ['editorial', 'Magazine · Editorial'], ['lifestyle', 'Magazine · Lifestyle'], ['print', 'Magazine · Print'],
 ];
@@ -63,7 +63,7 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     label,
     type: 'radio',
     checked: id === currentReading,
-    accelerator: `CmdOrCtrl+Shift+${index + 1}`,
+    accelerator: `CmdOrCtrl+Alt+${index + 1}`, // ⇧⌘3 and ⇧⌘4 belong to macOS screenshots
     click: () => onReadingSelected(id),
   }));
 

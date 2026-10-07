@@ -5,7 +5,7 @@ import globals from 'globals';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
-  { ignores: ['out/**', 'dist/**', 'dist.noindex/**', 'node_modules/**', 'build/**'] },
+  { ignores: ['out/**', 'dist/**', 'dist.noindex/**', 'node_modules/**', 'build/**', '.claude/**'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
