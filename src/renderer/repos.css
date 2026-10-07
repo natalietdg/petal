@@ -1,0 +1,77 @@
+/* Open Repo: a palette card at the top of the reader area; the reader and reply box hide while it's open. */
+#repos {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 72px 28px 28px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+}
+#repos[hidden] { display: none; }
+
+.repos-card {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--reader-bg);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.12);
+}
+
+.repos-search {
+  padding: 11px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 500 16px var(--ui-font);
+  outline: none;
+}
+.repos-search:focus { border-color: var(--link); }
+.repos-search::placeholder { color: var(--muted); }
+
+.repos-hint { margin: 8px 4px 6px; font-size: 12px; color: var(--muted); }
+.repos-hint.new-tab { color: var(--watch-ink); }
+
+.repos-list { overflow-y: auto; min-height: 0; }
+
+.repos-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.repos-row[aria-selected="true"] { background: var(--code-bg); box-shadow: inset 3px 0 0 var(--link); }
+.repos-row-head { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.repos-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.repos-branch {
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--next-pill);
+  color: var(--next-ink);
+  font: 500 11px var(--mono-font);
+}
+.repos-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+
+.repos-status { margin: 8px 4px 0; font-size: 12px; color: var(--muted); }
+.repos-status:empty { display: none; }

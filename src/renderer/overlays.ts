@@ -1,18 +1,19 @@
-// History, Workflow and Customize are views over the reader, one at a time.
+// History, Workflow, Customize and Open Repo are views over the reader, one at a time.
 // Opening one closes the others; Esc closes it; the reader and reply box show only when none is open.
 import { byId, focusTerminal } from './dom';
 
-export type OverlayId = 'history' | 'workflow' | 'customize';
+export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos';
 
 interface Overlay {
   view: HTMLElement;
-  button: HTMLElement;
+  button?: HTMLElement; // Open Repo has no dock button, only ⌘O and the reply box
 }
 
 const OVERLAYS: Record<OverlayId, Overlay> = {
   history: { view: byId('history'), button: byId('history-button') },
   workflow: { view: byId('workflow'), button: byId('workflow-button') },
   customize: { view: byId('customize'), button: byId('customize-button') },
+  repos: { view: byId('repos') },
 };
 const reader = byId('reader');
 const composer = byId('composer');
@@ -21,7 +22,7 @@ let openId: OverlayId | null = null;
 function render(): void {
   for (const [id, { view, button }] of Object.entries(OVERLAYS)) {
     view.hidden = id !== openId;
-    button.setAttribute('aria-pressed', String(id === openId));
+    button?.setAttribute('aria-pressed', String(id === openId));
   }
   reader.hidden = openId !== null;
   composer.hidden = openId !== null;

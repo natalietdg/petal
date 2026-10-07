@@ -1,5 +1,8 @@
 // Reply box under the reader: pasted into the active tab's Claude, or starts Claude with it when none is running.
+// Without Claude, `checkout <repo>` or `cd <repo>` opens Open Repo instead.
 import * as tabs from './tabs';
+import * as repos from './repos';
+import { parseRepoCommand } from '../shared/repo-match';
 import { byId, focusTerminal } from './dom';
 
 const form = byId<HTMLFormElement>('composer');
@@ -20,22 +23,36 @@ function fit(): void {
 // eslint-disable-next-line no-control-regex -- stripping C0 controls is the point
 const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
 
-function send(): void {
+const clear = (): void => {
+  input.value = '';
+  fit();
+};
+
+async function send(): Promise<void> {
   const text = stripControls(input.value).trim();
   const tab = tabs.active();
   if (!text || !tab) return;
-  if (tab.update?.state === 'live') window.pastel.write(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
-  else window.pastel.startClaude(tab.id, text);
-  input.value = '';
-  fit();
+  if (tab.update?.state === 'live') {
+    window.pastel.write(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
+    clear();
+    return;
+  }
+  const repoQuery = parseRepoCommand(text);
+  if (repoQuery && await repos.offers(tab.id, repoQuery)) {
+    clear();
+    repos.open(repoQuery);
+    return;
+  }
+  window.pastel.startClaude(tab.id, text);
+  clear();
 }
 
-form.addEventListener('submit', (event) => { event.preventDefault(); send(); });
+form.addEventListener('submit', (event) => { event.preventDefault(); void send(); });
 input.addEventListener('input', fit);
 input.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
-    send();
+    void send();
   } else if (event.key === 'Escape') {
     focusTerminal();
   }
