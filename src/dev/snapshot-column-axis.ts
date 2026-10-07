@@ -69,8 +69,17 @@ export async function columnAxisCheck(kit: Kit, win: BrowserWindow): Promise<voi
     for (const theme of Object.keys(themes)) {
       applyTheme(theme, { persist: false });
       for (const width of WIDTHS) {
-        win.setContentSize(width, 900);
-        await waitFor(async () => (await js('window.innerWidth')) === width, 3000);
+        // A resize can be dropped while the window is busy: ask again until the page really is this wide.
+        let sized = false;
+        for (let attempt = 0; attempt < 4 && !sized; attempt++) {
+          if (attempt) win.moveTop(); // a covered window holds its old size; z-order only, never focus
+          win.setContentSize(width, 900);
+          sized = Boolean(await waitFor(async () => {
+            win.webContents.invalidate(); // an unfocused window can hold its old frame and size
+            return (await js('window.innerWidth')) === width;
+          }, 3000));
+        }
+        check(sized, `${look} ${theme} window resized to ${width}px (content ${win.getContentSize()}, page ${await js('window.innerWidth')})`);
         await wait(350);
         if (!(await js("Boolean(document.querySelector('#latest .rail'))"))) await showSample();
         const m = await js(MEASURE);
