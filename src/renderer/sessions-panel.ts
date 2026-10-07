@@ -1,5 +1,8 @@
 // Docked monitor of every live Claude session. The reader stays pinned to this pty.
 // Each row can close its Claude after an inline confirm; recently closed ones can be reopened.
+import * as tabs from './tabs';
+import * as composer from './composer';
+import * as overlays from './overlays';
 import { byId, el, isIpcError } from './dom';
 import type { SessionCounts, SessionRow, SubagentRow } from '../main/sessions-monitor';
 import type { ClosedSession } from '../main/closed-store';
@@ -11,6 +14,7 @@ const MINUTE_MS = 60_000;
 const AGENTS_SHOWN = 4;
 
 const pill = byId('sessions-pill');
+const addButton = byId('add-session-button');
 const panel = byId('sessions-panel');
 export const expandedIds = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
@@ -19,6 +23,8 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let confirming: { sessionId: string; where: 'row' | 'limit' } | null = null;
 let closingId: string | null = null;
 const notes = new Map<string, string>();
+// Set when Add Session was refused at the limit, so the panel shows why.
+let addBlocked = false;
 
 export const isOpen = (): boolean => !panel.hidden;
 
@@ -34,6 +40,7 @@ function sinceText(ms: number | null, verb = ''): string {
 }
 
 const overLimit = ({ total }: SessionCounts, maxOpen: number): boolean => total > maxOpen;
+const atLimit = ({ total }: SessionCounts, maxOpen: number): boolean => total >= maxOpen;
 const limitText = (total: number, maxOpen: number) => `${total} open, your limit is ${maxOpen}`;
 
 function renderPill({ counts, maxOpen }: SessionsView): void {
@@ -149,6 +156,7 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
   const banner = el('div', 'sessions-limit');
   banner.setAttribute('role', 'status');
   banner.append(el('p', 'sessions-limit-text', limitText(view.counts.total, view.maxOpen)));
+  if (addBlocked) banner.append(el('p', 'sessions-limit-hint sessions-add-blocked', 'Close one to add a session.'));
   const oldest = rows.find((r) => r.sessionId === view.oldestIdleId);
   if (!oldest) {
     banner.append(el('p', 'sessions-limit-hint', 'None of them are idle right now.'));
@@ -186,8 +194,11 @@ function renderPanel(view: SessionsView): void {
   const rows = view.rows ?? [];
   const list = el('ul', 'session-list');
   list.append(...rows.map(renderRow));
-  const parts: HTMLElement[] = [el('p', 'sessions-heading', 'Claude sessions on this Mac')];
-  if (overLimit(view.counts, view.maxOpen)) parts.push(limitBanner(view, rows));
+  const parts: HTMLElement[] = [
+    textButton('Add Session', 'flow-button sessions-add', () => addSession()),
+    el('p', 'sessions-heading', 'Claude sessions on this Mac'),
+  ];
+  if ((addBlocked && atLimit(view.counts, view.maxOpen)) || overLimit(view.counts, view.maxOpen)) parts.push(limitBanner(view, rows));
   parts.push(list);
   if (view.closed?.length) {
     const closed = el('ul', 'session-list closed-list');
@@ -225,9 +236,26 @@ function schedule(): void {
 export function setOpen(open: boolean): void {
   panel.hidden = !open;
   pill.setAttribute('aria-expanded', String(open));
-  if (!open) confirming = null;
+  if (!open) { confirming = null; addBlocked = false; }
   refresh();
 }
 
+// A new tab the ⌘T way, then the reply box, so she can type the first message. At her limit, the panel says why instead.
+export async function addSession(): Promise<void> {
+  const view = await window.pastel.getSessions({ detailed: false, expandedIds: [] });
+  if (!isIpcError(view) && atLimit(view.counts, view.maxOpen)) {
+    addBlocked = true;
+    setOpen(true);
+    return;
+  }
+  addBlocked = false;
+  const open = overlays.current();
+  if (open) overlays.hide(open);
+  if (isOpen()) setOpen(false);
+  tabs.create();
+  composer.focus();
+}
+
 pill.addEventListener('click', () => setOpen(!isOpen()));
+addButton.addEventListener('click', () => addSession());
 refresh();

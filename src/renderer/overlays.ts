@@ -16,6 +16,7 @@ const OVERLAYS: Record<OverlayId, Overlay> = {
   repos: { view: byId('repos') },
 };
 const reader = byId('reader');
+const readerHead = byId('reader-head');
 const composer = byId('composer');
 let openId: OverlayId | null = null;
 
@@ -25,6 +26,7 @@ function render(): void {
     button?.setAttribute('aria-pressed', String(id === openId));
   }
   reader.hidden = openId !== null;
+  readerHead.hidden = openId !== null;
   composer.hidden = openId !== null;
 }
 

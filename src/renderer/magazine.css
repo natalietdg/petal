@@ -30,7 +30,7 @@
 
 /* ---------- Editorial: a printed feature. Light serif display, Part openers, a margin rail ---------- */
 [data-reading="editorial"] { --reading-measure: 728px; } /* 66ch of 20px Newsreader */
-[data-reading="editorial"] .reader-column { padding-top: 52px; padding-bottom: 140px; counter-reset: part; }
+[data-reading="editorial"] .reader-column { padding-top: 36px; padding-bottom: 140px; counter-reset: part; }
 [data-reading="editorial"] .status {
   display: flex;
   align-items: center;
@@ -127,7 +127,7 @@
 /* Wide window: pull quotes and sidebars move into a margin rail beside the text. */
 @media (min-width: 1200px) {
   /* Reserve the rail only when the newest reply has something to put in it. */
-  [data-reading="editorial"]:has(#latest .rail) :is(#reader, #composer) { --reading-measure: 1060px; --reading-pad-end: 376px; } /* 56px + 16em of 20px */
+  [data-reading="editorial"]:has(#latest .rail) :is(#reader, #reader-head, #composer) { --reading-measure: 1060px; --reading-pad-end: 376px; } /* 56px + 16em of 20px */
   /* The rail hangs in the right padding beside the section's text; the row grows to fit it. */
   [data-reading="editorial"] .story-section:has(> .rail) {
     display: grid;

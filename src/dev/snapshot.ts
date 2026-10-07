@@ -11,6 +11,8 @@ import { promptsCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
+import { addSessionCheck } from './snapshot-add-session';
+import { headerCheck } from './snapshot-header';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -347,6 +349,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
+    ['add session', () => addSessionCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
@@ -358,6 +361,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['repo line', () => repoLineCheck(kit, { feed })], // before the print steps, which replace the fixture's replies
     ['print look', () => printLookCheck(kit, win)], // replaces the reader's reply with its own long sample
     ['print axis', () => printAxisCheck(kit, win)],
+    ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // last: it appends turns to the fixture
   ];

@@ -14,7 +14,7 @@
 .reader-column {
   max-width: var(--reading-measure);
   margin: 0 auto;
-  padding: 40px var(--reading-pad-end) 120px var(--reading-pad-start);
+  padding: 24px var(--reading-pad-end) 120px var(--reading-pad-start);
   font-family: var(--body-font);
   font-optical-sizing: auto;
   font-size: 20px;
@@ -26,14 +26,24 @@
   hanging-punctuation: first;
 }
 
-/* Which repo this session is in: one quiet line that stays at the top while she scrolls. */
+/* Fixed header under the dock: repo line and view toggle stay put while the reader scrolls. */
+/* Same measure, side padding and gutters as #reader, so it sits on the column's axis. */
+#reader-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, var(--reading-measure));
+  justify-content: center;
+  padding: 10px var(--reading-pad-end) 12px var(--reading-pad-start);
+  overflow: hidden; /* the gutter below needs a non-visible overflow */
+  scrollbar-gutter: stable both-edges;
+  background: var(--reader-bg);
+}
+#reader-head[hidden] { display: none; }
+#reader-head .view-toggle { justify-self: start; margin: 0; }
+
+/* Which repo this session is in: one quiet line above the toggle. */
 .reader-repo {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin: -12px -56px 14px;
-  padding: 6px 56px;
-  background: var(--reader-bg); /* opaque, so text scrolling under it stays out of the way */
+  margin: 0 0 8px;
   font: 500 12px/1.4 var(--ui-font);
   letter-spacing: 0.02em;
   color: var(--muted);

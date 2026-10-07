@@ -153,7 +153,7 @@ scroller.addEventListener('click', (event) => {
 const repliesView = byId('replies-view');
 const flowView = byId('flow-view');
 const decisionsView = byId('decisions-view');
-const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader .reader-column > .view-toggle button')];
+const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
 
 export async function refreshFlow(): Promise<void> {
