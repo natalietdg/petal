@@ -24,10 +24,13 @@
 }
 [data-reading="print"] .cz-preview { background: var(--reader-bg); }
 
+/* One measure for the text and the reply box: 30em of 19px serif, about 69 characters a line. */
+[data-reading="print"] { --print-measure: 570px; }
+
 [data-reading="print"] .reader-column {
   --body-font: "Source Serif 4 Variable", "Newsreader Variable", Georgia, serif;
   --display-font: "Source Serif 4 Variable", "Newsreader Variable", Georgia, serif;
-  max-width: 30em; /* content box: about 65 characters a line */
+  max-width: var(--print-measure); /* content box; margin: auto (reader.css) centres it */
   padding: 44px 56px 150px;
   font-size: 19px;
   line-height: 1.55;
@@ -233,9 +236,14 @@
 /* Empty reader: the plain message, in the essay serif. */
 [data-reading="print"] .status.empty { font-family: var(--body-font); letter-spacing: normal; }
 
-/* Wide window: pull quotes and sidebars move into a margin rail beside the text. */
-@media (min-width: 1200px) {
-  [data-reading="print"] .reader-column:has(#latest .rail) { padding-right: calc(56px + 18em); }
+/* Reply box: centred on the text's axis at the text's measure; Send keeps the right-hand cell. */
+[data-reading="print"] #composer { display: grid; grid-template-columns: 1fr minmax(0, var(--print-measure)) 1fr; align-items: end; }
+[data-reading="print"] #composer-input { grid-column: 2; width: calc(100% - 30px); max-width: none; } /* minus padding and border */
+[data-reading="print"] #composer-send { grid-column: 3; justify-self: end; }
+
+/* Wide window: pull quotes and sidebars hang in the right margin; the column stays centred.
+   1340px leaves room for the 18em rail beside a centred 570px column. */
+@media (min-width: 1340px) {
   [data-reading="print"] .story-section:has(> .rail) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 0;
