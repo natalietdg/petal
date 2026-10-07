@@ -1,4 +1,5 @@
 // Winter Fireplace: a brick fireplace with stockings and a crackling fire, and a snowy window behind the pet.
+// Warm inside, cold outside: a honey wall and wood floor lit by the fire, against the blue night window.
 // Clarity rules: every object is ringed by a 1px outline in a darker tone of its own material, lit top-left.
 import { inCircle, inEllipse, layers, outlined, type CellClass, type Cell, type Scene, type Shape } from './kit';
 
@@ -8,6 +9,7 @@ const FIRE_BASE = 38;
 const GLASS = { left: 28, right: 46, top: 3, bottom: 20 };
 const ARCH = { cx: 37, cy: 12, r: 9.45 };
 const GROUND = 19; // first row of snowy ground inside the window
+const FLOOR = 44; // first floorboard row; the skirting sits just above it
 
 const inBox = (x: number, y: number, left: number, right: number, top: number, bottom: number): boolean => x >= left && x <= right && y >= top && y <= bottom;
 
@@ -127,12 +129,29 @@ const surround = outlined((x, y) => {
 // Stone hearth: lit top edge, face, shaded base.
 const hearth = outlined((x, y) => (inBox(x, y, 1, 25, 44, 46) ? (['w-stone-l', 'w-stone', 'w-stone-d'] as const)[y - 44] : null), 'w-stone-ink');
 
-// Knitted rug under the pet: red border around cream and red V stitches.
+// Red rug under the pet: dark border, warm red body, one orange stripe through the middle.
 const rug = outlined((x, y) => {
   if (!inEllipse(x + 0.5, y + 0.5, 38, 46, 9.5, 2.2)) return null;
-  if (!inEllipse(x + 0.5, y + 0.5, 38, 46, 8.5, 1.4)) return 'w-red-d';
-  return (x + y) % 2 ? 'w-knit' : 'w-knit-d';
+  if (!inEllipse(x + 0.5, y + 0.5, 38, 46, 8.5, 1.4)) return 'w-rug-d';
+  return y === 46 ? 'w-rug-l' : 'w-rug';
 }, 'w-red-ink');
+
+// Firelight falls off in a few flat bands, wider than tall, centred on the fire.
+const fireDistance = (x: number, y: number): number => Math.hypot((x + 0.5 - 14) / 1.3, y + 0.5 - 38);
+const LIT_NEAR = 13;
+const LIT_MID = 18;
+function wall(x: number, y: number): CellClass {
+  const d = fireDistance(x, y);
+  return d < LIT_NEAR ? 'w-wall3' : d < LIT_MID ? 'w-wall2' : d < 24 ? 'w-wall1' : 'w-wall';
+}
+// Floorboards: skirting, a lit top edge, one seam between two boards, staggered joints.
+function floor(x: number, y: number): CellClass | null {
+  if (y === FLOOR - 1) return 'w-wood-d';
+  if (y < FLOOR) return null;
+  if (y === FLOOR) return 'w-floor-l';
+  if (y === FLOOR + 2 || (y === FLOOR + 1 && x % 12 === 3) || (y === FLOOR + 3 && x % 12 === 9)) return 'w-floor-d';
+  return 'w-floor';
+}
 
 // Window: a round-topped pane, grown by `grow` pixels (0 glass, 1 frame, 2 outline).
 const inWindow = (x: number, y: number, grow: number): boolean => x >= GLASS.left - grow && x <= GLASS.right + grow && y <= GLASS.bottom + grow
@@ -176,7 +195,7 @@ function mountain(x: number, y: number): CellClass | null {
 const MOON = ['.mm', 'mm.', 'm..', 'mm.', '.mm']; // crescent, top-left of the pane
 
 function view(x: number, y: number): CellClass {
-  if (x === ARCH.cx && y >= 4) return 'w-wood'; // mullion
+  if (x === ARCH.cx && y >= 4) return 'w-frame-d'; // mullion
   // Frost creeping in from the bottom corners.
   if ((x - GLASS.left) + (GLASS.bottom - y) < 3 || (GLASS.right - x) + (GLASS.bottom - y) < 3) return 'w-frost';
   if (MOON[y - 4]?.[x - 33] === 'm') return 'w-moon';
@@ -185,14 +204,14 @@ function view(x: number, y: number): CellClass {
   if (y >= GROUND) return y === GROUND && x % 3 === 0 ? 'w-snow-d' : 'w-snow';
   return mountain(x, y) ?? (y <= 7 ? 'w-sky1' : y <= 11 ? 'w-sky2' : y <= 15 ? 'w-sky3' : 'w-sky4');
 }
-// Glass and frame: frame lit on its top-left half, shaded bottom-right.
+// Glass and cream frame: frame lit on its top-left half, shaded bottom-right.
 function windowPane(x: number, y: number): CellClass | null {
   if (insideGlass(x, y)) return view(x, y);
   if (!inWindow(x, y, 1)) return null;
-  return (x - ARCH.cx) + (y - ARCH.cy) < 0 ? 'w-wood-l' : 'w-wood-d';
+  return (x - ARCH.cx) + (y - ARCH.cy) < 0 ? 'w-frame-l' : 'w-frame-d';
 }
-const windowInk: Shape = (x, y) => (inWindow(x, y, 2) && !inWindow(x, y, 1) ? 'w-wood-ink' : null);
-const sill = outlined((x, y) => (inBox(x, y, 27, 47, 22, 23) ? (y === 22 ? 'w-wood-l' : 'w-wood-d') : null), 'w-wood-ink');
+const windowInk: Shape = (x, y) => (inWindow(x, y, 2) && !inWindow(x, y, 1) ? 'w-frame-ink' : null);
+const sill = outlined((x, y) => (inBox(x, y, 27, 47, 22, 23) ? (y === 22 ? 'w-frame-l' : 'w-frame-d') : null), 'w-frame-ink');
 
 // Front to back. Fill-only layers sit ahead of outlines that must not cut into them.
 const paint = layers(
@@ -201,14 +220,17 @@ const paint = layers(
   stockings,
   grate, logs, firebox, surround,
   hearth, body, chimney,
-  rug,
+  rug, floor, wall,
 );
 
-// Warm light spilling over the surround and hearth.
+// Warm light spilling over the surround, the hearth and the nearest wall and floor.
+const isRoom = (cell: CellClass | null): boolean => cell === 'w-wall3' || cell === 'w-wall2' || cell?.startsWith('w-floor') === true;
 const glow: Cell[] = [];
-for (let y = 22; y <= 46; y += 1) {
-  for (let x = 2; x <= 25; x += 1) {
-    if (inEllipse(x + 0.5, y + 0.5, 14, 40, 12, 9) && !inArch(x, y)) glow.push([x, y, 'w-glow']);
+for (let y = 0; y < 48; y += 1) {
+  for (let x = 0; x < 48; x += 1) {
+    const onFireplace = x >= 2 && x <= 25 && inEllipse(x + 0.5, y + 0.5, 14, 40, 12, 9) && !inArch(x, y);
+    const onRoom = isRoom(paint(x, y)) && fireDistance(x, y) < LIT_MID;
+    if (onFireplace || onRoom) glow.push([x, y, 'w-glow']);
   }
 }
 
@@ -255,6 +277,8 @@ const scene: Scene = {
     [12, 29, 'w-spark'], [15, 27, 'w-spark2'], [17, 30, 'w-spark'],
     // Candle flames, over each candle's lit column.
     ...CANDLES.map((x): Cell => [x, 10, 'w-cf']),
+    // Fairy lights strung through the garland.
+    [4, 15, 'w-lt1'], [9, 15, 'w-lt2'], [14, 15, 'w-lt1'], [19, 15, 'w-lt2'], [24, 15, 'w-lt1'],
     // Snowflakes in three staggered waves.
     [31, 4, 'w-sn1'], [35, 6, 'w-sn2'], [40, 4, 'w-sn3'], [44, 7, 'w-sn1'],
     [30, 9, 'w-sn3'], [39, 9, 'w-sn2'], [34, 13, 'w-sn1'], [43, 13, 'w-sn3'], [38, 14, 'w-sn2'],
