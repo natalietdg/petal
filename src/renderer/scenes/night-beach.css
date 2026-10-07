@@ -1,4 +1,4 @@
-/* Night Window and Beach scene colours and motion. Colours are fixed: they are places, not theme chrome. */
+/* City Lights (scene id 'night') and Beach scene colours and motion. Colours are fixed: they are places, not theme chrome. */
 
 /* Night: city rooftops, warm windows, the milky way, fairy lights, candle and sprout. */
 .sc-nb-city-far { fill: #172452; }
@@ -109,7 +109,7 @@
 .sc-ol-isle { fill: #4F8373; }
 .sc-ol-crab { fill: #6E1F1A; }
 .sc-ol-surf { fill: #3A2C3A; }
-/* Starlit window room. */
+/* City Lights room. */
 .sc-ol-wood { fill: #6E4E33; }
 .sc-ol-curtain { fill: #9E5C76; }
 .sc-ol-const { fill: #2B3D7C; }

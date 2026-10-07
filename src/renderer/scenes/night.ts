@@ -1,4 +1,4 @@
-// Starlit window: night sky over a sleeping city, fairy lights, rose curtains and hanging plants,
+// City Lights: night sky over a sleeping city, fairy lights, rose curtains and hanging plants,
 // a cushioned window seat with a knitted blanket, a telescope on a wall shelf, and a floor lamp.
 import {
   distanceToSegment, inCircle, layers, onSegments, outlined, stamp, type Cell, type CellClass, type Scene, type Segment, type Shape,
@@ -135,7 +135,7 @@ const moonPrint = outlined(stamp(0, 4, ['fffff', 'fqqqf', 'fqmqf', 'fmqqf', 'fmq
 const glow: Shape = (x, y) => (inCircle(x, y, 2.5, 19, 8) ? 'y' : null);
 
 const scene: Scene = {
-  name: 'Night Window',
+  name: 'City Lights',
   size: [48, 48],
   paint: layers(
     shade, pole, leftPlant, rightPlant, pillow, blanket,
