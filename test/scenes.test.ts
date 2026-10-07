@@ -88,4 +88,20 @@ describe('planetarium planet of the day', () => {
     const { back } = svg('planetarium');
     for (const planet of PLANETS) expect(back).toContain(`sc-pl-${planet}-body`);
   });
+
+  it('keeps both nebulae clear of every planet and ring, all eight', () => {
+    const { back } = svg('planetarium');
+    const cells = [...back.matchAll(/<rect x="(\d+)" y="(\d+)"[^>]*class="sc-pl-([\w-]+)"/g)];
+    const at = (pattern: RegExp): Set<string> => new Set(cells.filter((m) => pattern.test(m[3] ?? '')).map((m) => `${m[1]},${m[2]}`));
+    const nebula = at(/^(teal|pink)(-[ld])?$/);
+    const planet = at(new RegExp(`^(${PLANETS.join('|')})-`));
+    expect(nebula.size).toBeGreaterThan(0);
+    expect(planet.size).toBeGreaterThan(0);
+    // A one-cell gap too, so a nebula never even touches a planet.
+    const near = (cell: string): boolean => {
+      const [x, y] = cell.split(',').map(Number) as [number, number];
+      return [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => planet.has(`${x + dx},${y + dy}`)));
+    };
+    expect([...nebula].filter(near)).toEqual([]);
+  });
 });

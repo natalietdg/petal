@@ -30,12 +30,12 @@ function galaxy(x: number, y: number): CellClass | null {
   return arm > -0.2 ? 'pl-gx-glow' : null;
 }
 
-// Two tiny, faint nebulae, far off in the distance: teal top right, pink low left.
+// Two tiny, faint nebulae far off on the right, clear of every planet: teal top, pink between the constellations.
 type Blob = readonly [cx: number, cy: number, rx: number, ry: number];
 interface Nebula { blobs: readonly Blob[]; tones: readonly [CellClass, CellClass, CellClass] }
 const NEBULAE: readonly Nebula[] = [
   { blobs: [[38, 5, 2, 1.2], [36.5, 6, 1.5, 1]], tones: ['pl-teal-l', 'pl-teal', 'pl-teal-d'] },
-  { blobs: [[10, 31, 2, 1.2], [11.5, 30, 1.5, 1]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
+  { blobs: [[41, 18.5, 2, 1.2], [42.5, 17.5, 1.5, 1]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
 ];
 // Only the first blob gets the bright core, so each nebula has one heart.
 const inBlobs = (x: number, y: number, blobs: readonly Blob[], scale: number): boolean =>
