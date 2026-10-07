@@ -17,18 +17,23 @@
         <button id="customize-button" class="dock-button" type="button" aria-pressed="false">Customize</button>
         <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
         <button id="history-button" class="dock-button" type="button" aria-pressed="false">History</button>
+        <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)">Add Session</button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
         <div id="sessions-panel" class="sessions-panel" hidden></div>
       </aside>
-      <div id="cat"></div>
-      <main id="reader" aria-live="polite">
-        <div class="reader-column">
+      <header id="reader-head">
+        <div class="reader-head-column">
           <p id="reader-repo" class="reader-repo" hidden></p>
           <div class="view-toggle" role="tablist">
             <button type="button" data-view="replies" aria-selected="true">Replies</button>
             <button type="button" data-view="flow" aria-selected="false">Flow</button>
             <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
           </div>
+        </div>
+      </header>
+      <div id="cat"></div>
+      <main id="reader" aria-live="polite">
+        <div class="reader-column">
           <div id="replies-view">
             <p id="reader-status" class="status"></p>
             <article id="latest"></article>

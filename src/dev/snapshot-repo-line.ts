@@ -55,8 +55,8 @@ export async function repoLineCheck(kit: Kit, { feed }: { feed: ReaderFeed }): P
     await js("(() => { const r = document.getElementById('reader'); r.scrollTop = Math.min(700, r.scrollHeight - r.clientHeight); })()");
     await wait(200);
     const scrolled = await js(LINE);
-    const sticky = scrolled.scrollTop > 100 && Math.abs(scrolled.offsetFromTop) <= 1 && scrolled.shown;
-    check(sticky, `${reading}/${theme} stays at the top when scrolled ${scrolled.scrollTop}px (at rest it sits ${top.offsetFromTop}px down): ${JSON.stringify(scrolled)}`);
+    const sticky = scrolled.scrollTop > 100 && Math.abs(scrolled.offsetFromTop - top.offsetFromTop) <= 1 && scrolled.shown;
+    check(sticky, `${reading}/${theme} stays put in the header when scrolled ${scrolled.scrollTop}px (at rest ${top.offsetFromTop}px from the reader top): ${JSON.stringify(scrolled)}`);
     await capture(`repo-line-${reading}-${theme}`);
   }
 

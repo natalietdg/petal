@@ -8,6 +8,7 @@
   justify-content: flex-end;
   align-items: center;
   background: var(--reader-bg);
+  flex-wrap: wrap; /* at narrow widths the buttons take a second row, never the column */
   gap: 10px;
   font-family: var(--ui-font);
 }
@@ -25,6 +26,8 @@
   cursor: pointer;
 }
 .dock-button[aria-pressed="true"] { background: var(--code-bg); border-color: var(--reader-fg); }
+.dock-button.add-session { border-color: var(--next-ink); color: var(--next-ink); }
+.sessions-add { margin: 0 12px 12px; }
 
 .sessions-pill {
   display: flex;
@@ -63,7 +66,7 @@
 
 .sessions-panel {
   position: absolute;
-  top: 66px; /* the dock's 16px top padding + 50px */
+  top: calc(100% + 10px); /* under the band, even when it wraps */
   right: 20px;
   width: min(480px, calc(100vw - 40px));
   max-height: calc(var(--reader-area-height, 60vh) - 80px);
