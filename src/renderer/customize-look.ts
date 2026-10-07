@@ -28,23 +28,23 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
-    note('Also in the menus: Theme (⌘1–3), View for reading style (⇧⌘1–3), Pet and Pet › Scene.'),
+    note('Also in the menus: Theme (⌘1–3), View for reading style (⇧⌘1–4), Pet and Pet › Scene.'),
   ];
 }
 
-// ---- Formatting: markdown shape -> what each reading style does with it (from reader.css + magazine.css).
+// ---- Formatting: markdown shape -> what each reading style does with it (from reader.css, magazine.css and print.css).
 const SHAPES: readonly (readonly [shape: string, markdown: string, ...looks: string[]])[] = [
-  ['Headline', '**Bold first line**', 'Large serif headline', 'Big light serif, centred', 'Oversized grotesk in a colour-block hero'],
-  ['Dek', 'Paragraph right after the headline', 'Larger standfirst with a rule under it', 'Italic, centred, “By Claude” byline', 'Inside the hero, a size up'],
-  ['Lede', 'First body paragraph, 160+ characters', 'Drop cap', 'Two-line sunk drop cap in the link colour', 'Bold first letter, slightly larger'],
-  ['Sections', '## Short title', 'Serif head with a rule above', '“Part I” opener over an italic head', 'Each section its own colour card'],
-  ['Sidebar', '> **Title** then a list', 'Ruled box, small-caps title', 'Ruled box; margin rail on wide windows', 'Tinted rounded box'],
-  ['Pull quote', '> One sentence', 'Large serif line', 'Italic under a coloured rule; margin rail when wide', 'Bold accent colour with a side bar'],
-  ['Callouts', '**Watch out:** / **Decide:**', 'Watch: pill and thin rule. Decide: tinted box, thick bar', 'Same as Newspaper', 'Same; Decide sits on page colour inside a card'],
-  ['Tables', 'GFM table + *italic caption*', 'Horizontal rules only, bold first column', 'Same as Newspaper', 'Tinted rounded panel, washed header row'],
-  ['Code', 'Fenced block', 'Code-colour block, long lines wrap', 'Same as Newspaper', 'Same as Newspaper'],
-  ['Highlight', '==phrase==', 'Highlighter mark', 'Highlighter mark', 'Highlighter mark'],
-  ['Sources', '## Sources (or References, Limitations)', 'Small, quiet back matter', 'Same as Newspaper', 'Same, never a card'],
+  ['Headline', '**Bold first line**', 'Large serif headline', 'Big light serif, centred', 'Oversized grotesk in a colour-block hero', 'Bold book serif under a “Words by Claude” mono byline'],
+  ['Dek', 'Paragraph right after the headline', 'Larger standfirst with a rule under it', 'Italic, centred, “By Claude” byline', 'Big plain serif under a full ink rule'],
+  ['Lede', 'First body paragraph, 160+ characters', 'Drop cap', 'Two-line sunk drop cap in the link colour', 'No drop cap: the essay opens plainly'],
+  ['Sections', '## Short title', 'Serif head with a rule above', '“Part I” opener over an italic head', 'Bold serif head, no rule'],
+  ['Sidebar', '> **Title** then a list', 'Ruled box, small-caps title', 'Ruled box; margin rail on wide windows', 'Ink-ruled box on a faint tint; margin rail when wide'],
+  ['Pull quote', '> One sentence', 'Large serif line', 'Italic under a coloured rule; margin rail when wide', 'Large plain serif between two ink rules; margin rail when wide'],
+  ['Callouts', '**Watch out:** / **Decide:**', 'Watch: pill and thin rule. Decide: tinted box, thick bar', 'Same as Newspaper', 'Mono labels; Decide ruled box, Next mustard box'],
+  ['Tables', 'GFM table + *italic caption*', 'Horizontal rules only, bold first column', 'Same as Newspaper', 'Ink rules, mono header row'],
+  ['Code', 'Fenced block', 'Code-colour block, long lines wrap', 'Same as Newspaper', 'Same as Newspaper', 'Square ink-ruled block'],
+  ['Highlight', '==phrase==', 'Highlighter mark', 'Highlighter mark', 'Highlighter mark', 'Highlighter mark'],
+  ['Sources', '## Sources (or References, Limitations)', 'Small, quiet back matter', 'Same as Newspaper', 'Mono head over an ink rule'],
 ];
 
 const PREVIEW = `**The organizer now reads its prompt from Customize.**
@@ -81,7 +81,7 @@ organizer.prompt + JSON contract + existing tags
 export function renderFormatting(): HTMLElement[] {
   const readingName = Object.fromEntries(page.state.choices.reading)[page.state.look.reading] ?? page.state.look.reading;
   const table = el('table', 'cz-table');
-  table.innerHTML = '<thead><tr><th>Shape</th><th>Write it as</th><th>Newspaper</th><th>Editorial</th><th>Lifestyle</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Shape</th><th>Write it as</th><th>Newspaper</th><th>Editorial</th><th>Lifestyle</th><th>Print</th></tr></thead>';
   const tbody = el('tbody');
   for (const [shape, markdown, ...looks] of SHAPES) {
     const row = el('tr');

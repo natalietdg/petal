@@ -12,8 +12,11 @@ export const SCENE_CHOICES: readonly Choice[] = [
   ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['bakery', 'Corner Bakery'], ['howl', "Wizard's Loft"], ['study', "Wizard's Study"],
   ['midcentury', 'Vinyl Lounge'],
 ];
-// Ids match the data-reading values styled in renderer/magazine.css.
-export const READING_CHOICES: readonly Choice[] = [['newspaper', 'Newspaper'], ['editorial', 'Magazine · Editorial'], ['lifestyle', 'Magazine · Lifestyle']];
+// Ids match the data-reading values styled in renderer/magazine.css and print.css; order sets ⌘⇧1–4.
+export const READING_CHOICES: readonly Choice[] = [
+  ['newspaper', 'Newspaper'], ['editorial', 'Magazine · Editorial'], ['lifestyle', 'Magazine · Lifestyle'], ['print', 'Magazine · Print'],
+];
+export const isReadingChoice = (id: string): boolean => READING_CHOICES.some(([choice]) => choice === id);
 
 export interface MenuOptions {
   currentTheme: string;
