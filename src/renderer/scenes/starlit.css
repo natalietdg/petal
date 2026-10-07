@@ -1,10 +1,14 @@
-/* Starlit Window: a clear night through a four-pane window. Colours are fixed: they are places, not theme chrome. */
+/* Starlit Window: a planetarium sky through a four-pane window. Colours are fixed: they are places, not theme chrome. */
 /* Sky, navy up top, a little lighter toward the sill. */
 .sc-st-sky1 { fill: #0D0B2C; } .sc-st-sky2 { fill: #17123F; } .sc-st-sky3 { fill: #241A55; }
-/* Milky way: haze, body, bright core. */
-.sc-st-band { fill: #2C2468; } .sc-st-band-core { fill: #4A3D92; } .sc-st-band-hi { fill: #8C7DD0; }
-/* Full moon and its halo. */
-.sc-st-moon { fill: #FFF6D6; } .sc-st-moon-d { fill: #D8BE7E; } .sc-st-moon-c { fill: #E8D5A2; } .sc-st-halo { fill: #2F2A6A; }
+/* Spiral galaxy: white core, warm bulge, pink arms, violet glow. */
+.sc-st-gx-core { fill: #FFFFFF; } .sc-st-gx-bulge { fill: #FFE6C2; } .sc-st-gx-arm-hi { fill: #FFB3DE; }
+.sc-st-gx-arm { fill: #D46AB8; } .sc-st-gx-glow { fill: #4B2F8A; }
+/* Nebula band: pink spine, magenta body, teal and plum edges. */
+.sc-st-neb-hi { fill: #F7A8D8; } .sc-st-neb { fill: #B04A9E; } .sc-st-neb-plum { fill: #5E2A7E; } .sc-st-neb-haze { fill: #33205E; }
+.sc-st-neb-teal { fill: #2F9AA8; } .sc-st-neb-teal-d { fill: #1D4F70; }
+/* Constellation lines. */
+.sc-st-line { fill: #4F5AA6; }
 /* Stars in three brightnesses. */
 .sc-st-star { fill: #FFFFFF; } .sc-st-star-mid { fill: #C9C0FF; } .sc-st-star-dim { fill: #6C62B4; }
 /* Painted window frame and sill. */
@@ -28,6 +32,11 @@
 #cat .scene-starlit :is(.sc-st-tw2, .sc-st-spark2) { animation: st-twinkle 3s steps(1) -1s infinite; }
 #cat .scene-starlit :is(.sc-st-tw3, .sc-st-spark3) { animation: st-twinkle 3s steps(1) -2s infinite; }
 @keyframes st-twinkle { 0%, 60% { opacity: 1; } 61%, 85% { opacity: 0.2; } }
+/* The nebula's pink spine and teal edge shimmer slowly. */
+#cat .scene-starlit .sc-st-neb-hi { animation: st-shimmer-pink 8s ease-in-out infinite; }
+#cat .scene-starlit .sc-st-neb-teal { animation: st-shimmer-teal 8s ease-in-out -4s infinite; }
+@keyframes st-shimmer-pink { 50% { fill: #FFD0EC; } }
+@keyframes st-shimmer-teal { 50% { fill: #4FC2C8; } }
 /* A shooting star streaks down-left across the top-right pane, then waits for the next pass. */
 #cat .scene-starlit :is(.sc-st-shoot, .sc-st-trail, .sc-st-trail-faint) { animation: st-shooting-star 8s steps(1) infinite; }
 @keyframes st-shooting-star {
