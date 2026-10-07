@@ -14,6 +14,7 @@ import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
 import { pasteCheck } from './snapshot-paste';
+import { tarotCheck } from './snapshot-tarot';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -351,6 +352,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await views.historyScreens(kit);
   await views.customizeScreens(kit);
   await views.overlaysCheck(kit);
+  await tarotCheck(kit, win);
   await views.errorRepliesCheck(kit);
   await reposCheck(kit, { win, ...tabs });
   await repoLineCheck(kit, { feed }); // before the print steps, which replace the fixture's replies

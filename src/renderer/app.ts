@@ -16,6 +16,7 @@ import * as customize from './customize';
 import * as overlays from './overlays';
 import * as promptDock from './prompt-dock';
 import * as repos from './repos';
+import * as tarotReading from './tarot-reading';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -23,7 +24,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -69,11 +70,12 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel or the open overlay instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay or the tarot reading instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
     else if (overlays.current()) overlays.hideCurrent();
+    else if (tarotReading.isOpen()) tarotReading.close();
     else return true;
     return false;
   });

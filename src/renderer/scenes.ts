@@ -11,11 +11,12 @@ import planetarium from './scenes/planetarium';
 import rug from './scenes/rug';
 import starlit from './scenes/starlit';
 import study from './scenes/study';
+import tarot from './scenes/tarot';
 import winter from './scenes/winter';
 
 // Each scene paints a cell with a class letter (see .sc-* in cat.css), or null for empty.
 // `moving` cells go in their own group so a scene can animate just those.
-const SCENES: Record<string, Scene> = { cherry, beach, night, starlit, planetarium, rug, winter, bakery, howl, study, midcentury };
+const SCENES: Record<string, Scene> = { cherry, beach, night, starlit, planetarium, rug, winter, bakery, howl, study, midcentury, tarot };
 
 const rect = (x: number, y: number, cell: CellClass): string => `<rect x="${x}" y="${y}" width="1" height="1" class="sc-${cell}"/>`;
 
@@ -39,9 +40,11 @@ export function svg(id: string): SceneLayers {
   }
   const moving = scene.moving.map(([x, y, cell]) => rect(x, y, cell)).join('');
   const crab = (scene.crab ?? []).map(([x, y, cell]) => rect(x, y, cell)).join('');
+  const variants = Object.entries(scene.variants ?? {})
+    .map(([key, cells]) => `<g class="scene-variant" data-variant="${key}">${cells.map(([x, y, cell]) => rect(x, y, cell)).join('')}</g>`).join('');
   const open = (layer: string) => `<svg class="scene scene-${id} scene-${layer}" viewBox="0 0 ${width} ${height}" width="${width * 3}" height="${height * 3}" shape-rendering="crispEdges" aria-hidden="true">`;
   return {
-    back: `${open('back')}${back.join('')}<g class="scene-moving">${moving}</g>${crab ? `<g class="scene-crab">${crab}</g>` : ''}</svg>`,
+    back: `${open('back')}${back.join('')}${variants}<g class="scene-moving">${moving}</g>${crab ? `<g class="scene-crab">${crab}</g>` : ''}</svg>`,
     front: front.length ? `${open('front')}${front.join('')}</svg>` : '',
   };
 }

@@ -35,6 +35,10 @@ describe('scene registry', () => {
     expect(ids.indexOf('planetarium')).toBe(ids.indexOf('starlit') + 1);
   });
 
+  it('labels Tarot Room and lists it last', () => {
+    expect(SCENE_CHOICES.at(-1)).toEqual(['tarot', 'Tarot Room']);
+  });
+
   it.each(SCENE_IDS)('%s renders a non-empty SVG', (id) => {
     const { back } = svg(id);
     expect(back).toContain(`scene-${id}`);
