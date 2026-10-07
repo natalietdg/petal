@@ -64,6 +64,7 @@
   font: 14px var(--ui-font);
 }
 .cz-number { width: 7em; justify-self: start; }
+.cz-birthday { display: flex; align-items: center; gap: 10px; justify-self: start; }
 select.cz-input { justify-self: start; }
 .cz-command { font-family: var(--mono-font); font-size: 13px; }
 .cz-textarea {

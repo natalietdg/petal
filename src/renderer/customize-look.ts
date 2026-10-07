@@ -1,7 +1,9 @@
-// Customize sections Look (chips that call the same apply* functions as the menus) and Formatting.
+// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting.
 import * as markdown from './markdown';
+import * as tarotReading from './tarot-reading';
 import { el } from './dom';
-import { actionButton, card, note, page } from './customize-kit';
+import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
+import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 
 function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void): HTMLDivElement {
@@ -20,6 +22,22 @@ function chipGroup(label: string, choices: readonly Choice[], current: string, o
   return card(label, group);
 }
 
+// Saved in config.json only; the Tarot Room popover picks it up at once.
+function birthdayCard(): HTMLDivElement {
+  const input = el('input', 'cz-input cz-date');
+  Object.assign(input, { type: 'date', min: '1900-01-01', max: new Date().toLocaleDateString('en-CA'), value: page.state.config.tarot.birthdate });
+  const show = (config: Config): void => {
+    input.value = config.tarot.birthdate;
+    tarotReading.setBirthdate(config.tarot.birthdate);
+  };
+  // A half-typed date reads as '', so only a whole date saves; Clear is the way to remove it.
+  input.addEventListener('change', async () => { if (input.value) show(await save({ tarot: { birthdate: input.value } })); });
+  const clear = actionButton('Clear', async () => show(keepConfig(await window.pastel.config.reset('tarot.birthdate'), 'clear the birthday')), 'flow-button cz-birthday-clear');
+  const control = el('span', 'cz-birthday');
+  control.append(input, clear);
+  return card('Birthday', field('Date of birth', control, "For your Tarot Room reading. Kept in Petal's settings on this Mac, never sent anywhere."));
+}
+
 export function renderLook(): HTMLElement[] {
   const { choices, look } = page.state;
   const { look: set } = window.pastel;
@@ -28,6 +46,7 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
+    birthdayCard(),
     note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
   ];
 }

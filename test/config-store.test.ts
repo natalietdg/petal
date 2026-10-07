@@ -18,10 +18,11 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has four sections with the documented defaults', () => {
+  it('has five sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot']);
     expect(d.sessions).toEqual({ maxOpen: 8 });
+    expect(d.tarot).toEqual({ birthdate: '' });
     expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
     expect(d.organizer.prompt).toMatch(/^You label a Claude Code work session/);
     expect(d.flowTitles.prompt).toMatch(/^You turn a work log into STATE CHANGES/);
@@ -120,7 +121,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -197,5 +198,26 @@ describe('config-store sessions.maxOpen', () => {
     expect(config.load().sessions.maxOpen).toBe(8);
     config.save({ sessions: { maxOpen: 20 } });
     expect(config.reset('sessions.maxOpen').sessions.maxOpen).toBe(8);
+  });
+});
+
+describe('config-store tarot.birthdate', () => {
+  it('saves a real calendar date and clears with reset', () => {
+    expect(config.save({ tarot: { birthdate: '1995-03-14' } }).tarot.birthdate).toBe('1995-03-14');
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).tarot).toEqual({ birthdate: '1995-03-14' });
+    expect(config.reset('tarot.birthdate').tarot.birthdate).toBe('');
+  });
+
+  it('rejects anything but a real date and keeps the saved one; an empty string clears', () => {
+    config.save({ tarot: { birthdate: '2000-02-29' } });
+    for (const bad of ['2001-02-29', '1995-13-01', '1995-3-14', '14/03/1995', 'soon', 19950314, null, true]) {
+      expect(config.save({ tarot: { birthdate: bad } } as never).tarot.birthdate).toBe('2000-02-29');
+    }
+    expect(config.save({ tarot: { birthdate: '' } }).tarot.birthdate).toBe('');
+  });
+
+  it('an older config.json without the section loads with no birthday', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ sessions: { maxOpen: 4 } }));
+    expect(config.load().tarot).toEqual({ birthdate: '' });
   });
 });

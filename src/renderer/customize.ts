@@ -13,7 +13,7 @@ type SectionId = 'look' | 'formatting' | 'sessions' | 'organizer' | 'flowTitles'
 const button = byId('customize-button');
 
 const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
-  { id: 'look', name: 'Look', summary: 'Theme, reading style, pet and scene. Changes apply at once and tick the same menu items.' },
+  { id: 'look', name: 'Look', summary: 'Theme, reading style, pet, scene and your tarot birthday. Changes apply at once and tick the same menu items.' },
   { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style.' },
   { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
   { id: 'organizer', name: 'Organizer', summary: 'The background agent that titles, files and tags your recent sessions for History.' },

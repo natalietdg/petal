@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { svg } from '../src/renderer/scenes';
 import { everyDay, localDayNumber } from '../src/renderer/scenes/daily';
-import { DECK, cardFor } from '../src/renderer/scenes/tarot-deck';
+import { DECK, birthCard, birthCardNumber, cardFor } from '../src/renderer/scenes/tarot-deck';
 
 const day = (y: number, m: number, d: number, h = 12, min = 0): Date => new Date(y, m - 1, d, h, min);
 const nextDay = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 12);
@@ -75,6 +75,55 @@ describe('tarot card of the day', () => {
         }
       }
     });
+  });
+});
+
+describe('tarot birth card', () => {
+  it('sums every digit of the birthdate and reduces until 22 or less', () => {
+    expect(birthCardNumber('1995-03-14')).toBe(5); // 32 -> 3+2
+    expect(birthCard('1995-03-14')?.name).toBe('The Hierophant');
+    expect(birthCardNumber('1990-12-25')).toBe(11); // 29 -> 2+9
+    expect(birthCardNumber('2000-01-01')).toBe(4);
+    expect(birthCardNumber('1999-09-29')).toBe(12); // 48 -> 4+8
+  });
+
+  it('keeps 19, 20 and 21, and turns 22 into The Fool', () => {
+    expect(birthCardNumber('2000-09-08')).toBe(19);
+    expect(birthCardNumber('2000-09-09')).toBe(20);
+    expect(birthCardNumber('2001-09-09')).toBe(21);
+    expect(birthCardNumber('2001-09-19')).toBe(0);
+    expect(birthCard('2001-09-19')?.name).toBe('The Fool');
+  });
+
+  it('has no card without a whole YYYY-MM-DD date', () => {
+    for (const bad of ['', '1995-3-14', '14/03/1995', 'soon']) expect(birthCard(bad)).toBeNull();
+  });
+});
+
+describe('tarot personal card of the day', () => {
+  const birth = birthCardNumber('1995-03-14') ?? 0;
+
+  it('is the shared card shifted by the birth card, and unchanged without one', () => {
+    const date = day(2026, 10, 7);
+    expect(cardFor(date, birth).number).toBe((cardFor(date).number + birth) % 22);
+    expect(cardFor(date, birth).name).toBe('The Fool'); // The Star (17) + The Hierophant (5) wraps to 0
+  });
+
+  it('stays the same all day and changes at local midnight', () => {
+    const today = cardFor(day(2026, 10, 7, 0, 0), birth);
+    expect(cardFor(new Date(2026, 9, 7, 23, 59, 59, 999), birth)).toBe(today);
+    expect(cardFor(day(2026, 10, 8, 0, 0), birth)).not.toBe(today);
+  });
+
+  it('never repeats on consecutive days over 400 days for every birth card', () => {
+    for (let n = 0; n < 22; n += 1) {
+      let date = day(2026, 1, 1);
+      for (let i = 0; i < 400; i += 1) {
+        const next = nextDay(date);
+        expect(cardFor(next, n).name).not.toBe(cardFor(date, n).name);
+        date = next;
+      }
+    }
   });
 });
 

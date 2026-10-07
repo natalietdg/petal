@@ -89,4 +89,6 @@
 .tarot-popover h2 { margin: 2px 0 6px; font-size: 16px; }
 .tarot-popover p { margin: 0; }
 .tarot-popover .tarot-date { margin-top: 8px; font-size: 11px; opacity: 0.7; }
+.tarot-popover .tarot-birth { margin-top: 8px; font-size: 12px; font-style: italic; }
+.tarot-popover .tarot-birth + .tarot-birth { margin-top: 2px; }
 .tarot-tip[hidden], .tarot-popover[hidden] { display: none; }

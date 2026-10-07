@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -16,6 +16,8 @@ export interface Config {
   flowTitles: { prompt: string };
   responseHook: { command: string; notify: boolean };
   sessions: { maxOpen: number };
+  // YYYY-MM-DD or '' when unset; never leaves this file.
+  tarot: { birthdate: string };
 }
 
 type Section = keyof Config;
@@ -41,6 +43,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   flowTitles: { prompt: FLOW_TITLES_PROMPT },
   responseHook: { command: '', notify: false },
   sessions: { maxOpen: 8 },
+  tarot: { birthdate: '' },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -60,6 +63,14 @@ const promptOr = (value: unknown, saved: string, fallback: string): string => {
   return value.trim() ? value.replace(/\s+$/, '') : fallback;
 };
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
+// '' clears it; anything but a real calendar date keeps the saved one.
+const birthdateOr = (value: unknown, fallback: string): string => {
+  if (value === '') return '';
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+  const [y, m, d] = value.split('-').map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? value : fallback;
+};
 
 // Numbers are clamped; anything unusable falls back to base (the saved value), an empty prompt to the default.
 function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
@@ -69,6 +80,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const f = raw.flowTitles ?? {};
   const h = raw.responseHook ?? {};
   const s = raw.sessions ?? {};
+  const t = raw.tarot ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -83,6 +95,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       notify: boolOr(h.notify, b.responseHook.notify),
     },
     sessions: { maxOpen: intIn(s.maxOpen, MAX_OPEN.min, MAX_OPEN.max, b.sessions.maxOpen) },
+    tarot: { birthdate: birthdateOr(t.birthdate, b.tarot.birthdate) },
   };
 }
 

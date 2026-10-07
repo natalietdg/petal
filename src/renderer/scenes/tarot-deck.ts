@@ -1,4 +1,4 @@
-// The 22 Major Arcana for the Tarot Room, each with an original reading, and the rule for the card of the day.
+// The 22 Major Arcana for the Tarot Room, each with an original reading, the card of the day and the birth card.
 import { localDayNumber } from './daily';
 
 export interface TarotCard {
@@ -41,6 +41,24 @@ const STEP = 7;
 const OFFSET = 20;
 
 // Wrapped twice so days before 1970 still land on a card.
-export const cardForDay = (day: number): TarotCard => DECK[(((day * STEP + OFFSET) % DECK.length) + DECK.length) % DECK.length];
+const wrap = (n: number): number => ((n % DECK.length) + DECK.length) % DECK.length;
 
-export const cardFor = (date: Date): TarotCard => cardForDay(localDayNumber(date));
+// birthNumber shifts the whole sequence, so a personal card still changes every day.
+export const cardForDay = (day: number, birthNumber = 0): TarotCard => DECK[wrap(day * STEP + OFFSET + birthNumber)];
+
+export const cardFor = (date: Date, birthNumber = 0): TarotCard => cardForDay(localDayNumber(date), birthNumber);
+
+const digitSum = (n: number): number => [...String(n)].reduce((sum, digit) => sum + Number(digit), 0);
+
+// Tarot numerology: add every digit of YYYY-MM-DD, keep adding digits until 22 or less; 22 is The Fool.
+export function birthCardNumber(birthdate: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) return null;
+  let n = digitSum(Number(birthdate.replaceAll('-', '')));
+  while (n > 22) n = digitSum(n);
+  return n % 22;
+}
+
+export const birthCard = (birthdate: string): TarotCard | null => {
+  const n = birthCardNumber(birthdate);
+  return n === null ? null : DECK[n];
+};

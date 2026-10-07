@@ -1,9 +1,11 @@
 // Tarot Room: the scene renders with today's card face, hover shows its tip, click opens the reading, Esc and an outside click close it.
+// Then a birthday set in Customize shifts the day's card and adds the birth card; Clear goes back.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { cardFor } from '../renderer/scenes/tarot-deck';
+import { DECK, birthCardNumber, cardFor } from '../renderer/scenes/tarot-deck';
+import { userDataDir } from '../main/snapshot-mode';
 
 const STATE = `(() => {
   const root = document.documentElement;
@@ -30,9 +32,17 @@ const click = `${SCENE_RECT}.dispatchEvent(new MouseEvent('click', { bubbles: tr
 const escape = "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))";
 const clickOutside = "document.getElementById('reader').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
 
+// The unfocused snapshot window hands back the previous frame once; take and drop one capture first.
+async function settle(kit: Kit, win: BrowserWindow): Promise<void> {
+  win.webContents.invalidate();
+  await kit.wait(400);
+  await win.webContents.capturePage();
+  await kit.wait(400);
+}
+
 // The cat's box plus whatever tarot tip or popover is open above it.
 async function captureRoom(kit: Kit, win: BrowserWindow, name: string): Promise<void> {
-  await kit.wait(400);
+  await settle(kit, win);
   const box = await kit.js(`(() => {
     const rects = ['#cat', '.tarot-tip:not([hidden])', '.tarot-popover:not([hidden])'].map((s) => document.querySelector(s)).filter(Boolean).map((el) => el.getBoundingClientRect());
     const x = Math.min(...rects.map((r) => r.left)) - 20, y = Math.min(...rects.map((r) => r.top)) - 20;
@@ -41,6 +51,61 @@ async function captureRoom(kit: Kit, win: BrowserWindow, name: string): Promise<
   const file = path.join(kit.outDir, `snapshot-${name}.png`);
   fs.writeFileSync(file, (await win.webContents.capturePage(box)).toPNG());
   kit.log(`captured ${name}: ${file}`);
+}
+
+const BIRTHDATE = '1995-03-14';
+const savedBirthdate = (): unknown => {
+  try {
+    return (JSON.parse(fs.readFileSync(path.join(userDataDir(), 'config.json'), 'utf8')) as { tarot?: { birthdate?: unknown } }).tarot?.birthdate;
+  } catch {
+    return undefined;
+  }
+};
+
+// Sets (or with '' clears) the birthday through the Customize Look card, the way she would, then closes Customize.
+async function birthdayViaCustomize(kit: Kit, win: BrowserWindow, value: string): Promise<boolean> {
+  const { js, waitFor } = kit;
+  await js("PastelTerm.customize.open('look')");
+  await waitFor(() => js("Boolean(document.querySelector('#customize-body .cz-date'))"), 5000);
+  if (value) await js(`(() => { const input = document.querySelector('#customize-body .cz-date'); input.value = ${JSON.stringify(value)}; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  else await js("document.querySelector('#customize-body .cz-birthday-clear').click()");
+  const saved = await waitFor(() => savedBirthdate() === value, 3000);
+  await js("document.querySelector('#customize-body .cz-birthday').closest('.cz-card').scrollIntoView({ block: 'center' })");
+  await settle(kit, win);
+  const box = await js("(() => { const r = document.querySelector('#customize-body .cz-birthday').closest('.cz-card').getBoundingClientRect(); return { x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()");
+  const file = path.join(kit.outDir, `snapshot-customize-birthday-${value ? 'set' : 'clear'}.png`);
+  fs.writeFileSync(file, (await win.webContents.capturePage(box)).toPNG());
+  kit.log(`captured customize-birthday: ${file}`);
+  await js('PastelTerm.customize.close()');
+  return Boolean(saved);
+}
+
+async function birthdayCheck(kit: Kit, win: BrowserWindow, check: (ok: unknown, what: string) => void): Promise<void> {
+  const { js, wait } = kit;
+  const birth = DECK[birthCardNumber(BIRTHDATE) ?? 0];
+  const personal = cardFor(new Date(), birth.number);
+  const today = cardFor(new Date());
+
+  check(await birthdayViaCustomize(kit, win, BIRTHDATE), `Customize saves the birthday to config.json: ${JSON.stringify(savedBirthdate())}`);
+  await js(click);
+  await wait(200);
+  const set = await js(STATE);
+  check(set.popoverShown && set.popover.includes(`Your birth card: ${birth.numeral} ${birth.name}`) && set.popover.includes(personal.name) && set.popover.includes(personal.reading) && set.trCard === String(personal.number),
+    `with a birthday the reading shows the personal card (${personal.numeral} ${personal.name}) and the birth card (${birth.numeral} ${birth.name}): ${JSON.stringify(set.popover)} data-tr-card=${set.trCard}`);
+  check(!/[–—]/.test(set.popover), 'birthday lines have no em dashes');
+  await captureRoom(kit, win, 'tarot-popover-birthday-paleSky');
+  await js(escape);
+  await wait(200);
+
+  check(await birthdayViaCustomize(kit, win, ''), `Clear empties the saved birthday: ${JSON.stringify(savedBirthdate())}`);
+  await js(click);
+  await wait(200);
+  const cleared = await js(STATE);
+  check(cleared.popoverShown && !cleared.popover.includes('birth card') && cleared.popover.includes(today.name) && cleared.trCard === String(today.number),
+    `after Clear the reading is the shared card again (${today.numeral} ${today.name}): ${JSON.stringify(cleared.popover)}`);
+  await captureRoom(kit, win, 'tarot-popover-cleared-paleSky');
+  await js(escape);
+  await wait(200);
 }
 
 export async function tarotCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -93,6 +158,8 @@ export async function tarotCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await js(clickOutside);
   await wait(200);
   check(reopened && !(await js(STATE)).popoverShown, 'a click outside closes the reading');
+
+  await birthdayCheck(kit, win, check);
 
   await js(`PastelTerm.cat.setScene(${JSON.stringify(before ?? 'none')})`);
 }
