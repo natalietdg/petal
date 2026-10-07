@@ -3,11 +3,19 @@
 import * as tabs from './tabs';
 import * as repos from './repos';
 import { parseRepoCommand } from '../shared/repo-match';
-import { byId, focusTerminal, isIpcError } from './dom';
+import { byId, el, focusTerminal, isIpcError } from './dom';
+import { acceptFileDrags, droppedPaths } from './terminal';
+import { quotePaths } from '../shared/quote-path';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
 const MAX_ROWS = 8;
+// Pasted images waiting to go with the next send; each is a PNG main saved.
+const attachments: { file: string; thumb: string }[] = [];
+const chips = el('div');
+chips.id = 'composer-attachments';
+chips.hidden = true;
+form.prepend(chips);
 // Bracketed paste keeps multi-line replies as one message instead of sending at each newline.
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
@@ -16,6 +24,8 @@ function fit(): void {
   input.style.height = 'auto';
   const line = parseFloat(getComputedStyle(input).lineHeight);
   input.style.height = `${Math.min(input.scrollHeight, line * MAX_ROWS + 20)}px`;
+  // Chips start where the centered text box starts.
+  chips.style.paddingLeft = `${Math.max(0, input.offsetLeft - chips.offsetLeft)}px`;
   document.documentElement.style.setProperty('--composer-height', `${form.offsetHeight}px`);
 }
 
@@ -25,13 +35,58 @@ const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1
 
 const clear = (): void => {
   input.value = '';
+  attachments.length = 0;
+  renderChips();
   fit();
 };
+
+function renderChips(): void {
+  chips.replaceChildren(...attachments.map(({ thumb }, i) => {
+    const chip = el('span', 'composer-chip');
+    const image = el('img');
+    image.src = thumb;
+    image.alt = `Pasted image ${i + 1}`;
+    const remove = el('button', 'composer-chip-remove', '×');
+    remove.type = 'button';
+    remove.title = 'Remove image';
+    remove.setAttribute('aria-label', `Remove pasted image ${i + 1}`);
+    remove.addEventListener('click', () => { attachments.splice(i, 1); renderChips(); input.focus(); });
+    chip.append(image, remove);
+    return chip;
+  }));
+  chips.hidden = attachments.length === 0;
+  fit();
+}
+
+const dataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(file);
+});
+
+// Main saves the PNG; the chip shows a thumbnail and the path goes out with the message.
+async function attach(image: File): Promise<void> {
+  const saved = await window.pastel.savePastedImage(new Uint8Array(await image.arrayBuffer()));
+  if (isIpcError(saved)) {
+    console.warn('[petal] image paste failed:', saved.error);
+    return;
+  }
+  attachments.push({ file: saved.file, thumb: await dataUrl(image) });
+  renderChips();
+}
+
+// Inserts at the cursor, as Terminal types a dropped path.
+function insertAtCursor(text: string): void {
+  input.setRangeText(text, input.selectionStart, input.selectionEnd, 'end');
+  fit();
+}
 
 const refreshReader = (tabId: string): void => { window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: tabId })); };
 
 async function send(): Promise<void> {
-  const text = stripControls(input.value).trim();
+  // Claude turns an image path in a pasted message into [Image #n].
+  const text = [stripControls(input.value).trim(), quotePaths(attachments.map((a) => a.file))].filter(Boolean).join(' ');
   const tab = tabs.active();
   if (!text || !tab) return;
   if (tab.update?.state === 'live') {
@@ -57,6 +112,20 @@ async function send(): Promise<void> {
 
 form.addEventListener('submit', (event) => { event.preventDefault(); void send(); });
 input.addEventListener('input', fit);
+input.addEventListener('paste', (event) => {
+  const images = [...(event.clipboardData?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+  if (!images.length || event.clipboardData?.getData('text/plain')) return;
+  event.preventDefault();
+  images.forEach((image) => void attach(image));
+});
+acceptFileDrags(form);
+form.addEventListener('drop', (event) => {
+  const paths = droppedPaths(event.dataTransfer);
+  if (!paths.length) return;
+  event.preventDefault();
+  input.focus();
+  insertAtCursor(`${quotePaths(paths)} `);
+});
 input.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();

@@ -28,6 +28,9 @@ export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0 };
 // Snapshot runs record the keys a prompt answer would type instead of sending them to the fixture tab's shell.
 export const promptWrites: string[][] = [];
 
+// Snapshot runs also record what the terminal typed, so the harness can see a pasted image's Ctrl+V.
+export const ptyWrites: { tabId: string; data: string }[] = [];
+
 // Snapshot runs record Open Repo's `cd` instead of typing it, and open no tab for it.
 export const repoWrites: { tabId: string; command: string; newTab: boolean }[] = [];
 

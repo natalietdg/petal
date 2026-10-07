@@ -11,6 +11,7 @@ import { promptsCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
+import { pasteCheck } from './snapshot-paste';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -339,6 +340,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
   await views.composerCheck(kit, { win, ...tabs });
+  await pasteCheck(kit, { win, ...tabs });
   await promptsCheck(kit, { win, ...tabs });
   await views.sessionsCloseCheck(kit);
   await views.sessionsAgentsCheck(kit);
