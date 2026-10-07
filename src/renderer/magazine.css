@@ -29,7 +29,8 @@
 
 
 /* ---------- Editorial: a printed feature. Light serif display, Part openers, a margin rail ---------- */
-[data-reading="editorial"] .reader-column { max-width: 66ch; padding: 52px 56px 140px; counter-reset: part; }
+[data-reading="editorial"] { --reading-measure: 728px; } /* 66ch of 20px Newsreader */
+[data-reading="editorial"] .reader-column { padding-top: 52px; padding-bottom: 140px; counter-reset: part; }
 [data-reading="editorial"] .status {
   display: flex;
   align-items: center;
@@ -126,7 +127,7 @@
 /* Wide window: pull quotes and sidebars move into a margin rail beside the text. */
 @media (min-width: 1200px) {
   /* Reserve the rail only when the newest reply has something to put in it. */
-  [data-reading="editorial"] .reader-column:has(#latest .rail) { max-width: 1060px; padding-right: calc(56px + 16em); }
+  [data-reading="editorial"]:has(#latest .rail) :is(#reader, #composer) { --reading-measure: 1060px; --reading-pad-end: 376px; } /* 56px + 16em of 20px */
   /* The rail hangs in the right padding beside the section's text; the row grows to fit it. */
   [data-reading="editorial"] .story-section:has(> .rail) {
     display: grid;
@@ -240,7 +241,7 @@
 
 
 /* ---------- Lifestyle, structural: colour-block hero and section cards ---------- */
-[data-reading="lifestyle"] .reader-column { max-width: 80ch; }
+[data-reading="lifestyle"] { --reading-measure: 960px; } /* 80ch of 18.5px Atkinson */
 [data-reading="lifestyle"] .story-head {
   background: var(--why-wash);
   border-radius: 28px;
