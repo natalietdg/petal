@@ -7,6 +7,7 @@ import cherry from './scenes/cherry';
 import howl from './scenes/howl';
 import midcentury from './scenes/midcentury';
 import night from './scenes/night';
+import planetarium from './scenes/planetarium';
 import rug from './scenes/rug';
 import starlit from './scenes/starlit';
 import study from './scenes/study';
@@ -14,7 +15,7 @@ import winter from './scenes/winter';
 
 // Each scene paints a cell with a class letter (see .sc-* in cat.css), or null for empty.
 // `moving` cells go in their own group so a scene can animate just those.
-const SCENES: Record<string, Scene> = { cherry, beach, night, starlit, rug, winter, bakery, howl, study, midcentury };
+const SCENES: Record<string, Scene> = { cherry, beach, night, starlit, planetarium, rug, winter, bakery, howl, study, midcentury };
 
 const rect = (x: number, y: number, cell: CellClass): string => `<rect x="${x}" y="${y}" width="1" height="1" class="sc-${cell}"/>`;
 

@@ -27,6 +27,7 @@ import './scenes/study.css';
 import './scenes/midcentury.css';
 import './scenes/night-beach.css';
 import './scenes/starlit.css';
+import './scenes/planetarium.css';
 import './flow.css';
 import './history.css';
 import './composer.css';

@@ -9,8 +9,8 @@ export const CAT_CHOICES: readonly Choice[] = [['mika', 'Mika'], ['miki', 'Miki'
 // Ids match SCENES in renderer/scenes.js; 'none' shows the cat alone.
 export const SCENE_CHOICES: readonly Choice[] = [
   ['none', 'No Scene'], ['cherry', 'Sakura Picnic'], ['beach', 'Seaside Afternoon'], ['night', 'City Lights'], ['starlit', 'Starlit Window'],
-  ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['bakery', 'Corner Bakery'], ['howl', "Wizard's Loft"], ['study', "Wizard's Study"],
-  ['midcentury', 'Vinyl Lounge'],
+  ['planetarium', 'Planetarium'], ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['bakery', 'Corner Bakery'], ['howl', "Wizard's Loft"],
+  ['study', "Wizard's Study"], ['midcentury', 'Vinyl Lounge'],
 ];
 // Ids match the data-reading values styled in renderer/magazine.css and print.css; order sets ⌥⌘1–4.
 export const READING_CHOICES: readonly Choice[] = [

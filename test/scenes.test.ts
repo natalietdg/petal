@@ -27,6 +27,13 @@ describe('scene registry', () => {
     expect(ids.indexOf('starlit')).toBe(ids.indexOf('night') + 1);
   });
 
+  it('labels Planetarium and places it right after Starlit Window', () => {
+    const labels = Object.fromEntries(SCENE_CHOICES);
+    expect(labels.planetarium).toBe('Planetarium');
+    const ids = SCENE_CHOICES.map(([id]) => id);
+    expect(ids.indexOf('planetarium')).toBe(ids.indexOf('starlit') + 1);
+  });
+
   it.each(SCENE_IDS)('%s renders a non-empty SVG', (id) => {
     const { back } = svg(id);
     expect(back).toContain(`scene-${id}`);
