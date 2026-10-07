@@ -1,0 +1,250 @@
+/* ---------- Print: a long-read essay magazine. Warm paper, black ink, bold book serif, letterspaced mono labels ----------
+   Source Serif 4 stands in for the book serif, IBM Plex Mono Light for the grotesque mono (both OFL, bundled).
+   :is(#latest, .prose) carries an id's weight, so these beat reader.css and magazine.css's shared rules. */
+
+/* Tokens. Night keeps its own colours; the light themes print on warm paper with black ink. */
+[data-reading="print"] :is(#reader, .cz-preview) {
+  --print-ink: var(--reader-fg);
+  --print-tint: var(--code-bg);
+  --print-accent: var(--highlight);
+  --print-accent-ink: var(--highlight-ink);
+  --print-mono: "IBM Plex Mono", var(--mono-font);
+}
+[data-reading="print"][data-theme="light"] :is(#reader, .cz-preview) {
+  --reader-bg: #FFF7F4;
+  --reader-fg: #141414;
+  --muted: #59514D;
+  --link: #141414;
+  --rule: #D8CBC5;
+  --code-bg: #F7EBE5;
+  --print-ink: #141414;
+  --print-tint: #F9EEE9;
+  --print-accent: #EED27E;
+  --print-accent-ink: #141414;
+}
+[data-reading="print"] .cz-preview { background: var(--reader-bg); }
+
+[data-reading="print"] .reader-column {
+  --body-font: "Source Serif 4 Variable", "Newsreader Variable", Georgia, serif;
+  --display-font: "Source Serif 4 Variable", "Newsreader Variable", Georgia, serif;
+  max-width: 30em; /* content box: about 65 characters a line */
+  padding: 44px 56px 150px;
+  font-size: 19px;
+  line-height: 1.55;
+  font-variant-numeric: proportional-nums;
+}
+
+/* Kicker: letterspaced mono over a full-width ink rule, like the magazine's top band. */
+[data-reading="print"] .status {
+  margin: 0 0 2.2em;
+  padding-bottom: 0.9em;
+  border-bottom: 1px solid var(--print-ink);
+  font-family: var(--print-mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  color: var(--print-ink);
+}
+
+/* ---- Story head: byline over a short rule, bold headline, full rule, then a big plain dek. ---- */
+[data-reading="print"] .story-head { margin: 0 0 2.2em; }
+[data-reading="print"] .story-head::before {
+  content: "Words by Claude";
+  display: block;
+  width: 6.2em;
+  margin-bottom: 1.3em;
+  padding-bottom: 0.7em;
+  border-bottom: 1px solid var(--print-ink);
+  white-space: nowrap;
+  font-family: var(--print-mono);
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+}
+[data-reading="print"] :is(#latest, .prose) .headline {
+  font-size: 2.65em;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+  margin: 0 0 0.55em;
+}
+[data-reading="print"] :is(#latest, .prose) .headline strong { font-weight: inherit; }
+[data-reading="print"] :is(#latest, .prose) .headline.headline-long { font-size: 2.1em; }
+[data-reading="print"] :is(#latest, .prose) .headline.headline-very-long { font-size: 1.6em; line-height: 1.2; }
+[data-reading="print"] :is(#latest, .prose) .headline + p {
+  margin: 0;
+  padding: 0.75em 0 0;
+  border-top: 1px solid var(--print-ink);
+  border-bottom: 0;
+  font-size: 1.42em;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+[data-reading="print"] :is(#latest, .prose) .headline + p > strong:first-child {
+  font-variant-caps: normal;
+  letter-spacing: normal;
+  font-weight: 700;
+}
+
+/* The essays open plainly: no drop cap. */
+[data-reading="print"] :is(#latest, .prose) .lede::first-letter {
+  float: none;
+  font: inherit;
+  padding: 0;
+}
+[data-reading="print"] .prose p { margin-bottom: 1.05em; hyphens: manual; }
+[data-reading="print"] .prose strong { font-weight: 700; }
+[data-reading="print"] .prose a { color: var(--print-ink); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+
+/* ---- Sections: bold serif heads, no rules; space does the separating. ---- */
+[data-reading="print"] .story-section + .story-section { margin-top: 2em; }
+[data-reading="print"] #latest .story-head + .story-section > h2:first-child { margin-top: 0; }
+[data-reading="print"] .prose h2:not(.back-matter) {
+  border-top: 0;
+  padding-top: 0;
+  margin: 0 0 0.5em;
+  font-size: 1.3em;
+  font-weight: 700;
+  letter-spacing: -0.008em;
+  line-height: 1.25;
+}
+[data-reading="print"] .prose h3 { font-family: var(--display-font); font-size: 1.05em; font-weight: 700; }
+[data-reading="print"] .prose h2 .h-num {
+  font-family: var(--print-mono);
+  font-size: 0.6em;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  vertical-align: 0.2em;
+}
+
+/* Small labels: mono, letterspaced, uppercase. */
+[data-reading="print"] :is(.prose h2.back-matter, .prose th, .older-time, .pill, .prose blockquote.sidebar > p:first-child > strong:first-child) {
+  font-family: var(--print-mono);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---- Pull quote: a large plain serif line between two ink rules. ---- */
+[data-reading="print"] .prose blockquote.pull-quote {
+  margin: 1.6em 0;
+  padding: 0.75em 0;
+  border: 0;
+  border-top: 1px solid var(--print-ink);
+  border-bottom: 1px solid var(--print-ink);
+  font-family: var(--display-font);
+  font-style: normal;
+  font-size: 1.42em;
+  font-weight: 400;
+  line-height: 1.3;
+}
+[data-reading="print"] .prose blockquote.pull-quote p { margin: 0; }
+
+/* ---- Sidebar: a ruled box on a faint tint, like the magazine's inset panels. ---- */
+[data-reading="print"] .prose blockquote.sidebar {
+  margin: 1.6em 0;
+  padding: 1.1em 1.3em 0.6em;
+  border: 1px solid var(--print-ink);
+  background: var(--print-tint);
+  font-size: 0.9em;
+}
+[data-reading="print"] .prose blockquote.sidebar > p:first-child > strong:first-child { font-size: 0.82em; }
+
+/* ---- Callouts: mono labels instead of pills; the two that ask something of her stay boxed and loud. ---- */
+[data-reading="print"] .pill {
+  margin-right: 0.7em;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--print-ink);
+  font-size: 0.7em;
+  vertical-align: 0.1em;
+}
+[data-reading="print"] .callout-watch { border-left: 1px solid var(--print-ink); padding-left: 1em; }
+[data-reading="print"] .callout-decide {
+  border: 1px solid var(--print-ink);
+  border-left: 5px solid var(--print-ink);
+  border-radius: 0;
+  background: var(--print-tint);
+  padding: 0.85em 1.1em;
+}
+[data-reading="print"] .callout-next {
+  border: 1px solid var(--print-ink);
+  border-radius: 0;
+  background: var(--print-accent);
+  color: var(--print-accent-ink);
+  padding: 0.85em 1.1em;
+}
+[data-reading="print"] .callout-next .pill { color: var(--print-accent-ink); }
+
+/* ---- Tables and code: ink rules, square corners. ---- */
+[data-reading="print"] .prose table { border-top: 1px solid var(--print-ink); border-bottom: 1px solid var(--print-ink); }
+[data-reading="print"] .prose th { font-size: 0.72em; border-bottom: 1px solid var(--print-ink); }
+[data-reading="print"] .prose td:first-child { font-weight: 600; }
+[data-reading="print"] .prose pre { border: 1px solid var(--print-ink); border-radius: 0; background: var(--print-tint); }
+[data-reading="print"] .prose code { border-radius: 0; }
+[data-reading="print"] .prose p:has(> em:only-child) { font-family: var(--print-mono); font-size: 0.7em; letter-spacing: 0.04em; }
+[data-reading="print"] .prose hr { border-top-color: var(--print-ink); }
+
+/* ---- Back matter: mono head, smaller serif list. ---- */
+[data-reading="print"] .prose h2.back-matter {
+  margin: 0 0 0.8em;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 0.68em;
+  color: var(--print-ink);
+}
+
+/* End mark: a centred ornament between two rules, closing the newest story before its back matter. */
+[data-reading="print"] #latest .story-section.back::before,
+[data-reading="print"] #latest > .prose:not(:has(> .story-section.back))::after {
+  content: "❦";
+  display: block;
+  margin: 2.6em 0 2.2em;
+  text-align: center;
+  font-size: 1.2em;
+  line-height: 1;
+  background:
+    linear-gradient(var(--print-ink), var(--print-ink)) left center / calc(50% - 1.4em) 1px no-repeat,
+    linear-gradient(var(--print-ink), var(--print-ink)) right center / calc(50% - 1.4em) 1px no-repeat;
+}
+
+/* ---- Her message: a square ruled slip in mono, not a chat bubble. ---- */
+[data-reading="print"] .reader-you {
+  border: 1px solid var(--print-ink);
+  border-radius: 0;
+  background: none;
+  padding: 0.7em 1em;
+  font-family: var(--print-mono);
+  font-size: 0.74em;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+}
+
+/* ---- Earlier turns: ink hairlines, modest heads (reader.css keeps them small). ---- */
+[data-reading="print"] .older-turn { border-top-color: var(--print-ink); }
+[data-reading="print"] .older-time { font-size: 11px; color: var(--print-ink); }
+[data-reading="print"] #reader #older .story-head::before { content: none; }
+[data-reading="print"] #reader #older .headline + p { font-size: 1.1em; padding-top: 0.5em; }
+
+/* Empty reader: the plain message, in the essay serif. */
+[data-reading="print"] .status.empty { font-family: var(--body-font); letter-spacing: normal; }
+
+/* Wide window: pull quotes and sidebars move into a margin rail beside the text. */
+@media (min-width: 1200px) {
+  [data-reading="print"] .reader-column:has(#latest .rail) { padding-right: calc(56px + 18em); }
+  [data-reading="print"] .story-section:has(> .rail) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 0;
+    align-items: start;
+  }
+  [data-reading="print"] .story-section > h2 { grid-column: 1; }
+  [data-reading="print"] .story-section > .section-body { display: block; grid-column: 1; }
+  [data-reading="print"] .story-section > .rail { display: block; grid-column: 2; grid-row: 2; width: 15em; margin-left: 3em; }
+  [data-reading="print"] .rail blockquote { margin: 0 0 1.6em; }
+  [data-reading="print"] .rail blockquote.pull-quote { font-size: 1.2em; margin-top: 0; }
+  [data-reading="print"] .rail blockquote.sidebar { font-size: 0.82em; }
+}
