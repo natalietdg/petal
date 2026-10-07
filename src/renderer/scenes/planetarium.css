@@ -7,31 +7,23 @@
 /* Nebulae: tiny and faint, barely off the sky colour, so they read as distant. */
 .sc-pl-teal-l { fill: #24485E; } .sc-pl-teal { fill: #1C2C54; } .sc-pl-teal-d { fill: #161A48; }
 .sc-pl-pink-l { fill: #46305E; } .sc-pl-pink { fill: #322458; } .sc-pl-pink-d { fill: #281C52; }
-/* The day's planet, low contrast so it reads as background. */
-/* Mercury: grey, cratered. */
-.sc-pl-mercury-limb { fill: #2E2A3E; } .sc-pl-mercury-body { fill: #4A4656; } .sc-pl-mercury-lit { fill: #565260; }
-.sc-pl-mercury-crater { fill: #383446; } .sc-pl-mercury-crater-lit { fill: #625E6A; }
-/* Venus: pale cream cloud bands. */
-.sc-pl-venus-limb { fill: #4A4040; } .sc-pl-venus-body { fill: #96845E; } .sc-pl-venus-lit { fill: #A08E68; }
-.sc-pl-venus-band { fill: #847250; } .sc-pl-venus-haze { fill: #AC9C76; }
-/* Earth: blue oceans, green and brown land, white clouds and ice. */
-.sc-pl-earth-limb { fill: #1A2A5A; } .sc-pl-earth-body { fill: #22427A; } .sc-pl-earth-lit { fill: #284C86; }
-.sc-pl-earth-land { fill: #3A6038; } .sc-pl-earth-desert { fill: #6A5A3A; } .sc-pl-earth-cloud { fill: #7A88AC; } .sc-pl-earth-ice { fill: #96A0BA; }
-/* Mars: rust, dark seas, a south polar cap. */
-.sc-pl-mars-limb { fill: #4A2236; } .sc-pl-mars-body { fill: #66302F; } .sc-pl-mars-lit { fill: #763830; }
-.sc-pl-mars-sea { fill: #55262E; } .sc-pl-mars-cap { fill: #B09A9C; }
-/* Jupiter: cream and tan bands, the Great Red Spot. */
-.sc-pl-jupiter-limb { fill: #48343E; } .sc-pl-jupiter-body { fill: #7A6852; } .sc-pl-jupiter-lit { fill: #86745C; }
-.sc-pl-jupiter-belt { fill: #644C3C; } .sc-pl-jupiter-belt-d { fill: #523C34; } .sc-pl-jupiter-pole { fill: #5A4A44; } .sc-pl-jupiter-spot { fill: #8E4A3A; }
-/* Saturn: pale gold bands and wide rings. */
-.sc-pl-saturn-limb { fill: #4A4038; } .sc-pl-saturn-body { fill: #7C6C4C; } .sc-pl-saturn-lit { fill: #887856; } .sc-pl-saturn-band { fill: #6A5A40; }
-.sc-pl-saturn-ring { fill: #A89870; } .sc-pl-saturn-ring-in { fill: #847658; }
-/* Uranus: pale cyan, faint bands, a thin upright ring. */
-.sc-pl-uranus-limb { fill: #22465A; } .sc-pl-uranus-body { fill: #3C7686; } .sc-pl-uranus-lit { fill: #468290; } .sc-pl-uranus-band { fill: #356C7C; }
-.sc-pl-uranus-ring { fill: #6A8C9E; }
-/* Neptune: deep blue, lighter bands, a dark spot with a bright cloud. */
-.sc-pl-neptune-limb { fill: #1A2458; } .sc-pl-neptune-body { fill: #24397C; } .sc-pl-neptune-lit { fill: #2A4488; }
-.sc-pl-neptune-band { fill: #3A5A9C; } .sc-pl-neptune-belt { fill: #1E2E6A; } .sc-pl-neptune-spot { fill: #131A46; } .sc-pl-neptune-cloud { fill: #6E86C0; }
+/* The day's planet: vivid and lit from the galaxy (rim, lit, body, shade), still behind it. */
+/* Mercury: silvery lavender-grey, cratered. */
+.sc-pl-mercury-limb { fill: #3E3A60; } .sc-pl-mercury-shade { fill: #5E5A86; } .sc-pl-mercury-body { fill: #8E8AB8; } .sc-pl-mercury-lit { fill: #B4B0D8; } .sc-pl-mercury-rim { fill: #DAD6F2; } .sc-pl-mercury-crater { fill: #76729E; } .sc-pl-mercury-crater-lit { fill: #C8C4E6; }
+/* Venus: buttery peach-gold cloud bands. */
+.sc-pl-venus-limb { fill: #6A4458; } .sc-pl-venus-shade { fill: #B07C5C; } .sc-pl-venus-body { fill: #E8B474; } .sc-pl-venus-lit { fill: #F6CE8C; } .sc-pl-venus-rim { fill: #FFE6B4; } .sc-pl-venus-band { fill: #D89E66; } .sc-pl-venus-haze { fill: #FCDCA0; }
+/* Earth: clear ocean blue, fresh green land, white clouds. */
+.sc-pl-earth-limb { fill: #1E2E78; } .sc-pl-earth-shade { fill: #2850A8; } .sc-pl-earth-body { fill: #3A78D8; } .sc-pl-earth-lit { fill: #5A9CEE; } .sc-pl-earth-rim { fill: #A6D2FF; } .sc-pl-earth-land { fill: #5CBE6A; } .sc-pl-earth-desert { fill: #D8B878; } .sc-pl-earth-cloud { fill: #E6EEFC; } .sc-pl-earth-ice { fill: #EEF4FF; }
+/* Mars: warm coral and terracotta, peach highlights, a polar cap. */
+.sc-pl-mars-limb { fill: #6A2A48; } .sc-pl-mars-shade { fill: #A84A4A; } .sc-pl-mars-body { fill: #E06E54; } .sc-pl-mars-lit { fill: #F2906A; } .sc-pl-mars-rim { fill: #FFC2A0; } .sc-pl-mars-sea { fill: #B4504A; } .sc-pl-mars-cap { fill: #F8E2DA; }
+/* Jupiter: cream, apricot and caramel bands, a rose spot. */
+.sc-pl-jupiter-limb { fill: #6A4458; } .sc-pl-jupiter-shade { fill: #B08468; } .sc-pl-jupiter-body { fill: #F2D2A4; } .sc-pl-jupiter-lit { fill: #FAE2BC; } .sc-pl-jupiter-rim { fill: #FFF2DA; } .sc-pl-jupiter-belt { fill: #E0A070; } .sc-pl-jupiter-belt-d { fill: #C88460; } .sc-pl-jupiter-pole { fill: #C8A48C; } .sc-pl-jupiter-spot { fill: #F08A8E; }
+/* Saturn: soft gold and champagne, pale rings. */
+.sc-pl-saturn-limb { fill: #6A5458; } .sc-pl-saturn-shade { fill: #B49464; } .sc-pl-saturn-body { fill: #EED29A; } .sc-pl-saturn-lit { fill: #F8E2B2; } .sc-pl-saturn-rim { fill: #FFF2D2; } .sc-pl-saturn-band { fill: #DCB878; } .sc-pl-saturn-ring { fill: #FCEFCC; } .sc-pl-saturn-ring-in { fill: #DCC8A0; }
+/* Uranus: mint-aqua, faint bands, an upright ring. */
+.sc-pl-uranus-limb { fill: #2A5A78; } .sc-pl-uranus-shade { fill: #3E9AA4; } .sc-pl-uranus-body { fill: #6CD4CC; } .sc-pl-uranus-lit { fill: #8EE6DC; } .sc-pl-uranus-rim { fill: #C2FAF0; } .sc-pl-uranus-band { fill: #5CC4C0; } .sc-pl-uranus-ring { fill: #C6F2EE; }
+/* Neptune: vivid sapphire and cornflower, a dark spot. */
+.sc-pl-neptune-limb { fill: #1C2276; } .sc-pl-neptune-shade { fill: #2A3CB0; } .sc-pl-neptune-body { fill: #3E64E0; } .sc-pl-neptune-lit { fill: #5C86F2; } .sc-pl-neptune-rim { fill: #A0BEFF; } .sc-pl-neptune-band { fill: #7A9CF6; } .sc-pl-neptune-belt { fill: #3050C8; } .sc-pl-neptune-spot { fill: #1E2A86; } .sc-pl-neptune-cloud { fill: #E2EAFF; }
 /* Stars in three brightnesses, white and gold, and constellation lines. */
 .sc-pl-star { fill: #FFFFFF; } .sc-pl-star-mid { fill: #C9C0FF; } .sc-pl-star-dim { fill: #6C62B4; }
 .sc-pl-star-gold { fill: #FFE08A; } .sc-pl-star-gold-mid { fill: #E8BE5A; } .sc-pl-star-gold-dim { fill: #8E7448; }
