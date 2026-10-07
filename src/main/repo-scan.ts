@@ -33,7 +33,8 @@ const SHORT_SHA_LENGTH = 7;
 const SKIP_AT_ROOT = new Set(['Library', 'Applications', 'Pictures', 'Music', 'Movies']);
 // At any depth; names starting with "." (.Trash, .cache, .npm, .nvm…) are skipped as well.
 const SKIP_ANYWHERE = new Set(['node_modules']);
-const SKIP_SUFFIXES = ['.photoslibrary', '.musiclibrary', '.app'];
+// Media-app libraries raise the Apple Music / media library prompt (kTCCServiceMediaLibrary) wherever they sit.
+const SKIP_SUFFIXES = ['.photoslibrary', '.musiclibrary', '.tvlibrary', '.app'];
 
 function isSkipped(name: string, depth: number): boolean {
   if (name.startsWith('.')) return true;

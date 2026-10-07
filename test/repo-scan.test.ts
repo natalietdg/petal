@@ -1,6 +1,7 @@
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { branchFromHead, scanRepos } from '../src/main/repo-scan';
 import { removeTempDirs, tempDir } from './helpers';
 
@@ -17,7 +18,10 @@ function makeRepo(root: string, relative: string, head = 'ref: refs/heads/main\n
 
 const names = async (root: string, options = {}) => (await scanRepos({ root, ...options })).repos.map((r) => r.shortPath);
 
-afterEach(removeTempDirs);
+afterEach(() => {
+  vi.restoreAllMocks();
+  removeTempDirs();
+});
 
 describe('branchFromHead', () => {
   it('reads a branch ref, a detached sha, and gives up on anything else', () => {
@@ -54,6 +58,24 @@ describe('scanRepos', () => {
     for (const skipped of ['Library/x', 'Pictures/x', 'Music/x', 'Movies/x', 'Applications/x', '.Trash/x', '.cache/x', '.nvm/x', 'Code/node_modules/x', 'Photos Library.photoslibrary/x']) makeRepo(home, skipped);
     makeRepo(home, 'Code/kept');
     expect(await names(home)).toEqual(['~/Code/kept']);
+  });
+
+  it('never reads or stats media-library locations, at the top or deeper down', async () => {
+    const home = tempDir('petal-home-');
+    const media = ['Music', 'Movies', 'Pictures', 'Desktop/old/TV Library.tvlibrary', 'Desktop/old/Music Library.musiclibrary', 'Code/Photos Library.photoslibrary'];
+    for (const dir of media) makeRepo(home, `${dir}/inside`);
+    makeRepo(home, 'Code/kept');
+    const touched: string[] = [];
+    for (const call of ['readdir', 'stat', 'lstat', 'readFile', 'open'] as const) {
+      const original = fsp[call] as (...args: unknown[]) => unknown;
+      vi.spyOn(fsp, call).mockImplementation(((target: unknown, ...rest: unknown[]) => {
+        touched.push(String(target));
+        return original.call(fsp, target, ...rest);
+      }) as never);
+    }
+    expect(await names(home)).toEqual(['~/Code/kept']);
+    expect(touched.length).toBeGreaterThan(0);
+    for (const dir of media) expect(touched.filter((t) => t.startsWith(path.join(home, dir)))).toEqual([]);
   });
 
   it('skips Library-style names only at the top of home', async () => {
