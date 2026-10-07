@@ -3,10 +3,11 @@ import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { byId, query } from './dom';
 import { timeOf } from './format';
-import type { ReaderState, Reply } from '../shared/types';
+import type { PendingEcho } from './pending-echo';
+import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[] };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -21,6 +22,34 @@ status.before(older);
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
 const youBubble = (prompt: string): HTMLDivElement => Object.assign(document.createElement('div'), { className: 'reader-you', textContent: prompt });
+
+// Sent from the reply box, not yet in Claude's log.
+function pendingBubble(echo: PendingEcho): HTMLDivElement {
+  const bubble = youBubble(echo.text);
+  bubble.classList.add('pending');
+  bubble.dataset.pendingKey = String(echo.key);
+  return bubble;
+}
+
+const writingLine = (): HTMLParagraphElement => Object.assign(document.createElement('p'), { className: 'reader-writing', textContent: 'Claude is writing…' });
+
+// Her messages after Claude's newest reply: from the log first, then reply-box sends still on their way.
+interface OpenTurn {
+  id: string;
+  time: string;
+  bubbles: HTMLElement[];
+}
+
+function openTurn(waiting: WaitingPrompt[], pending: PendingEcho[]): OpenTurn | null {
+  const first = waiting[0];
+  const firstEcho = pending[0];
+  if (!first && !firstEcho) return null;
+  return {
+    id: first ? `prompt:${first.id}` : `echo:${firstEcho?.key}`,
+    time: first?.timestamp ?? new Date(firstEcho?.sentAt ?? Date.now()).toISOString(),
+    bubbles: [...waiting.map((w) => youBubble(w.prompt)), ...pending.map(pendingBubble)],
+  };
+}
 
 // An earlier turn in full: her message, then Claude's whole reply.
 function olderTurn(reply: Reply): HTMLElement {
@@ -53,9 +82,17 @@ export function rerender(): void {
   if (lastUpdate) update(lastUpdate);
 }
 
-export function update({ state, replies }: ShownUpdate): void {
-  lastUpdate = { state, replies };
+export function update(shown: ShownUpdate): void {
+  lastUpdate = shown;
+  const { state, replies, waiting = [], pending = [], busy = false } = shown;
   column.classList.toggle('ended', state === 'ended');
+  const live = state === 'live';
+  const open = live ? openTurn(waiting, pending) : null;
+  const writing = live && (busy || pending.length > 0) ? [writingLine()] : [];
+  if (open) {
+    showOpenTurn(open, replies, writing);
+    return;
+  }
   const [newest, ...rest] = replies;
   if (!newest) {
     showMessage(state === 'live'
@@ -70,13 +107,29 @@ export function update({ state, replies }: ShownUpdate): void {
     ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
     : `Latest reply · ${timeOfReply(newest.timestamp)}`;
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown));
+  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown), ...writing);
   latest.dataset.replyId = newest.id;
   older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
   diagrams.render(latest);
-  if (newest.id !== latestId) status.scrollIntoView({ block: 'start' }); // new reply: bring it into view
-  latestId = newest.id;
+  bringIntoView(newest.id);
   if (view === 'flow') scheduleFlowRefresh();
+}
+
+// She has spoken since Claude's newest reply: every reply moves up, and her message leads the page.
+function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]): void {
+  status.classList.remove('empty');
+  status.textContent = `You · ${timeOfReply(open.time)}`;
+  latest.replaceChildren(...open.bubbles, ...writing);
+  delete latest.dataset.replyId;
+  older.replaceChildren(...[...replies].reverse().map(olderTurn)); // oldest first
+  bringIntoView(open.id);
+  if (view === 'flow') scheduleFlowRefresh();
+}
+
+// A new turn or reply: bring it into view once; the same one updating keeps her place.
+function bringIntoView(id: string | undefined): void {
+  if (id !== latestId) status.scrollIntoView({ block: 'start' });
+  latestId = id;
 }
 
 let flowTimer: ReturnType<typeof setTimeout> | undefined;

@@ -9,7 +9,7 @@ import * as history from './history';
 import { fixtureSession, isSnapshotRun, promptWrites } from './snapshot-mode';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
-import { on, send } from './ipc';
+import { handle, on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { PromptAnswer } from '../shared/prompt-answer';
 import type { TabId, TermSize } from '../shared/types';
@@ -114,13 +114,19 @@ export function closeWindowTabs(contentsId: number): void {
 }
 
 export function registerTabIpc(): void {
-  const tabFor = (event: Electron.IpcMainEvent, tabId: TabId) => sessions.get(tabKey(event.sender.id, tabId));
+  const tabFor = (event: { sender: { id: number } }, tabId: TabId) => sessions.get(tabKey(event.sender.id, tabId));
 
   on('pty:start', (event, { tabId, cols, rows }) => {
     if (!tabFor(event, tabId)) startSession(event.sender, { tabId, cols, rows });
   });
 
   on('pty:write', (event, { tabId, data }) => tabFor(event, tabId)?.pty.write(data));
+
+  handle('pty:paste', (event, { tabId, data }) => {
+    const session = tabFor(event, tabId);
+    session?.pty.write(data);
+    return { sent: Boolean(session) };
+  });
 
   on('pty:resize', (event, { tabId, cols, rows }) => {
     if (cols > 0 && rows > 0) tabFor(event, tabId)?.pty.resize(cols, rows);

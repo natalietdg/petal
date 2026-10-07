@@ -28,7 +28,7 @@ export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
 const SCREEN_SETTLE_MS = 80;
-const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], busy: false, sessionId: null, cwd: null, question: null };
+const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], waiting: [], promptCount: 0, busy: false, sessionId: null, cwd: null, question: null };
 
 // Startup reads that fail in main fall back to the defaults, and the reader says which ones.
 const startupProblems: string[] = [];
@@ -56,7 +56,7 @@ async function start(): Promise<void> {
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
-    reader.update(update);
+    reader.update({ ...update, pending: tab.pending });
     cat.setBusy(update.busy);
     promptDock.showQuestion(tab.id, update.question);
     readScreen(tab);
@@ -119,6 +119,11 @@ async function start(): Promise<void> {
   });
 
   window.addEventListener('petal:focus-terminal', focusTerminal);
+  // The reply box added or took back a pending message.
+  window.addEventListener('petal:reader-refresh', (event) => {
+    const active = tabs.active();
+    if (active && (event as CustomEvent<string>).detail === active.id) showTab(active);
+  });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
 
   const { term, renderer } = tabs.create();

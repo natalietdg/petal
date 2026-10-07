@@ -42,12 +42,21 @@ export interface Reply {
   prompt: string;
 }
 
+// One of her prompts from the transcript, before Claude has written any text for it.
+export interface WaitingPrompt {
+  id: string | undefined;
+  timestamp: string | undefined;
+  prompt: string;
+}
+
 export type ReaderState = 'none' | 'live' | 'ended';
 
 // main -> renderer on 'reader:replies'; tabId and label are added per tab.
 export interface ReaderUpdate {
   state: ReaderState;
   replies: Reply[];
+  waiting: WaitingPrompt[]; // her prompts Claude hasn't answered with text yet
+  promptCount: number; // her prompts in this session so far
   busy: boolean;
   sessionId: string | null;
   cwd: string | null;

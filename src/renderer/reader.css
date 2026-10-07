@@ -271,3 +271,15 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
   max-height: 9em;
   overflow-y: auto;
 }
+/* Sent from the reply box; full strength once Claude has it. */
+.reader-you.pending { opacity: 0.65; }
+
+/* While Claude is mid-reply: the terminal shows the words first, this says more are coming. */
+.reader-writing {
+  margin: 1.2em 0 0;
+  font: italic 0.86em/1.5 var(--ui-font);
+  color: var(--muted);
+  animation: writing-pulse 1.6s ease-in-out infinite;
+}
+@keyframes writing-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .reader-writing { animation: none; } }

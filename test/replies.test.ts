@@ -24,7 +24,7 @@ describe('assistantText', () => {
 describe('ReplyCollector', () => {
   it('groups all assistant text between two prompts into one reply, with the prompt above it', () => {
     const c = new ReplyCollector();
-    expect(c.add(userEntry('first question'))).toBe(false);
+    expect(c.add(userEntry('first question'))).toBe(true); // shown at once, before any reply
     expect(c.add(assistantEntry('part one', 'a1'))).toBe(true);
     expect(c.add(toolUseEntry())).toBe(false);
     expect(c.add(toolResultEntry())).toBe(false); // a tool result is not a new turn
@@ -77,6 +77,26 @@ describe('ReplyCollector', () => {
     }
     expect(c.newestFirst()).toHaveLength(20);
     expect(c.newestFirst()[0].id).toBe('a24');
+  });
+
+  it('lists her prompts as waiting until Claude writes text, then puts them above the reply', () => {
+    const c = new ReplyCollector();
+    c.add(userEntry('one'));
+    c.add(toolUseEntry());
+    c.add(userEntry('two'));
+    expect(c.waiting().map((w) => w.prompt)).toEqual(['one', 'two']);
+    expect(c.promptCount).toBe(2);
+    c.add(assistantEntry('answer', 'a1'));
+    expect(c.waiting()).toEqual([]);
+    expect(c.newestFirst()[0]?.prompt).toBe('one\n\ntwo');
+  });
+
+  it('wrappers and tool results are not prompts: not waiting, not counted', () => {
+    const c = new ReplyCollector();
+    expect(c.add(userEntry('<command-name>/clear</command-name>'))).toBe(false);
+    expect(c.add(toolResultEntry())).toBe(false);
+    expect(c.waiting()).toEqual([]);
+    expect(c.promptCount).toBe(0);
   });
 
   it('newestFirst returns a copy', () => {
