@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SCENE_CHOICES } from '../src/main/menu';
 import { has, svg } from '../src/renderer/scenes';
-import { type Planet, PLANETS, planetFor } from '../src/renderer/scenes/planetarium';
+import planetarium, { galaxy, onAnyPlanet, type Planet, PLANETS, planetFor } from '../src/renderer/scenes/planetarium';
 
 const RENDERER = path.join(__dirname, '..', 'src', 'renderer');
 const SCENE_IDS = SCENE_CHOICES.map(([id]) => id).filter((id) => id !== 'none');
@@ -103,5 +103,14 @@ describe('planetarium planet of the day', () => {
       return [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => planet.has(`${x + dx},${y + dy}`)));
     };
     expect([...nebula].filter(near)).toEqual([]);
+  });
+
+  it('keeps the galaxy whole and a cell clear of every planet and ring, all eight', () => {
+    const touchesPlanet = (x: number, y: number): boolean => [-1, 0, 1].some((dx) => [-1, 0, 1].some((dy) => onAnyPlanet(x + dx, y + dy)));
+    const galaxyCells = Array.from({ length: 48 * 48 }, (_, i) => [i % 48, Math.floor(i / 48)] as const).filter(([x, y]) => galaxy(x, y));
+    expect(galaxyCells.length).toBeGreaterThan(50);
+    expect(galaxyCells.filter(([x, y]) => touchesPlanet(x, y))).toEqual([]);
+    // Fully visible: nothing in the scene (dome edge, rim) paints over any galaxy cell.
+    expect(galaxyCells.filter(([x, y]) => planetarium.paint(x, y) !== galaxy(x, y))).toEqual([]);
   });
 });

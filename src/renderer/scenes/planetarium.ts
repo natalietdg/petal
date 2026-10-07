@@ -16,9 +16,9 @@ const sky = (x: number, y: number): CellClass => {
   return d > 33 ? 'pl-sky1' : d > 24 ? 'pl-sky2' : 'pl-sky3';
 };
 
-// The focal point: a tilted two-armed spiral galaxy, white core, pink inner arms fading to violet.
-const GALAXY = { cx: 24, cy: 17, tilt: 1.5, radius: 9, wind: 2, turn: 0.8 };
-function galaxy(x: number, y: number): CellClass | null {
+// The focal point: a tilted two-armed spiral galaxy on the right, clear of every planet; white core, pink arms fading to violet.
+const GALAXY = { cx: 37, cy: 15, tilt: 1.5, radius: 9, wind: 2, turn: 0.8 };
+export function galaxy(x: number, y: number): CellClass | null {
   const dx = x + 0.5 - GALAXY.cx;
   const dy = (y + 0.5 - GALAXY.cy) * GALAXY.tilt;
   const r = Math.hypot(dx, dy);
@@ -30,12 +30,12 @@ function galaxy(x: number, y: number): CellClass | null {
   return arm > -0.2 ? 'pl-gx-glow' : null;
 }
 
-// Two tiny, faint nebulae far off on the right, clear of every planet: teal top, pink between the constellations.
+// Two tiny, faint nebulae, clear of the planets and galaxy: teal top right, pink low left.
 type Blob = readonly [cx: number, cy: number, rx: number, ry: number];
 interface Nebula { blobs: readonly Blob[]; tones: readonly [CellClass, CellClass, CellClass] }
 const NEBULAE: readonly Nebula[] = [
-  { blobs: [[38, 5, 2, 1.2], [36.5, 6, 1.5, 1]], tones: ['pl-teal-l', 'pl-teal', 'pl-teal-d'] },
-  { blobs: [[41, 18.5, 2, 1.2], [42.5, 17.5, 1.5, 1]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
+  { blobs: [[43.5, 7.5, 1.6, 1], [42.5, 8.5, 1.2, 0.8]], tones: ['pl-teal-l', 'pl-teal', 'pl-teal-d'] },
+  { blobs: [[9, 33, 2, 1.2], [10.5, 32, 1.5, 1]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
 ];
 // Only the first blob gets the bright core, so each nebula has one heart.
 const inBlobs = (x: number, y: number, blobs: readonly Blob[], scale: number): boolean =>
@@ -51,8 +51,8 @@ function nebula(x: number, y: number): CellClass | null {
 
 // Constellations: bright stars joined by thin muted lines, as a planetarium draws them.
 const FIGURES: readonly (readonly (readonly [number, number])[])[] = [
-  [[44, 16], [40, 12], [36, 14], [33, 10], [29, 11]],
-  [[45, 25], [41, 22], [37, 24], [33, 21], [30, 25]],
+  [[25, 6], [29, 3], [33, 5], [37, 3]],
+  [[27, 25], [31, 23], [35, 25], [40, 23], [45, 25]],
 ];
 const LINE = new Set<string>();
 const FIGURE_STARS = new Set<string>();
@@ -76,11 +76,11 @@ const STARS: Record<string, CellClass> = {};
 const place = (cell: CellClass, at: readonly (readonly [number, number])[]): void => {
   for (const [x, y] of at) STARS[`${x},${y}`] = cell;
 };
-place('pl-star', [[30, 5], [17, 30]]);
+place('pl-star', [[22, 24], [17, 30]]);
 place('pl-star-gold', [[42, 8], [20, 27]]);
-place('pl-star-mid', [[35, 6], [26, 25], [24, 30], [12, 33], [1, 27]]);
+place('pl-star-mid', [[26, 19], [26, 25], [24, 30], [12, 33], [1, 27]]);
 place('pl-star-gold-mid', [[38, 19], [2, 31]]);
-place('pl-star-dim', [[27, 8], [39, 8], [21, 33], [6, 31], [29, 3], [15, 25], [4, 28], [31, 34]]);
+place('pl-star-dim', [[27, 8], [39, 8], [21, 33], [6, 31], [15, 25], [4, 28], [31, 34]]);
 place('pl-star-gold-dim', [[44, 20], [9, 35], [34, 26]]);
 const star = (x: number, y: number): CellClass | null => STARS[`${x},${y}`] ?? null;
 
@@ -197,6 +197,10 @@ for (let y = 0; y <= HORIZON; y += 1) {
   }
 }
 
+// Any planet or ring of the eight covers this cell (whatever is drawn in front of it).
+export const onAnyPlanet = (x: number, y: number): boolean =>
+  PLANETS.some((name) => PAINTERS[name](x + 0.5 - PLANET_CENTRE.cx, y + 0.5 - PLANET_CENTRE.cy) !== null);
+
 // Below the horizon: a glowing cove strip, a row of seat backs, then the floor.
 const SEAT_TOPS = 'aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.aa.';
 function room(x: number, y: number): CellClass | null {
@@ -239,8 +243,8 @@ const scene: Scene = {
     ...planets,
     ...tw(1, [[36, 9], [10, 31], [25, 3]]), ...tw(1, [[45, 33]], '-gold'),
     ...tw(2, [[18, 23], [28, 31], [44, 30]]), ...tw(2, [[3, 36]], '-gold'),
-    ...tw(3, [[1, 33], [26, 35], [33, 2]]), ...tw(3, [[39, 4]], '-gold'),
-    ...sparkle(10, 27, 1), ...sparkle(29, 28, 2), ...sparkle(25, 6, 3),
+    ...tw(3, [[1, 33], [26, 35], [46, 22]]), ...tw(3, [[39, 4]], '-gold'),
+    ...sparkle(10, 27, 1), ...sparkle(29, 28, 2), ...sparkle(26, 11, 3),
     ...SHOOTING,
   ],
 };
