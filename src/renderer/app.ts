@@ -28,7 +28,7 @@ export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
 const SCREEN_SETTLE_MS = 80;
-const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], waiting: [], promptCount: 0, busy: false, sessionId: null, cwd: null, question: null };
+const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], waiting: [], promptCount: 0, busy: false, sessionId: null, cwd: null, repo: null, question: null };
 
 // Startup reads that fail in main fall back to the defaults, and the reader says which ones.
 const startupProblems: string[] = [];

@@ -233,8 +233,14 @@
 [data-reading="print"] #reader #older .story-head::before { content: none; }
 [data-reading="print"] #reader #older .headline + p { font-size: 1.1em; padding-top: 0.5em; }
 
+/* Repo line: the essay's mono label voice. */
+[data-reading="print"] .reader-repo { font: 400 12px/1.4 var(--print-mono); letter-spacing: 0.08em; color: var(--print-ink); }
+
 /* Empty reader: the plain message, in the essay serif. */
 [data-reading="print"] .status.empty { font-family: var(--body-font); letter-spacing: normal; }
+
+/* A matching gutter on the left puts the text on the window's centre line, where the reply box sits. */
+[data-reading="print"] #reader { scrollbar-gutter: stable both-edges; }
 
 /* Reply box: centred on the text's axis at the text's measure; Send keeps the right-hand cell. */
 [data-reading="print"] #composer { display: grid; grid-template-columns: 1fr minmax(0, var(--print-measure)) 1fr; align-items: end; }

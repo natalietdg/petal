@@ -7,11 +7,12 @@ import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null };
 
 const latest = byId('latest');
 const older = byId('older');
 const status = byId('reader-status');
+const repoLine = byId('reader-repo');
 const scroller = byId('reader');
 let latestId: string | null | undefined = null;
 const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
@@ -84,7 +85,9 @@ export function rerender(): void {
 
 export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
-  const { state, replies, waiting = [], pending = [], busy = false } = shown;
+  const { state, replies, waiting = [], pending = [], busy = false, repo = null } = shown;
+  repoLine.textContent = repo ?? '';
+  repoLine.hidden = !repo;
   column.classList.toggle('ended', state === 'ended');
   const live = state === 'live';
   const open = live ? openTurn(waiting, pending) : null;

@@ -1,4 +1,5 @@
 // Pins the reader to the claude running inside one pty; never any other session.
+import { repoLabel } from './repo-label';
 import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude-session';
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail, type TranscriptView } from './transcript';
@@ -34,6 +35,7 @@ export class ReaderFeed implements ProcessListener {
   private waiting: WaitingPrompt[] = [];
   private promptCount = 0;
   private pendingQuestion: PendingQuestion | null = null;
+  private repo: string | null = null; // kept after claude exits, so an ended reader still names its repo
   private ticking = false;
 
   constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null }: FeedOptions = {}) {
@@ -71,7 +73,10 @@ export class ReaderFeed implements ProcessListener {
     if (pid === this.claudePid) return;
     const exited = this.claudePid && !pid;
     this.claudePid = pid;
-    if (pid && !this.session) this.clearTranscript(); // a new claude starts clean
+    if (pid && !this.session) {
+      this.clearTranscript(); // a new claude starts clean
+      this.repo = null;
+    }
     if (!this.session) this.emit(pid ? 'live' : exited && this.replies.length ? 'ended' : 'none');
   }
 
@@ -79,6 +84,7 @@ export class ReaderFeed implements ProcessListener {
     this.finishingId = null;
     this.tail?.stop();
     this.session = session;
+    this.repo = repoLabel(session.cwd);
     this.clearTranscript();
     this.emit('live');
     this.tail = new TranscriptTail(session.transcript, (view) => this.show(view));
@@ -105,9 +111,12 @@ export class ReaderFeed implements ProcessListener {
     if (!current) return; // refresh only runs while following
     const statusChanged = found.status !== current.status;
     const turnEnded = current.status === 'busy' && found.status === 'idle';
-    this.session = { ...current, status: found.status };
+    this.session = { ...current, status: found.status, cwd: found.cwd };
+    const repo = repoLabel(found.cwd);
+    const repoChanged = repo !== this.repo; // a branch switch shows on the next tick
+    this.repo = repo;
     this.tail?.poll();
-    if (statusChanged) this.emit('live');
+    if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
   }
@@ -146,7 +155,7 @@ export class ReaderFeed implements ProcessListener {
     const { sessionId = null, cwd = null } = this.session ?? {};
     const live = state === 'live';
     this.send('reader:replies', {
-      state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, question: live ? this.question : null,
+      state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, repo: state === 'none' ? null : this.repo, question: live ? this.question : null,
     });
   }
 
