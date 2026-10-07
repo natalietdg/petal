@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SCENE_CHOICES } from '../src/main/menu';
 import { has, svg } from '../src/renderer/scenes';
-import { planetFor } from '../src/renderer/scenes/planetarium';
+import { type Planet, PLANETS, planetFor } from '../src/renderer/scenes/planetarium';
 
 const RENDERER = path.join(__dirname, '..', 'src', 'renderer');
 const SCENE_IDS = SCENE_CHOICES.map(([id]) => id).filter((id) => id !== 'none');
@@ -51,38 +51,37 @@ describe('scene registry', () => {
 
 describe('planetarium planet of the day', () => {
   const day = (y: number, m: number, d: number, h = 12): Date => new Date(y, m - 1, d, h);
+  const next = (p: string): string => PLANETS[(PLANETS.indexOf(p as Planet) + 1) % PLANETS.length] ?? '';
 
-  it('starts on Mars on 2026-10-07 and alternates daily', () => {
-    expect(planetFor(day(2026, 10, 7))).toBe('mars');
-    expect(planetFor(day(2026, 10, 8))).toBe('neptune');
-    expect(planetFor(day(2026, 10, 9))).toBe('mars');
-    expect(planetFor(day(2026, 10, 6))).toBe('neptune');
+  it('starts on Mars on 2026-10-07 and walks the solar system one planet a day', () => {
+    const week = [7, 8, 9, 10, 11, 12, 13, 14, 15].map((d) => planetFor(day(2026, 10, d)));
+    expect(week).toEqual(['mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'mercury', 'venus', 'earth', 'mars']);
+    expect(planetFor(day(2026, 10, 6))).toBe('earth');
   });
 
   it('flips at local midnight, not mid-day', () => {
     expect(planetFor(day(2026, 10, 7, 0))).toBe('mars');
     expect(planetFor(new Date(2026, 9, 7, 23, 59, 59))).toBe('mars');
-    expect(planetFor(day(2026, 10, 8, 0))).toBe('neptune');
+    expect(planetFor(day(2026, 10, 8, 0))).toBe('jupiter');
   });
 
-  it('keeps alternating across month and year boundaries', () => {
+  it('keeps the cycle across month and year boundaries', () => {
     expect(planetFor(day(2026, 10, 31))).toBe('mars');
-    expect(planetFor(day(2026, 11, 1))).toBe('neptune');
-    expect(planetFor(day(2026, 12, 31))).toBe('neptune');
-    expect(planetFor(day(2027, 1, 1))).toBe('mars');
-    expect(planetFor(day(2028, 2, 29))).not.toBe(planetFor(day(2028, 3, 1)));
+    expect(planetFor(day(2026, 11, 1))).toBe('jupiter');
+    expect(planetFor(day(2026, 12, 31))).toBe('mercury');
+    expect(planetFor(day(2027, 1, 1))).toBe('venus');
+    expect(planetFor(day(2028, 3, 1))).toBe(next(planetFor(day(2028, 2, 29))));
   });
 
-  it('still alternates over DST changes (EU and US spring and autumn)', () => {
+  it('steps exactly one planet over DST changes (EU and US spring and autumn)', () => {
     for (const [y, m, d] of [[2026, 3, 29], [2026, 10, 25], [2026, 3, 8], [2026, 11, 1]] as const) {
-      expect(planetFor(day(y, m, d, 1))).not.toBe(planetFor(day(y, m, d + 1, 1)));
+      expect(planetFor(day(y, m, d + 1, 1))).toBe(next(planetFor(day(y, m, d, 1))));
       expect(planetFor(day(y, m, d, 0))).toBe(planetFor(day(y, m, d, 23)));
     }
   });
 
-  it('draws both planets so CSS can show the day\'s one', () => {
+  it('draws all eight planets so CSS can show the day\'s one', () => {
     const { back } = svg('planetarium');
-    expect(back).toContain('sc-pl-mars-cap');
-    expect(back).toContain('sc-pl-nep-spot');
+    for (const planet of PLANETS) expect(back).toContain(`sc-pl-${planet}-body`);
   });
 });

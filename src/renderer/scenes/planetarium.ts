@@ -1,5 +1,5 @@
 // Planetarium: the whole canvas is the dome. A spiral galaxy is the focal point, a huge planet looms behind it
-// (Mars and Neptune on alternate days), faint nebulae sit far back, and the cat sits by the projector.
+// (a different one each day), faint nebulae sit far back, and the cat sits by the projector.
 import {
   inCircle, inEllipse, layers, NEIGHBOURS, outlined, sprite, stamp, type Cell, type CellClass, type Scene, type Shape,
 } from './kit';
@@ -30,12 +30,12 @@ function galaxy(x: number, y: number): CellClass | null {
   return arm > -0.2 ? 'pl-gx-glow' : null;
 }
 
-// Two small, faint nebulae far back: teal top left, pink low right.
+// Two tiny, faint nebulae, far off in the distance: teal top right, pink low left.
 type Blob = readonly [cx: number, cy: number, rx: number, ry: number];
 interface Nebula { blobs: readonly Blob[]; tones: readonly [CellClass, CellClass, CellClass] }
 const NEBULAE: readonly Nebula[] = [
-  { blobs: [[12, 6, 3.5, 2], [9, 7.5, 2.5, 1.5], [15, 4.5, 2.5, 1.5]], tones: ['pl-teal-l', 'pl-teal', 'pl-teal-d'] },
-  { blobs: [[40, 30, 3.5, 2], [43, 28, 2.5, 1.5], [37, 32, 2.5, 1.5]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
+  { blobs: [[38, 5, 2, 1.2], [36.5, 6, 1.5, 1]], tones: ['pl-teal-l', 'pl-teal', 'pl-teal-d'] },
+  { blobs: [[10, 31, 2, 1.2], [11.5, 30, 1.5, 1]], tones: ['pl-pink-l', 'pl-pink', 'pl-pink-d'] },
 ];
 // Only the first blob gets the bright core, so each nebula has one heart.
 const inBlobs = (x: number, y: number, blobs: readonly Blob[], scale: number): boolean =>
@@ -51,8 +51,8 @@ function nebula(x: number, y: number): CellClass | null {
 
 // Constellations: bright stars joined by thin muted lines, as a planetarium draws them.
 const FIGURES: readonly (readonly (readonly [number, number])[])[] = [
-  [[3, 16], [7, 12], [11, 14], [14, 10], [18, 11]],
-  [[2, 25], [6, 22], [10, 24], [14, 21], [17, 25]],
+  [[44, 16], [40, 12], [36, 14], [33, 10], [29, 11]],
+  [[45, 25], [41, 22], [37, 24], [33, 21], [30, 25]],
 ];
 const LINE = new Set<string>();
 const FIGURE_STARS = new Set<string>();
@@ -76,47 +76,100 @@ const STARS: Record<string, CellClass> = {};
 const place = (cell: CellClass, at: readonly (readonly [number, number])[]): void => {
   for (const [x, y] of at) STARS[`${x},${y}`] = cell;
 };
-place('pl-star', [[17, 5], [30, 30]]);
-place('pl-star-gold', [[5, 8], [27, 27]]);
-place('pl-star-mid', [[12, 6], [21, 25], [23, 30], [35, 33], [46, 27]]);
-place('pl-star-gold-mid', [[9, 19], [45, 31]]);
-place('pl-star-dim', [[20, 8], [31, 12], [8, 8], [26, 33], [41, 31], [18, 3], [32, 25], [45, 13], [16, 34]]);
-place('pl-star-gold-dim', [[3, 20], [38, 35], [13, 26]]);
+place('pl-star', [[30, 5], [17, 30]]);
+place('pl-star-gold', [[42, 8], [20, 27]]);
+place('pl-star-mid', [[35, 6], [26, 25], [24, 30], [12, 33], [1, 27]]);
+place('pl-star-gold-mid', [[38, 19], [2, 31]]);
+place('pl-star-dim', [[27, 8], [39, 8], [21, 33], [6, 31], [29, 3], [15, 25], [4, 28], [31, 34]]);
+place('pl-star-gold-dim', [[44, 20], [9, 35], [34, 26]]);
 const star = (x: number, y: number): CellClass | null => STARS[`${x},${y}`] ?? null;
 
-// The day's planet: Mars and Neptune alternate by local calendar day, Mars on 2026-10-07.
-export type Planet = 'mars' | 'neptune';
+// The day's planet: all eight in solar order, one per local calendar day, Mars on 2026-10-07.
+export const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const;
+export type Planet = (typeof PLANETS)[number];
 const DAY_MS = 86_400_000;
-const FIRST_MARS_DAY = Date.UTC(2026, 9, 7);
+const MARS_DAY = Date.UTC(2026, 9, 7);
 export function planetFor(date: Date): Planet {
   // The local date as a UTC day count, so a DST shift never skips or repeats a day.
-  const days = Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - FIRST_MARS_DAY) / DAY_MS);
-  return days % 2 === 0 ? 'mars' : 'neptune';
+  const days = Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - MARS_DAY) / DAY_MS);
+  const index = (((days + PLANETS.indexOf('mars')) % PLANETS.length) + PLANETS.length) % PLANETS.length;
+  return PLANETS[index] ?? 'mars';
 }
 
-// A huge disc behind the galaxy, mostly cropped by the dome: dim limb, face, then each planet's markings.
-const PLANET = { cx: 42, cy: 8, r: 18 };
-type Painter = (dx: number, dy: number) => CellClass;
-const marsCell: Painter = (dx, dy) => {
-  if (inEllipse(dx, dy, -3, 18, 9, 5)) return 'pl-mars-cap';
-  const sea = inEllipse(dx, dy, -6, 5, 4.5, 2) || inEllipse(dx, dy, -1, 9, 5, 1.6) || inEllipse(dx, dy, -12, 1, 2, 3);
-  if (sea) return 'pl-mars-sea';
-  return Math.hypot(dx + 4, dy - 4) < 9 ? 'pl-mars-lit' : 'pl-mars-body';
-};
-const neptuneCell: Painter = (dx, dy) => {
-  if (inEllipse(dx, dy, -7, 8.5, 3, 1.4)) return 'pl-nep-spot';
-  if (inEllipse(dx, dy, -2.5, 9.5, 1.4, 0.7)) return 'pl-nep-cloud';
-  if ((dy > 1 && dy < 3) || dy > 13.5) return 'pl-nep-belt';
-  if ((dy > -5 && dy < -3) || (dy > 4.5 && dy < 6)) return 'pl-nep-band';
-  return Math.hypot(dx + 4, dy - 4) < 9 ? 'pl-nep-lit' : 'pl-nep-body';
-};
-function planetCell(x: number, y: number, paint: Painter, limb: CellClass): CellClass | null {
-  const dx = x + 0.5 - PLANET.cx;
-  const dy = y + 0.5 - PLANET.cy;
+// Huge, low-contrast discs on the left behind the galaxy, cropped by the dome; (dx, dy) is from the centre.
+const PLANET_CENTRE = { cx: 5, cy: 8 };
+type Painter = (dx: number, dy: number) => CellClass | null;
+// The face is lit toward the galaxy, so a soft highlight sits lower right of centre.
+const lit = (dx: number, dy: number, size: number): boolean => Math.hypot(dx - size * 0.25, dy - size * 0.25) < size * 0.5;
+// A plain disc with a dim limb; `face` paints the markings, `name` prefixes every class.
+const disc = (name: Planet, r: number, face: (dx: number, dy: number) => string): Painter => (dx, dy) => {
   const d = Math.hypot(dx, dy);
-  if (d > PLANET.r) return null;
-  return d > PLANET.r - 1.5 ? limb : paint(dx, dy);
-}
+  if (d > r) return null;
+  return `pl-${name}-${d > r - 1.5 ? 'limb' : face(dx, dy)}`;
+};
+// A ring as an annulus of a tilted ellipse (plus an optional inner ring): the near half draws over the body.
+const ring = (name: Planet, rx: number, ry: number, tilt: number, body: Painter, inner = true): Painter => (dx, dy) => {
+  const u = dx * Math.cos(tilt) + dy * Math.sin(tilt);
+  const v = -dx * Math.sin(tilt) + dy * Math.cos(tilt);
+  const e = Math.hypot(u / rx, v / ry);
+  const band = e <= 1 && e >= 0.86 ? 'ring' : inner && e < 0.76 && e >= 0.6 ? 'ring-in' : null;
+  const front = band && (rx > ry ? v > 0 : u > 0);
+  if (band && front) return `pl-${name}-${band}`;
+  return body(dx, dy) ?? (band ? `pl-${name}-${band}` : null);
+};
+
+const PAINTERS: Record<Planet, Painter> = {
+  mercury: disc('mercury', 18, (dx, dy) => {
+    const craters: readonly Blob[] = [[6, 2, 3, 2.5], [-2, 10, 2.5, 2], [10, 10, 2, 1.6], [1, -6, 2, 1.6], [12, -2, 1.5, 1.3]];
+    for (const [cx, cy, rx, ry] of craters) {
+      if (inEllipse(dx, dy, cx + 0.6, cy + 0.6, rx * 0.6, ry * 0.6)) return 'crater-lit';
+      if (inEllipse(dx, dy, cx, cy, rx, ry)) return 'crater';
+    }
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+  venus: disc('venus', 18, (dx, dy) => {
+    const wave = dy + Math.sin(dx / 3) * 1.2;
+    if ((wave > -6 && wave < -4) || (wave > 3 && wave < 5) || wave > 12) return 'band';
+    if (wave > 8 && wave < 9.5) return 'haze';
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+  earth: disc('earth', 18, (dx, dy) => {
+    if (dy > 15 || dy < -15) return 'ice';
+    const wisps: readonly Blob[] = [[3, -9, 5, 0.8], [12, 3, 3, 0.7], [-4, 3, 4, 0.8], [6, 12, 4, 0.7], [-6, -4, 3, 0.7]];
+    if (wisps.some(([cx, cy, rx, ry]) => inEllipse(dx, dy, cx, cy, rx, ry))) return 'cloud';
+    if (inEllipse(dx, dy, 8, -2, 4, 6) || inEllipse(dx, dy, 11, 6, 3, 3)) return inEllipse(dx, dy, 9, 1, 2, 2) ? 'desert' : 'land';
+    if (inEllipse(dx, dy, -2, 9, 3, 4)) return 'land';
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+  mars: disc('mars', 18, (dx, dy) => {
+    if (inEllipse(dx, dy, 3, 18, 9, 5)) return 'cap';
+    if (inEllipse(dx, dy, 6, 5, 4.5, 2) || inEllipse(dx, dy, 1, 9, 5, 1.6) || inEllipse(dx, dy, 12, 1, 2, 3)) return 'sea';
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+  jupiter: disc('jupiter', 18, (dx, dy) => {
+    if (inEllipse(dx, dy, 8, 7.5, 3, 1.6)) return 'spot';
+    if ((dy > -4 && dy < -1.5) || (dy > 3 && dy < 5.5)) return 'belt';
+    if ((dy > -9 && dy < -7.5) || (dy > 10 && dy < 11.5)) return 'belt-d';
+    if (dy > 14 || dy < -13) return 'pole';
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+  // Saturn sits a little lower so its rings cross open sky.
+  saturn: (dx, dy) => ring('saturn', 22, 7, -0.35, disc('saturn', 12, (bx, by) => {
+    if ((by > -4 && by < -2.5) || (by > 3 && by < 4.5)) return 'band';
+    return lit(bx, by, 12) ? 'lit' : 'body';
+  }))(dx + 1, dy - 4),
+  uranus: ring('uranus', 7, 21, 0.1, disc('uranus', 15, (dx, dy) => {
+    if ((dy > -5 && dy < -3.5) || (dy > 5 && dy < 6.5)) return 'band';
+    return lit(dx, dy, 15) ? 'lit' : 'body';
+  }), false),
+  neptune: disc('neptune', 18, (dx, dy) => {
+    if (inEllipse(dx, dy, 7, 8.5, 3, 1.4)) return 'spot';
+    if (inEllipse(dx, dy, 2.5, 9.5, 1.4, 0.7)) return 'cloud';
+    if ((dy > 1 && dy < 3) || dy > 13.5) return 'belt';
+    if ((dy > -5 && dy < -3) || (dy > 4.5 && dy < 6)) return 'band';
+    return lit(dx, dy, 18) ? 'lit' : 'body';
+  }),
+};
 
 const foreground = (x: number, y: number): CellClass | null => galaxy(x, y) ?? constellation(x, y) ?? star(x, y);
 const domeSky: Shape = (x, y) => (inDome(x, y) ? foreground(x, y) ?? nebula(x, y) ?? sky(x, y) : null);
@@ -126,15 +179,15 @@ const onRim = (x: number, y: number): boolean => inDome(x, y)
 const rimmed: Shape = (x, y) => (onRim(x, y) ? 'pl-rim' : domeSky(x, y));
 const dome = outlined(rimmed, 'pl-dome-o', (x, y) => inDome(x, y) || y > HORIZON);
 
-// Both planets are drawn over open sky only, so stars and galaxy stay in front; CSS shows the day's one.
+// Every planet is drawn over open sky only, so stars and galaxy stay in front; CSS shows the day's one.
 const planets: Cell[] = [];
 for (let y = 0; y <= HORIZON; y += 1) {
   for (let x = 0; x < 48; x += 1) {
     if (!inDome(x, y) || onRim(x, y) || foreground(x, y)) continue;
-    const mars = planetCell(x, y, marsCell, 'pl-mars-limb');
-    const neptune = planetCell(x, y, neptuneCell, 'pl-nep-limb');
-    if (mars) planets.push([x, y, mars]);
-    if (neptune) planets.push([x, y, neptune]);
+    for (const name of PLANETS) {
+      const cell = PAINTERS[name](x + 0.5 - PLANET_CENTRE.cx, y + 0.5 - PLANET_CENTRE.cy);
+      if (cell) planets.push([x, y, cell]);
+    }
   }
 }
 
@@ -148,8 +201,8 @@ function room(x: number, y: number): CellClass | null {
   return y === HORIZON + 5 ? 'pl-floor-l' : 'pl-floor';
 }
 
-// The star projector: two dark globes on a stalk, low on the left.
-const projector = outlined(stamp(5, 27, [
+// The star projector: two dark globes on a stalk, low and right of centre, clear of the planet.
+const projector = outlined(stamp(14, 26, [
   '.gGg......',
   'gGGGg.....',
   'GGGGG.....',
@@ -178,10 +231,10 @@ const scene: Scene = {
   // Planets go first so every moving cell draws over them.
   moving: [
     ...planets,
-    ...tw(1, [[11, 9], [37, 31], [22, 3]]), ...tw(1, [[2, 33]], '-gold'),
-    ...tw(2, [[29, 23], [19, 31], [3, 30]]), ...tw(2, [[44, 36]], '-gold'),
-    ...tw(3, [[46, 33], [21, 35], [14, 2]]), ...tw(3, [[8, 4]], '-gold'),
-    ...sparkle(37, 27, 1), ...sparkle(18, 28, 2), ...sparkle(22, 6, 3),
+    ...tw(1, [[36, 9], [10, 31], [25, 3]]), ...tw(1, [[45, 33]], '-gold'),
+    ...tw(2, [[18, 23], [28, 31], [44, 30]]), ...tw(2, [[3, 36]], '-gold'),
+    ...tw(3, [[1, 33], [26, 35], [33, 2]]), ...tw(3, [[39, 4]], '-gold'),
+    ...sparkle(10, 27, 1), ...sparkle(29, 28, 2), ...sparkle(25, 6, 3),
     ...SHOOTING,
   ],
 };
