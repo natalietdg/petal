@@ -10,6 +10,7 @@ import * as views from './snapshot-views';
 import { promptsCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
+import { columnAxisCheck } from './snapshot-column-axis';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -358,6 +359,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   await repoLineCheck(kit, { feed }); // before the print steps, which replace the fixture's replies
   await printLookCheck(kit, win); // replaces the reader's reply with its own long sample
   await printAxisCheck(kit, win);
+  await columnAxisCheck(kit, win);
   await latencyCheck(kit, { feed, file: fakeTranscript() ?? '' }); // last: it appends turns to the fixture
 }
 
@@ -409,6 +411,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'print-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await printAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return app.quit();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return app.quit();
   }
 

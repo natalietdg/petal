@@ -1,14 +1,18 @@
-/* Floats over the reader's top-right corner, outside its scroll. */
+/* A band above the reader, outside its scroll, so column text never sits under the buttons. */
 #sessions-dock {
-  position: absolute;
-  top: 16px;
-  right: 20px;
+  position: relative;
+  flex: none;
+  padding: 16px 20px 0;
   z-index: 5;
   display: flex;
+  justify-content: flex-end;
   align-items: center;
+  background: var(--reader-bg);
   gap: 10px;
   font-family: var(--ui-font);
 }
+/* Over History, Workflow, Customize or Open Repo the band goes clear, so their own top shows through as before. */
+#reader-area:has(> :is(#history, #workflow, #customize, #repos):not([hidden])) #sessions-dock { background: none; }
 
 /* History sits beside the Sessions pill, quieter so the pill stays the obvious one. */
 .dock-button {
@@ -59,8 +63,8 @@
 
 .sessions-panel {
   position: absolute;
-  top: 50px;
-  right: 0;
+  top: 66px; /* the dock's 16px top padding + 50px */
+  right: 20px;
   width: min(480px, calc(100vw - 40px));
   max-height: calc(var(--reader-area-height, 60vh) - 80px);
   overflow-y: auto;

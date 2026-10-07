@@ -2,20 +2,11 @@
 #composer {
   position: relative;
   flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 10px 28px 14px;
   border-top: 1px solid var(--rule);
   background: var(--reader-bg);
 }
 #composer-input {
-  flex: 1;
   resize: none;
-  max-width: 68ch;
-  margin: 0 auto;
-  padding: 10px 14px;
   border: 1px solid var(--rule);
   border-radius: 14px;
   background: var(--code-bg);
@@ -26,7 +17,6 @@
 #composer-input:focus { border-color: var(--link); }
 #composer-input::placeholder { color: var(--muted); }
 #composer-send {
-  flex: none;
   padding: 9px 16px;
   border: 0;
   border-radius: 999px;
@@ -74,3 +64,19 @@
 }
 .composer-chip-remove:hover, .composer-chip-remove:focus-visible { opacity: 1; }
 /* "Start Claude in this tab first": sits just above the box, never shifts the layout. */
+
+/* ---------- Layout: the box sits on the reading column's axis at its measure, in every look ---------- */
+/* Same side padding and scrollbar gutters as #reader, so both centre on one line. */
+#composer {
+  display: grid;
+  grid-template-columns: minmax(0, var(--reading-measure));
+  justify-content: center;
+  padding: 10px var(--reading-pad-end) 14px var(--reading-pad-start);
+  overflow: hidden; /* the gutter below needs a non-visible overflow */
+  scrollbar-gutter: stable both-edges;
+}
+/* Thumbnails on top at the same measure; box and Send share the cell below, Send in the box's corner so it never moves the box. */
+#composer-attachments { grid-row: 1; margin-bottom: 10px; } /* a margin, not row-gap: no gap while it's hidden */
+#composer-input, #composer-send { grid-area: 2 / 1; }
+#composer-input { justify-self: stretch; min-width: 0; padding: 10px 88px 10px 14px; } /* stays content-box: fit() in composer.ts sizes the height that way */
+#composer-send { justify-self: end; align-self: end; margin: 0 7px 7px 0; }

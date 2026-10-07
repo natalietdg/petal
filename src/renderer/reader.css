@@ -5,12 +5,16 @@
   /* Newsreader is drawn for long reading on screens; Fraunces sets the headlines. */
   --body-font: "Newsreader Variable", "Atkinson Hyperlegible Next", Georgia, serif;
   --display-font: "Fraunces Variable", "Newsreader Variable", Georgia, serif;
+  /* Column geometry, read by the reader column and the reply box alike (each look sets its own measure). */
+  --reading-measure: 750px; /* 68ch of 20px Newsreader */
+  --reading-pad-start: 56px;
+  --reading-pad-end: 56px;
 }
 
 .reader-column {
-  max-width: 68ch;
+  max-width: var(--reading-measure);
   margin: 0 auto;
-  padding: 40px 56px 120px;
+  padding: 40px var(--reading-pad-end) 120px var(--reading-pad-start);
   font-family: var(--body-font);
   font-optical-sizing: auto;
   font-size: 20px;
