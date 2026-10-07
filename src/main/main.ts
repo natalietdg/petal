@@ -8,6 +8,8 @@ import { isSnapshotRun, userDataDir } from './snapshot-mode';
 import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
+import { registerReposIpc } from './repos-ipc';
+import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
 import { handle, on, send } from './ipc';
@@ -78,6 +80,7 @@ function refreshMenu(): void {
     onToggleReader: () => sendToFocused('layout:toggle'),
     onToggleHistory: () => sendToFocused('history:toggle'),
     onOpenSettings: openSettings,
+    onOpenRepo: () => sendToFocused('repos:palette'),
   });
 }
 onLookChanged(refreshMenu);
@@ -97,12 +100,14 @@ function registerIpc(): void {
   });
 
   registerCustomizeIpc();
+  registerReposIpc({ sessions, openTab });
 }
 
 app.whenReady().then(() => {
   registerIpc();
   refreshMenu();
   const win = createWindow();
+  repoIndex.refreshIfStale(); // in the background, so ⌘O opens on a fresh list
   // The dev harness is a separate chunk, loaded only in snapshot runs; they never call Claude in the background.
   if (isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   else organizer.start({ openSessionIds });

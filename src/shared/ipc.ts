@@ -12,6 +12,7 @@ import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../ma
 import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
+import type { RepoEntry } from '../main/repo-scan';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -84,6 +85,16 @@ export interface CustomizeState {
 
 type Ok = { ok: true };
 
+// Open Repo: the indexed repos, and whether a pick here would go to a new tab (Claude is live in this one).
+export interface ReposList {
+  repos: RepoEntry[];
+  scannedAt: number | null;
+  scanning: boolean;
+  claudeLive: boolean;
+}
+
+export type RepoOpenResult = { note: string } | { ok: true; newTab: boolean; command: string };
+
 // renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle. Every reply can be { error } (main/ipc-guard.ts).
 export interface InvokeChannels {
   'theme:get': { args: []; result: Guarded<Theme> };
@@ -121,6 +132,9 @@ export interface InvokeChannels {
   'flow:mermaid': { args: [request: FlowExportRequest]; result: Guarded<MermaidResult | null> };
   'flow:copy-mermaid': { args: [request: FlowExportRequest]; result: Guarded<{ ok: boolean }> };
   'flow:save-mermaid': { args: [request: FlowExportRequest]; result: Guarded<{ ok: boolean; canceled?: true; filePath?: string }> };
+
+  'repos:list': { args: [request: { tabId: TabId }]; result: Guarded<ReposList> };
+  'repos:open': { args: [request: { tabId: TabId; path: string }]; result: Guarded<RepoOpenResult> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.
@@ -160,6 +174,7 @@ export interface EventChannels {
   'layout:toggle': void;
   'history:toggle': void;
   'customize:open': void;
+  'repos:palette': void;
 }
 
 export type InvokeChannel = keyof InvokeChannels;

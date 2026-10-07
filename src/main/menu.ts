@@ -34,9 +34,10 @@ export interface MenuOptions {
   onToggleReader: () => void;
   onToggleHistory: () => void;
   onOpenSettings: () => void;
+  onOpenRepo: () => void;
 }
 
-export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onOpenSettings }: MenuOptions): void {
+export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onOpenSettings, onOpenRepo }: MenuOptions): void {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -89,6 +90,7 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
       submenu: [
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: onNewTab },
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: onNewWindow },
+        { label: 'Open Repo…', accelerator: 'CmdOrCtrl+O', click: onOpenRepo },
         { type: 'separator' },
         { label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', click: () => onCycleTab(1) },
         { label: 'Previous Tab', accelerator: 'CmdOrCtrl+Shift+[', click: () => onCycleTab(-1) },

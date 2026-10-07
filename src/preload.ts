@@ -55,6 +55,7 @@ const api = {
   reportReady: (info: SendChannels['renderer:ready'][0]) => send('renderer:ready', info),
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
+  onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
   look: {
     setTheme: (id: string) => send('look:theme', id),
     setReading: (id: string) => send('look:reading', id),
@@ -85,6 +86,10 @@ const api = {
     tagRemove: (sessionId: string, name: string) => invoke('history:tag-remove', { sessionId, name }),
     tagDelete: (name: string) => invoke('history:tag-delete', { name }),
     tagRename: (from: string, to: string) => invoke('history:tag-rename', { from, to }),
+  },
+  repos: {
+    list: (tabId: TabId) => invoke('repos:list', { tabId }),
+    open: (tabId: TabId, path: string) => invoke('repos:open', { tabId, path }),
   },
   flow: {
     get: (target: FlowTarget) => invoke('flow:get', { target }),
