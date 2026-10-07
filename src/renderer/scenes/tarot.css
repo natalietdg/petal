@@ -1,0 +1,92 @@
+/* Tarot Room: deep plum and indigo, gold accents, warm candlelight. Colours are fixed: they are places, not theme chrome. */
+/* Wall, the day's card's glow, candlelight and the stencilled moon and stars. */
+.sc-tr-wall { fill: #2A1736; } .sc-tr-glow2 { fill: #3B2046; } .sc-tr-glow1 { fill: #55305A; }
+.sc-tr-candle-glow { fill: #4A2A44; }
+.sc-tr-motif { fill: #A9844A; } .sc-tr-motif-d { fill: #8A6A3E; }
+/* The card: gold edge, cream face, dark outline. */
+.sc-tr-card-edge { fill: #E9B949; } .sc-tr-card-face { fill: #FFF4DC; } .sc-tr-card-o { fill: #170B1C; }
+/* Emblems and numerals on the card face. */
+.sc-tr-em-ink { fill: #3A1F4A; } .sc-tr-em-red { fill: #D63B4C; } .sc-tr-em-orange { fill: #E5801E; } .sc-tr-em-gold { fill: #B07A12; }
+.sc-tr-em-lamp { fill: #F5C531; } .sc-tr-em-blue { fill: #3567C0; } .sc-tr-em-sky { fill: #79A8E0; } .sc-tr-em-green { fill: #3A9655; }
+.sc-tr-em-pink { fill: #F09BC2; } .sc-tr-em-violet { fill: #7446B8; } .sc-tr-em-brown { fill: #7A4A2A; } .sc-tr-em-white { fill: #FFFFFF; }
+/* Velvet: the valance and curtain in plum, gold trim and tassels. */
+.sc-tr-velvet-l { fill: #8A3474; } .sc-tr-velvet { fill: #6A2259; } .sc-tr-velvet-d { fill: #4A1640; } .sc-tr-velvet-o { fill: #1E0A1C; }
+.sc-tr-trim { fill: #E0A93E; } .sc-tr-tassel { fill: #C48A2C; } .sc-tr-gold { fill: #E9B949; } .sc-tr-gold-d { fill: #A87420; }
+/* Table cloth in indigo velvet, face-down card backs. */
+.sc-tr-cloth-top { fill: #4C3E9C; } .sc-tr-cloth-l { fill: #45388E; } .sc-tr-cloth { fill: #372C78; } .sc-tr-cloth-fold { fill: #261D58; }
+.sc-tr-back-l { fill: #D9A441; } .sc-tr-back { fill: #7A2E66; }
+/* Crystal ball. */
+.sc-tr-ball-l { fill: #B9AEF0; } .sc-tr-ball { fill: #8676D0; } .sc-tr-ball-d { fill: #574A9E; } .sc-tr-ball-o { fill: #1A1236; }
+/* Candles. */
+.sc-tr-wax-l { fill: #FFF6E6; } .sc-tr-wax { fill: #F0E0C2; } .sc-tr-wax-d { fill: #C9B08A; } .sc-tr-wick { fill: #2A1A12; }
+/* Floor. */
+.sc-tr-floor-l { fill: #3A2846; } .sc-tr-floor { fill: #24172E; } .sc-tr-floor-d { fill: #170E1E; }
+/* Moving: flames, the ball's mist and glint, the stencilled stars' centres. */
+.sc-tr-flame-tip1, .sc-tr-flame-tip2 { fill: #F27A2A; } .sc-tr-flame1, .sc-tr-flame2 { fill: #FFB23C; } .sc-tr-flame-core { fill: #FFF3B8; }
+.sc-tr-mist { fill: #E7A6DE; } .sc-tr-glint { fill: #FFFFFF; } .sc-tr-twinkle { fill: #E9C77A; }
+
+/* The day's card: every face is drawn, only the one named by data-tr-card (set by tarot-reading.ts) shows. */
+#cat .scene-tarot .scene-variant { display: none; }
+:root[data-tr-card="0"] #cat .scene-tarot [data-variant="0"],
+:root[data-tr-card="1"] #cat .scene-tarot [data-variant="1"],
+:root[data-tr-card="2"] #cat .scene-tarot [data-variant="2"],
+:root[data-tr-card="3"] #cat .scene-tarot [data-variant="3"],
+:root[data-tr-card="4"] #cat .scene-tarot [data-variant="4"],
+:root[data-tr-card="5"] #cat .scene-tarot [data-variant="5"],
+:root[data-tr-card="6"] #cat .scene-tarot [data-variant="6"],
+:root[data-tr-card="7"] #cat .scene-tarot [data-variant="7"],
+:root[data-tr-card="8"] #cat .scene-tarot [data-variant="8"],
+:root[data-tr-card="9"] #cat .scene-tarot [data-variant="9"],
+:root[data-tr-card="10"] #cat .scene-tarot [data-variant="10"],
+:root[data-tr-card="11"] #cat .scene-tarot [data-variant="11"],
+:root[data-tr-card="12"] #cat .scene-tarot [data-variant="12"],
+:root[data-tr-card="13"] #cat .scene-tarot [data-variant="13"],
+:root[data-tr-card="14"] #cat .scene-tarot [data-variant="14"],
+:root[data-tr-card="15"] #cat .scene-tarot [data-variant="15"],
+:root[data-tr-card="16"] #cat .scene-tarot [data-variant="16"],
+:root[data-tr-card="17"] #cat .scene-tarot [data-variant="17"],
+:root[data-tr-card="18"] #cat .scene-tarot [data-variant="18"],
+:root[data-tr-card="19"] #cat .scene-tarot [data-variant="19"],
+:root[data-tr-card="20"] #cat .scene-tarot [data-variant="20"],
+:root[data-tr-card="21"] #cat .scene-tarot [data-variant="21"] { display: inline; }
+#cat .scene-tarot { cursor: pointer; }
+/* Over the room the tarot tip replaces the cat's own. */
+#cat:has(.scene-tarot:hover) .cat-tip { opacity: 0; }
+
+/* Always on, gently: two candles flicker out of step. */
+#cat .scene-tarot .sc-tr-flame-tip1 { animation: tr-flicker 1.3s steps(1) infinite; }
+#cat .scene-tarot .sc-tr-flame-tip2 { animation: tr-flicker 1.7s steps(1) -0.6s infinite; }
+#cat .scene-tarot .sc-tr-flame1 { animation: tr-flame 2.1s steps(1) infinite; }
+#cat .scene-tarot .sc-tr-flame2 { animation: tr-flame 2.6s steps(1) -1s infinite; }
+@keyframes tr-flicker { 0%, 45% { opacity: 1; } 46%, 60% { opacity: 0; } 61%, 80% { opacity: 1; } 81%, 88% { opacity: 0.4; } }
+@keyframes tr-flame { 0%, 55% { fill: #FFB23C; } 56%, 100% { fill: #FFC85A; } }
+/* The crystal ball's mist shimmers slowly; its glint winks now and then. */
+#cat .scene-tarot .sc-tr-mist { animation: tr-mist 6s ease-in-out infinite; }
+#cat .scene-tarot .sc-tr-glint { animation: tr-glint 5s steps(1) infinite; }
+@keyframes tr-mist { 0%, 100% { fill: #E7A6DE; } 50% { fill: #9FD8E8; } }
+@keyframes tr-glint { 0%, 80% { opacity: 1; } 81%, 90% { opacity: 0.3; } }
+/* The stencilled stars catch the candlelight. */
+#cat .scene-tarot .sc-tr-twinkle { animation: tr-twinkle 4s steps(1) infinite; }
+@keyframes tr-twinkle { 0%, 70% { fill: #E9C77A; } 71%, 85% { fill: #8A6A3E; } }
+
+/* Hover tip and click popover with the day's reading (tarot-reading.ts); they sit above the cat. */
+.tarot-tip, .tarot-popover {
+  position: absolute;
+  right: 28px;
+  bottom: calc(var(--composer-height, 0px) + 14px + 150px);
+  z-index: 6;
+  max-width: 260px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 400 13px/1.45 var(--ui-font);
+  box-shadow: 0 4px 18px rgba(20, 10, 30, 0.22);
+}
+.tarot-tip { padding: 6px 10px; pointer-events: none; }
+.tarot-tip strong, .tarot-popover h2 { font-weight: 700; }
+.tarot-popover { padding: 14px 16px 12px; border: 1px solid #E9B949; }
+.tarot-popover .tarot-numeral { margin: 0; font: 700 12px var(--ui-font); letter-spacing: 0.12em; color: #B07A12; }
+.tarot-popover h2 { margin: 2px 0 6px; font-size: 16px; }
+.tarot-popover p { margin: 0; }
+.tarot-popover .tarot-date { margin-top: 8px; font-size: 11px; opacity: 0.7; }
+.tarot-tip[hidden], .tarot-popover[hidden] { display: none; }

@@ -17,6 +17,8 @@ export interface Scene {
   front?: (x: number, y: number) => boolean;
   // The beach crab, which walks on its own.
   crab?: readonly Cell[];
+  // Alternative cell sets drawn over `paint`; CSS shows one at a time (the tarot card of the day).
+  variants?: Readonly<Record<string, readonly Cell[]>>;
 }
 
 export type Segment = readonly [x1: number, y1: number, x2: number, y2: number];
