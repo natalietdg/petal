@@ -121,28 +121,20 @@ function glass(x: number, y: number): CellClass {
 const CRACK = ['22,19', '24,19', '23,20', '22,21', '21,22', '24,21', '25,22'];
 const crack: Shape = (x, y) => (CRACK.includes(`${x},${y}`) ? 'b-glassCrack' : null);
 
-// Kick panel painted dirty teal, flaking back to bare wood, with a curled flap of paint.
-function kickPanel(x: number, y: number): CellClass {
-  if (y === CASE.glassBottom + 1) return 'b-steel';
-  if (y === CASE.base) return 'b-steelD';
-  if ((x === 18 && y === 37) || (x === 19 && y >= 37 && y <= 38)) return 'b-flap';
-  const bare = (x >= 16 && x <= 23 && y >= 38) || noise(x, y) < 14;
-  return bare ? 'b-bare' : 'b-paint';
-}
-
-// The display case: steel frame, worn wood top, glowing glass with a glass shelf, peeling kick panel.
+// The display case in clean flat wood: lit top and left edges, shaded right and bottom edges, glowing glass.
 function caseBody(x: number, y: number): CellClass | null {
   const { left, right, top, glassTop, shelf, glassBottom, base } = CASE;
   if (x < left || x > right || y < top || y > base) return null;
-  if (y === top) return 'b-woodL';
-  if (y === top + 1) return 'b-wood';
-  if (y > glassBottom) return kickPanel(x, y);
-  if (x === left || x === right || y === glassBottom) return 'b-steel';
+  if (y === top || y === glassBottom + 1) return 'b-woodL';
+  if (y === base || x === right) return 'b-woodD';
+  if (y === top + 1 || y > glassBottom) return 'b-wood';
+  if (x === left) return 'b-woodL';
+  if (y === glassBottom) return 'b-wood';
   if (y === glassTop) return 'b-tube';
   if (y === shelf) return 'b-shelf';
   return crack(x, y) ?? pastries(x, y) ?? glass(x, y);
 }
-const displayCase = outlined(caseBody, 'b-steelD');
+const displayCase = outlined(caseBody, 'b-woodInk');
 
 // Neon BAKERY sign in pink tubes on the brick, haloed; the K has its own class so it can stutter.
 const LETTERS: Record<string, readonly string[]> = {

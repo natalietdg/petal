@@ -10,10 +10,9 @@
 .sc-b-crack { fill: #070808; } .sc-b-grout { fill: #121514; }
 .sc-b-spill { fill: #6E5530; }
 
-/* The case: steel frame, worn wood top, peeling teal kick panel. */
-.sc-b-steel { fill: #3A3D40; } .sc-b-steelD { fill: #121315; }
-.sc-b-woodL { fill: #6B4A33; } .sc-b-wood { fill: #432C1E; }
-.sc-b-paint { fill: #2F5752; } .sc-b-bare { fill: #3B2A1E; } .sc-b-flap { fill: #6E9A90; }
+/* The case: clean flat wood, one highlight tone, one shadow tone, a dark outline. Steel ink rings the window. */
+.sc-b-woodL { fill: #7A5538; } .sc-b-wood { fill: #553826; } .sc-b-woodD { fill: #3A2619; }
+.sc-b-woodInk { fill: #1A110B; } .sc-b-steelD { fill: #121315; }
 
 /* Lit glass: the brightest values in the scene. */
 .sc-b-tube { fill: #FFF8E0; }
