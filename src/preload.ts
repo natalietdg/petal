@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels } from './shared/ipc';
 import type { FlowTarget, TabId, TermSize } from './shared/types';
 import type { PromptAnswer } from './shared/prompt-answer';
@@ -35,6 +35,9 @@ const api = {
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
   paste: (tabId: TabId, data: string) => invoke('pty:paste', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
+  savePastedImage: (bytes: Uint8Array) => invoke('paste:save-image', { bytes }),
+  // A dropped file's absolute path; '' for a file made in the page.
+  pathForFile: (file: File) => webUtils.getPathForFile(file),
   answerPrompt: (tabId: TabId, answer: PromptAnswer) => send('prompt:answer', { tabId, answer }),
   resize: (tabId: TabId, { cols, rows }: TermSize) => send('pty:resize', { tabId, cols, rows }),
   closeShell: (tabId: TabId) => send('pty:close', { tabId }),

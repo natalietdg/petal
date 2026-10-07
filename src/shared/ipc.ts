@@ -138,6 +138,8 @@ export interface InvokeChannels {
 
   // The reply box's send: answered, so a send that never reached the pty can be taken back.
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
+  // An image pasted into the reply box, saved as a PNG; Claude reads it by the returned path.
+  'paste:save-image': { args: [request: { bytes: Uint8Array }]; result: Guarded<{ file: string }> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.

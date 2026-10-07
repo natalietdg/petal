@@ -6,7 +6,7 @@ import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
 import * as history from './history';
-import { fixtureSession, isSnapshotRun, promptWrites } from './snapshot-mode';
+import { fixtureSession, isSnapshotRun, promptWrites, ptyWrites } from './snapshot-mode';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { handle, on, send } from './ipc';
@@ -120,7 +120,10 @@ export function registerTabIpc(): void {
     if (!tabFor(event, tabId)) startSession(event.sender, { tabId, cols, rows });
   });
 
-  on('pty:write', (event, { tabId, data }) => tabFor(event, tabId)?.pty.write(data));
+  on('pty:write', (event, { tabId, data }) => {
+    if (isSnapshotRun()) ptyWrites.push({ tabId, data });
+    tabFor(event, tabId)?.pty.write(data);
+  });
 
   handle('pty:paste', (event, { tabId, data }) => {
     const session = tabFor(event, tabId);

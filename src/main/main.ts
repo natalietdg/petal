@@ -9,6 +9,7 @@ import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
+import { registerPasteIpc } from './paste-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
@@ -101,6 +102,7 @@ function registerIpc(): void {
 
   registerCustomizeIpc();
   registerReposIpc({ sessions, openTab });
+  registerPasteIpc();
 }
 
 app.whenReady().then(() => {
