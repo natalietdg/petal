@@ -153,6 +153,11 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   log(`expanding row: ${rows.find((row) => row.sessionId === expandId)?.name}`);
 
   const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
+  // Live sessions come and go mid-run: expand a row the panel still shows, else the first pick.
+  const shownRow = (): Promise<string | null> => js(`(() => {
+    const rows = [...document.querySelectorAll('#sessions-panel .session-row:not(.own)')];
+    return (rows.find((r) => r.querySelector('.session-status.busy')) ?? rows[0])?.dataset.sessionId ?? null;
+  })()`);
   for (const id of themeIds) {
     const theme = themes[id];
     applyTheme(id, { persist: false });
@@ -161,9 +166,10 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
     await panel('expandedIds.clear()');
     await panel('setOpen(true)');
     await verifiedCapture({ js, capture, log, theme, panelOpen: true, name: `panel-${id}` });
-    await panel(`expandedIds.add(${JSON.stringify(expandId)})`);
+    const rowId = (await shownRow()) ?? expandId;
+    await panel(`expandedIds.add(${JSON.stringify(rowId)})`);
     await panel('refresh()');
-    await verifiedCapture({ js, capture, log, theme, panelOpen: true, expandedId: expandId, name: `panel-row-${id}` });
+    await verifiedCapture({ js, capture, log, theme, panelOpen: true, expandedId: rowId, name: `panel-row-${id}` });
   }
   await panel('expandedIds.clear()');
   await panel('setOpen(false)');
