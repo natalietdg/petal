@@ -54,7 +54,7 @@ const LONG_REPLY = [
 
 const OLDER_REPLY = '**Found the jump.**\n\nThe reader scrolls to the kicker on every update, not just on new replies.';
 
-const update = {
+export const printUpdate = {
   state: 'live',
   replies: [
     { id: 'print-new', timestamp: '2026-10-07T09:30:00.000Z', prompt: 'why does the reader jump to the top while a reply is still coming in?', markdown: LONG_REPLY },
@@ -99,7 +99,7 @@ export async function printLookCheck(kit: Kit, win: BrowserWindow): Promise<void
   await js('PastelTerm.customize.close()');
 
   // The long reply: headline, dek, sections, rail, callouts, table, code, back matter, one earlier turn.
-  await js(`PastelTerm.reader.update(${JSON.stringify(update)})`);
+  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
   const shaped = await waitFor(() => js(`(() => {
     const latest = document.getElementById('latest');
     const ok = latest.dataset.replyId === 'print-new' && latest.querySelector('.rail');

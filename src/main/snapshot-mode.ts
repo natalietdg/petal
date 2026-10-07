@@ -16,6 +16,7 @@ export interface FixtureSession {
   sessionId: string;
   transcript: string;
   status: string;
+  cwd?: string; // set by the harness's repo header step only
 }
 export const fixtureSession = (): FixtureSession | null => {
   const transcript = fixtureFile();

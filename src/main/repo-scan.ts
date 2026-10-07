@@ -56,12 +56,16 @@ export function branchFromHead(head: string): string | null {
   return null;
 }
 
-// A worktree or submodule has a .git file ("gitdir: <path>") instead of a .git folder.
+// A worktree or submodule's .git file ("gitdir: <path>") -> the git dir it points at.
+export function gitDirFromPointer(repoDir: string, dotGitFile: string): string | null {
+  const pointer = /^gitdir:\s*(.+)$/m.exec(dotGitFile);
+  return pointer?.[1] ? path.resolve(repoDir, pointer[1].trim()) : null;
+}
+
 async function gitDirOf(repoDir: string, dotGit: Dirent): Promise<string | null> {
   const dotGitPath = path.join(repoDir, '.git');
   if (dotGit.isDirectory()) return dotGitPath;
-  const pointer = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(dotGitPath, 'utf8'));
-  return pointer?.[1] ? path.resolve(repoDir, pointer[1].trim()) : null;
+  return gitDirFromPointer(repoDir, await fs.readFile(dotGitPath, 'utf8'));
 }
 
 const mtimeOf = (file: string): Promise<number> => fs.stat(file).then((s) => s.mtimeMs, () => 0);

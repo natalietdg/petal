@@ -60,6 +60,7 @@ export interface ReaderUpdate {
   busy: boolean;
   sessionId: string | null;
   cwd: string | null;
+  repo: string | null; // "<repo> · <branch>" for cwd, or its folder name outside git
   question: PendingQuestion | null; // an AskUserQuestion waiting for her answer
 }
 

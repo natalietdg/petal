@@ -22,6 +22,23 @@
   hanging-punctuation: first;
 }
 
+/* Which repo this session is in: one quiet line that stays at the top while she scrolls. */
+.reader-repo {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: -12px -56px 14px;
+  padding: 6px 56px;
+  background: var(--reader-bg); /* opaque, so text scrolling under it stays out of the way */
+  font: 500 12px/1.4 var(--ui-font);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-repo[hidden] { display: none; }
+
 /* Newspaper kicker above the headline, ruled like a masthead. */
 .status {
   margin: 0 0 22px;
