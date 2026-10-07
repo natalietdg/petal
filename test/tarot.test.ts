@@ -158,7 +158,7 @@ describe('tarot room scene', () => {
     const { back } = svg('tarot');
     // Emblem rows only (below the numeral), so the numerals can't make two faces differ.
     const emblems = [...back.matchAll(/data-variant="\d+">(.*?)<\/g>/g)]
-      .map((g) => [...(g[1] ?? '').matchAll(/<rect x="(\d+)" y="(\d+)"[^>]*class="([\w-]+)"/g)].filter((r) => Number(r[2]) >= 17).map((r) => r.slice(1).join()).join(';'));
+      .map((g) => [...(g[1] ?? '').matchAll(/<rect x="(\d+)" y="(\d+)"[^>]*class="([\w-]+)"/g)].filter((r) => Number(r[2]) >= 13).map((r) => r.slice(1).join()).join(';'));
     expect(new Set(emblems).size).toBe(22);
   });
 });

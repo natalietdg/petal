@@ -17,6 +17,13 @@
 .sc-tr-back-l { fill: #D9A441; } .sc-tr-back { fill: #7A2E66; }
 /* Crystal ball. */
 .sc-tr-ball-l { fill: #B9AEF0; } .sc-tr-ball { fill: #8676D0; } .sc-tr-ball-d { fill: #574A9E; } .sc-tr-ball-o { fill: #1A1236; }
+/* The reader: magenta bandana, sheer lilac veil over a darker face, violet robe, warm hands. */
+.sc-tr-rd-scarf-l { fill: #D8609A; } .sc-tr-rd-scarf { fill: #B0386F; } .sc-tr-rd-scarf-d { fill: #7A2250; }
+.sc-tr-rd-veil-l { fill: #C7B5DC; } .sc-tr-rd-veil { fill: #A08ABC; } .sc-tr-rd-veil-d { fill: #7C679A; } .sc-tr-rd-face { fill: #8A6A92; }
+.sc-tr-rd-robe-l { fill: #7655AE; } .sc-tr-rd-robe { fill: #5A3C8C; } .sc-tr-rd-robe-d { fill: #3F2868; } .sc-tr-rd-o { fill: #170B1C; }
+.sc-tr-rd-hair { fill: #3A1E2E; } .sc-tr-rd-hand { fill: #D79A74; } .sc-tr-rd-hand-d { fill: #B07452; }
+/* The card's shelf. */
+.sc-tr-shelf { fill: #4A2638; }
 /* Candles. */
 .sc-tr-wax-l { fill: #FFF6E6; } .sc-tr-wax { fill: #F0E0C2; } .sc-tr-wax-d { fill: #C9B08A; } .sc-tr-wick { fill: #2A1A12; }
 /* Floor. */
@@ -24,6 +31,7 @@
 /* Moving: flames, the ball's mist and glint, the stencilled stars' centres. */
 .sc-tr-flame-tip1, .sc-tr-flame-tip2 { fill: #F27A2A; } .sc-tr-flame1, .sc-tr-flame2 { fill: #FFB23C; } .sc-tr-flame-core { fill: #FFF3B8; }
 .sc-tr-mist { fill: #E7A6DE; } .sc-tr-glint { fill: #FFFFFF; } .sc-tr-twinkle { fill: #E9C77A; }
+.sc-tr-rd-hem1, .sc-tr-rd-hem2 { fill: #E0B85A; } .sc-tr-rd-tail1, .sc-tr-rd-tail2 { fill: #B0386F; } .sc-tr-rd-eye { fill: #FFF3D6; }
 
 /* The day's card: every face is drawn, only the one named by data-tr-card (set by tarot-reading.ts) shows. */
 #cat .scene-tarot .scene-variant { display: none; }
@@ -68,6 +76,16 @@
 /* The stencilled stars catch the candlelight. */
 #cat .scene-tarot .sc-tr-twinkle { animation: tr-twinkle 4s steps(1) infinite; }
 @keyframes tr-twinkle { 0%, 70% { fill: #E9C77A; } 71%, 85% { fill: #8A6A3E; } }
+
+/* The reader: her veil's hem ripples, her bandana tail sways, her eyes glint through the veil now and then. */
+#cat .scene-tarot .sc-tr-rd-hem1 { animation: tr-hem 3.6s steps(1) infinite; }
+#cat .scene-tarot .sc-tr-rd-hem2 { animation: tr-hem 3.6s steps(1) -1.8s infinite; }
+#cat .scene-tarot .sc-tr-rd-tail1 { animation: tr-sway 4.2s steps(1) infinite; }
+#cat .scene-tarot .sc-tr-rd-tail2 { animation: tr-sway 4.2s steps(1) -2.1s infinite; }
+#cat .scene-tarot .sc-tr-rd-eye { animation: tr-eye 7s steps(1) infinite; }
+@keyframes tr-hem { 0%, 49% { fill: #E0B85A; } 50%, 100% { fill: #C7B5DC; } }
+@keyframes tr-sway { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes tr-eye { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.35; } }
 
 /* Hover tip and click popover with the day's reading (tarot-reading.ts); they sit above the cat. */
 .tarot-tip, .tarot-popover {
