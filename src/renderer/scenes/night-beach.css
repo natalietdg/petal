@@ -43,7 +43,14 @@
 .sc-nb-crab-eye { fill: #FFFFFF; }
 .sc-nb-crab-cheek { fill: #FFB3C1; }
 
-/* Busy-only motion. Moves step in whole sprite pixels so edges stay crisp. */
+/* Resting: fairy lights chase in pairs, stepping on the star twinkle's 1.2s beat so no extra repaints. */
+#cat .scene-night .scene-moving :is(.sc-nb-bulb-gold, .sc-nb-bulb-mint) { animation: nb-blink 2.4s steps(1) infinite; }
+#cat .scene-night .scene-moving :is(.sc-nb-bulb-rose, .sc-nb-bulb-sky) { animation: nb-blink 2.4s steps(1) -1.2s infinite; }
+/* Resting: water glints twinkle on the waves' 0.8s beat. */
+#cat .scene-beach .scene-moving .sc-nb-glint { animation: nb-blink 3.2s steps(1) infinite; }
+#cat .scene-beach .scene-moving .sc-nb-glint:nth-child(even) { animation-delay: -1.6s; }
+
+/* Busy motion. Moves step in whole sprite pixels so edges stay crisp. */
 #cat.busy .scene-night .scene-moving .sc-nb-bulb-gold { animation: nb-blink 1.6s steps(1) infinite; }
 #cat.busy .scene-night .scene-moving .sc-nb-bulb-rose { animation: nb-blink 1.6s steps(1) infinite 0.4s; }
 #cat.busy .scene-night .scene-moving .sc-nb-bulb-mint { animation: nb-blink 1.6s steps(1) infinite 0.8s; }

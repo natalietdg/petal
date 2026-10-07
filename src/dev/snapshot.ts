@@ -14,6 +14,7 @@ import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
 import { pasteCheck } from './snapshot-paste';
+import { sceneMotionCheck } from './snapshot-scenes';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -338,8 +339,9 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   log(`fonts: ${fonts.join(', ')}; headline family: ${await js("getComputedStyle(document.querySelector('#latest .headline')).fontFamily")}`);
   await captureDiagrams({ js, capture, log, themes, applyTheme });
   await catFrames({ js, win, capture, log, feed, themes, applyTheme });
-  await captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId: null });
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+  await sceneMotionCheck(kit, { feed, win });
+  await captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId: null });
   await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
   await views.composerCheck(kit, { win, ...tabs });
   await pasteCheck(kit, { win, ...tabs });
@@ -401,6 +403,20 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await views.resumeRoundTrip(kit, { pty, feed, transcript: () => transcript });
     fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
+    return app.quit();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'scenes') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await sceneMotionCheck(kit, { feed, win }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return app.quit();
+  }
+
+  // Holds one scene idle so its CPU can be measured from outside (ps); quits after PASTEL_SNAPSHOT_IDLE_S.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'scene-idle') {
+    await js(`PastelTerm.cat.setScene(${JSON.stringify(process.env.PASTEL_SNAPSHOT_SCENE ?? 'none')})`);
+    log(`idling on scene ${await js("document.getElementById('cat').dataset.scene")}`);
+    await wait(Number(process.env.PASTEL_SNAPSHOT_IDLE_S ?? 45) * 1000);
     return app.quit();
   }
 

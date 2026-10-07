@@ -29,6 +29,10 @@
 .sc-h-glint, .sc-h-glint2 { fill: #FFFFFF; opacity: 0; }
 .sc-h-glow { fill: #C8F07A; opacity: 0.13; }
 
+/* Resting: the lantern breathes and the candle tips flicker at half pace. */
+#cat .scene-howl .sc-h-glow { animation: h-glow 3.6s steps(3) infinite; }
+#cat .scene-howl .sc-h-fb { animation: h-flame-b 1.2s steps(1) infinite; }
+
 /* While Claude works: strands sway, candles flicker, gems glint and the lantern breathes. */
 #cat.busy .scene-howl [class^="sc-h-s1-"] { animation: h-sway 2.4s steps(1) infinite; }
 #cat.busy .scene-howl [class^="sc-h-s2-"] { animation: h-sway 2.4s steps(1) -0.8s infinite; }

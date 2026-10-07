@@ -27,9 +27,9 @@
 .sc-hs-glow { fill: #C8F07A; opacity: 0.13; }
 
 /* While Claude works: strands sway, candles flicker, gems glint and the lantern breathes. */
-#cat.busy .scene-study [class^="sc-h-s1-"] { animation: h-sway 2.4s steps(1) infinite; }
-#cat.busy .scene-study [class^="sc-h-s2-"] { animation: h-sway 2.4s steps(1) -0.8s infinite; }
-#cat.busy .scene-study [class^="sc-h-s3-"] { animation: h-sway 2.4s steps(1) -1.6s infinite; }
+#cat.busy .scene-study [class^="sc-hs-s1-"] { animation: h-sway 2.4s steps(1) infinite; }
+#cat.busy .scene-study [class^="sc-hs-s2-"] { animation: h-sway 2.4s steps(1) -0.8s infinite; }
+#cat.busy .scene-study [class^="sc-hs-s3-"] { animation: h-sway 2.4s steps(1) -1.6s infinite; }
 @keyframes h-sway {
   0% { transform: translateX(0); }
   25% { transform: translateX(1px); }
@@ -53,10 +53,10 @@
 :is(.sc-hs-sp1-h, .sc-hs-sp2-h, .sc-hs-sp3-h) { fill: #FFF6D6; }
 .sc-hs-sp-eye { fill: #FFFFFF; }
 .sc-hs-sp-lidline { fill: #24150E; }
-.scene-study :is([class^="sc-h-sp2-"], [class^="sc-h-sp3-"], .sc-hs-sp-lid, .sc-hs-sp-lidline) { opacity: 0; }
-.scene-study [class^="sc-h-sp1-"] { animation: h-spirit-frame 0.9s steps(1) infinite; }
-.scene-study [class^="sc-h-sp2-"] { animation: h-spirit-frame 0.9s steps(1) -0.6s infinite; }
-.scene-study [class^="sc-h-sp3-"] { animation: h-spirit-frame 0.9s steps(1) -0.3s infinite; }
+.scene-study :is([class^="sc-hs-sp2-"], [class^="sc-hs-sp3-"], .sc-hs-sp-lid, .sc-hs-sp-lidline) { opacity: 0; }
+.scene-study [class^="sc-hs-sp1-"] { animation: h-spirit-frame 0.9s steps(1) infinite; }
+.scene-study [class^="sc-hs-sp2-"] { animation: h-spirit-frame 0.9s steps(1) -0.6s infinite; }
+.scene-study [class^="sc-hs-sp3-"] { animation: h-spirit-frame 0.9s steps(1) -0.3s infinite; }
 @keyframes h-spirit-frame { 0% { opacity: 1; } 33.333% { opacity: 0; } }
 .scene-study :is(.sc-hs-sp-lid, .sc-hs-sp-lidline) { animation: h-spirit-blink 4s steps(1) infinite; }
 @keyframes h-spirit-blink { 0% { opacity: 0; } 92.5% { opacity: 1; } 96.25% { opacity: 0; } }
