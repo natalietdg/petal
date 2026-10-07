@@ -5,6 +5,7 @@ import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
 import { isSnapshotRun, userDataDir } from './snapshot-mode';
+import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
@@ -34,17 +35,19 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: currentTheme().reader.background,
     title: 'Petal',
+    ...(isSnapshotRun() && offscreenWindowOptions()),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      backgroundThrottling: !isSnapshotRun(), // an off-screen window must keep painting
     },
   });
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event) => event.preventDefault());
-  win.once('ready-to-show', () => (isSnapshotRun() ? win.showInactive() : win.show()));
+  win.once('ready-to-show', () => (isSnapshotRun() ? showOffscreen(win) : win.show()));
   // electron-vite builds the renderer next to main: out/renderer/index.html.
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
@@ -106,6 +109,7 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  if (isSnapshotRun()) app.dock?.hide(); // no Dock icon, never the active app
   registerIpc();
   refreshMenu();
   const win = createWindow();
