@@ -4,11 +4,18 @@
 /* Spiral galaxy: white core, warm bulge, pink to violet arms, a deep glow. */
 .sc-pl-gx-core { fill: #FFFFFF; } .sc-pl-gx-bulge { fill: #FFE6C2; } .sc-pl-gx-arm-hi { fill: #FFB3DE; }
 .sc-pl-gx-arm { fill: #D46AB8; } .sc-pl-gx-arm-out { fill: #8A4AB0; } .sc-pl-gx-glow { fill: #3A2678; }
-/* Nebulae: teal and pink. */
-.sc-pl-teal-l { fill: #8EE3DC; } .sc-pl-teal { fill: #2F9AA8; } .sc-pl-teal-d { fill: #1B4A6C; }
-.sc-pl-pink-l { fill: #F7B0DA; } .sc-pl-pink { fill: #B04A9E; } .sc-pl-pink-d { fill: #4E2470; }
-/* Stars in three brightnesses, and constellation lines. */
+/* Nebulae: faint teal and pink, close to the sky so they sit far back. */
+.sc-pl-teal-l { fill: #2E5E7A; } .sc-pl-teal { fill: #223F66; } .sc-pl-teal-d { fill: #1A2552; }
+.sc-pl-pink-l { fill: #5A3572; } .sc-pl-pink { fill: #3E275E; } .sc-pl-pink-d { fill: #2C1C52; }
+/* The day's planet, low contrast so it reads as background. Mars: rust, dark seas, a south polar cap. */
+.sc-pl-mars-limb { fill: #4A2236; } .sc-pl-mars-body { fill: #66302F; } .sc-pl-mars-lit { fill: #763830; }
+.sc-pl-mars-sea { fill: #55262E; } .sc-pl-mars-cap { fill: #B09A9C; }
+/* Neptune: deep blue, lighter bands, a dark spot with a bright cloud. */
+.sc-pl-nep-limb { fill: #1A2458; } .sc-pl-nep-body { fill: #24397C; } .sc-pl-nep-lit { fill: #2A4488; }
+.sc-pl-nep-band { fill: #3A5A9C; } .sc-pl-nep-belt { fill: #1E2E6A; } .sc-pl-nep-spot { fill: #131A46; } .sc-pl-nep-cloud { fill: #6E86C0; }
+/* Stars in three brightnesses, white and gold, and constellation lines. */
 .sc-pl-star { fill: #FFFFFF; } .sc-pl-star-mid { fill: #C9C0FF; } .sc-pl-star-dim { fill: #6C62B4; }
+.sc-pl-star-gold { fill: #FFE08A; } .sc-pl-star-gold-mid { fill: #E8BE5A; } .sc-pl-star-gold-dim { fill: #8E7448; }
 .sc-pl-line { fill: #4F5AA6; }
 /* Room: cove light at the horizon, seat backs, floor. */
 .sc-pl-cove { fill: #E9A6C8; } .sc-pl-wall { fill: #1A1430; }
@@ -18,19 +25,25 @@
 .sc-pl-proj-l { fill: #6A6290; } .sc-pl-proj { fill: #3A3458; } .sc-pl-proj-d { fill: #26223C; } .sc-pl-proj-o { fill: #120E20; }
 /* Moving: twinkling stars, sparkle arms, the shooting star. */
 .sc-pl-tw1, .sc-pl-tw2, .sc-pl-tw3, .sc-pl-shoot { fill: #FFFFFF; }
+.sc-pl-tw1-gold, .sc-pl-tw2-gold, .sc-pl-tw3-gold { fill: #FFD66E; }
 .sc-pl-spark1, .sc-pl-spark2, .sc-pl-spark3 { fill: #B8A8F0; }
 .sc-pl-trail { fill: #D7CCFF; } .sc-pl-trail-faint { fill: #7A6CC0; }
 
+/* Both planets are drawn; only the day's one shows (data-pl-planet, set by planetarium.ts; Mars by default). */
+#cat .scene-planetarium [class^="sc-pl-nep-"] { display: none; }
+:root[data-pl-planet="neptune"] #cat .scene-planetarium [class^="sc-pl-nep-"] { display: inline; }
+:root[data-pl-planet="neptune"] #cat .scene-planetarium [class^="sc-pl-mars-"] { display: none; }
+
 /* Always on, gently: stars twinkle in three staggered groups. */
-#cat .scene-planetarium :is(.sc-pl-tw1, .sc-pl-spark1) { animation: pl-twinkle 3s steps(1) infinite; }
-#cat .scene-planetarium :is(.sc-pl-tw2, .sc-pl-spark2) { animation: pl-twinkle 3s steps(1) -1s infinite; }
-#cat .scene-planetarium :is(.sc-pl-tw3, .sc-pl-spark3) { animation: pl-twinkle 3s steps(1) -2s infinite; }
+#cat .scene-planetarium :is(.sc-pl-tw1, .sc-pl-tw1-gold, .sc-pl-spark1) { animation: pl-twinkle 3s steps(1) infinite; }
+#cat .scene-planetarium :is(.sc-pl-tw2, .sc-pl-tw2-gold, .sc-pl-spark2) { animation: pl-twinkle 3s steps(1) -1s infinite; }
+#cat .scene-planetarium :is(.sc-pl-tw3, .sc-pl-tw3-gold, .sc-pl-spark3) { animation: pl-twinkle 3s steps(1) -2s infinite; }
 @keyframes pl-twinkle { 0%, 60% { opacity: 1; } 61%, 85% { opacity: 0.2; } }
 /* The nebula cores shimmer slowly, out of step. */
 #cat .scene-planetarium .sc-pl-teal-l { animation: pl-shimmer-teal 8s ease-in-out infinite; }
 #cat .scene-planetarium .sc-pl-pink-l { animation: pl-shimmer-pink 8s ease-in-out -4s infinite; }
-@keyframes pl-shimmer-teal { 50% { fill: #BFF5EE; } }
-@keyframes pl-shimmer-pink { 50% { fill: #FFD6EE; } }
+@keyframes pl-shimmer-teal { 50% { fill: #3A6E88; } }
+@keyframes pl-shimmer-pink { 50% { fill: #6A4082; } }
 /* A shooting star streaks down-left across the upper right, then waits for the next pass. */
 #cat .scene-planetarium :is(.sc-pl-shoot, .sc-pl-trail, .sc-pl-trail-faint) { animation: pl-shooting-star 8s steps(1) infinite; }
 @keyframes pl-shooting-star {
