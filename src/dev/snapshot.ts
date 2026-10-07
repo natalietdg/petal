@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app, type BrowserWindow } from 'electron';
+import { app, BrowserWindow, screen } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck } from './snapshot-prompts';
@@ -20,6 +20,7 @@ import { sceneMotionCheck } from './snapshot-scenes';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
+import { onAnyDisplay } from '../main/snapshot-window';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -65,6 +66,11 @@ interface RunDeps extends TabsDeps {
   win: BrowserWindow;
   themes: Themes;
   applyTheme: ApplyTheme;
+}
+
+interface StepCount {
+  done: number;
+  total: number;
 }
 
 interface StepDeps {
@@ -326,7 +332,51 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
   applyTheme('paleSky', { persist: false });
 }
 
-async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<void> {
+// Runs every fixture check in order; returns how many finished, so a cut-short run shows in the marker.
+async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
+  const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+  const steps: [string, () => Promise<unknown>][] = [
+    ['reply', () => fixtureReply({ js, log, pty })],
+    ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
+    ['cat frames', () => catFrames({ js, win, capture, log, feed, themes, applyTheme })],
+    ['scene motion', () => sceneMotionCheck(kit, { feed, win })],
+    ['sessions panel', () => captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId: null })],
+    ['tabs', () => views.tabsCheck(kit, { win, feed, ...tabs })], // before the flow steps, which can hang on their own
+    ['composer', () => views.composerCheck(kit, { win, ...tabs })],
+    ['paste', () => pasteCheck(kit, { win, ...tabs })],
+    ['prompts', () => promptsCheck(kit, { win, ...tabs })],
+    ['sessions close', () => views.sessionsCloseCheck(kit)],
+    ['sessions agents', () => views.sessionsAgentsCheck(kit)],
+    ['fixture flow', () => views.fixtureFlow(kit)],
+    ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
+    ['history', () => views.historyScreens(kit)],
+    ['customize', () => views.customizeScreens(kit)],
+    ['overlays', () => views.overlaysCheck(kit)],
+    ['tarot', () => tarotCheck(kit, win)],
+    ['error replies', () => views.errorRepliesCheck(kit)],
+    ['repos', () => reposCheck(kit, { win, ...tabs })],
+    ['repo line', () => repoLineCheck(kit, { feed })], // before the print steps, which replace the fixture's replies
+    ['print look', () => printLookCheck(kit, win)], // replaces the reader's reply with its own long sample
+    ['print axis', () => printAxisCheck(kit, win)],
+    ['column axis', () => columnAxisCheck(kit, win)],
+    ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // last: it appends turns to the fixture
+  ];
+  const count: StepCount = { done: 0, total: steps.length };
+  log(`SNAPSHOT START steps=${count.total}`);
+  for (const [name, step] of steps) {
+    log(`step ${count.done + 1}/${count.total} ${name}`);
+    try {
+      await step();
+    } catch (error) {
+      log(`FAIL step ${name}: ${(error as Error).stack}`); // a failing step logs and stops instead of hanging
+      return count;
+    }
+    count.done++;
+  }
+  return count;
+}
+
+async function fixtureReply({ js, log, pty }: Pick<StepDeps, 'js' | 'log'> & { pty: IPty }): Promise<void> {
   log(`mermaid loaded before any diagram: ${await js("typeof window.mermaid !== 'undefined'")}`);
   writeFixture(fakeTranscript() ?? '');
   const samplePath = path.join(outDir(), 'terminal-sample.txt');
@@ -339,37 +389,54 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   log(`reply rendered: ${Boolean(reply)}`);
   const fonts = await js(`['400 19px "Atkinson Hyperlegible Next"', '400 16px "Atkinson Hyperlegible Mono"'].map((f) => f + '=' + document.fonts.check(f))`);
   log(`fonts: ${fonts.join(', ')}; headline family: ${await js("getComputedStyle(document.querySelector('#latest .headline')).fontFamily")}`);
-  await captureDiagrams({ js, capture, log, themes, applyTheme });
-  await catFrames({ js, win, capture, log, feed, themes, applyTheme });
-  const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-  await sceneMotionCheck(kit, { feed, win });
-  await captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId: null });
-  await views.tabsCheck(kit, { win, feed, ...tabs }); // before the flow steps, which can hang on their own
-  await views.composerCheck(kit, { win, ...tabs });
-  await pasteCheck(kit, { win, ...tabs });
-  await promptsCheck(kit, { win, ...tabs });
-  await views.sessionsCloseCheck(kit);
-  await views.sessionsAgentsCheck(kit);
-  await views.fixtureFlow(kit);
-  await views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION);
-  await views.historyScreens(kit);
-  await views.customizeScreens(kit);
-  await views.overlaysCheck(kit);
-  await tarotCheck(kit, win);
-  await views.errorRepliesCheck(kit);
-  await reposCheck(kit, { win, ...tabs });
-  await repoLineCheck(kit, { feed }); // before the print steps, which replace the fixture's replies
-  await printLookCheck(kit, win); // replaces the reader's reply with its own long sample
-  await printAxisCheck(kit, win);
-  await columnAxisCheck(kit, win);
-  await latencyCheck(kit, { feed, file: fakeTranscript() ?? '' }); // last: it appends turns to the fixture
+}
+
+const WATCH_INTERVAL_MS = 2000;
+
+// Samples the window all run long into window-watch.log; it must never be visible on a display or focused.
+function watchWindow(win: BrowserWindow, log: Log): () => void {
+  const file = path.join(outDir(), 'window-watch.log');
+  fs.writeFileSync(file, `displays ${JSON.stringify(screen.getAllDisplays().map((d) => d.bounds))}\n`);
+  let samples = 0;
+  let seen = 0;
+  let focused = 0;
+  const sample = () => {
+    const bounds = win.getBounds();
+    const visible = onAnyDisplay(bounds) && win.getOpacity() > 0;
+    const hasFocus = BrowserWindow.getFocusedWindow() !== null;
+    samples++;
+    if (visible) seen++;
+    if (hasFocus) focused++;
+    fs.appendFileSync(file, `${new Date().toISOString()} bounds=${JSON.stringify(bounds)} opacity=${win.getOpacity()} visible=${visible} focused=${hasFocus}\n`);
+  };
+  sample();
+  const timer = setInterval(sample, WATCH_INTERVAL_MS);
+  return () => {
+    clearInterval(timer);
+    sample();
+    log(`${seen || focused ? 'FAIL' : 'ok'} window stayed off every display and unfocused: ${samples} samples, ${seen} visible, ${focused} focused`);
+  };
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {
   fs.mkdirSync(outDir(), { recursive: true });
   const logFile = path.join(outDir(), 'snapshot.log');
   fs.writeFileSync(logFile, '');
-  const log: Log = (line) => fs.appendFileSync(logFile, `${line}\n`);
+  let ok = 0;
+  let fail = 0;
+  const log: Log = (line) => {
+    if (/^ok\b/.test(line)) ok++;
+    else if (/^FAIL\b/.test(line)) fail++;
+    fs.appendFileSync(logFile, `${line}\n`);
+  };
+  const stopWatch = watchWindow(win, log);
+  // Every finished run ends on this line; a log without it was cut short and counts as failed.
+  const finish = (steps?: StepCount): void => {
+    stopWatch();
+    const short = steps && steps.done < steps.total;
+    log(`SNAPSHOT ${short ? 'INCOMPLETE' : 'COMPLETE'} ok=${ok} fail=${fail}${steps ? ` steps=${steps.done}/${steps.total}` : ''}`);
+    app.quit();
+  };
   const js: Js = (code) => win.webContents.executeJavaScript(code);
   const capture: Capture = async (name) => {
     await wait(800);
@@ -378,9 +445,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     log(`captured ${name}: ${file}`);
   };
 
-  // The snapshot window pops up over her work: never take her mouse or keyboard.
-  win.setIgnoreMouseEvents(true);
-  win.setFocusable(false);
   log(`renderer: ${JSON.stringify(await new Promise((r) => once('renderer:ready', (_e, info) => r(info))))}`);
   const first = activeSession(win.webContents.id); // the window's first tab
   if (!first) throw new Error('snapshot: the first tab never started');
@@ -391,7 +455,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'flow-relaunch') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await views.flowRelaunch(kit, { fixtureFile: fakeTranscript() ?? '', realSessionId: process.env.PETAL_SNAPSHOT_REAL_SESSION ?? '' });
-    return app.quit();
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'open') {
@@ -399,7 +463,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await views.openFromHistory(kit, { pty, feed, transcript: () => transcript, sessions, win });
     fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-    return app.quit();
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'resume') {
@@ -407,7 +471,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await views.resumeRoundTrip(kit, { pty, feed, transcript: () => transcript });
     fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-    return app.quit();
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'scenes') {
@@ -427,21 +491,20 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'print-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await printAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
-    return app.quit();
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
-    return app.quit();
+    return finish();
   }
 
   if (fakeTranscript()) {
     // A failing step logs and quits instead of leaving the run hanging.
-    await runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs: { sessions, activeSession, openTab } })
-      .catch((error: Error) => log(`FAIL ${error.stack}`));
+    const steps = await runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs: { sessions, activeSession, openTab } });
     fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-    return app.quit();
+    return finish(steps);
   }
 
   await wait(2500); // login shell rc files
@@ -462,7 +525,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     log(`FAIL claude session never found under shell pid ${pty.pid}`);
     log(execSync('/bin/ps -Ao pid=,ppid=,comm=').toString());
     fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-    return app.quit();
+    return finish();
   }
   const sessionFile = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'sessions', `${session.pid}.json`), 'utf8')) as { sessionId?: string };
   log(`followed pid=${session.pid} sessionId=${session.sessionId} sessionsJson.sessionId=${sessionFile.sessionId} match=${session.sessionId === sessionFile.sessionId}`);
@@ -490,6 +553,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   log(`ended state shown: ${Boolean(ended)}; reply still visible: ${(await js("document.getElementById('latest').innerText")).trim() === replyText}`);
   await capture('ended');
   fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-  app.quit();
+  finish();
 }
 

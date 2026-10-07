@@ -8,6 +8,7 @@ import * as links from './links-store';
 import * as tagsStore from './tags-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand } from './resume-command';
+import { isSnapshotRun } from './snapshot-mode';
 import { pageOfTurns, turnsFor } from './history-turns';
 import { registerTagsIpc } from './tags-ipc';
 import { registerFlowIpc } from './flow-ipc';
@@ -69,8 +70,10 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
 
     const existing = tabShowing(sessionId);
     if (existing) {
-      existing.win.show();
-      existing.win.focus();
+      if (!isSnapshotRun()) {
+        existing.win.show();
+        existing.win.focus();
+      }
       send(existing.win.webContents, 'tabs:activate', { tabId: existing.tabId });
       return { ok: true, focused: existing.win.webContents.id !== event.sender.id };
     }

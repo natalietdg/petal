@@ -72,7 +72,6 @@ export async function columnAxisCheck(kit: Kit, win: BrowserWindow): Promise<voi
         // A resize can be dropped while the window is busy: ask again until the page really is this wide.
         let sized = false;
         for (let attempt = 0; attempt < 4 && !sized; attempt++) {
-          if (attempt) win.moveTop(); // a covered window holds its old size; z-order only, never focus
           win.setContentSize(width, 900);
           sized = Boolean(await waitFor(async () => {
             win.webContents.invalidate(); // an unfocused window can hold its old frame and size
