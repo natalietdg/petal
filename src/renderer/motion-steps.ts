@@ -3,11 +3,19 @@
 
 const STEPS = /^steps\(\s*(\d+)/;
 
+// The parts of a DOM Animation read here; declared locally so main-process unit tests can type-check them.
+export interface SteppedAnimation {
+  readonly effect: {
+    getTiming(): { duration?: unknown; delay?: unknown; direction?: string };
+    getKeyframes?(): { computedOffset?: unknown; easing?: unknown }[];
+  } | null;
+}
+
 // Change points as fractions of one iteration, or null when the easing is continuous.
 // A superset is fine: an extra point only costs one redundant write.
-export function changePoints(animation: Animation): number[] | null {
-  const effect = animation.effect as KeyframeEffect | null;
-  if (!effect) return null;
+export function changePoints(animation: SteppedAnimation): number[] | null {
+  const effect = animation.effect;
+  if (!effect?.getKeyframes) return null;
   const frames = effect.getKeyframes();
   const points = new Set<number>([0]);
   for (let i = 0; i < frames.length; i += 1) {
@@ -32,7 +40,7 @@ export interface StepTiming {
   delay: number;
 }
 
-export const stepTiming = (animation: Animation): StepTiming => {
+export const stepTiming = (animation: SteppedAnimation): StepTiming => {
   const timing = animation.effect?.getTiming();
   return { points: changePoints(animation), duration: Number(timing?.duration ?? 0), delay: Number(timing?.delay ?? 0) };
 };

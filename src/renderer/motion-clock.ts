@@ -13,7 +13,7 @@ interface Held extends StepTiming {
   step: number | null; // last stretch written; null until the first write
 }
 
-const held = new WeakMap<Animation, Held>();
+let held = new WeakMap<Animation, Held>();
 let timer: ReturnType<typeof setInterval> | undefined;
 // The infinite animations, re-listed only when one starts or is cancelled: listing ~500 every tick costs more than the writes.
 let animations: Animation[] | null = null;
@@ -63,5 +63,9 @@ function tickSoon(): void {
 }
 document.addEventListener('animationstart', tickSoon);
 document.addEventListener('animationcancel', relist); // a cancelled animation must never be written again
+// Busy/idle keeps an animation's name but can swap its timing (h-glow 3.6s -> 1.8s) with no event: re-read it.
+const forget = (): void => { held = new WeakMap(); relist(); };
+const cat = document.getElementById('cat');
+if (cat) new MutationObserver(forget).observe(cat, { attributes: true, attributeFilter: ['class'] });
 document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? start() : stop()));
 if (document.visibilityState === 'visible') start();
