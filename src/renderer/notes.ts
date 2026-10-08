@@ -19,7 +19,7 @@ interface Options {
 }
 
 const noSession = (): NotesEditor => ({
-  element: el('p', 'status empty notes-empty', 'Notes belong to a Claude session. Start Claude in this tab and its notes show here.'),
+  element: el('p', 'status empty notes-empty', 'No Claude session in this tab yet'),
   flush: async () => {},
 });
 

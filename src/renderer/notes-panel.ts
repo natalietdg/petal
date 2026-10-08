@@ -100,11 +100,11 @@ function dragToResize(grip: HTMLElement, aside: HTMLElement): void {
   });
 }
 
-// The reader's panel starts where the reader does, below the dock and the fixed header.
-const readerScroller = byId('reader');
+// The reader's panel runs from the top of the fixed header (just under the dock) to the reply box's bottom.
+const readerHead = byId('reader-head');
 export const reader = createPanel(byId('notes-panel'), byId('reader-area'));
 reader.bindToggle(byId<HTMLButtonElement>('notes-toggle'));
-new ResizeObserver(() => { reader.aside.style.top = `${readerScroller.offsetTop}px`; }).observe(readerScroller);
+new ResizeObserver(() => { reader.aside.style.top = `${readerHead.offsetTop}px`; }).observe(byId('reader'));
 
 // Reads the saved open state and width; runs once at startup.
 export async function loadPrefs(): Promise<void> {

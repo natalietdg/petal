@@ -181,16 +181,19 @@ export function setView(next: ReaderView): void {
   if (view !== 'replies') refreshFlow();
 }
 
-// The notes panel follows the shown tab's Claude session; a tab whose session id changed (/clear) says where the old notes went.
+// The notes panel follows the shown tab's Claude session, or the last one it had once Claude ends;
+// a tab whose session id changed (/clear) says where the old notes went.
 let notesSession: string | null | undefined;
-const sessionByTab = new Map<string, string | null>();
+const sessionByTab = new Map<string, string>();
 const clearedTabs = new Set<string>();
 
-function followNotesSession({ tabId, sessionId = null }: ShownUpdate): void {
+function followNotesSession({ tabId, sessionId: live = null }: ShownUpdate): void {
+  let sessionId = live;
   if (tabId) {
     const before = sessionByTab.get(tabId);
-    if (before && sessionId && before !== sessionId) clearedTabs.add(tabId);
-    sessionByTab.set(tabId, sessionId);
+    if (before && live && before !== live) clearedTabs.add(tabId);
+    if (live) sessionByTab.set(tabId, live);
+    else sessionId = before ?? null;
   }
   if (sessionId === notesSession) return;
   notesSession = sessionId;
