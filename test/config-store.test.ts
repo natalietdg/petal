@@ -18,10 +18,11 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has six sections with the documented defaults', () => {
+  it('has seven sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel']);
     expect(d.welcome).toEqual({ seen: false });
+    expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
     expect(d.tarot).toEqual({ birthdate: '' });
     expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
@@ -122,8 +123,14 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
+  });
+
+  it('notes panel keeps a known open state and clamps its width', () => {
+    expect(config.save({ notesPanel: { open: 'open', width: 9999 } }).notesPanel).toEqual({ open: 'open', width: 520 });
+    expect(config.save({ notesPanel: { open: 'sideways', width: 'wide' } }).notesPanel).toEqual({ open: 'open', width: 520 });
+    expect(config.save({ notesPanel: { open: 'closed', width: 100 } }).notesPanel).toEqual({ open: 'closed', width: 260 });
   });
 
   it('atomic write leaves no .tmp', () => {
