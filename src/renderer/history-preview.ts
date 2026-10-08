@@ -9,6 +9,7 @@ import { attachPreviewTags } from './history-tags';
 import { createNotesEditor, type NotesEditor } from './notes';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
+import { limitNote } from './sessions-panel';
 import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 
 export async function renderPreview(): Promise<void> {
@@ -158,6 +159,12 @@ async function renderRepliesBody(session: Session, body: HTMLElement): Promise<v
 }
 
 export async function doResume(sessionId: string, note: HTMLElement, confirmFork: boolean): Promise<void> {
+  // A session already in a tab just gets focused; anything else starts a Claude, so her limit applies.
+  const limited = reply.tabFor(sessionId) ? null : await limitNote('open it here');
+  if (limited) {
+    note.textContent = limited;
+    return;
+  }
   const result = await window.pastel.history.resume(sessionId, confirmFork);
   note.replaceChildren();
   if ('ok' in result) {

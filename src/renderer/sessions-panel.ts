@@ -168,6 +168,12 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
 }
 
 async function reopen(entry: ClosedSession, confirmFork: boolean): Promise<void> {
+  const limited = await limitNote('reopen one');
+  if (limited) {
+    notes.set(entry.sessionId, limited);
+    refresh();
+    return;
+  }
   notes.set(entry.sessionId, 'Opening…');
   refresh();
   const result = await window.pastel.history.resume(entry.sessionId, confirmFork);
