@@ -24,6 +24,7 @@ import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
+import { colourKeyCheck } from './snapshot-colour-key';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -380,6 +381,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['column axis', () => columnAxisCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
+    ['colour key', () => colourKeyCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
@@ -525,6 +527,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
