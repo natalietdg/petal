@@ -77,15 +77,15 @@ export function finishesAgent(entry: TranscriptEntry): boolean {
   return uses.some((item) => item.name === HANDBACK) || (entry.message?.stop_reason === 'end_turn' && uses.length === 0);
 }
 
-// From the newest entry back: the last assistant turn decides, unless a new prompt came after it.
-export function isFinished(entries: readonly TranscriptEntry[]): boolean {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const entry = entries[i];
-    if (entry?.type === 'assistant' && contentItems(entry).length) return finishesAgent(entry);
-    if (entry?.type === 'user' && !entry.isMeta && !isToolResultTurn(entry) && contentItems(entry).length) return false;
-  }
-  return false;
+// The last assistant turn decides, unless a new prompt came after it; other lines leave it as it was.
+export function finishedAfter(finished: boolean, entry: TranscriptEntry): boolean {
+  if (!contentItems(entry).length || entry.isMeta) return finished;
+  if (entry.type === 'assistant') return finishesAgent(entry);
+  if (entry.type === 'user' && !isToolResultTurn(entry)) return false;
+  return finished;
 }
+
+export const isFinished = (entries: readonly TranscriptEntry[]): boolean => entries.reduce(finishedAfter, false);
 
 export function latestStep(entries: readonly TranscriptEntry[]): string | null {
   for (let i = entries.length - 1; i >= 0; i--) {
