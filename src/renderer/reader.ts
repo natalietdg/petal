@@ -4,6 +4,7 @@ import * as flow from './flow';
 import { byId, query } from './dom';
 import { createNotesEditor, type NotesEditor } from './notes';
 import { timeOf } from './format';
+import { createStrip, paintStrip } from './status-strip';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 
@@ -15,6 +16,8 @@ const older = byId('older');
 const status = byId('reader-status');
 const repoLine = byId('reader-repo');
 const scroller = byId('reader');
+const strip = createStrip();
+query(byId('reader-head'), '.reader-head-column').append(strip);
 let latestId: string | null | undefined = null;
 const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
 const FLASH_MS = 1600;
@@ -88,6 +91,7 @@ export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
   followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null } = shown;
+  paintStrip(strip, replies.map((r) => r.markdown));
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
   column.classList.toggle('ended', state === 'ended');
