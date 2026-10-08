@@ -29,6 +29,7 @@ import './scenes/night-beach.css';
 import './scenes/starlit.css';
 import './scenes/planetarium.css';
 import './scenes/tarot.css';
+import './scenes/scene-card.css';
 import './flow.css';
 import './history.css';
 import './composer.css';
