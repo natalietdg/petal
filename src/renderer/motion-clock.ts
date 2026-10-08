@@ -15,8 +15,11 @@ interface Held extends StepTiming {
 
 const held = new WeakMap<Animation, Held>();
 let timer: ReturnType<typeof setInterval> | undefined;
+// The infinite animations, re-listed only when one starts or is cancelled: listing ~500 every tick costs more than the writes.
+let animations: Animation[] | null = null;
 
 const isInfinite = (animation: Animation): boolean => animation.effect?.getTiming().iterations === Infinity;
+const relist = (): void => { animations = null; };
 
 function take(animation: Animation, now: number): Held {
   const entry = { ...stepTiming(animation), offsetMs: Number(animation.currentTime ?? 0), takenAt: now, step: null };
@@ -27,9 +30,9 @@ function take(animation: Animation, now: number): Held {
 // Reads first, then writes: any read after a write forces a style recalc per animation.
 function tick(): void {
   const now = performance.now();
-  const infinite = document.getAnimations().filter(isInfinite);
-  const entries = infinite.map((animation) => held.get(animation) ?? take(animation, now));
-  infinite.forEach((animation, i) => {
+  animations ??= document.getAnimations().filter(isInfinite);
+  const entries = animations.map((animation) => held.get(animation) ?? take(animation, now));
+  animations.forEach((animation, i) => {
     const entry = entries[i];
     const time = entry.offsetMs + (now - entry.takenAt);
     const step = stepAt(entry, time);
@@ -52,6 +55,13 @@ function stop(): void {
 }
 
 // New animations (a scene switch, the cat going busy) are taken over at once instead of on the next tick.
-document.addEventListener('animationstart', () => { if (timer) tick(); });
+// One tick for a whole burst of starts (a scene switch starts hundreds), not one per event.
+let soon: ReturnType<typeof setTimeout> | undefined;
+function tickSoon(): void {
+  relist();
+  if (timer && !soon) soon = setTimeout(() => { soon = undefined; tick(); });
+}
+document.addEventListener('animationstart', tickSoon);
+document.addEventListener('animationcancel', relist); // a cancelled animation must never be written again
 document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? start() : stop()));
 if (document.visibilityState === 'visible') start();

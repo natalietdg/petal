@@ -52,6 +52,6 @@ export async function sceneIdle({ win, js, log }: { win: BrowserWindow; js: Js; 
   const seconds = (Date.now() - start) / 1000;
   const percent = Object.fromEntries(Object.keys(after).map((type) => [type, +((100 * (after[type] - (before[type] ?? 0))) / seconds).toFixed(2)]));
   const total = Object.values(percent).reduce((sum, value) => sum + value, 0);
-  const state = await js("({ scene: document.getElementById('cat').dataset.scene, visibility: document.visibilityState, focus: document.hasFocus(), count: document.getAnimations().length, rects: document.querySelectorAll('#cat rect').length, animations: [...new Set(document.getAnimations().filter((a) => a.playState === 'running').map((a) => a.animationName))].join(' ') })");
+  const state = await js("({ scene: document.getElementById('cat').dataset.scene, visibility: document.visibilityState, focus: document.hasFocus(), count: document.getAnimations().length, paused: document.getAnimations().filter((a) => a.playState !== 'running').length, rects: document.querySelectorAll('#cat rect').length, animations: [...new Set(document.getAnimations().filter((a) => a.playState === 'running').map((a) => a.animationName))].join(' ') })");
   log(`IDLE ${JSON.stringify({ ...state, onscreen: process.env.PASTEL_SNAPSHOT_ONSCREEN === '1', bounds: win.getBounds(), seconds: +seconds.toFixed(1), total: +total.toFixed(2), percent })}`);
 }
