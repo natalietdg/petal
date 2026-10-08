@@ -27,6 +27,7 @@ const MEASURE = `(() => {
     terminalPane: Math.round(pane.height),
     readerArea: Math.round(area.getBoundingClientRect().height),
     readerAreaScroll: area.scrollHeight,
+    chrome: ['sessions-dock', 'reader-head', 'prompt-dock', 'composer'].reduce((sum, id) => sum + document.getElementById(id).offsetHeight, 0),
     composerBottom: Math.round(document.getElementById('composer').getBoundingClientRect().bottom),
     rows: PastelTerm.tabs.active()?.term.rows ?? null,
     grid: getComputedStyle(document.getElementById('app')).gridTemplateRows,
@@ -39,8 +40,12 @@ const MEASURE = `(() => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Measure = any;
 
-// Terminal pane height a reader fraction should give: the fr rows split everything but the divider.
-const expectedPane = (m: Measure, fraction: number): number => (1 - fraction) * (m.appHeight - m.divider.height);
+// Terminal pane height a drag should give: bounds 20–85%, and never less reader than its fixed bands.
+function expectedPane(m: Measure, target: number): number {
+  const rows = m.appHeight - m.divider.height;
+  const fraction = Math.min(0.85, Math.max(0.2, m.chrome / rows, target));
+  return (1 - fraction) * rows;
+}
 
 async function realDrag(kit: Kit, win: BrowserWindow, m: Measure, toY: number): Promise<void> {
   const x = Math.round(win.getContentSize()[0] / 2);
@@ -79,10 +84,11 @@ async function dragCase(kit: Kit, win: BrowserWindow, label: string, how: 'real'
     const thrown = how === 'real' ? (await realDrag(kit, win, before, toY), 'ok') : await syntheticDrag(kit, before, toY);
     await wait(350); // ResizeObserver → fit → rows
     const after: Measure = await js(MEASURE);
-    const want = expectedPane(before, Math.min(0.85, Math.max(0.2, fraction)));
+    const want = expectedPane(before, fraction);
     const heightOk = Math.abs(after.terminalPane - want) <= HEIGHT_TOLERANCE_PX;
+    const reachable = after.coveredCount === 0 && after.composerBottom <= Math.ceil(after.divider.top);
     const rowsOk = after.rows !== before.rows || Math.abs(before.terminalPane - after.terminalPane) <= HEIGHT_TOLERANCE_PX;
-    log(`${heightOk && rowsOk && thrown === 'ok' ? 'ok' : 'FAIL'} divider ${label} ${how} drag to ${fraction * 100}%: pane ${before.terminalPane}→${after.terminalPane}px (want ${Math.round(want)}±${HEIGHT_TOLERANCE_PX}), rows ${before.rows}→${after.rows}, covered ${after.coveredCount} ${JSON.stringify(after.covered.slice(0, 3))}, composer bottom ${after.composerBottom} divider top ${Math.round(after.divider.top)}, reader area ${after.readerArea}px (scroll ${after.readerAreaScroll}), grid "${after.grid}", inline "${after.inline}", ${thrown}`);
+    log(`${heightOk && rowsOk && reachable && thrown === 'ok' ? 'ok' : 'FAIL'} divider ${label} ${how} drag to ${fraction * 100}%: pane ${before.terminalPane}→${after.terminalPane}px (want ${Math.round(want)}±${HEIGHT_TOLERANCE_PX}), rows ${before.rows}→${after.rows}, covered ${after.coveredCount} ${JSON.stringify(after.covered.slice(0, 3))}, composer bottom ${after.composerBottom} divider top ${Math.round(after.divider.top)}, reader area ${after.readerArea}px (scroll ${after.readerAreaScroll}), grid "${after.grid}", inline "${after.inline}", ${thrown}`);
   }
 }
 
