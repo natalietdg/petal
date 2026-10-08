@@ -1,71 +1,75 @@
-/* Izakaya palette, iz- prefixed. Outside: deep indigo night and dark wood.
-   Every light is warm: lantern reds and oranges, amber shoji, gold spill on the road. */
+/* Izakaya palette, iz- prefixed. Golden plaster, warm wood, lantern reds and ambers.
+   The only cool tones are the night and noren in the doorway. */
 
-/* Sky, tile roof and eave. */
-.sc-iz-skyD { fill: #0E0F2A; } .sc-iz-sky { fill: #181A44; }
-.sc-iz-roofL { fill: #4C5088; } .sc-iz-roof { fill: #2C2F5C; } .sc-iz-roofD { fill: #1C1E40; }
-.sc-iz-tileEnd { fill: #6066A0; } .sc-iz-eave { fill: #140E1C; }
+/* Ceiling, wall and the three rings of lantern glow. */
+.sc-iz-ceil { fill: #4A2012; }
+.sc-iz-beamL { fill: #C8763A; } .sc-iz-cord { fill: #2A1610; }
+.sc-iz-wall { fill: #8A4E2A; }
+.sc-iz-halo3 { fill: #A6603A; } .sc-iz-halo2 { fill: #C67A42; } .sc-iz-halo { fill: #E89A50; }
 
-/* Wall: dark plank, warmed red-brown round every lantern. */
-.sc-iz-wood { fill: #34202A; } .sc-iz-seam { fill: #1E1220; }
-.sc-iz-halo2 { fill: #5A2E28; } .sc-iz-halo { fill: #84402A; } .sc-iz-haloSeam { fill: #5A2A1E; }
-.sc-iz-beamL { fill: #B87038; } .sc-iz-post { fill: #4A2618; }
-
-/* Chōchin: dark caps, red skin, orange body, a hot core. */
-.sc-iz-cap { fill: #1E1210; } .sc-iz-cord { fill: #1E1210; }
+/* Lanterns: dark caps, red skin, orange body, a hot core. */
+.sc-iz-cap { fill: #2A1610; }
 .sc-iz-lanD { fill: #B4241C; } .sc-iz-lan { fill: #EE4430; } .sc-iz-lanO { fill: #FF8C3A; }
 .sc-iz-coreA, .sc-iz-coreB { fill: #FFE08A; }
-.sc-iz-akaD { fill: #A41E18; } .sc-iz-aka { fill: #E43828; } .sc-iz-akaL { fill: #FF6A30; }
-.sc-iz-akaRib { fill: #8E1812; } .sc-iz-akaCore { fill: #FFC864; }
 
-/* Sake barrels: straw, rope bands, red labels. */
-.sc-iz-strawL { fill: #F2D498; } .sc-iz-straw { fill: #BE9A5E; } .sc-iz-rope { fill: #5A321C; }
-.sc-iz-label { fill: #D8382A; } .sc-iz-labelMark { fill: #FFE6B0; }
-
-/* Noren: indigo panels, white ring crest, warm slits. */
-.sc-iz-rod { fill: #D8B068; }
+/* Doorway: dark posts, indigo noren, the cool night outside. */
+.sc-iz-post { fill: #7A3418; }
 .sc-iz-norenL { fill: #4A5EC0; } .sc-iz-noren { fill: #2C3E96; } .sc-iz-norenD { fill: #1C2864; }
-.sc-iz-mon { fill: #F6F0E2; } .sc-iz-gap { fill: #FFC266; }
+.sc-iz-nightD { fill: #141230; } .sc-iz-night { fill: #1E1A40; } .sc-iz-star { fill: #F4E6C0; }
 
-/* Shoji and the room: the brightest values in the scene. */
-.sc-iz-shojiFrame { fill: #6A3418; } .sc-iz-lattice { fill: #8E4C22; }
-.sc-iz-paperL { fill: #FFE8A6; } .sc-iz-paper { fill: #FFC86A; }
-.sc-iz-roomL { fill: #FFDC92; } .sc-iz-room { fill: #F2A44A; }
-.sc-iz-shelf { fill: #6E3416; }
+/* The chef. */
+.sc-iz-hair { fill: #1E1414; } .sc-iz-band { fill: #FFFFFF; } .sc-iz-knot { fill: #D8382A; }
+.sc-iz-skin { fill: #F6C894; } .sc-iz-blush { fill: #F29A7C; } .sc-iz-eye { fill: #2A1A14; } .sc-iz-mouth { fill: #A8442E; }
+.sc-iz-coatL { fill: #4E72D0; } .sc-iz-coat { fill: #2F4FA6; } .sc-iz-coatD { fill: #1A2C6A; }
+
+/* Grill, coals, skewers and the pot. */
+.sc-iz-iron { fill: #1E1414; } .sc-iz-grill { fill: #3A2A28; } .sc-iz-grillD { fill: #2A1E1C; }
+.sc-iz-coalL { fill: #FFC050; } .sc-iz-coal { fill: #FF5A24; }
+.sc-iz-stick { fill: #EAD6A8; } .sc-iz-meat { fill: #A4501E; } .sc-iz-meatL { fill: #EE9E48; }
+.sc-iz-pot { fill: #2A2028; } .sc-iz-potL { fill: #8A7A80; }
+
+/* Shelves, bottles and jars. */
+.sc-iz-shelf { fill: #9A4A1C; } .sc-iz-neck { fill: #2A1610; }
 .sc-iz-greenL { fill: #9EE0A0; } .sc-iz-green { fill: #2E8A4A; }
-.sc-iz-brownL { fill: #C27838; } .sc-iz-brown { fill: #5A2810; }
-.sc-iz-potL { fill: #8A7A80; } .sc-iz-pot { fill: #2A2028; }
-.sc-iz-counterL { fill: #FFC070; } .sc-iz-counter { fill: #8E441E; } .sc-iz-counterD { fill: #602A12; }
+.sc-iz-brownL { fill: #E08A3C; } .sc-iz-brown { fill: #6A2E10; }
+.sc-iz-sakeL { fill: #FFFAF0; } .sc-iz-sake { fill: #E8DCC4; } .sc-iz-sakeBand { fill: #3A4E9A; }
+.sc-iz-jarL { fill: #E08A5A; } .sc-iz-jar { fill: #A4502E; }
+.sc-iz-glazeL { fill: #9AB0D0; } .sc-iz-glaze { fill: #4E6288; }
 
-/* Step and wet road. */
-.sc-iz-stepLit { fill: #F0B460; } .sc-iz-stepTop { fill: #5A4C68; } .sc-iz-step { fill: #2E2840; }
-.sc-iz-road { fill: #161A3A; } .sc-iz-roadL { fill: #20264E; }
-.sc-iz-spillL { fill: #E8A050; } .sc-iz-spill { fill: #8E5838; }
-.sc-iz-reflA, .sc-iz-reflB { fill: #FF7A3C; }
+/* Menu tags on their rail. */
+.sc-iz-rail { fill: #3E1E12; } .sc-iz-tag { fill: #FBE9C0; } .sc-iz-tagD { fill: #D8B47C; }
+
+/* Counter, plate and stools. */
+.sc-iz-counterL { fill: #FFD890; } .sc-iz-counter { fill: #E2A250; } .sc-iz-lip { fill: #FFE4A8; }
+.sc-iz-counterG { fill: #C47A30; } .sc-iz-counterD { fill: #6E2C10; }
+.sc-iz-panelL { fill: #DC8E46; } .sc-iz-panel { fill: #B4662C; } .sc-iz-panelD { fill: #5E2410; }
+.sc-iz-panelG { fill: #9A5422; }
+.sc-iz-plate { fill: #FFF8EC; } .sc-iz-plateD { fill: #C8B89E; }
+.sc-iz-seatL { fill: #FFB860; } .sc-iz-seat { fill: #C86E2A; } .sc-iz-leg { fill: #6A2C12; }
+
+/* Moving cells: the chef's arm and fan, sparks and steam. */
+.sc-iz-sleeveA, .sc-iz-sleeveB { fill: #4E72D0; }
+.sc-iz-handA, .sc-iz-handB { fill: #F6C894; }
+.sc-iz-fanA, .sc-iz-fanB { fill: #E8402C; }
+.sc-iz-sparkA, .sc-iz-sparkB { fill: #FFC24A; }
 .sc-iz-steamA, .sc-iz-steamB { fill: #FFF6E6; fill-opacity: 0.85; }
-.sc-iz-rain, .sc-iz-rain2, .sc-iz-rain3 { fill: #B8CCF2; fill-opacity: 0.6; }
 
-/* Motion, always on: lanterns breathe, steam rises, the road shimmers, drizzle falls. */
-#cat .scene-izakaya .sc-iz-coreA { animation: izakaya-glow 3.2s steps(1) infinite; }
-#cat .scene-izakaya .sc-iz-coreB { animation: izakaya-glow 3.2s steps(1) -1.6s infinite; }
-#cat .scene-izakaya .sc-iz-akaCore { animation: izakaya-glow 4.4s steps(1) -0.7s infinite; }
+/* Motion, always on: lanterns sway and glow, the chef fans, sparks fly, steam rises. */
+#cat .scene-izakaya .scene-moving :is(.sc-iz-cap, .sc-iz-lanD, .sc-iz-lan, .sc-iz-lanO) { animation: izakaya-sway 4s steps(1) infinite; }
+#cat .scene-izakaya .scene-moving .sc-iz-coreA { animation: izakaya-sway 4s steps(1) infinite, izakaya-glow 3.2s steps(1) infinite; }
+#cat .scene-izakaya .scene-moving .sc-iz-coreB { animation: izakaya-sway 4s steps(1) infinite, izakaya-glow 3.2s steps(1) -1.6s infinite; }
+@keyframes izakaya-sway { 25% { transform: translateX(1px); } 50% { transform: none; } 75% { transform: translateX(-1px); } }
 @keyframes izakaya-glow { 50% { fill: #FFB24C; } }
 
-#cat .scene-izakaya .sc-iz-steamA { animation: izakaya-steam 2.4s steps(4) infinite; }
-#cat .scene-izakaya .sc-iz-steamB { animation: izakaya-steam 2.4s steps(4) -1.2s infinite; }
-@keyframes izakaya-steam {
+#cat .scene-izakaya :is(.sc-iz-sleeveA, .sc-iz-handA, .sc-iz-fanA) { animation: izakaya-swap 1.2s steps(1) infinite; }
+#cat .scene-izakaya :is(.sc-iz-sleeveB, .sc-iz-handB, .sc-iz-fanB) { animation: izakaya-swap 1.2s steps(1) -0.6s infinite; }
+@keyframes izakaya-swap { 50% { opacity: 0; } }
+
+#cat .scene-izakaya .sc-iz-sparkA { animation: izakaya-rise 1.6s steps(4) infinite; }
+#cat .scene-izakaya .sc-iz-sparkB { animation: izakaya-rise 1.6s steps(4) -0.8s infinite; }
+#cat .scene-izakaya .sc-iz-steamA { animation: izakaya-rise 2.4s steps(4) infinite; }
+#cat .scene-izakaya .sc-iz-steamB { animation: izakaya-rise 2.4s steps(4) -1.2s infinite; }
+@keyframes izakaya-rise {
   0% { transform: translate(0, 0); opacity: 1; }
   100% { transform: translate(1px, -4px); opacity: 0; }
-}
-
-#cat .scene-izakaya .sc-iz-reflA { animation: izakaya-shimmer 1.4s steps(1) infinite; }
-#cat .scene-izakaya .sc-iz-reflB { animation: izakaya-shimmer 1.4s steps(1) -0.7s infinite; }
-@keyframes izakaya-shimmer { 50% { opacity: 0.2; } }
-
-#cat .scene-izakaya .sc-iz-rain { animation: izakaya-rain 1s steps(3) infinite; }
-#cat .scene-izakaya .sc-iz-rain2 { animation: izakaya-rain 1s steps(3) -0.33s infinite; }
-#cat .scene-izakaya .sc-iz-rain3 { animation: izakaya-rain 1s steps(3) -0.66s infinite; }
-@keyframes izakaya-rain {
-  0% { transform: translate(0, 0); opacity: 1; }
-  100% { transform: translate(-3px, 6px); opacity: 0; }
 }

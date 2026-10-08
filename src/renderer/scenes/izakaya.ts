@@ -1,33 +1,27 @@
-// Izakaya: a little Japanese pub seen from the wet street at night.
-// Focal point: the row of glowing chōchin and the lit doorway under its indigo noren.
-// Deep indigo night outside; every light is warm red, orange or amber, and it spills onto the street.
-import { inEllipse, layers, stamp, type Cell, type CellClass, type Scene, type Shape } from './kit';
+// Izakaya: inside a little Japanese pub at night, sitting at the counter.
+// Focal point: the chef in his blue samue jacket and hachimaki, fanning the grill under the big lantern.
+// Golden plaster, warm wood and lantern halos everywhere; only the night through the noren is cool.
+import { cellsOf, layers, stamp, type Cell, type CellClass, type Scene, type Shape } from './kit';
 
-// Layout on the 48x48 canvas. The pet sits bottom right (x 28+, y 28+) on the step; her toy sits just left of her.
-const LANTERN_XS = [2, 10, 18, 26, 34, 42];
-const LANTERN_TOP = 8;
-const BEAM = 14;
-const DOOR = { left: 2, right: 26, top: 15, bottom: 38 };
-const NOREN = { top: 16, bottom: 23, gaps: [10, 18] };
-// A plain ring crest: no lettering.
-const MON_RING = stamp(12, 18, ['.xxx.', 'x...x', 'x...x', 'x...x', '.xxx.'], { x: 'iz-mon' });
-const SHOJI_RIGHT = 12;
-const AKA = { cx: 31.5, cy: 21.5, rx: 4.4, ry: 4.6, top: 16, bottom: 27 };
-const STEP = 39;
-const STREET = 41;
+// Layout on the 48x48 canvas. The pet sits on the counter's right end (x 28+, y 28+); her toy sits just left of her.
+const DOORWAY = { left: 0, right: 8, top: 4, bottom: 28 };
+const COUNTER = { top: 29, lip: 32, front: 34 };
 
-// Sky and a kawara tile roof: ridge, grooved tiles, a row of round tile ends, then the dark eave.
-function roof(x: number, y: number): CellClass | null {
-  if (y === 0) return 'iz-skyD';
-  if (y <= 2) return 'iz-sky';
-  if (y === 3) return 'iz-roofL';
-  if (y <= 5) return x % 3 === 0 ? 'iz-roofD' : 'iz-roof';
-  if (y === 6) return x % 3 === 1 ? 'iz-tileEnd' : 'iz-roofD';
-  return y === 7 ? 'iz-eave' : null;
-}
+// Dark ceiling with a long lantern-lit beam the lanterns hang from.
+const ceiling: Shape = (_x, y) => (y === 0 ? 'iz-ceil' : y === 1 ? 'iz-beamL' : null);
 
-// Six paper chōchin hung under the eave: dark caps, red skin, orange body, a bright core that pulses.
-const LANTERN = [
+// Three paper lanterns: a big one over the chef, two small ones either side. Caps, red skin, orange body, hot core.
+const BIG_LANTERN = [
+  '...k...',
+  '..kkk..',
+  '.rRORr.',
+  'rROcORr',
+  'rROcORr',
+  'rROcORr',
+  '.rRORr.',
+  '..kkk..',
+];
+const SMALL_LANTERN = [
   '..k..',
   '.kkk.',
   'rRORr',
@@ -36,133 +30,178 @@ const LANTERN = [
   'rRORr',
   '.kkk.',
 ];
-const lanterns = layers(...LANTERN_XS.map((left, i) => stamp(left, LANTERN_TOP - 1, LANTERN, {
-  k: 'iz-cap', r: 'iz-lanD', R: 'iz-lan', O: 'iz-lanO', c: i % 2 ? 'iz-coreB' : 'iz-coreA',
-})));
+const lanternKey = (core: CellClass): Record<string, CellClass> => ({ k: 'iz-cap', r: 'iz-lanD', R: 'iz-lan', O: 'iz-lanO', c: core });
+const lanterns = layers(
+  stamp(17, 1, BIG_LANTERN, lanternKey('iz-coreA')),
+  stamp(9, 3, SMALL_LANTERN, lanternKey('iz-coreB')),
+  stamp(38, 3, SMALL_LANTERN, lanternKey('iz-coreB')),
+);
+// Cords from the beam to the small lanterns' hooks.
+const cords: Shape = (x, y) => (y === 2 && (x === 11 || x === 40) ? 'iz-cord' : null);
 
-// The big akachōchin by the door: cord, caps, red body with dark ribs, a hot core.
-function akachochin(x: number, y: number): CellClass | null {
-  const { cx, cy, rx, ry, top, bottom } = AKA;
-  const capped = x >= cx - 2 && x <= cx + 2;
-  if (y === top - 1 && Math.abs(x + 0.5 - cx) < 1) return 'iz-cord';
-  if ((y === top || y === bottom) && capped) return 'iz-cap';
-  if (!inEllipse(x + 0.5, y + 0.5, cx, cy, rx, ry)) return null;
-  const dx = Math.abs(x + 0.5 - cx);
-  if (dx >= rx - 1.2) return 'iz-akaD';
-  if (Math.abs(y + 0.5 - cy) < 2 && dx < 1.5) return 'iz-akaCore';
-  if ((y - top) % 3 === 0) return 'iz-akaRib';
-  return dx < 2.5 ? 'iz-akaL' : 'iz-aka';
+// The doorway on the left: indigo noren split in two, the cool night beyond, a far-off red lantern and two stars.
+function doorway(x: number, y: number): CellClass | null {
+  const { left, right, top, bottom } = DOORWAY;
+  if (x < left || x > right || y < top || y > bottom) return null;
+  if (x === left || x === right || y === top) return 'iz-post';
+  if (y <= 11) {
+    if (x === 4) return 'iz-night';
+    return y === top + 1 ? 'iz-norenL' : y === 11 ? 'iz-norenD' : 'iz-noren';
+  }
+  if ((x === 2 && y === 15) || (x === 6 && y === 13)) return 'iz-star';
+  if (x >= 4 && x <= 5 && (y === 19 || y === 20)) return y === 19 ? 'iz-lanO' : 'iz-lan';
+  return y < 18 ? 'iz-nightD' : 'iz-night';
 }
 
-// Three straw-wrapped sake barrels stacked by the wall, rope bands and a red label, lit on the lantern side.
-const TARU = [
-  '.llss.',
-  'bbbbbb',
-  'lLLLLs',
-  'lLMMLs',
-  'lLLLLs',
-  'bbbbbb',
-  '.llss.',
-];
-const TARU_KEY: Record<string, CellClass> = { s: 'iz-straw', l: 'iz-strawL', b: 'iz-rope', L: 'iz-label', M: 'iz-labelMark' };
-const barrels = layers(stamp(39, 14, TARU, TARU_KEY), stamp(36, 21, TARU, TARU_KEY), stamp(42, 21, TARU, TARU_KEY));
+// The chef: black hair, white hachimaki with a red knot, smiling eyes, indigo samue jacket; his left hand rests on the grill.
+const CHEF = stamp(16, 11, [
+  '...hhhh....',
+  '..hhhhhh...',
+  '.HHHHHHHHkk',
+  '.hssssssh.k',
+  '.ssessess..',
+  '.sbssssbs..',
+  '..ssmmss...',
+  '...ssss....',
+  '.LLLVVLLL..',
+  'LLLLVLLLLL.',
+  'LLLLLLLLLL.',
+  'cccccccccc.',
+  'cccccccccc.',
+  'scccccccc..',
+], {
+  h: 'iz-hair', H: 'iz-band', k: 'iz-knot', s: 'iz-skin', b: 'iz-blush', e: 'iz-eye', m: 'iz-mouth',
+  L: 'iz-coatL', V: 'iz-coatD', c: 'iz-coat',
+});
 
-// The noren: three indigo panels on a bamboo rod, a white ring crest on the middle one, warm light in the slits.
-function noren(x: number, y: number): CellClass | null {
-  if (x <= DOOR.left || x >= DOOR.right) return null;
-  if (y === DOOR.top) return 'iz-rod';
-  if (y < NOREN.top || y > NOREN.bottom) return null;
-  if (NOREN.gaps.includes(x)) return 'iz-gap';
-  if (MON_RING(x, y)) return 'iz-mon';
-  if (y === NOREN.top) return 'iz-norenL';
-  return y === NOREN.bottom ? 'iz-norenD' : 'iz-noren';
+// The charcoal grill in front of him: two skewers over glowing coals in a dark iron box.
+const GRILL = stamp(15, 24, [
+  '..tmMm.mMmt.',
+  'kCcCcCcCcCck',
+  'kggggggggggk',
+  'kGGGGGGGGGGk',
+  'kkkkkkkkkkkk',
+], { t: 'iz-stick', m: 'iz-meat', M: 'iz-meatL', k: 'iz-iron', C: 'iz-coalL', c: 'iz-coal', g: 'iz-grill', G: 'iz-grillD' });
+
+// A simmering pot on the left burner.
+const POT = stamp(10, 25, ['.kk.', 'LLLL', 'pppp', '.pp.'], { k: 'iz-pot', L: 'iz-potL', p: 'iz-pot' });
+
+// Shelves either side of the chef: sake bottles up top, ceramic jars below.
+const SHELF_KEY: Record<string, CellClass> = {
+  n: 'iz-neck', G: 'iz-greenL', g: 'iz-green', W: 'iz-sakeL', w: 'iz-sake', B: 'iz-brownL', b: 'iz-brown',
+  j: 'iz-jar', J: 'iz-jarL', u: 'iz-glaze', U: 'iz-glazeL', l: 'iz-neck', s: 'iz-shelf',
+};
+const shelves = layers(
+  stamp(10, 11, [
+    '.n..n.',
+    'Gg.Ww.',
+    'Gg.Ww.',
+    'Gg.Ww.',
+    'ssssss',
+    '....n.',
+    '.l..Bb',
+    'jJj.Bb',
+    'jJj.Bb',
+    'ssssss',
+  ], SHELF_KEY),
+  stamp(27, 11, [
+    'n..n.',
+    'Bb.Gg',
+    'Bb.Gg',
+    'Bb.Gg',
+    'sssss',
+    '.....',
+    '.l.l.',
+    'jJ.uU',
+    'jJ.uU',
+    'sssss',
+  ], SHELF_KEY),
+);
+
+// The menu: a rail of pale wooden tags, uneven lengths, no lettering.
+const TAG_XS = [33, 36, 39, 42, 45];
+function menu(x: number, y: number): CellClass | null {
+  if (y === 11 && x >= 32) return 'iz-rail';
+  const tag = TAG_XS.find((left) => x === left || x === left + 1);
+  if (tag === undefined || y < 12) return null;
+  const bottom = tag % 2 ? 18 : 17;
+  if (y > bottom) return null;
+  return x === tag ? 'iz-tag' : 'iz-tagD';
 }
 
-// Closed shoji on the left: wooden lattice over paper glowing amber, brightest up top.
-function shoji(x: number, y: number): CellClass | null {
-  if (x <= DOOR.left || x > SHOJI_RIGHT || y <= NOREN.bottom || y >= DOOR.bottom) return null;
-  if (x === SHOJI_RIGHT || x === DOOR.left + 1) return 'iz-shojiFrame';
-  if (x === 6 || x === 9 || y === 27 || y === 31 || y === 35) return 'iz-lattice';
-  return y < 31 ? 'iz-paperL' : 'iz-paper';
+// On the counter: a sake flask and cup on the left, a plate of yakitori skewers beside them.
+const ON_COUNTER = layers(
+  stamp(2, 25, [
+    '.W....',
+    '.W....',
+    'wWw...',
+    'bbb...',
+    'wWw.WW',
+    'wWw.ww',
+  ], { w: 'iz-sake', W: 'iz-sakeL', b: 'iz-sakeBand' }),
+  stamp(9, 29, [
+    '.tmMmMm',
+    'ppppppp',
+    '.PPPPP.',
+  ], { t: 'iz-stick', m: 'iz-meat', M: 'iz-meatL', p: 'iz-plate', P: 'iz-plateD' }),
+);
+
+// One long thin grain streak: a darker run from `from` to `to` on a single row.
+const streak = (x: number, from: number, to: number): boolean => x >= from && x <= to;
+
+// Long horizontal panels across the full width, 4 rows each: lit top edge, one long grain streak, dark seam.
+const PLANK_ROWS = 4;
+const PLANK_STREAKS: readonly (readonly [number, number])[] = [[3, 38], [10, 47], [0, 30]];
+function counterFront(x: number, y: number): CellClass {
+  const plank = Math.floor((y - COUNTER.front) / PLANK_ROWS);
+  const row = (y - COUNTER.front) % PLANK_ROWS;
+  if (row === 0) return 'iz-panelL';
+  if (row === PLANK_ROWS - 1) return 'iz-panelD';
+  const [from, to] = PLANK_STREAKS[plank % PLANK_STREAKS.length] ?? [0, 0];
+  return row === 2 && streak(x, from, to) ? 'iz-panelG' : 'iz-panel';
 }
 
-// Through the open half of the door: two sake bottles on a shelf, a pot on the counter, a hot amber wall.
-const BAR = stamp(13, 24, [
-  '..n..n.......',
-  '.Gg.Bb.......',
-  '.Gg.Bb.......',
-  '.Gg.Bb.......',
-  'ssssss.pPPPp.',
-  '.......ppppp.',
-  '........ppp..',
-], { n: 'iz-cap', G: 'iz-greenL', g: 'iz-green', B: 'iz-brownL', b: 'iz-brown', s: 'iz-shelf', p: 'iz-pot', P: 'iz-potL' });
-function interior(x: number, y: number): CellClass | null {
-  if (x <= SHOJI_RIGHT || x >= DOOR.right || y <= NOREN.bottom || y > DOOR.bottom) return null;
-  const bar = BAR(x, y);
-  if (bar) return bar;
-  if (y === 31) return 'iz-counterL';
-  if (y > 31) return x % 4 === 1 ? 'iz-counterD' : 'iz-counter';
-  return inEllipse(x + 0.5, y + 0.5, 21.5, 26, 4.5, 3.5) ? 'iz-roomL' : 'iz-room';
+// The counter across the front: lit top edge, one long grain streak on the top, bright front lip, dark underside, then the panels.
+function counter(x: number, y: number): CellClass | null {
+  if (y < COUNTER.top) return null;
+  if (y === COUNTER.top) return 'iz-counterL';
+  if (y < COUNTER.lip) return y === COUNTER.lip - 1 && streak(x, 6, 41) ? 'iz-counterG' : 'iz-counter';
+  if (y === COUNTER.lip) return 'iz-lip';
+  if (y < COUNTER.front) return 'iz-counterD';
+  return counterFront(x, y);
 }
 
-// Door posts and the lintel beam, lit from the lanterns above.
-function timber(x: number, y: number): CellClass | null {
-  if (y === BEAM) return 'iz-beamL';
-  if ((x === DOOR.left || x === DOOR.right) && y >= DOOR.top && y <= DOOR.bottom) return 'iz-post';
-  return null;
-}
+// Two round wooden stools in front of the counter.
+const STOOL = ['.SSSSSS.', 'ssssssss', '.l....l.', '.l....l.', '.l....l.', '.l....l.', '.l....l.', '.l....l.', '.l....l.'];
+const stools = layers(...[2, 12].map((left) => stamp(left, 39, STOOL, { S: 'iz-seatL', s: 'iz-seat', l: 'iz-leg' })));
 
-// Dark plank wall, warmed to brown-red wherever a lantern is near.
-const LIGHTS: readonly (readonly [number, number, number])[] = [
-  ...LANTERN_XS.map((left) => [left + 2.5, 11, 4.5] as const),
-  [AKA.cx, AKA.cy, 6.5],
-];
+// Golden plaster wall, warmed by three graded rings round every lantern.
+const LIGHTS: readonly (readonly [number, number, number])[] = [[20.5, 5, 6], [11.5, 6.5, 4.5], [40.5, 6.5, 4.5]];
+const RINGS: readonly (readonly [number, CellClass])[] = [[1, 'iz-halo'], [1.45, 'iz-halo2'], [1.95, 'iz-halo3']];
 function wall(x: number, y: number): CellClass {
   const near = Math.min(...LIGHTS.map(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r));
-  const seam = x % 4 === 3;
-  if (near <= 1) return seam ? 'iz-haloSeam' : 'iz-halo';
-  if (near <= 1.45) return seam ? 'iz-seam' : 'iz-halo2';
-  return seam ? 'iz-seam' : 'iz-wood';
+  return RINGS.find(([reach]) => near <= reach)?.[1] ?? 'iz-wall';
 }
 
-// Stone step, golden under the door; wet indigo road with the doorway's light spilling across it.
-function ground(x: number, y: number): CellClass | null {
-  const underDoor = x >= DOOR.left && x <= DOOR.right;
-  if (y === STEP) return underDoor ? 'iz-stepLit' : 'iz-stepTop';
-  if (y === STEP + 1) return 'iz-step';
-  if (y < STREET) return null;
-  const row = y - STREET;
-  const lit = row <= 2 && x >= DOOR.left + 1 + row && x <= DOOR.right - 1 - row;
-  if (lit) return row <= 1 ? 'iz-spillL' : 'iz-spill';
-  return row % 3 === 1 ? 'iz-roadL' : 'iz-road';
-}
-
-// Front to back.
-const front = layers(roof, lanterns, akachochin, barrels, noren, shoji, interior, timber, ground);
+// Front to back. The lanterns are left out: they sway, so they live in `moving`.
+const front = layers(stools, ON_COUNTER, counter, GRILL, CHEF, POT, shelves, menu, doorway, cords, ceiling);
 const paint: Shape = (x, y) => front(x, y) ?? wall(x, y);
 
-// Moving cells. Each lantern's light as a broken streak in the wet road, two sets that swap.
-const reflections: Cell[] = LANTERN_XS.flatMap((left): Cell[] => {
-  const cx = left + 2;
-  return [[cx, 44, 'iz-reflA'], [cx + 1, 44, 'iz-reflA'], [cx - 1, 46, 'iz-reflB'], [cx, 46, 'iz-reflB'], [cx + 1, 46, 'iz-reflB']];
-});
-// Steam curling up from the pot, and more drifting out under the noren.
-const steam: Cell[] = [
-  [21, 27, 'iz-steamA'], [22, 26, 'iz-steamA'], [23, 27, 'iz-steamB'], [22, 25, 'iz-steamB'], [21, 24, 'iz-steamB'], [23, 24, 'iz-steamA'],
-  [18, 22, 'iz-steamA'], [19, 23, 'iz-steamB'], [24, 23, 'iz-steamB'],
-];
-// A light drizzle, three staggered sets of short streaks.
-const RAIN: readonly (readonly [number, number, CellClass])[] = [
-  [5, 0, 'iz-rain'], [16, 1, 'iz-rain2'], [29, 0, 'iz-rain3'], [40, 1, 'iz-rain'],
-  [8, 15, 'iz-rain3'], [24, 12, 'iz-rain'], [38, 9, 'iz-rain2'], [46, 30, 'iz-rain3'],
-  [4, 33, 'iz-rain2'], [15, 37, 'iz-rain3'], [22, 30, 'iz-rain'],
-];
-const rain: Cell[] = RAIN.flatMap(([x, y, c]): Cell[] => [[x, y, c], [x, y + 1, c], [x - 1, y + 2, c]]);
+// Moving cells. The lanterns, swaying together on their cords.
+const lanternCells = cellsOf(lanterns, 0, 0, 47, 10);
+// The chef's right arm fanning the grill with an uchiwa: two frames that swap.
+const arm = (frame: 'A' | 'B', cells: readonly (readonly [number, number, 'sleeve' | 'hand' | 'fan'])[]): Cell[] =>
+  cells.map(([x, y, part]) => [x, y, `iz-${part}${frame}`]);
+const armDown = arm('A', [[25, 20, 'sleeve'], [26, 21, 'sleeve'], [26, 22, 'sleeve'], [26, 23, 'hand'], [27, 22, 'fan'], [28, 22, 'fan'], [27, 23, 'fan'], [28, 23, 'fan'], [28, 21, 'fan']]);
+const armUp = arm('B', [[25, 20, 'sleeve'], [26, 20, 'sleeve'], [26, 19, 'sleeve'], [27, 18, 'hand'], [27, 17, 'fan'], [28, 17, 'fan'], [27, 16, 'fan'], [28, 16, 'fan'], [28, 15, 'fan']]);
+// Sparks off the coals and steam off the pot, rising and fading.
+const sparks: Cell[] = [[17, 23, 'iz-sparkA'], [21, 22, 'iz-sparkB'], [24, 23, 'iz-sparkA']];
+const steam: Cell[] = [[11, 24, 'iz-steamA'], [12, 23, 'iz-steamB'], [11, 22, 'iz-steamA'], [12, 21, 'iz-steamB'], [11, 20, 'iz-steamB'], [13, 22, 'iz-steamA']];
 
 const scene: Scene = {
   name: 'Izakaya',
   size: [48, 48],
   paint,
-  moving: [...reflections, ...steam, ...rain],
+  moving: [...lanternCells, ...armDown, ...armUp, ...sparks, ...steam],
 };
 export default scene;
