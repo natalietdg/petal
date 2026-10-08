@@ -1,5 +1,6 @@
 // What counts as a real user prompt in a Claude Code transcript (not a tool result, wrapper or reminder).
 import { isTextItem, type ContentItem, type TranscriptEntry } from './transcript-entry';
+import { stripPasted } from '../shared/pasted-content';
 
 const WRAPPER = /^\s*<(command-|local-command|system-reminder|bash-|user-prompt-submit-hook|task-notification)/;
 const INTERRUPTED = /^\[Request interrupted/;
@@ -16,8 +17,8 @@ export function isUserTurn(entry: TranscriptEntry): boolean {
   return !contentItems(entry).some((item) => item.type === 'tool_result');
 }
 
-// The typed prompt text, or '' when the turn is a wrapper, reminder or interruption.
-export function promptText(entry: TranscriptEntry): string {
+// The prompt as logged, paste wrappers kept for the bubbles; '' when the turn is a wrapper, reminder or interruption.
+export function rawPromptText(entry: TranscriptEntry): string {
   if (!isUserTurn(entry)) return '';
   const text = contentItems(entry)
     .filter(isTextItem)
@@ -26,6 +27,9 @@ export function promptText(entry: TranscriptEntry): string {
     .trim();
   return WRAPPER.test(text) || INTERRUPTED.test(text) ? '' : text;
 }
+
+// The prompt as plain text for titles, previews and search: paste wrapper tags removed.
+export const promptText = (entry: TranscriptEntry): string => stripPasted(rawPromptText(entry));
 
 // A slash-command turn ("/release args") as typed, or '' when the turn isn't one.
 export function commandText(entry: TranscriptEntry): string {
