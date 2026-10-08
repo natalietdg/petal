@@ -96,7 +96,7 @@ export function sendReply(sessionId: string, raw: string, confirmFork = false): 
 
 // No tab follows this session yet: the same checks as Open and Add Session, then a background tab.
 async function openAndSend(sessionId: string, text: string, confirmFork: boolean): Promise<ReplyOutcome> {
-  const limited = await limitNote();
+  const limited = await limitNote('reply from here');
   if (limited) return { note: limited };
   opening = sessionId;
   const result = await window.pastel.history.resume(sessionId, confirmFork, true);
