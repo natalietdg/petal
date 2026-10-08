@@ -19,7 +19,8 @@ export const KEY_ENTRIES: readonly KeyEntry[] = [
 
 // Everything else in a reply: drawn in the look's ink and paper only (text, muted, rule colours), never an accent.
 export const NEUTRAL_PROBES: readonly string[] = [
-  '#reader-status',
+  '#reader-status', '#reader-head .status-strip .status-chip', '#reader-head .status-strip .status-text',
+  '.status-block', '.status-chip', '.status-text',
   '.story-head', '.headline', '.headline + p', '.lede',
   '.story-section:not(.back)', '.story-section:not(.back) > h2',
   '.callout-done', '.callout-done .pill', '.callout-why', '.callout-why .pill', '.callout-next', '.callout-next .pill',

@@ -258,15 +258,12 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
   font-weight: 500;
 }
 
-/* Doing / Recommend / Next: chip colours shared by the reply block and the header strip. */
-.status-doing     { --pill: var(--why-pill);  --ink: var(--why-ink); }
-.status-recommend { --pill: var(--done-pill); --ink: var(--done-ink); }
-.status-next      { --pill: var(--next-pill); --ink: var(--next-ink); }
+/* Doing / Recommend / Next: neutral labels in the text's ink, in the reply block and the header strip. */
+:is(.status-doing, .status-recommend, .status-next) { --pill: transparent; --ink: var(--reader-fg); }
 .status-row { display: contents; }
 .status-chip {
   justify-self: start;
-  padding: 0.12em 0.7em;
-  border-radius: 999px;
+  padding: 0.12em 0;
   background: var(--pill);
   color: var(--ink);
   font: 600 11px/1.5 var(--ui-font);

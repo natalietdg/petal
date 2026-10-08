@@ -268,12 +268,10 @@
 [data-reading="editorial"] .status-chip {
   padding: 0;
   background: none;
-  color: var(--link);
   letter-spacing: 0.18em;
 }
 [data-reading="lifestyle"] .status-block {
   border: 0;
-  border-radius: 20px;
-  padding: 1em 1.25em;
-  background: var(--code-bg);
+  border-left: 4px solid var(--reader-fg);
+  padding: 0.2em 0 0.2em 1.1em;
 }
