@@ -137,11 +137,27 @@ window.pastel.agents.onTimeline((update) => {
   if (justFinished) void refreshList(); // the header says finished now, not on the next tick
 });
 
+const CHIP_GAP_PX = 8;
+const headColumn = chip.parentElement;
+
+// On the view toggle's row, left of the Notes toggle when it shares that row; the strip below is never touched.
+function placeChip(): void {
+  const row = headColumn?.querySelector<HTMLElement>('.view-toggle');
+  if (chip.hidden || !row || !headColumn) return;
+  const notes = document.getElementById('notes-toggle');
+  const sharesRow = notes && !notes.hidden && notes.offsetTop < row.offsetTop + row.offsetHeight && notes.offsetTop + notes.offsetHeight > row.offsetTop;
+  chip.style.top = `${row.offsetTop + (row.offsetHeight - chip.offsetHeight) / 2}px`;
+  chip.style.right = `${sharesRow ? headColumn.clientWidth - notes.offsetLeft + CHIP_GAP_PX : 0}px`;
+}
+const chipWatch = new ResizeObserver(placeChip);
+for (const target of [headColumn, document.getElementById('notes-toggle'), chip]) if (target) chipWatch.observe(target);
+
 // The header chip and the open view ride the Sessions tick; no timer of their own.
 sessionsPanel.onView(({ here }) => {
   chip.hidden = here.total === 0;
   chip.textContent = agentsChipText(here);
   chip.classList.toggle('has-running', here.running > 0);
+  placeChip();
   if (!overlays.isOpen('agents')) return;
   if (openId) void window.pastel.agents.poll();
   void refreshList();

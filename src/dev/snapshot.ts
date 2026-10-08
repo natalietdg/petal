@@ -14,10 +14,13 @@ import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
 import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
+import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
 import { agentsCheck } from './snapshot-agents';
+import { statusStripCheck } from './snapshot-status-strip';
 import { notesCheck } from './snapshot-notes';
+import { notesSideCheck } from './snapshot-notes-side';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
@@ -361,11 +364,13 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
     ['agents view', () => agentsCheck(kit, win)],
     ['add session', () => addSessionCheck(kit)],
+    ['tab limit', () => tabLimitCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
     ['notes', () => notesCheck(kit)],
+    ['notes side', () => notesSideCheck(kit, win)],
     ['history reply', () => historyReplyCheck(kit)],
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],
@@ -382,6 +387,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['tables', () => tablesCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
+    ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
   const count: StepCount = { done: 0, total: steps.length };

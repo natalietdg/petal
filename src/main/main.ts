@@ -63,6 +63,12 @@ const sendToFocused = <C extends EventChannel>(channel: C, ...payload: EventArgs
   if (contents) send(contents, channel, ...payload);
 };
 
+// ⌘T: the renderer checks her session limit before opening the tab.
+function newSessionTab(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'tabs:new-session');
+}
+
 function openSettings(): void {
   const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
   if (contents) send(contents, 'customize:open');
@@ -85,7 +91,7 @@ function refreshMenu(): void {
     currentReading: reading,
     onReadingSelected: applyReading,
     onNewWindow: () => createWindow(),
-    onNewTab: () => openTab(focusedContents()),
+    onNewTab: newSessionTab,
     onCloseTab: () => sendToFocused('tabs:close-active'),
     onCycleTab: (delta) => sendToFocused('tabs:cycle', delta),
     onToggleReader: () => sendToFocused('layout:toggle'),

@@ -10,15 +10,22 @@ import { READING_CHOICES } from '../main/menu';
 
 const WIDTHS = [800, 1280, 1600];
 
-// Chip vs view toggle and column: no intersection, inside the column, and its centre takes the click.
+// Chip vs view toggle, Notes toggle and status strip: no intersection, inside the column, every one still takes its click.
 const CHIP_PROBE = `(() => {
   const r = (el) => el.getBoundingClientRect();
   const chip = document.getElementById('agents-chip');
-  const c = r(chip), t = r(document.querySelector('#reader-head .view-toggle')), col = r(document.querySelector('#reader-head .reader-head-column'));
-  const hit = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
-  const apart = c.left >= t.right || c.right <= t.left || c.top >= t.bottom || c.bottom <= t.top;
-  return { shown: !chip.hidden && c.width > 0, apart, inside: c.left >= col.left - 0.5 && c.right <= col.right + 0.5 && c.top >= col.top - 0.5 && c.bottom <= col.bottom + 0.5, hit: hit === chip, text: chip.textContent };
+  const notes = document.getElementById('notes-toggle');
+  const strip = document.querySelector('#reader-head .status-strip');
+  const c = r(chip), col = r(document.querySelector('#reader-head .reader-head-column'));
+  const others = [document.querySelector('#reader-head .view-toggle'), notes, strip].filter((el) => el && !el.hidden && r(el).height > 0);
+  const apart = others.every((el) => { const t = r(el); return c.left >= t.right || c.right <= t.left || c.top >= t.bottom || c.bottom <= t.top; });
+  const takes = (el) => { const b = r(el); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return hit === el || el.contains(hit); };
+  return { shown: !chip.hidden && c.width > 0, apart, inside: c.left >= col.left - 0.5 && c.right <= col.right + 0.5 && c.top >= col.top - 0.5 && c.bottom <= col.bottom + 0.5,
+    hit: takes(chip), notesHit: Boolean(notes) && takes(notes), notes: Boolean(notes) && !notes.hidden, strip: Boolean(strip) && !strip.hidden, text: chip.textContent };
 })()`;
+
+// A reply with Doing / Recommend / Next, so the header strip shows during the geometry check.
+const STRIP_REPLY = ['**Header check.**', '', '**Doing:** checking the header row.', '**Recommend:** keep the chip beside Notes.', '**Next:** open the agents list.'].join('\n');
 
 const LIST_PROBE = `[...document.querySelectorAll('#agents .agents-row')].map((b) => ({
   id: b.dataset.agentId, task: b.querySelector('.agents-row-task').textContent, status: b.querySelector('.agent-status').textContent,
@@ -53,6 +60,8 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   check(chip?.text === 'Agents · 1 running', `header chip counts this session's running agents: ${JSON.stringify(chip?.text)}`);
 
   const [startWidth, startHeight] = win.getContentSize();
+  const stripUpdate = { state: 'live', replies: [{ id: 'agents-strip', markdown: STRIP_REPLY, prompt: '', timestamp: new Date().toISOString() }], sessionId: 'snapshot-fixture' };
+  await js(`PastelTerm.reader.update({ ...${JSON.stringify(stripUpdate)}, tabId: PastelTerm.tabs.active().id })`);
   for (const [look] of READING_CHOICES) {
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
     for (const width of WIDTHS) {
@@ -60,11 +69,12 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
       await waitFor(async () => (await js('window.innerWidth')) === width, 3000);
       await wait(200);
       const p = await js(CHIP_PROBE);
-      check(p.shown && p.apart && p.inside && p.hit, `${look} ${width}px chip clear of the toggle, inside the column, clickable: ${JSON.stringify(p)}`);
+      check(p.shown && p.notes && p.strip && p.apart && p.inside && p.hit && p.notesHit, `${look} ${width}px chip, Notes toggle and strip all shown, chip clear of each, inside the column, both clickable: ${JSON.stringify(p)}`);
       if (width === 800) await capture(`agents-chip-${look}-800`);
     }
   }
   await js("window.pastel.look.setReading('newspaper')");
+  await js('(() => { const tab = PastelTerm.tabs.active(); PastelTerm.reader.update({ ...tab.update, tabId: tab.id }); })()'); // back to the fixture's replies
   resizeOffscreen(win, 1280, 900);
 
   await js("document.getElementById('agents-chip').click()");
