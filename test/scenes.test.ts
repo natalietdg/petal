@@ -35,6 +35,14 @@ describe('scene registry', () => {
     expect(ids.indexOf('planetarium')).toBe(ids.indexOf('starlit') + 1);
   });
 
+  it('offers the Izakaya where the Corner Bakery was, and no bakery', () => {
+    const ids = SCENE_CHOICES.map(([id]) => id);
+    expect(Object.fromEntries(SCENE_CHOICES).izakaya).toBe('Izakaya');
+    expect(ids.indexOf('izakaya')).toBe(ids.indexOf('winter') + 1);
+    expect(ids).not.toContain('bakery');
+    expect(has('bakery')).toBe(false);
+  });
+
   it('labels Tarot Room and lists it last', () => {
     expect(SCENE_CHOICES.at(-1)).toEqual(['tarot', 'Tarot Room']);
   });

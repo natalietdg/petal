@@ -14,5 +14,5 @@ The first public Petal: a calm, readable terminal for Claude Code.
 - **Workflow.** Today's sessions, time spent, setup and handoffs, in one place.
 - **Open Repo (⌘O).** Jump to any repo on your machine; Petal types the `cd` for you, or opens a new tab when Claude is busy in this one.
 - **Pasting files and images.** Paste or drop a screenshot and Claude gets the file.
-- **Make it yours.** Pastel themes in light and dark, a pet that keeps you company, and calm animated scenes, from a rainy-night bakery to a planetarium and a tarot room.
+- **Make it yours.** Pastel themes in light and dark, a pet that keeps you company, and calm animated scenes, from a lantern-lit izakaya to a planetarium and a tarot room.
 - **Quiet updates.** Petal checks for updates in the background and shows "Update ready · Restart" when one has downloaded. It never restarts while Claude is running in a tab.
