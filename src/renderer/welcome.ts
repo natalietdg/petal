@@ -113,7 +113,8 @@ function render(state: CustomizeState, claudeFound: boolean): void {
     el('p', 'welcome-note', 'Esc also closes this. Help › Welcome brings it back.'),
   );
   view.replaceChildren(pane);
-  startButton.focus();
+  startButton.focus({ preventScroll: true }); // Esc and Enter work at once; the title stays in view
+  view.scrollTop = 0;
 }
 
 // claudeFound: the snapshot run passes false to draw the not-installed variant.
