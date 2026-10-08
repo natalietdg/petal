@@ -19,7 +19,7 @@ describe('fuzzyScore', () => {
 describe('rankRepos', () => {
   const repos = [
     repo('admin-v3', '~/work/admin-v3', 1),
-    repo('pastel-term', '~/CascadeProjects/pastel-term', 2),
+    repo('pastel-term', '~/Code/pastel-term', 2),
     repo('sweep', '~/side/sweep', 3),
     repo('notes', '~/petal-notes/notes', 4),
   ];

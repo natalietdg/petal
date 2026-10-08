@@ -23,7 +23,7 @@ function outputStyle(): string | null {
 }
 
 const HANDOFF_SAMPLE = {
-  record: { title: 'Fix the reader session', cwd: '~/CascadeProjects/pastel-term', sessionId: '<session id>', file: '~/.claude/projects/<folder>/<session id>.jsonl' },
+  record: { title: 'Fix the reader session', cwd: '~/Code/petal', sessionId: '<session id>', file: '~/.claude/projects/<folder>/<session id>.jsonl' },
   turns: [{ prompt: 'why did the reader switch sessions?', reply: ['**The reader now follows only the claude inside this window.**'] }],
 };
 

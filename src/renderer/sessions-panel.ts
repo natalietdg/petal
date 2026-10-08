@@ -256,6 +256,12 @@ export async function addSession(): Promise<void> {
   composer.focus();
 }
 
+// Why a new tab can't open right now, or null; History's reply box asks before opening one.
+export async function limitNote(): Promise<string | null> {
+  const view = await window.pastel.getSessions({ detailed: false, expandedIds: [] });
+  return !isIpcError(view) && atLimit(view.counts, view.maxOpen) ? `${limitText(view.counts.total, view.maxOpen)}. Close one to reply from here.` : null;
+}
+
 pill.addEventListener('click', () => setOpen(!isOpen()));
 addButton.addEventListener('click', () => addSession());
 refresh();

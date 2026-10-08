@@ -13,12 +13,13 @@ import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
 import type { RepoEntry } from '../main/repo-scan';
+import type { SaveResult } from '../main/notes-store';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
 
 export interface HistoryList {
-  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[] })[];
+  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string })[];
   tags: TagsData['tags'];
   organizing: boolean;
 }
@@ -57,7 +58,8 @@ export type ResumeResult =
   | { confirm: string }
   | { ok: true; focused: boolean }
   | { ok: true; newTab: true; command: string }
-  | { ok: true; command: string };
+  | { ok: true; command: string }
+  | { ok: true; tabId: TabId }; // a background reply: this window's tab already showing the session
 
 export type FlowView = (StoredFlow & { stale: boolean }) | { empty: true; creating: boolean };
 
@@ -93,6 +95,10 @@ export interface ReposList {
   claudeLive: boolean;
 }
 
+// The update pill's Restart: either it is restarting, or a note says why not.
+export type RestartResult = { restarting: true } | { note: string };
+export const UPDATE_PILL_TEXT = 'Update ready · Restart';
+
 export type RepoOpenResult = { note: string } | { ok: true; newTab: boolean; command: string };
 
 // renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle. Every reply can be { error } (main/ipc-guard.ts).
@@ -102,6 +108,8 @@ export interface InvokeChannels {
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: [request?: { recheck?: boolean }]; result: Guarded<boolean> };
+  'update:status': { args: []; result: Guarded<{ ready: boolean }> };
+  'update:restart': { args: []; result: Guarded<RestartResult> };
   'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
   'sessions:close': { args: [sessionId: string]; result: Guarded<CloseResult> };
 
@@ -119,13 +127,17 @@ export interface InvokeChannels {
 
   'history:list': { args: []; result: Guarded<HistoryList> };
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
-  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean }]; result: Guarded<ResumeResult> };
+  // background: open it in a tab that isn't shown (a reply from History's preview).
+  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean; background?: boolean }]; result: Guarded<ResumeResult> };
   'history:send': { args: [request: { sessionId: string }]; result: Guarded<SendResult> };
   'history:tidy': { args: []; result: Guarded<PassResult> };
   'history:tag-add': { args: [request: { sessionId: string; name: string }]; result: Guarded<Ok> };
   'history:tag-remove': { args: [request: { sessionId: string; name: string }]; result: Guarded<Ok> };
   'history:tag-delete': { args: [request: { name: string }]; result: Guarded<Ok> };
   'history:tag-rename': { args: [request: { from: string; to: string }]; result: Guarded<Ok> };
+  // Her private notes for one Claude session; read and written only by Petal.
+  'notes:get': { args: [request: { sessionId: string }]; result: Guarded<{ text: string }> };
+  'notes:save': { args: [request: { sessionId: string; text: string }]; result: Guarded<SaveResult> };
 
   'flow:get': { args: [request: { target: FlowTarget }]; result: Guarded<FlowView | null> };
   'flow:create': { args: [request: { target: FlowTarget }]; result: Guarded<(StoredFlow & { stale: false }) | null> };
@@ -172,7 +184,7 @@ export interface EventChannels {
   'pty:data': { tabId: TabId; data: string };
   'reader:replies': TabReaderUpdate;
   'tab:closed': { tabId: TabId };
-  'tabs:new': void;
+  'tabs:new': { background: boolean };
   'tabs:close-active': void;
   'tabs:cycle': number;
   'tabs:activate': { tabId: TabId };
@@ -181,6 +193,7 @@ export interface EventChannels {
   'customize:open': void;
   'welcome:open': void;
   'repos:palette': void;
+  'update:ready': void;
 }
 
 export type InvokeChannel = keyof InvokeChannels;

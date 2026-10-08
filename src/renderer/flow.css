@@ -89,7 +89,7 @@
 .flow-ledger-n { color: var(--muted); font-family: var(--mono-font); }
 .flow-ledger-kind { font: 600 11px var(--ui-font); letter-spacing: 0.05em; color: var(--muted); }
 .flow-actor { padding: 0 8px; border-radius: 999px; font: 600 12px var(--ui-font); }
-.actor-natalie { background: var(--decide-pill); color: var(--decide-ink); }
+.actor-you { background: var(--decide-pill); color: var(--decide-ink); }
 .actor-claude { background: var(--next-pill); color: var(--next-ink); }
 .actor-external { background: var(--watch-pill); color: var(--watch-ink); }
 .flow-ledger-what { flex: 1 1 60%; }

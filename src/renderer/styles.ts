@@ -31,6 +31,7 @@ import './scenes/planetarium.css';
 import './scenes/tarot.css';
 import './flow.css';
 import './history.css';
+import './notes.css';
 import './composer.css';
 import './prompt-dock.css';
 import './workflow.css';

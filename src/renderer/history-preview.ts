@@ -1,13 +1,15 @@
-// History's preview pane: the hovered session's header, its whole conversation, or its flow and decisions.
-import * as markdown from './markdown';
+// History's preview pane: the hovered session's header, its whole conversation, or its flow, decisions or notes.
+// Replies end in a reply box; once a tab answers for the session, the conversation follows that tab live.
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { el } from './dom';
 import { timeOf } from './format';
 import { dayLabel, hooks, preview, selectedSession, state, titleOf, type Session } from './history-state';
 import { attachPreviewTags } from './history-tags';
-
-type Turn = { index: number; prompt: string; reply: string };
+import { createNotesEditor, type NotesEditor } from './notes';
+import * as overlays from './overlays';
+import * as reply from './history-reply';
+import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 
 export async function renderPreview(): Promise<void> {
   const session = selectedSession();
@@ -27,8 +29,8 @@ export async function renderPreview(): Promise<void> {
   resume.type = 'button';
   resume.addEventListener('click', () => doResume(session.sessionId, note, false));
   const toggle = el('div', 'view-toggle');
-  for (const mode of ['replies', 'flow', 'decisions'] as const) {
-    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions' }[mode]);
+  for (const mode of ['replies', 'flow', 'decisions', 'notes'] as const) {
+    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions', notes: 'Notes' }[mode]);
     b.type = 'button';
     b.setAttribute('aria-selected', String(mode === state.previewMode));
     b.addEventListener('click', () => { state.previewMode = mode; renderPreview(); });
@@ -41,18 +43,66 @@ export async function renderPreview(): Promise<void> {
   head.append(resume, send, note, toggle);
 
   const body = el('div', 'history-preview-body');
-  preview.replaceChildren(head, body);
+  void notesEditor?.flush(); // typing in the last notes is saved before they go
+  notesEditor = null;
+  preview.replaceChildren(head, body, ...(state.previewMode === 'replies' ? [replyBox(session)] : []));
+  await renderBody(session, body);
+}
+
+async function renderBody(session: Session, body: HTMLElement): Promise<void> {
   try {
-    await (state.previewMode === 'replies' ? renderRepliesBody(session, body) : renderFlowBody(session, body));
+    if (state.previewMode === 'notes') renderNotesBody(session, body);
+    else if (state.previewMode !== 'replies') await renderFlowBody(session, body);
+    else {
+      const tab = liveTab(session);
+      if (tab) body.append(liveThread(tab));
+      else await renderRepliesBody(session, body);
+      body.append(liveTail(session));
+    }
   } catch (error) {
     showError(body, error);
   }
 }
 
+let redraws = 0;
+// The tab replying to the shown session changed: redraw its replies only, so the head and reply box keep her place.
+async function redrawFollowed(tabId: string | null): Promise<void> {
+  const session = selectedSession();
+  if (!session || !overlays.isOpen('history') || state.previewMode !== 'replies') return;
+  if (tabId !== null && reply.tabFor(session.sessionId)?.id !== tabId) return;
+  const ticket = ++redraws;
+  const atEnd = preview.scrollHeight - preview.scrollTop - preview.clientHeight < 80;
+  const fresh = el('div', 'history-preview-body');
+  await renderBody(session, fresh);
+  if (ticket !== redraws || selectedSession() !== session) return; // a newer redraw or another session won
+  preview.querySelector('.history-preview-body')?.replaceWith(fresh);
+  repaintFollowed();
+  if (atEnd) preview.scrollTop = preview.scrollHeight;
+}
+
+function repaintFollowed(): void {
+  const session = selectedSession();
+  const box = preview.querySelector<HTMLElement>('.history-reply-box');
+  if (session && box) paintStatus(box, session);
+}
+
+reply.hooks.redraw = (tabId) => void redrawFollowed(tabId);
+reply.hooks.repaint = (tabId) => { if (reply.tabFor(selectedSession()?.sessionId ?? '')?.id === tabId) repaintFollowed(); };
+
 // Failures show as a line in the pane, never as a blank preview.
 function showError(body: HTMLElement, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   body.replaceChildren(el('p', 'history-error', `Couldn’t show this session: ${message}`));
+}
+
+let notesEditor: NotesEditor | null = null;
+
+// Saving updates the row's notes badge and what search finds.
+function renderNotesBody(session: Session, body: HTMLElement): void {
+  notesEditor = createNotesEditor(session.sessionId, {
+    onSaved: (text) => { session.notes = text; hooks.renderList(); },
+  });
+  body.append(notesEditor.element);
 }
 
 async function renderFlowBody(session: Session, body: HTMLElement): Promise<void> {
@@ -63,19 +113,6 @@ async function renderFlowBody(session: Session, body: HTMLElement): Promise<void
     onJump: () => { state.previewMode = 'replies'; renderPreview(); },
     onCreated: () => { session.hasFlow = true; hooks.renderList(); },
   });
-}
-
-// One turn: what she asked, then Claude's reply rendered like the reader.
-function turnCard(turn: Turn): HTMLElement {
-  const card = el('article', 'history-turn');
-  card.dataset.turn = String(turn.index);
-  card.append(el('p', 'history-you-label', 'You'), el('div', 'history-you', turn.prompt));
-  if (turn.reply) {
-    const reply = el('div', 'history-reply');
-    reply.append(markdown.render(turn.reply));
-    card.append(reply);
-  }
-  return card;
 }
 
 // The whole conversation in order, newest at the bottom; "Show earlier" pages back through older turns.
@@ -98,7 +135,7 @@ async function renderRepliesBody(session: Session, body: HTMLElement): Promise<v
     earlier.textContent = `Show earlier · ${start} more`;
   };
   const append = (turns: Turn[], where: 'top' | 'bottom') => {
-    const cards = turns.map(turnCard);
+    const cards = turns.map((turn) => turnCard(turn));
     if (where === 'top') thread.prepend(...cards);
     else thread.append(...cards);
     cards.forEach((card) => diagrams.render(card));
@@ -155,6 +192,7 @@ async function doSend(sessionId: string, note: HTMLElement): Promise<void> {
 // Preview without re-rendering the list, so hovering never steals the row under the mouse.
 export function hoverPreview(sessionId: string): void {
   if (sessionId === state.selectedId) return;
+  if (document.activeElement?.matches('#history-preview textarea')) return; // never swap the session she's typing into
   state.selectedId = sessionId;
   state.previewMode = 'replies'; // a newly picked session always opens on its replies
   for (const r of document.querySelectorAll<HTMLElement>('.history-row')) r.classList.toggle('selected', r.dataset.sessionId === sessionId);

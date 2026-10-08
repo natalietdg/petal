@@ -69,6 +69,10 @@ function descendants(rootPid: number, processes: readonly ProcessRow[]): Process
   return found;
 }
 
+// True when a claude CLI runs anywhere under rootPid; the updater asks this about Petal itself.
+export const claudeRunsUnder = (rootPid: number, processes: readonly ProcessRow[]): boolean =>
+  descendants(rootPid, processes).some((proc) => isClaudeCli(proc.comm));
+
 // Parsed ~/.claude/sessions/<pid>.json, or null when missing or malformed.
 export function readSessionFile(pid: number): SessionFile | null {
   try {

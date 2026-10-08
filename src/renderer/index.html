@@ -19,6 +19,7 @@
         <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
         <button id="history-button" class="dock-button" type="button" aria-pressed="false">History</button>
         <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)">Add Session</button>
+        <button id="update-pill" class="update-pill" type="button" hidden></button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
         <div id="sessions-panel" class="sessions-panel" hidden></div>
       </aside>
@@ -29,6 +30,7 @@
             <button type="button" data-view="replies" aria-selected="true">Replies</button>
             <button type="button" data-view="flow" aria-selected="false">Flow</button>
             <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
+            <button type="button" data-view="notes" aria-selected="false">Notes</button>
           </div>
         </div>
       </header>
@@ -42,6 +44,7 @@
           </div>
           <section id="flow-view" class="prose" hidden></section>
           <section id="decisions-view" class="prose" hidden></section>
+          <section id="notes-view" hidden></section>
         </div>
       </main>
       <section id="prompt-dock" aria-live="polite"></section>

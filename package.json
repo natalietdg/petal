@@ -14,13 +14,15 @@
     "package": "electron-vite build && electron-builder --mac --dir --universal --publish never",
     "dist": "electron-vite build && electron-builder --mac --publish never",
     "lint": "eslint .",
+    "release": "scripts/release.sh",
     "test": "vitest run",
-    "package:local": "electron-vite build && electron-builder --mac --dir --universal --publish never -c.mac.identity=\"Apple Development: Natalie Leong (ZZ9559DF3Q)\""
+    "package:local": "[ -n \"$CSC_NAME\" ] || { echo 'package:local needs CSC_NAME, e.g. CSC_NAME=\"Apple Development: <you> (<id>)\" npm run package:local' >&2; exit 1; } && electron-vite build && electron-builder --mac --dir --universal --publish never -c.mac.identity=\"$CSC_NAME\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {

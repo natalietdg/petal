@@ -18,6 +18,7 @@ import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as tarotReading from './tarot-reading';
 import * as welcome from './welcome';
+import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -25,7 +26,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, welcome };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -58,7 +59,7 @@ async function start(): Promise<void> {
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
-    reader.update({ ...update, pending: tab.pending });
+    reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     cat.setBusy(update.busy);
     promptDock.showQuestion(tab.id, update.question);
     readScreen(tab);
@@ -66,6 +67,7 @@ async function start(): Promise<void> {
   // Pickers come and go with pty output; read the active screen once a burst settles.
   let screenTimer: ReturnType<typeof setTimeout> | undefined;
   const onScreen = (tab: Tab) => {
+    history.tabScreen(tab.id); // History's reply box may follow a tab in the background
     if (tab !== tabs.active()) return;
     clearTimeout(screenTimer);
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
@@ -103,10 +105,15 @@ async function start(): Promise<void> {
     tabs.setUpdate(update.tabId, update);
     const active = tabs.active();
     if (active && update.tabId === active.id) showTab(active);
+    history.tabUpdated(update.tabId);
   });
-  window.pastel.onTabClosed(({ tabId }) => tabs.remove(tabId));
+  window.pastel.onTabClosed(({ tabId }) => {
+    tabs.remove(tabId);
+    history.tabClosed(tabId);
+  });
   window.pastel.onTabCommand((command) => {
-    if (command.kind === 'new') tabs.create();
+    if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
+    else if (command.kind === 'new') tabs.create();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);
     else if (command.kind === 'activate') tabs.activate(command.tabId);
@@ -117,17 +124,21 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
-  byId('reader').addEventListener('mouseup', () => {
+  byId('reader').addEventListener('mouseup', (event) => {
+    if ((event.target as Element).closest('#notes-view')) return; // notes keep their own keys
     if (!window.getSelection()?.toString()) focusTerminal();
   });
 
   window.addEventListener('petal:focus-terminal', focusTerminal);
   // The reply box added or took back a pending message.
   window.addEventListener('petal:reader-refresh', (event) => {
+    const tabId = (event as CustomEvent<string>).detail;
     const active = tabs.active();
-    if (active && (event as CustomEvent<string>).detail === active.id) showTab(active);
+    if (active && tabId === active.id) showTab(active);
+    history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
+  updatePill.init();
 
   const { term, renderer } = tabs.create();
   const firstRun = await welcome.openIfFirstRun(); // a new install sees the welcome screen over the first tab

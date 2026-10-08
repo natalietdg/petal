@@ -84,7 +84,7 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
     await js("PastelTerm.reader.setView('decisions')");
     await waitFor(() => js("document.querySelectorAll('#decisions-view .decision').length"), 10000);
     const decisions = await js(`[...document.querySelectorAll('#decisions-view .decision')].map((d) => d.querySelector('.flow-actor').textContent + ' | ' + d.querySelector('.decision-what').textContent)`);
-    log(`${decisions.length ? 'ok' : 'FAIL'} decisions ${id}: ${JSON.stringify(decisions)}`);
+    log(`${decisions.some((d: string) => d.startsWith('Decided by you')) ? 'ok' : 'FAIL'} decisions ${id}: ${JSON.stringify(decisions)}`);
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `decisions-${id}` });
   }
   // Click a step: it must land on that reply in Replies view.

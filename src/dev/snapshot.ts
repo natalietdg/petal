@@ -11,8 +11,12 @@ import { promptsCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
+import { tablesCheck } from './snapshot-tables';
 import { addSessionCheck } from './snapshot-add-session';
+import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
+import { notesCheck } from './snapshot-notes';
+import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -238,7 +242,7 @@ const FIXTURE_REPLY = [
 const FIXTURE_STEPS: { prompt: string; edits?: string[]; reply: string | null }[] = [
   {
     prompt: 'should Petal ship to /Applications now?',
-    edits: ['/Users/natalieleong/CascadeProjects/pastel-term/package.json', '/Users/natalieleong/CascadeProjects/pastel-term/src/main/menu.js'],
+    edits: ['/Users/you/Code/petal/package.json', '/Users/you/Code/petal/src/main/menu.js'],
     reply: [
       '**The Petal build is ready in dist.**',
       '',
@@ -248,7 +252,7 @@ const FIXTURE_STEPS: { prompt: string; edits?: string[]; reply: string | null }[
       '',
       '```',
       '#21 | 2026-09-28 | ACTION | Claude | Renamed the app to Petal | package.json',
-      '#22 | 2026-09-28 | DECISION | Natalie | Keep the project folder name | ~/CascadeProjects/pastel-term',
+      '#22 | 2026-09-28 | DECISION | Alex | Keep the project folder name | ~/Code/petal',
       '```',
     ].join('\n'),
   },
@@ -352,9 +356,12 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
     ['add session', () => addSessionCheck(kit)],
+    ['update pill', () => updatePillCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
+    ['notes', () => notesCheck(kit)],
+    ['history reply', () => historyReplyCheck(kit)],
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
@@ -366,6 +373,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['print axis', () => printAxisCheck(kit, win)],
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
+    ['tables', () => tablesCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];

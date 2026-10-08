@@ -1,7 +1,6 @@
-/* Customize replaces the reader while open; the dock stays on top. */
+/* Customize replaces the reader while open, below the dock. */
 #customize {
-  position: absolute;
-  inset: 0;
+  position: relative;
   overflow-y: auto;
   background: var(--reader-bg);
   color: var(--reader-fg);
@@ -9,7 +8,7 @@
 }
 #customize[hidden] { display: none; }
 
-.customize-pane { max-width: 1040px; margin: 0 auto; padding: 72px 40px 60px; }
+.customize-pane { max-width: 1040px; margin: 0 auto; padding: 16px 40px 60px; }
 .customize-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 18px; }
 .customize-title { margin: 0; font: 600 2em/1.1 var(--display-font); letter-spacing: -0.02em; }
 .customize-tabs { margin: 0; flex-wrap: wrap; }

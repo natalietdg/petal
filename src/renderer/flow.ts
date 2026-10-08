@@ -1,6 +1,7 @@
 // Renders a session's "flow of outcomes": step cards on a thin line, plus the Mermaid export bar.
 import * as diagrams from './diagrams';
 import { el, isIpcError } from './dom';
+import { whoOf, type Who } from './ledger-actor';
 import type { AuditRow, FlowStep, Outcome, StateChange } from '../main/flow';
 import type { FlowView, Guarded } from '../shared/ipc';
 import type { FlowTarget } from '../shared/types';
@@ -20,13 +21,7 @@ interface ExportBar extends HTMLDivElement {
 }
 
 const TITLES: Record<string, string> = { done: 'Done', decide: 'Decide', watch: 'Watch out', next: 'Next', why: 'Why' };
-const ACTORS = /^(natalie|claude|external)/i;
 const CREATING_RECHECK_MS = 3000;
-type Who = 'natalie' | 'claude' | 'external';
-const whoOf = (actor: string): Who => {
-  const who = ACTORS.exec(actor)?.[1]?.toLowerCase();
-  return who === 'natalie' || who === 'claude' ? who : 'external';
-};
 
 function outcomeLine({ label, text }: Outcome): HTMLParagraphElement {
   const line = el('p', `flow-outcome callout callout-${label}`);
@@ -204,7 +199,7 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
 
 
 // Decisions tab: every DECISION ledger row in the session, tagged by who made it.
-const WHO: Record<Who, string> = { natalie: 'you', claude: 'Claude', external: 'someone else' };
+const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
 const SUPERSEDES = /supersedes\s+#(\d+)/i;
 const RECOMMENDED = /\(Claude (?:recommended|proposed|suggested|chose|scoped)[^)]*\)/i;
 
@@ -248,7 +243,7 @@ export function renderDecisions(container: HTMLElement, flow: FlowResult, option
     const shown = rows.filter((row) => who === 'all' || row.who === who);
     list.replaceChildren(...(shown.length ? shown.map((row) => decisionCard(row, onJump)) : [el('p', 'status empty', 'No decisions logged here.')]));
   };
-  const FILTERS: [Who | 'all', string][] = [['all', 'All'], ['natalie', 'By you'], ['claude', 'By Claude']];
+  const FILTERS: [Who | 'all', string][] = [['all', 'All'], ['you', 'By you'], ['claude', 'By Claude']];
   for (const [key, label] of FILTERS) {
     const b = el('button', '', `${label} · ${rows.filter((r) => key === 'all' || r.who === key).length}`);
     b.type = 'button';

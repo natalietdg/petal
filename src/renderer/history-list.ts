@@ -15,6 +15,7 @@ function row(session: Session): HTMLButtonElement {
   if (status) title.append(el('span', `history-status history-status-${status.replace(/\s+/g, '-')}`, status));
   if (session.live) title.append(el('span', 'history-live', 'live'));
   if (session.hasFlow) title.append(el('span', 'history-flow', 'flow'));
+  if (session.notes) title.append(el('span', 'history-flow history-has-notes', 'notes'));
   const count = `${session.messages}${session.messagesExact ? '' : '+'} messages`;
   const meta = el('span', 'history-meta');
   if (session.organizer?.project) meta.append(el('span', 'history-project', session.organizer.project));
@@ -65,7 +66,7 @@ function groupHeading(label: string, count: number): HTMLHeadingElement {
 
 export function renderList(): void {
   const query = search.value.trim().toLowerCase();
-  const haystack = (s: Session) => `${s.title} ${s.firstPrompt} ${s.organizer?.title ?? ''} ${s.organizer?.project ?? ''} ${(s.tags ?? []).join(' ')}`.toLowerCase();
+  const haystack = (s: Session) => `${s.title} ${s.firstPrompt} ${s.organizer?.title ?? ''} ${s.organizer?.project ?? ''} ${(s.tags ?? []).join(' ')} ${s.notes ?? ''}`.toLowerCase();
   const hasEveryTag = (s: Session) => [...state.tagFilter].every((t) => s.tags?.includes(t));
   const shown = state.sessions.filter((s) => (!query || haystack(s).includes(query)) && hasEveryTag(s));
   // Sessions arrive newest first, so groups and their rows keep that order.

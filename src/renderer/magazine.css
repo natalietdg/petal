@@ -219,16 +219,20 @@
   border-radius: 20px;
   padding: 1em 1.3em 0.5em;
 }
+/* One rounded box, header and body on the same paper; separate borders so the corners clip. */
 [data-reading="lifestyle"] .prose table {
-  border-top: 0;
-  border-bottom: 0;
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
   background: var(--code-bg);
   border-radius: 14px;
   overflow: hidden;
 }
 [data-reading="lifestyle"] .prose th,
 [data-reading="lifestyle"] .prose td { padding-left: 0.9em; }
-[data-reading="lifestyle"] .prose th { background: var(--done-wash); }
+/* Header text is 0.82em, so its inset scales up to line up with the body cells. */
+[data-reading="lifestyle"] .prose th { border-bottom: 2px solid var(--rule); padding-left: calc(0.9em / 0.82); }
+[data-reading="lifestyle"] .prose tr:last-child > td { border-bottom: 0; }
 [data-reading="lifestyle"] .prose .end-mark::after {
   content: "";
   display: inline-block;
@@ -266,7 +270,8 @@
 [data-reading="lifestyle"] .story-section:not(.back):nth-of-type(3n) { background: var(--decide-wash); }
 [data-reading="lifestyle"] .story-section > h2:first-child { margin-top: 0; }
 [data-reading="lifestyle"] .story-section .callout-decide,
-[data-reading="lifestyle"] .story-section blockquote.sidebar { background: var(--reader-bg); }
+[data-reading="lifestyle"] .story-section blockquote.sidebar,
+[data-reading="lifestyle"] .story-section table { background: var(--reader-bg); }
 
 /* Long headlines step down in the magazine looks too. */
 [data-reading] :is(#latest, .prose) .headline.headline-long { font-size: 2.2em; }
