@@ -13,7 +13,8 @@
 .sc-tr-velvet-l { fill: #8A3474; } .sc-tr-velvet { fill: #6A2259; } .sc-tr-velvet-d { fill: #4A1640; } .sc-tr-velvet-o { fill: #1E0A1C; }
 .sc-tr-trim { fill: #E0A93E; } .sc-tr-tassel { fill: #C48A2C; } .sc-tr-gold { fill: #E9B949; } .sc-tr-gold-d { fill: #A87420; }
 /* Table cloth in indigo velvet, face-down card backs. */
-.sc-tr-cloth-top { fill: #4C3E9C; } .sc-tr-cloth-l { fill: #45388E; } .sc-tr-cloth { fill: #372C78; } .sc-tr-cloth-fold { fill: #261D58; }
+.sc-tr-cloth-sheen { fill: #6656B8; } .sc-tr-cloth-top { fill: #4C3E9C; } .sc-tr-cloth-l { fill: #45388E; } .sc-tr-cloth { fill: #352A74; }
+.sc-tr-cloth-d { fill: #261D58; } .sc-tr-cloth-fold { fill: #22194E; }
 .sc-tr-back-l { fill: #D9A441; } .sc-tr-back { fill: #7A2E66; }
 /* Crystal ball. */
 .sc-tr-ball-l { fill: #B9AEF0; } .sc-tr-ball { fill: #8676D0; } .sc-tr-ball-d { fill: #574A9E; } .sc-tr-ball-o { fill: #1A1236; }

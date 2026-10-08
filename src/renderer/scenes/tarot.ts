@@ -117,13 +117,23 @@ const TABLE = { cx: 14, cy: 31, rx: 15.5, ry: 3, hem: 41 };
 const onTop = (x: number, y: number): boolean => inEllipse(x + 0.5, y + 0.5, TABLE.cx, TABLE.cy, TABLE.rx, TABLE.ry);
 const across = (x: number): number => Math.max(0, 1 - ((x + 0.5 - TABLE.cx) / TABLE.rx) ** 2);
 const hemAt = (x: number): number => TABLE.hem - 2 + Math.round(2 * Math.sqrt(across(x)));
+const onDrape = (x: number, y: number): boolean => y > TABLE.cy && across(x) > 0 && y < hemAt(x) && !onTop(x, y);
+// Two deep folds fall to the floor, each with a lit ridge on its candle side.
+const FOLDS: readonly number[] = [4, 24];
+// A soft sheen on the velvet top, right of the cards.
+const SHEEN = { y: 30, left: 23, right: 26 };
+function cloth(x: number, y: number): CellClass {
+  if (!onDrape(x, y - 1)) return 'tr-cloth-d';
+  if (FOLDS.includes(x)) return 'tr-cloth-fold';
+  return FOLDS.includes(x + 1) ? 'tr-cloth-l' : 'tr-cloth';
+}
 function table(x: number, y: number): CellClass | null {
-  if (onTop(x, y)) return onTop(x, y + 1) ? 'tr-cloth-top' : 'tr-trim';
+  if (onTop(x, y)) {
+    if (!onTop(x, y + 1)) return 'tr-trim';
+    return y === SHEEN.y && x >= SHEEN.left && x <= SHEEN.right ? 'tr-cloth-sheen' : 'tr-cloth-top';
+  }
   if (y < TABLE.cy || across(x) === 0 || y > hemAt(x)) return null;
-  if (y === hemAt(x)) return 'tr-trim';
-  const fold = (x + 2) % 6;
-  if (y >= TABLE.cy + 4 && fold === 0) return 'tr-cloth-fold';
-  return fold === 5 ? 'tr-cloth-l' : 'tr-cloth';
+  return y === hemAt(x) ? 'tr-trim' : cloth(x, y);
 }
 
 // A plum velvet valance along the top: lit lower fold, gold trim, a tassel every eight cells.
