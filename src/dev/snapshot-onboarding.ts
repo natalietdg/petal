@@ -38,6 +38,41 @@ async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Pr
   applyTheme('paleSky', { persist: false });
 }
 
+// Window sizes Start and the organizer switch must fit without scrolling: the default and a small laptop window.
+const FOOTER_SIZES: [width: number, height: number][] = [[1280, 900], [990, 800]];
+
+const footerRects = `(() => {
+  const inside = (r, box) => r.width > 0 && r.height > 0 && r.top >= box.top && r.left >= box.left && r.bottom <= box.bottom && r.right <= box.right;
+  const view = document.getElementById('welcome').getBoundingClientRect();
+  const port = { top: 0, left: 0, bottom: window.innerHeight, right: window.innerWidth };
+  const start = document.querySelector('.welcome-start').getBoundingClientRect();
+  const toggle = document.querySelector('.welcome-switch').getBoundingClientRect();
+  const cat = document.getElementById('cat').getBoundingClientRect();
+  const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  return {
+    window: [window.innerWidth, window.innerHeight],
+    start: [Math.round(start.left), Math.round(start.top), Math.round(start.right), Math.round(start.bottom)],
+    startVisible: inside(start, port) && inside(start, view),
+    switchVisible: inside(toggle, port) && inside(toggle, view),
+    startUnderCat: overlaps(start, cat),
+    scrolled: document.querySelector('.welcome-pane').scrollTop,
+  };
+})()`;
+
+async function footerInViewCheck({ js, log, wait, capture }: Kit, win: BrowserWindow): Promise<void> {
+  const [width, height] = win.getSize();
+  for (const [w, h] of FOOTER_SIZES) {
+    win.setSize(w, h);
+    await wait(700);
+    const r = await js(footerRects);
+    const ok = r.startVisible && r.switchVisible && !r.startUnderCat && r.scrolled === 0;
+    log(`${ok ? 'ok' : 'FAIL'} welcome Start and organizer switch in view without scrolling at ${w}x${h}: ${JSON.stringify(r)}`);
+    await capture(`welcome-${w}x${h}`);
+  }
+  win.setSize(width, height);
+  await wait(500);
+}
+
 // Needs a fresh userData (a new PASTEL_SNAPSHOT_DIR); a reused one has already seen the screen.
 export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, log, waitFor, wait } = kit;
@@ -51,6 +86,7 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome finds claude on this Mac: ${first.claude}`);
   log(`${configStore.load().welcome.seen ? 'ok' : 'FAIL'} welcome.seen saved once shown`);
   await captureBoth(kit, 'welcome');
+  await footerInViewCheck(kit, win);
 
   await js('PastelTerm.welcome.open({ claudeFound: false })');
   const missing = await js(welcomeState);

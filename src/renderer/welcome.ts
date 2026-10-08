@@ -100,7 +100,6 @@ function render(state: CustomizeState, claudeFound: boolean): void {
     const found = await window.pastel.claudeInstalled(true);
     render(state, found === true);
   });
-  const optional = el('p', 'welcome-note', 'Optional. Off unless you turn it on; you can change it later in Customize.');
   pane.append(
     el('h1', 'welcome-title', 'Welcome to Petal'),
     el('p', 'welcome-tagline', TAGLINE),
@@ -108,13 +107,15 @@ function render(state: CustomizeState, claudeFound: boolean): void {
     claudeBox,
     section('Pick a cat', catPicker(state)),
     section('Pick a scene', scenePicker(state)),
-    section('Session titles', organizerSwitch(state), optional),
-    startButton,
-    el('p', 'welcome-note', 'Esc also closes this. Help › Welcome brings it back.'),
   );
-  view.replaceChildren(pane);
+  // Pinned to the bottom so Start and the switch never need a scroll.
+  const footer = el('footer', 'welcome-footer');
+  const choices = el('div', 'welcome-footer-text');
+  choices.append(organizerSwitch(state), el('p', 'welcome-note', 'Optional, off unless you turn it on. Esc also closes this; Help › Welcome brings it back.'));
+  footer.append(startButton, choices); // Start on the left, clear of the cat in the right corner
+  view.replaceChildren(pane, footer);
   startButton.focus({ preventScroll: true }); // Esc and Enter work at once; the title stays in view
-  view.scrollTop = 0;
+  pane.scrollTop = 0;
 }
 
 // claudeFound: the snapshot run passes false to draw the not-installed variant.
