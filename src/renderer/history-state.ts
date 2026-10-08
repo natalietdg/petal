@@ -1,36 +1,21 @@
-// History's shared state and page skeleton. The list, tags and preview modules render into these elements;
-// the shell (history.ts) wires `hooks` so they can ask for a refresh without importing it.
+// History's shared state and page skeleton. The list and preview modules render into these elements;
+// the shell (history.ts) wires `hooks` so they can reach it without importing it.
 import { byId, query } from './dom';
+import { stripPasted } from '../shared/pasted-content';
 import type { HistoryList } from '../shared/ipc';
 
 export type Session = HistoryList['sessions'][number];
 export type PreviewMode = 'replies' | 'flow' | 'decisions';
-export type GroupBy = 'tag' | 'day' | 'project';
+export type SortBy = 'recent' | 'title';
 
 export const state = {
   sessions: [] as Session[],
   selectedId: null as string | null,
   previewMode: 'replies' as PreviewMode,
-  groupBy: 'tag' as GroupBy,
-  tagColors: {} as HistoryList['tags'], // { [name]: { color } } from tags.json
-  tagFilter: new Set<string>(), // every selected tag must be on a session (AND)
+  sort: 'recent' as SortBy,
 };
 
-// Folded groups and the folded tag bar are remembered per viewer; storage can be unavailable, so never rely on it.
-const FOLD_KEY = 'petal.history.folded';
-const readFolds = (): Set<string> => { try { return new Set<string>(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); } };
-export const folded = readFolds();
-const saveFolds = () => { try { localStorage.setItem(FOLD_KEY, JSON.stringify([...folded])); } catch { /* per-viewer nicety only */ } };
-export const TAGBAR_KEY = 'tagbar';
-
-export function toggleFold(key: string): void {
-  if (folded.has(key)) folded.delete(key);
-  else folded.add(key);
-  saveFolds();
-}
-
 export const hooks = {
-  refresh: async (): Promise<boolean> => false,
   renderList: (): void => {},
   close: (): void => {},
 };
@@ -44,15 +29,12 @@ view.innerHTML = `
     </div>
     <input id="history-search" class="history-search" type="search" placeholder="Search titles, first prompts and notes" aria-label="Search sessions">
     <div class="history-toolbar">
-      <div id="history-group" class="view-toggle history-group" role="tablist" aria-label="Group sessions">
-        <button type="button" data-group="tag" aria-selected="true">By tag</button>
-        <button type="button" data-group="day" aria-selected="false">By day</button>
-        <button type="button" data-group="project" aria-selected="false">By project</button>
+      <div id="history-sort" class="view-toggle history-sort" role="tablist" aria-label="Sort sessions">
+        <button type="button" data-sort="recent" aria-selected="true">Recent</button>
+        <button type="button" data-sort="title" aria-selected="false">A–Z</button>
       </div>
-      <button id="history-tidy" class="flow-button history-tidy" type="button" title="Give recent sessions clear titles and projects. Uses your Claude plan.">Tidy now</button>
       <button class="history-list-toggle" type="button" aria-expanded="true" aria-label="Hide the session list" title="Hide the list (⌘\\)">‹</button>
     </div>
-    <div id="history-tagbar" class="history-tagbar" role="group" aria-label="Filter by tag"></div>
     <div id="history-list" class="history-list"></div>
   </div>
   <div class="history-preview-pane">
@@ -67,14 +49,11 @@ export const preview = query(view, '#history-preview');
 export const replyDock = query(view, '#history-reply-dock');
 export const notesAside = query(view, '#history-notes');
 export const openNote = query(view, '#history-open-note');
-export const groupToggle = query(view, '#history-group');
-export const tidyButton = query<HTMLButtonElement>(view, '#history-tidy');
-export const tagBar = query(view, '#history-tagbar');
+export const sortToggle = query(view, '#history-sort');
 export const railTitle = query(view, '.history-rail-title');
 
 // Organizer labels win over Claude Code's own title when present.
-export const titleOf = (session: Session): string => session.organizer?.title || session.title || 'Untitled session';
-export const projectOf = (session: Session): string => session.organizer?.project || 'Unsorted';
+export const titleOf = (session: Session): string => session.organizer?.title || stripPasted(session.title).trim() || 'Untitled session';
 export const selectedSession = (): Session | undefined => state.sessions.find((s) => s.sessionId === state.selectedId);
 
 const DAY_MS = 86_400_000;

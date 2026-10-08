@@ -41,7 +41,6 @@
 .history-search::placeholder { color: var(--muted); }
 
 .history-list { overflow-y: auto; padding-right: 12px; }
-.history-day { margin: 16px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 
 .history-row {
   display: flex;
@@ -79,10 +78,9 @@
 .history-error { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--decide-wash); color: var(--reader-fg); font: 500 14px var(--ui-font); }
 
 .history-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 16px 8px 0; }
-.history-group { margin: 0; }
-.history-group button { padding: 4px 12px; font-size: 13px; }
-.history-tidy { margin-left: auto; }
-.history-tidy:disabled { opacity: 0.6; cursor: progress; }
+.history-sort { margin: 0; }
+.history-sort button { padding: 4px 12px; font-size: 13px; }
+.history-toolbar .history-list-toggle { margin-left: auto; }
 .history-project { margin-right: 6px; padding: 0 6px; border-radius: 6px; background: var(--code-bg); color: var(--reader-fg); font-weight: 600; }
 .history-row:hover .history-project, .history-row.selected .history-project { background: var(--reader-bg); }
 .history-status { flex-shrink: 0; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -90,44 +88,6 @@
 .history-status-in-progress { background: var(--next-pill); color: var(--next-ink); }
 .history-status-blocked { background: var(--decide-pill); color: var(--decide-ink); }
 
-/* Tags: Finder-style colour dot in a quiet pill, readable in light and dark themes. */
-.history-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-.history-tag { display: inline-flex; align-items: center; gap: 5px; padding: 0 4px 0 7px; border-radius: 999px; background: var(--code-bg); color: var(--reader-fg); font: 600 11px/18px var(--ui-font); white-space: nowrap; }
-.history-tag::before { content: ''; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--tag-color); }
-.history-row:hover .history-tag, .history-row.selected .history-tag { background: var(--reader-bg); }
-.history-tag-remove { padding: 0 3px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 12px/16px var(--ui-font); cursor: pointer; }
-.history-tag-remove:hover { background: var(--rule); color: var(--reader-fg); }
-.history-row .history-tag { padding-right: 7px; }
-.history-row .history-tag-remove { display: none; } /* × only on the row under the mouse */
-.history-row:hover .history-tag { padding-right: 2px; }
-.history-row:hover .history-tag-remove { display: inline; padding: 0 2px; line-height: 14px; }
-
-.history-tagbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 16px 8px 0; }
-.history-tagbar[hidden] { display: none; }
-.history-tag-filter { padding-left: 9px; font-size: 12px; line-height: 24px; border: 1px solid var(--rule); background: none; }
-.history-tag-filter[aria-pressed="true"] { border-color: var(--next-ink); background: var(--next-pill); color: var(--next-ink); }
-.history-tag-filter .history-tag-name { cursor: pointer; }
-.history-tag-heading { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: none; padding-left: 0; }
-
-.history-preview-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 10px; }
-.history-preview-tags .history-tag { font-size: 12px; line-height: 22px; }
-.history-tag-add { padding: 0 10px; border: 1px dashed var(--rule); border-radius: 999px; background: none; color: var(--muted); font: 600 12px/22px var(--ui-font); cursor: pointer; }
-.history-tag-add:hover { border-color: var(--next-ink); color: var(--next-ink); }
-.history-tag-input { width: 9em; padding: 2px 10px; border: 1px solid var(--next-ink); border-radius: 999px; background: var(--code-bg); color: var(--reader-fg); font: 500 12px/18px var(--ui-font); }
-
-/* Folding: tag groups and the tag bar collapse to their heading. */
-.history-fold {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: 600 12px var(--ui-font);
-  padding: 0 6px 0 0;
-  cursor: pointer;
-}
-.history-fold:hover { color: var(--reader-fg); }
-.history-group-heading { display: flex; align-items: center; gap: 4px; }
-.history-group-count { margin-left: 6px; color: var(--muted); font-weight: 500; }
-.history-tagbar-fold { letter-spacing: 0.04em; }
 
 /* Conversation view: her prompts as quiet bubbles, Claude's replies as reader text. */
 .history-thread { display: flex; flex-direction: column; gap: 1.6em; }

@@ -5,7 +5,6 @@ import * as flow from './flow';
 import { el } from './dom';
 import { timeOf } from './format';
 import { dayLabel, hooks, notesAside, openNote, preview, railTitle, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
-import { attachPreviewTags } from './history-tags';
 import { createPanel } from './notes-panel';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
@@ -25,9 +24,6 @@ export async function renderPreview(): Promise<void> {
   const head = el('header', 'history-preview-head');
   head.append(el('h2', 'history-preview-title', titleOf(session)),
     el('p', 'status', `${session.shortCwd} · ${dayLabel(session.lastAt)} ${timeOf(session.lastAt)}`));
-  const tagLine = el('div', 'history-preview-tags');
-  head.append(tagLine);
-  attachPreviewTags(tagLine);
 
   const note = el('p', 'history-note');
   const resume = el('button', 'flow-button resume-button', 'Open');
