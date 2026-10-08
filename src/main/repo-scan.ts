@@ -6,7 +6,7 @@ import path from 'node:path';
 export interface RepoEntry {
   name: string;
   path: string;
-  shortPath: string; // "~/CascadeProjects/pastel-term"
+  shortPath: string; // "~/Code/petal"
   branch: string | null; // short sha when HEAD is detached
   modifiedMs: number; // newest of HEAD and index
 }

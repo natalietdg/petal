@@ -15,7 +15,7 @@ Each step has a verify-gate. Tick only with evidence (log line, PNG, number).
 
 Test launches: run the Electron binary directly under `perl -e 'alarm N; exec @ARGV'` (an `npx` wrapper leaves Electron orphaned).
 
-## B. By hand (Natalie, 5 minutes)
+## B. By hand (the maintainer, 5 minutes)
 - [ ] B1 ⌘T new tab, ⌘⇧] / ⌘⇧[ switch, ⌘W close.
 - [ ] B2 History → Open a past session lands in a new tab.
 - [ ] B3 History → Send to Claude types the read line into the active tab.

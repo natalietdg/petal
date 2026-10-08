@@ -237,7 +237,7 @@ const FIXTURE_REPLY = [
 const FIXTURE_STEPS: { prompt: string; edits?: string[]; reply: string | null }[] = [
   {
     prompt: 'should Petal ship to /Applications now?',
-    edits: ['/Users/natalieleong/CascadeProjects/pastel-term/package.json', '/Users/natalieleong/CascadeProjects/pastel-term/src/main/menu.js'],
+    edits: ['/Users/you/Code/petal/package.json', '/Users/you/Code/petal/src/main/menu.js'],
     reply: [
       '**The Petal build is ready in dist.**',
       '',
@@ -247,7 +247,7 @@ const FIXTURE_STEPS: { prompt: string; edits?: string[]; reply: string | null }[
       '',
       '```',
       '#21 | 2026-09-28 | ACTION | Claude | Renamed the app to Petal | package.json',
-      '#22 | 2026-09-28 | DECISION | Natalie | Keep the project folder name | ~/CascadeProjects/pastel-term',
+      '#22 | 2026-09-28 | DECISION | Alex | Keep the project folder name | ~/Code/petal',
       '```',
     ].join('\n'),
   },
