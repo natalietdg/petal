@@ -144,7 +144,7 @@
   padding: 0.45em 0.9em 0.45em 0;
   text-align: left;
   vertical-align: top;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere; /* break-word leaves a long word's full width as the cell's minimum, pushing the table sideways */
   max-width: 18em;
 }
 /* URLs and paths may break anywhere, so one long token cannot push the table past its column. */
