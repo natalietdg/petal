@@ -339,8 +339,8 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   const steps: [string, () => Promise<unknown>][] = [
-    ['welcome', async () => { organizerOffCheck(kit, 'start'); await welcomeCheck(kit, win); }], // first: it needs the fresh launch
-    ['reply', () => fixtureReply({ js, log, pty })],
+    ['reply', () => fixtureReply({ js, log, pty })], // first: the feed must read the fixture it writes, not an older copy
+    ['welcome', async () => { organizerOffCheck(kit, 'start'); await welcomeCheck(kit, win); }], // still open from the fresh launch
     ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
     ['cat frames', () => catFrames({ js, win, capture, log, feed, themes, applyTheme })],
     ['scene motion', () => sceneMotionCheck(kit, { feed, win })],
