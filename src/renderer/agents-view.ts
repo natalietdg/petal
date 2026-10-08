@@ -1,7 +1,7 @@
 // The Agents view over the reader: the shown session's subagents, then one agent's live timeline. Esc steps back.
 import * as overlays from './overlays';
 import * as sessionsPanel from './sessions-panel';
-import { appendItems } from './agents-timeline';
+import { appendItems, settle } from './agents-timeline';
 import { byId, el, isIpcError } from './dom';
 import { agentsChipText } from '../shared/ipc';
 import type { AgentSummary } from '../main/agents';
@@ -68,6 +68,7 @@ function append(items: readonly TimelineItem[]): void {
   if (!timeline) return;
   const follow = atBottom();
   appendItems(timeline, items);
+  if (finished) settle(timeline);
   if (follow) view.scrollTop = view.scrollHeight;
 }
 
@@ -130,8 +131,10 @@ function stepBack(): boolean {
 
 window.pastel.agents.onTimeline((update) => {
   if (update.agentId !== openId) return;
+  const justFinished = update.finished && !finished;
   finished = update.finished;
   append(update.items);
+  if (justFinished) void refreshList(); // the header says finished now, not on the next tick
 });
 
 // The header chip and the open view ride the Sessions tick; no timer of their own.

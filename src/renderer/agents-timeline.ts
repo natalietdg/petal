@@ -41,6 +41,11 @@ function textRow(text: string, className: string, label?: string): HTMLLIElement
   return row;
 }
 
+// A finished agent has no step still waiting; a step it never got a result for just loses the dots.
+export function settle(list: HTMLElement): void {
+  for (const status of list.querySelectorAll('.agent-step-status.waiting')) status.replaceChildren();
+}
+
 // Appends rows in arrival order; a result updates its step instead of adding a row.
 export function appendItems(list: HTMLElement, items: readonly TimelineItem[]): void {
   for (const item of items) {

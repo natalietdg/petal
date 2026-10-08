@@ -16,6 +16,7 @@ import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
+import { agentsCheck } from './snapshot-agents';
 import { notesCheck } from './snapshot-notes';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
@@ -358,6 +359,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
+    ['agents view', () => agentsCheck(kit, win)],
     ['add session', () => addSessionCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
@@ -523,6 +525,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'agents' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await agentsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
