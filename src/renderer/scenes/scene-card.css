@@ -1,0 +1,25 @@
+/* Rooms with a hover tip and click card (scene-card.ts): the room is clickable and its tip replaces the cat's own. */
+#cat :is(.scene-tarot, .scene-planetarium) { cursor: pointer; }
+#cat:has(:is(.scene-tarot, .scene-planetarium):hover) .cat-tip { opacity: 0; }
+
+/* The tip and card sit above the cat. */
+.scene-tip, .scene-popover {
+  position: absolute;
+  right: 28px;
+  bottom: calc(var(--composer-height, 0px) + 14px + 150px);
+  z-index: 6;
+  max-width: 260px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 400 13px/1.45 var(--ui-font);
+  box-shadow: 0 4px 18px rgba(20, 10, 30, 0.22);
+}
+.scene-tip { padding: 6px 10px; pointer-events: none; }
+.scene-tip strong, .scene-popover h2 { font-weight: 700; }
+.scene-popover { padding: 14px 16px 12px; border: 1px solid #E9B949; }
+.scene-popover .scene-kicker { margin: 0; font: 700 12px var(--ui-font); letter-spacing: 0.12em; color: #B07A12; }
+.scene-popover h2 { margin: 2px 0 6px; font-size: 16px; }
+.scene-popover p { margin: 0; }
+.scene-popover .scene-date { margin-top: 8px; font-size: 11px; opacity: 0.7; }
+.scene-tip[hidden], .scene-popover[hidden] { display: none; }

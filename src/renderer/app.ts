@@ -16,7 +16,9 @@ import * as customize from './customize';
 import * as overlays from './overlays';
 import * as promptDock from './prompt-dock';
 import * as repos from './repos';
+import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
+import './planet-reading';
 import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
@@ -72,12 +74,12 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel, the open overlay or the tarot reading instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay or a scene card instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
     else if (overlays.current()) overlays.hideCurrent();
-    else if (tarotReading.isOpen()) tarotReading.close();
+    else if (sceneCards.anyOpen()) sceneCards.closeAll();
     else return true;
     return false;
   });

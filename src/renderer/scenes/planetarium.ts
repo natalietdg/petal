@@ -3,6 +3,7 @@
 import {
   inCircle, inEllipse, layers, NEIGHBOURS, outlined, sprite, stamp, type Cell, type CellClass, type Scene, type Shape,
 } from './kit';
+import { localDayNumber } from './daily';
 
 // The dome: a big circle cut off by the horizon, so the top corners show the room behind it.
 const DOME = { cx: 24, cy: 40, r: 41.2 };
@@ -87,14 +88,13 @@ const star = (x: number, y: number): CellClass | null => STARS[`${x},${y}`] ?? n
 // The day's planet: all eight in solar order, one per local calendar day, Mars on 2026-10-07.
 export const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const;
 export type Planet = (typeof PLANETS)[number];
-const DAY_MS = 86_400_000;
-const MARS_DAY = Date.UTC(2026, 9, 7);
-export function planetFor(date: Date): Planet {
-  // The local date as a UTC day count, so a DST shift never skips or repeats a day.
-  const days = Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - MARS_DAY) / DAY_MS);
-  const index = (((days + PLANETS.indexOf('mars')) % PLANETS.length) + PLANETS.length) % PLANETS.length;
+const MARS_DAY = localDayNumber(new Date(2026, 9, 7));
+// `day` is a local calendar day number from daily.ts, so a DST shift never skips or repeats a day.
+export function planetForDay(day: number): Planet {
+  const index = (((day - MARS_DAY + PLANETS.indexOf('mars')) % PLANETS.length) + PLANETS.length) % PLANETS.length;
   return PLANETS[index] ?? 'mars';
 }
+export const planetFor = (date: Date): Planet => planetForDay(localDayNumber(date));
 
 // Huge, glowing discs on the left behind the galaxy, cropped by the dome; (dx, dy) is from the centre.
 const PLANET_CENTRE = { cx: 5, cy: 8 };
@@ -250,15 +250,3 @@ const scene: Scene = {
 };
 export default scene;
 
-// Typed loosely: tests import this file without the DOM, so the timer only starts in the app.
-type Page = { documentElement: { dataset: Record<string, string | undefined> } };
-const page = (globalThis as { document?: Page }).document;
-// Checked each minute rather than timed to midnight: a sleeping laptop delays timers.
-const showTodaysPlanet = (root: Page['documentElement']): void => {
-  const planet = planetFor(new Date());
-  if (root.dataset.plPlanet !== planet) root.dataset.plPlanet = planet;
-};
-if (page) {
-  showTodaysPlanet(page.documentElement);
-  setInterval(() => showTodaysPlanet(page.documentElement), 60_000);
-}

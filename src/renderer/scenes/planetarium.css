@@ -40,7 +40,7 @@
 .sc-pl-spark1, .sc-pl-spark2, .sc-pl-spark3 { fill: #B8A8F0; }
 .sc-pl-trail { fill: #D7CCFF; } .sc-pl-trail-faint { fill: #7A6CC0; }
 
-/* All eight planets are drawn; only the day's one shows (data-pl-planet, set by planetarium.ts). */
+/* All eight planets are drawn; only the day's one shows (data-pl-planet, set by planet-reading.ts). */
 #cat .scene-planetarium :is([class^="sc-pl-mercury-"], [class^="sc-pl-venus-"], [class^="sc-pl-earth-"], [class^="sc-pl-mars-"], [class^="sc-pl-jupiter-"], [class^="sc-pl-saturn-"], [class^="sc-pl-uranus-"], [class^="sc-pl-neptune-"]) { display: none; }
 :root:not([data-pl-planet]) #cat .scene-planetarium [class^="sc-pl-mars-"] { display: inline; }
 :root[data-pl-planet="mercury"] #cat .scene-planetarium [class^="sc-pl-mercury-"] { display: inline; }
@@ -71,3 +71,12 @@
   9% { opacity: 0.6; transform: translate(-6px, 6px); }
   12%, 100% { opacity: 0; transform: translate(-8px, 8px); }
 }
+
+/* The planet card (planet-reading.ts): the day's planet colour edges it, like a lit rim. */
+.scene-popover.planet-popover { border-color: var(--pl-accent, #E9B949); border-left-width: 4px; }
+.planet-popover[data-planet="mercury"] { --pl-accent: #8E8AB8; } .planet-popover[data-planet="venus"] { --pl-accent: #E8B474; }
+.planet-popover[data-planet="earth"] { --pl-accent: #3A78D8; } .planet-popover[data-planet="mars"] { --pl-accent: #E06E54; }
+.planet-popover[data-planet="jupiter"] { --pl-accent: #E0A070; } .planet-popover[data-planet="saturn"] { --pl-accent: #DCB878; }
+.planet-popover[data-planet="uranus"] { --pl-accent: #5CC4C0; } .planet-popover[data-planet="neptune"] { --pl-accent: #3E64E0; }
+.planet-popover .planet-line + .planet-line { margin-top: 4px; }
+.planet-popover .planet-tomorrow { margin-top: 8px; font-size: 12px; font-style: italic; }
