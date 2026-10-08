@@ -25,17 +25,18 @@ mac:
       arch: universal
   icon: build/icon.icns
   category: public.app-category.developer-tools
-  # Signing is off until the Developer ID cert is installed: then delete this line and set notarize: true.
+  # Unsigned by default; scripts/release.sh (npm run release) passes the Developer ID identity and turns notarize on.
   identity: null
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
+  # The zip is what electron-updater downloads on macOS; keep it.
   # Both slices ship node-pty's prebuilt darwin-x64 and darwin-arm64 binaries unchanged.
   x64ArchFiles: "**/node_modules/node-pty/prebuilds/darwin-*/**"
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
-# Auto-update is stubbed: this only writes latest-mac.yml; nothing publishes or checks for updates yet.
+# Builds write latest-mac.yml for electron-updater; only `npm run release -- --publish` uploads, as a draft.
 publish:
   provider: github
   owner: natalietdg
