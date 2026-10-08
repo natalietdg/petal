@@ -2,7 +2,7 @@
 // Opening one closes the others; Esc closes it; the reader and reply box show only when none is open.
 import { byId, focusTerminal } from './dom';
 
-export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos';
+export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos' | 'welcome';
 
 interface Overlay {
   view: HTMLElement;
@@ -14,6 +14,7 @@ const OVERLAYS: Record<OverlayId, Overlay> = {
   workflow: { view: byId('workflow'), button: byId('workflow-button') },
   customize: { view: byId('customize'), button: byId('customize-button') },
   repos: { view: byId('repos') },
+  welcome: { view: byId('welcome') },
 };
 const reader = byId('reader');
 const readerHead = byId('reader-head');

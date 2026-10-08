@@ -16,9 +16,11 @@
   --cat-white: #FFFFFF;
   --cat-collar: transparent;
 }
+/* A still cat in a picker: the same unset coat parts as #cat. */
+.cat-portrait { --cat-stripe: transparent; --cat-patch: transparent; --cat-white: #FFFFFF; --cat-collar: transparent; }
 /* Coats from her photos. */
 /* Mika, an orange tabby (from the pixel logo she liked): darker stripes, green eyes, brown outline. */
-#cat[data-cat="mika"] {
+#cat[data-cat="mika"], .cat-portrait[data-cat="mika"] {
   --cat-body: #F0A262;
   --cat-belly: #FADBB2;
   --cat-pink: #FADBB2;
@@ -26,9 +28,9 @@
   --cat-eye: #5FA85A;
   --cat-stripe: #D9803F;
 }
-#cat[data-cat="mika"] .px-O { fill: #3A2214; }
+#cat[data-cat="mika"] .px-O, .cat-portrait[data-cat="mika"] .px-O { fill: #3A2214; }
 /* Corgi: warm tan with white markings, near-black eyes, warm brown outline like Mika's. */
-#cat[data-cat="corgi"] {
+#cat[data-cat="corgi"], .cat-portrait[data-cat="corgi"] {
   --cat-body: #E8A15A;
   --cat-belly: #FFF8EE;
   --cat-pink: #F2A2B8;
@@ -36,9 +38,9 @@
   --cat-eye: #2A1A12;
   --cat-white: #FFF8EE;
 }
-#cat[data-cat="corgi"] .px-O { fill: #3A2214; }
+#cat[data-cat="corgi"] .px-O, .cat-portrait[data-cat="corgi"] .px-O { fill: #3A2214; }
 /* Miki: near-black grey tabby; the collar goes soft grey so it shows against her fur. */
-#cat[data-cat="miki"] {
+#cat[data-cat="miki"], .cat-portrait[data-cat="miki"] {
   --cat-body: #4A4847;
   --cat-belly: #F4EEE4;
   --cat-pink: #E9A3A8;
@@ -49,7 +51,7 @@
   --cat-collar: #8A8A94;
 }
 /* Kira: calico, warm grey tabby with orange and dark patches, white belly and paws. */
-#cat[data-cat="kira"] {
+#cat[data-cat="kira"], .cat-portrait[data-cat="kira"] {
   --cat-body: #9C8572;
   --cat-belly: #F6F0E6;
   --cat-pink: #E9A0A8;
@@ -68,7 +70,7 @@
 .px-O { fill: var(--cat-ink, var(--reader-fg)); }
 /* Night themes: the text colour is light, so outlines and pupils would glow. Keep them dark ink,
    add a faint rim so the silhouette still reads, and dim the scenes so they don't glare. */
-[data-theme="dark"] #cat { --cat-ink: #10162A; }
+[data-theme="dark"] #cat, [data-theme="dark"] .cat-portrait { --cat-ink: #10162A; }
 [data-theme="dark"] #cat .cat-sprite svg,
 [data-theme="dark"] #cat .cat-prop svg { filter: drop-shadow(0 0 1px rgba(191, 214, 245, 0.45)); }
 [data-theme="dark"] #cat .scene { filter: brightness(0.82) saturate(0.9); }
