@@ -107,7 +107,8 @@
   text-align: center;
 }
 .prose strong { font-weight: 700; }
-.prose a { color: var(--link); text-underline-offset: 3px; }
+/* Only four treatments carry colour (highlight, Decide, Watch out, inline code); links stay in the text's ink. */
+.prose a { color: inherit; text-underline-offset: 3px; }
 .prose ul, .prose ol { padding-left: 1.4em; margin: 0 0 1em; }
 .prose li + li { margin-top: 0.45em; }
 .prose hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }
@@ -146,10 +147,10 @@
   border-radius: 6px;
 }
 
+/* Code blocks: set off by a rule and indent, no fill (the chip colour belongs to inline code). */
 .prose pre {
-  background: var(--code-bg);
-  padding: 16px 20px;
-  border-radius: 12px;
+  padding: 4px 0 4px 18px;
+  border-left: 3px solid var(--rule);
   overflow-x: auto;
   line-height: 1.55;
   margin: 0.2em 0 1.25em;
@@ -178,8 +179,8 @@
   text-wrap: balance;
   margin-bottom: 0.5em;
 }
-/* Standfirst: the paragraph right after the headline, like a news deck (the colour key shows it too). */
-:is(#latest, #colour-key) .headline + p {
+/* Standfirst: the paragraph right after the headline, like a news deck. */
+#latest .headline + p {
   font-size: 1.14em;
   line-height: 1.5;
   padding-bottom: 1em;
@@ -207,17 +208,17 @@
 }
 
 /* Semantic callouts: pill label + tinted left border. */
-.callout-done   { --pill: var(--done-pill);   --ink: var(--done-ink);   --wash: var(--done-wash); }
-.callout-why    { --pill: var(--why-pill);    --ink: var(--why-ink);    --wash: var(--why-wash); }
 .callout-watch  { --pill: var(--watch-pill);  --ink: var(--watch-ink);  --wash: var(--watch-wash); }
 .callout-decide { --pill: var(--decide-pill); --ink: var(--decide-ink); --wash: var(--decide-wash); }
-.callout-next   { --pill: var(--next-pill);   --ink: var(--next-ink);   --wash: var(--next-wash); }
+/* Done, Why and Next are neutral: a bold label in the text's ink, no fill. */
+:is(.callout-done, .callout-why, .callout-next) { --pill: transparent; --ink: var(--reader-fg); --wash: transparent; }
+:is(.callout-done, .callout-why, .callout-next) .pill { padding-left: 0; padding-right: 0; }
 
 /* Quiet callouts (Done, Why, Watch out) sit in the text flow: a pill, no box. */
 .callout { padding: 0; background: none; }
 .callout-watch { padding-left: 0.9em; border-left: 2px solid var(--ink); }
 
-/* Only the two that ask something of her get a box. */
+/* Only the two that ask something of her get a box; Next's is a plain ink frame. */
 .callout-decide, .callout-next {
   background: var(--wash);
   border-left: 3px solid var(--ink);

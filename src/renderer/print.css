@@ -6,8 +6,6 @@
 [data-reading="print"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview) {
   --print-ink: var(--reader-fg);
   --print-tint: var(--code-bg);
-  --print-accent: var(--highlight);
-  --print-accent-ink: var(--highlight-ink);
   --print-mono: "IBM Plex Mono", var(--mono-font);
 }
 [data-reading="print"][data-theme="light"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview) {
@@ -19,8 +17,6 @@
   --code-bg: #F7EBE5;
   --print-ink: #141414;
   --print-tint: #F9EEE9;
-  --print-accent: #EED27E;
-  --print-accent-ink: #141414;
 }
 [data-reading="print"] .cz-preview { background: var(--reader-bg); }
 
@@ -145,17 +141,16 @@
 }
 [data-reading="print"] .prose blockquote.pull-quote p { margin: 0; }
 
-/* ---- Sidebar: a ruled box on a faint tint, like the magazine's inset panels. ---- */
+/* ---- Sidebar: a ruled box, like the magazine's inset panels. ---- */
 [data-reading="print"] .prose blockquote.sidebar {
   margin: 1.6em 0;
   padding: 1.1em 1.3em 0.6em;
   border: 1px solid var(--print-ink);
-  background: var(--print-tint);
   font-size: 0.9em;
 }
 [data-reading="print"] .prose blockquote.sidebar > p:first-child > strong:first-child { font-size: 0.82em; }
 
-/* ---- Callouts: mono labels instead of pills; the two that ask something of her stay boxed and loud. ---- */
+/* ---- Callouts: mono labels instead of pills; Decide keeps its tint, Next is an ink frame. ---- */
 [data-reading="print"] .pill {
   margin-right: 0.7em;
   padding: 0;
@@ -176,18 +171,16 @@
 [data-reading="print"] .callout-next {
   border: 1px solid var(--print-ink);
   border-radius: 0;
-  background: var(--print-accent);
-  color: var(--print-accent-ink);
+  background: none;
   padding: 0.85em 1.1em;
 }
-[data-reading="print"] .callout-next .pill { color: var(--print-accent-ink); }
 
 /* ---- Tables and code: ink rules, square corners. ---- */
 [data-reading="print"] .prose table { border-top: 1px solid var(--print-ink); border-bottom: 1px solid var(--print-ink); }
 [data-reading="print"] .prose th { font-size: 0.72em; border-bottom: 1px solid var(--print-ink); }
 /* Row labels: the essay's one table voice, a half-step heavier than the body. */
 [data-reading="print"] .prose td:first-child { font-weight: 520; }
-[data-reading="print"] .prose pre { border: 1px solid var(--print-ink); border-radius: 0; background: var(--print-tint); }
+[data-reading="print"] .prose pre { padding: 12px 16px; border: 1px solid var(--print-ink); border-radius: 0; }
 [data-reading="print"] .prose code { border-radius: 0; }
 [data-reading="print"] .prose p:has(> em:only-child) { font-family: var(--print-mono); font-size: 0.7em; letter-spacing: 0.04em; }
 [data-reading="print"] .prose hr { border-top-color: var(--print-ink); }
