@@ -1,6 +1,6 @@
 // Keystrokes for each answer shape; the sequences match what a real Claude Code 2.1.291 accepted.
 import { describe, expect, it } from 'vitest';
-import { keysFor, permissionKeys, questionKeys } from '../src/main/prompt-keys';
+import { keysFor, permissionKeys, pickerKeys, questionKeys } from '../src/main/prompt-keys';
 import type { AskQuestion } from '../src/shared/prompt-answer';
 
 const q = (multiSelect = false, count = 2): AskQuestion => ({
@@ -42,6 +42,32 @@ describe('questionKeys', () => {
     expect(questionKeys([q(true, 3)], [{ selected: [1, 1] }])).toBeNull();
     expect(questionKeys([q(true, 3)], [{ other: 'kiwi' }])).toBeNull();
     expect(questionKeys([], [])).toBeNull();
+  });
+});
+
+describe('pickerKeys (measured live on 2.1.293)', () => {
+  it('an option is its digit: answers a single-select tab, toggles a multiSelect box, 1/2 submit/cancel on review', () => {
+    expect(pickerKeys({ pick: 1 })).toEqual(['1']);
+    expect(pickerKeys({ pick: 3 })).toEqual(['3']);
+  });
+
+  it('typed text: the free-text digit, the text without controls, Enter', () => {
+    expect(pickerKeys({ other: 4, text: 'teal' })).toEqual(['4', 'teal', '\r']);
+    expect(pickerKeys({ other: 3, text: 'ki\x1bwi\r\nnow' })).toEqual(['3', 'ki wi now', '\r']);
+  });
+
+  it('Next is →, Back is ←', () => {
+    expect(pickerKeys({ move: 'next' })).toEqual(['\x1b[C']);
+    expect(pickerKeys({ move: 'back' })).toEqual(['\x1b[D']);
+  });
+
+  it('refuses anything else', () => {
+    for (const bad of [null, undefined, 1, 'next', {}, { pick: 0 }, { pick: 10 }, { pick: 1.5 }, { pick: '1' }, { move: 'up' },
+      { other: 3, text: ' \x1b ' }, { other: 3 }, { other: 0, text: 'x' }]) expect(pickerKeys(bad)).toBeNull();
+  });
+
+  it('keysFor routes a picker step', () => {
+    expect(keysFor({ kind: 'picker', step: { move: 'next' } }, null)).toEqual(['\x1b[C']);
   });
 });
 

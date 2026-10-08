@@ -64,7 +64,6 @@ async function start(): Promise<void> {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     cat.setBusy(update.busy);
-    promptDock.showQuestion(tab.id, update.question);
     readScreen(tab);
   };
   // Pickers come and go with pty output; read the active screen once a burst settles.

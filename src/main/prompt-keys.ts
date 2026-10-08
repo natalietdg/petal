@@ -40,12 +40,30 @@ export function questionKeys(questions: readonly AskQuestion[], answers: readonl
 }
 
 const MAX_PERMISSION_OPTION = 9;
+const LEFT = '\x1b[D';
+
+const optionDigit = (option: unknown): string | null =>
+  Number.isInteger(option) && (option as number) >= 1 && (option as number) <= MAX_PERMISSION_OPTION ? String(option) : null;
 
 export function permissionKeys(option: unknown): string[] | null {
-  return Number.isInteger(option) && (option as number) >= 1 && (option as number) <= MAX_PERMISSION_OPTION ? [String(option)] : null;
+  const digit = optionDigit(option);
+  return digit ? [digit] : null;
+}
+
+// One step on the picker as shown on screen (keys measured on 2.1.293, see shared/prompt-answer.ts).
+export function pickerKeys(step: unknown): string[] | null {
+  if (typeof step !== 'object' || step === null) return null;
+  if ('move' in step) return step.move === 'next' ? [RIGHT] : step.move === 'back' ? [LEFT] : null;
+  if ('other' in step) {
+    const digit = optionDigit(step.other);
+    const text = 'text' in step && typeof step.text === 'string' ? cleanOther(step.text) : '';
+    return digit && text ? [digit, text, ENTER] : null;
+  }
+  return 'pick' in step ? permissionKeys(step.pick) : null;
 }
 
 export function keysFor(answer: PromptAnswer, pendingQuestions: readonly AskQuestion[] | null): string[] | null {
   if (answer.kind === 'permission') return permissionKeys(answer.option);
+  if (answer.kind === 'picker') return pickerKeys(answer.step);
   return pendingQuestions && Array.isArray(answer.answers) ? questionKeys(pendingQuestions, answer.answers) : null;
 }

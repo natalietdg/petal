@@ -81,6 +81,7 @@ function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId
 
 // A double click must not type a second answer into whatever comes after the prompt.
 const ANSWER_SETTLE_MS = 1000;
+const PICKER_SETTLE_MS = 250; // picker steps come one per screen change, e.g. ticking several boxes
 const answering = new WeakMap<TabSession, { until: number; toolUseId: string | null }>();
 
 // Types an answer into the tab's claude; a question must still be the one pending in its transcript.
@@ -92,7 +93,8 @@ function answerPrompt(session: TabSession, answer: PromptAnswer): void {
   if (last && (Date.now() < last.until || (toolUseId !== null && last.toolUseId === toolUseId))) return;
   const keys = keysFor(answer, pending?.questions ?? null);
   if (!keys) return;
-  answering.set(session, { until: Date.now() + keys.length * PROMPT_KEY_GAP_MS + ANSWER_SETTLE_MS, toolUseId });
+  const settle = answer.kind === 'picker' ? PICKER_SETTLE_MS : ANSWER_SETTLE_MS;
+  answering.set(session, { until: Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle, toolUseId });
   if (isSnapshotRun()) { promptWrites.push(keys); return; }
   keys.forEach((key, i) => setTimeout(() => {
     if (sessions.has(tabKey(session.contentsId, session.tabId))) session.pty.write(key);
@@ -147,7 +149,7 @@ export function registerTabIpc(): void {
 
   on('prompt:answer', (event, { tabId, answer }) => {
     const session = tabFor(event, tabId);
-    if (session && (answer?.kind === 'question' || answer?.kind === 'permission')) answerPrompt(session, answer);
+    if (session && (answer?.kind === 'question' || answer?.kind === 'picker' || answer?.kind === 'permission')) answerPrompt(session, answer);
   });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.
