@@ -28,6 +28,8 @@ export interface Config {
   notesPanel: { open: (typeof NOTES_OPEN)[number]; width: number };
   // Reader share of each window, keyed by window slot (main/layout-ipc.ts).
   layout: { splits: Record<string, number> };
+  // History's session list folded to a slim rail.
+  history: { listCollapsed: boolean };
 }
 
 type Section = keyof Config;
@@ -57,6 +59,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   welcome: { seen: false },
   notesPanel: { open: 'auto' as const, width: 320 },
   layout: { splits: {} },
+  history: { listCollapsed: false },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -105,6 +108,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const w = raw.welcome ?? {};
   const n = raw.notesPanel ?? {};
   const l = raw.layout ?? {};
+  const hi = raw.history ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -126,6 +130,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       width: intIn(n.width, NOTES_WIDTH.min, NOTES_WIDTH.max, b.notesPanel.width),
     },
     layout: { splits: splitsOr(l.splits, b.layout.splits) },
+    history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed) },
   };
 }
 

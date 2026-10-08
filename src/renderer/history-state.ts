@@ -38,6 +38,10 @@ export const hooks = {
 export const view = byId('history');
 view.innerHTML = `
   <div class="history-list-pane">
+    <div class="history-rail">
+      <button class="history-list-toggle" type="button" aria-expanded="false" aria-label="Show the session list" title="Show the list (⌘\\)">›</button>
+      <span class="history-rail-title"></span>
+    </div>
     <input id="history-search" class="history-search" type="search" placeholder="Search titles, first prompts and notes" aria-label="Search sessions">
     <div class="history-toolbar">
       <div id="history-group" class="view-toggle history-group" role="tablist" aria-label="Group sessions">
@@ -46,6 +50,7 @@ view.innerHTML = `
         <button type="button" data-group="project" aria-selected="false">By project</button>
       </div>
       <button id="history-tidy" class="flow-button history-tidy" type="button" title="Give recent sessions clear titles and projects. Uses your Claude plan.">Tidy now</button>
+      <button class="history-list-toggle" type="button" aria-expanded="true" aria-label="Hide the session list" title="Hide the list (⌘\\)">‹</button>
     </div>
     <div id="history-tagbar" class="history-tagbar" role="group" aria-label="Filter by tag"></div>
     <div id="history-list" class="history-list"></div>
@@ -65,6 +70,7 @@ export const openNote = query(view, '#history-open-note');
 export const groupToggle = query(view, '#history-group');
 export const tidyButton = query<HTMLButtonElement>(view, '#history-tidy');
 export const tagBar = query(view, '#history-tagbar');
+export const railTitle = query(view, '.history-rail-title');
 
 // Organizer labels win over Claude Code's own title when present.
 export const titleOf = (session: Session): string => session.organizer?.title || session.title || 'Untitled session';

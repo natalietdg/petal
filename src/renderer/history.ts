@@ -1,12 +1,12 @@
 // History: this past week's Claude sessions. Replaces the reader while open; Esc or Cmd+Y goes back.
 // The list, tags and preview live in history-*.ts; this is the overlay shell that opens, refreshes and wires them.
 import * as overlays from './overlays';
-import { groupToggle, hooks, list, openNote, search, state, tidyButton, type GroupBy, type PreviewMode } from './history-state';
+import { groupToggle, hooks, list, openNote, search, state, tidyButton, view, type GroupBy, type PreviewMode } from './history-state';
 import { renderTagBar } from './history-tags';
 import { renderList } from './history-list';
 import { renderPreview } from './history-preview';
 import * as reply from './history-reply';
-import { byId, el } from './dom';
+import { byId, el, isIpcError } from './dom';
 
 export type { PreviewMode } from './history-state';
 
@@ -76,6 +76,23 @@ groupToggle.addEventListener('click', (event) => {
   if (isGroupBy(group)) setGroupBy(group);
 });
 tidyButton.addEventListener('click', tidy);
+
+// The list folds to a slim rail so the preview gets the full width; remembered in Petal's config.
+function setListCollapsed(collapsed: boolean, persist = true): void {
+  view.classList.toggle('list-collapsed', collapsed);
+  if (persist) void window.pastel.config.save({ history: { listCollapsed: collapsed } });
+}
+for (const toggleButton of view.querySelectorAll('.history-list-toggle')) {
+  toggleButton.addEventListener('click', () => setListCollapsed(!view.classList.contains('list-collapsed')));
+}
+window.addEventListener('keydown', (event) => {
+  if (!isOpen() || !event.metaKey || event.key !== '\\') return;
+  event.preventDefault();
+  setListCollapsed(!view.classList.contains('list-collapsed'));
+});
+void window.pastel.config.get().then((result) => {
+  if (!isIpcError(result)) setListCollapsed(result.config.history.listCollapsed, false);
+});
 window.pastel.onToggleHistory(toggle);
 
 export const rerender = (): void => { if (isOpen()) renderPreview(); };

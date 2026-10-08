@@ -4,7 +4,7 @@ import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { el } from './dom';
 import { timeOf } from './format';
-import { dayLabel, hooks, notesAside, openNote, preview, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
+import { dayLabel, hooks, notesAside, openNote, preview, railTitle, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
 import { attachPreviewTags } from './history-tags';
 import { createPanel } from './notes-panel';
 import * as overlays from './overlays';
@@ -21,6 +21,7 @@ export async function renderPreview(): Promise<void> {
     replyDock.replaceChildren();
     return;
   }
+  railTitle.textContent = titleOf(session);
   const head = el('header', 'history-preview-head');
   head.append(el('h2', 'history-preview-title', titleOf(session)),
     el('p', 'status', `${session.shortCwd} · ${dayLabel(session.lastAt)} ${timeOf(session.lastAt)}`));

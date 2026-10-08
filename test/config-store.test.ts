@@ -18,10 +18,11 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has eight sections with the documented defaults', () => {
+  it('has nine sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history']);
     expect(d.layout).toEqual({ splits: {} });
+    expect(d.history).toEqual({ listCollapsed: false });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
@@ -124,7 +125,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -261,6 +262,15 @@ describe('first launch and the organizer migration', () => {
   it('saving welcome.seen sticks for the next launch', () => {
     config.save({ welcome: { seen: true } });
     expect(config.load().welcome.seen).toBe(true);
+  });
+});
+
+describe('config-store history list', () => {
+  it('saves the collapsed list, and only a real boolean changes it', () => {
+    config.save({ history: { listCollapsed: true } });
+    expect(config.load().history.listCollapsed).toBe(true);
+    config.save({ history: { listCollapsed: 'no' } });
+    expect(config.load().history.listCollapsed).toBe(true);
   });
 });
 
