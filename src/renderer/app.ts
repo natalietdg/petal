@@ -21,6 +21,7 @@ import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
 import './planet-reading';
 import * as welcome from './welcome';
+import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
@@ -29,7 +30,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome, notesPanel };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -128,7 +129,6 @@ async function start(): Promise<void> {
   });
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
   byId('reader').addEventListener('mouseup', (event) => {
-    if ((event.target as Element).closest('#notes-view')) return; // notes keep their own keys
     if (!window.getSelection()?.toString()) focusTerminal();
   });
 

@@ -13,6 +13,7 @@ export interface NotesEditor {
 interface Options {
   hint?: string; // one quiet line under the toolbar
   onSaved?: (text: string) => void;
+  onLoaded?: (text: string) => void; // the saved notes, once read
 }
 
 const noSession = (): NotesEditor => ({
@@ -20,7 +21,7 @@ const noSession = (): NotesEditor => ({
   flush: async () => {},
 });
 
-export function createNotesEditor(sessionId: string | null, { hint, onSaved }: Options = {}): NotesEditor {
+export function createNotesEditor(sessionId: string | null, { hint, onSaved, onLoaded }: Options = {}): NotesEditor {
   if (!sessionId) return noSession();
   const root = el('section', 'notes');
   root.dataset.sessionId = sessionId;
@@ -78,6 +79,7 @@ export function createNotesEditor(sessionId: string | null, { hint, onSaved }: O
     input.value = result.text;
     input.disabled = false;
     status.textContent = result.text ? 'Saved' : '';
+    onLoaded?.(result.text);
   });
 
   return { element: root, flush: save };
