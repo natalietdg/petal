@@ -5,7 +5,7 @@
 // The clock stops while the window is hidden; covered windows aren't seen.
 import { stepAt, stepTiming, type StepTiming } from './motion-steps';
 
-const TICK_MS = 120; // ~8 fps: finer than the fastest step in any scene (winter's fire, 180 ms)
+const TICK_MS = 180; // ~5.5 fps: one frame per step of the fastest scene motion (winter fire, 180 ms)
 
 interface Held extends StepTiming {
   offsetMs: number; // the animation's own phase (negative delays) when the clock took it over
