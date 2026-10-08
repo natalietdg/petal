@@ -28,6 +28,20 @@ export function showOffscreen(win: BrowserWindow): void {
   win.setOpacity(0);
   win.showInactive();
   if (!onAnyDisplay(win.getBounds())) win.setOpacity(1);
+  keepOffscreenAcrossDisplayChanges(win);
+}
+
+// A display plugged in or rearranged mid-run can land on the window's spot: move past every display again.
+function keepOffscreenAcrossDisplayChanges(win: BrowserWindow): void {
+  const repin = () => {
+    if (win.isDestroyed() || process.env.PASTEL_SNAPSHOT_ONSCREEN === '1') return; // the idle CPU probe sits on-screen on purpose
+    const { x = 0, y = 0 } = offscreenWindowOptions();
+    win.setPosition(x, y);
+  };
+  const repinNowAndLater = () => { repin(); setTimeout(repin, 1000); }; // macOS can relocate it a beat after the event
+  screen.on('display-added', repinNowAndLater);
+  screen.on('display-removed', repinNowAndLater);
+  screen.on('display-metrics-changed', repinNowAndLater);
 }
 
 // Resizes without leaving the off-screen spot: macOS can pull a resized window back onto a display.
