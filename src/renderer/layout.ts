@@ -4,7 +4,10 @@ const app = byId('app');
 const divider = byId('divider');
 const MIN_FRACTION = 0.2;
 const MAX_FRACTION = 0.85;
-let readerFraction = 0.65;
+const DEFAULT_FRACTION = 0.65;
+const KEY_STEP = 0.02;
+const PAGE_STEP = 0.1;
+let readerFraction = DEFAULT_FRACTION;
 
 // The reader's fixed bands (dock, header, prompts, reply box); the split never squeezes the reader below them.
 const CHROME = ['sessions-dock', 'reader-head', 'prompt-dock', 'composer'].map(byId);
@@ -21,8 +24,15 @@ function shownFraction(): number {
 }
 
 function applySplit(): void {
-  const reader = Math.round(shownFraction() * 1000);
+  const shown = shownFraction();
+  const reader = Math.round(shown * 1000);
   app.style.gridTemplateRows = `minmax(0, ${reader}fr) auto minmax(0, ${1000 - reader}fr)`;
+  divider.setAttribute('aria-valuenow', String(Math.round(shown * 100)));
+}
+
+function setSplit(fraction: number): void {
+  readerFraction = Math.min(MAX_FRACTION, Math.max(MIN_FRACTION, fraction));
+  applySplit();
 }
 
 export function toggleReaderOnly(): void {
@@ -35,8 +45,7 @@ divider.addEventListener('pointerdown', (event) => {
   divider.setPointerCapture(event.pointerId);
   const onMove = (move: PointerEvent) => {
     const box = app.getBoundingClientRect();
-    readerFraction = Math.min(MAX_FRACTION, Math.max(MIN_FRACTION, (move.clientY - box.top) / box.height));
-    applySplit();
+    setSplit((move.clientY - box.top) / box.height);
   };
   const end = () => {
     divider.removeEventListener('pointermove', onMove);
@@ -46,6 +55,24 @@ divider.addEventListener('pointerdown', (event) => {
   divider.addEventListener('pointermove', onMove);
   divider.addEventListener('pointerup', end);
   divider.addEventListener('pointercancel', end);
+});
+
+divider.addEventListener('dblclick', () => setSplit(DEFAULT_FRACTION));
+
+// Up and down move the line; steps start from where it shows, so a raised floor never eats a press.
+const KEY_MOVES: Record<string, (shown: number) => number> = {
+  ArrowUp: (shown) => shown - KEY_STEP,
+  ArrowDown: (shown) => shown + KEY_STEP,
+  PageUp: (shown) => shown - PAGE_STEP,
+  PageDown: (shown) => shown + PAGE_STEP,
+  Home: () => MIN_FRACTION,
+  End: () => MAX_FRACTION,
+};
+divider.addEventListener('keydown', (event) => {
+  const move = KEY_MOVES[event.key];
+  if (!move) return;
+  event.preventDefault();
+  setSplit(move(shownFraction()));
 });
 
 // A band growing (a prompt, a longer reply box) or the window shrinking re-checks the floor.

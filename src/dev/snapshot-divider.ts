@@ -50,8 +50,9 @@ function expectedPane(m: Measure, target: number): number {
 async function realDrag(kit: Kit, win: BrowserWindow, m: Measure, toY: number): Promise<void> {
   const x = Math.round(win.getContentSize()[0] / 2);
   const fromY = Math.round(m.divider.centre);
+  // Moves carry the held button, as a real drag does; without it Chromium never starts the capture.
   const send = (type: 'mouseDown' | 'mouseMove' | 'mouseUp', y: number) =>
-    win.webContents.sendInputEvent({ type, x, y: Math.round(y), button: 'left', clickCount: 1, modifiers: type === 'mouseMove' ? ['leftButtonDown'] : [] });
+    win.webContents.sendInputEvent({ type, x, y: Math.round(y), button: 'left', clickCount: 1, modifiers: type === 'mouseMove' ? ['leftbuttondown'] : [] });
   send('mouseMove', fromY);
   send('mouseDown', fromY);
   for (let i = 1; i <= 8; i++) {
@@ -92,30 +93,84 @@ async function dragCase(kit: Kit, win: BrowserWindow, label: string, how: 'real'
   }
 }
 
-export async function dividerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+// Every look, Sessions panel shut and open: nothing covers the divider, and drags land where they should.
+async function looksAtSize(kit: Kit, win: BrowserWindow, width: number, height: number): Promise<void> {
   const { js, log, waitFor, wait, capture } = kit;
-  const [startWidth, startHeight] = win.getContentSize();
-  await js('PastelTerm.welcome.close()');
-  for (const [width, height] of [[1280, 900], [800, 700]] as const) {
   resizeOffscreen(win, width, height);
   await waitFor(async () => (await js('window.innerHeight')) === height, 3000);
-  log(`divider window ${width}x${height}`);
   for (const [look] of READING_CHOICES) {
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
     for (const panelOpen of [false, true]) {
       await js(`PastelTerm.sessionsPanel.setOpen(${panelOpen})`);
       await wait(400);
-      const label = `${look} panel ${panelOpen ? 'open' : 'shut'}`;
+      const label = `${width}x${height} ${look} panel ${panelOpen ? 'open' : 'shut'}`;
       const m: Measure = await js(MEASURE);
       log(`${m.coveredCount === 0 ? 'ok' : 'FAIL'} divider ${label}: nothing covers it, ${m.coveredCount} covered points ${JSON.stringify(m.covered)}`);
       await dragCase(kit, win, label, 'real');
       await dragCase(kit, win, label, 'synthetic');
-      if (look === 'newspaper') await capture(`divider-${panelOpen ? 'panel' : 'shut'}`);
+      if (look === 'newspaper') await capture(`divider-${width}-${panelOpen ? 'panel' : 'shut'}`);
     }
   }
-  }
+}
+
+const valueNow = (kit: Kit): Promise<number> => kit.js("Number(document.getElementById('divider').getAttribute('aria-valuenow'))");
+
+// Grab in the invisible reach, double-click back to 65/35, and arrow keys.
+async function handlingCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+  const { js, log, wait } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} divider ${what}`);
+  const x = Math.round(win.getContentSize()[0] / 2);
+  const doubleClick = (y: number) => {
+    for (const clickCount of [1, 2]) {
+      for (const type of ['mouseDown', 'mouseUp'] as const) win.webContents.sendInputEvent({ type, x, y: Math.round(y), button: 'left', clickCount });
+    }
+  };
+
+  const start: Measure = await js(MEASURE);
+  const reach = await js(`(() => { const d = document.getElementById('divider').getBoundingClientRect(); const hit = (y) => document.elementFromPoint(${x}, y)?.id; return { above: hit(d.top - 4), below: hit(d.bottom + 4), outside: hit(d.top - 7) }; })()`);
+  check(reach.above === 'divider' && reach.below === 'divider' && reach.outside !== 'divider', `grabs 4px above and below its line, not 7px: ${JSON.stringify(reach)}`);
+  await realDrag(kit, win, { ...start, divider: { ...start.divider, centre: start.divider.top - 4 } }, start.appTop + 0.4 * start.appHeight);
+  await wait(350);
+  const grabbed: Measure = await js(MEASURE);
+  check(Math.abs(grabbed.terminalPane - expectedPane(start, 0.4)) <= HEIGHT_TOLERANCE_PX, `drag from 4px above the line: pane ${grabbed.terminalPane}px, want ${Math.round(expectedPane(start, 0.4))}`);
+
+  doubleClick(grabbed.divider.centre);
+  await wait(350);
+  const reset: Measure = await js(MEASURE);
+  check((await valueNow(kit)) === 65 && Math.abs(reset.terminalPane - expectedPane(start, 0.65)) <= HEIGHT_TOLERANCE_PX, `double-click resets to 65/35: valuenow ${await valueNow(kit)}, pane ${reset.terminalPane}px`);
+
+  await js("document.getElementById('divider').focus()");
+  const keys = async (keyCode: string, times: number) => {
+    for (let i = 0; i < times; i++) {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+    }
+    await wait(300);
+  };
+  await keys('Up', 5);
+  const up = await valueNow(kit);
+  await keys('Down', 10);
+  const down = await valueNow(kit);
+  await keys('Home', 1);
+  const home = await valueNow(kit);
+  const role = await js("(() => { const d = document.getElementById('divider'); return { role: d.getAttribute('role'), tabIndex: d.tabIndex, focused: document.activeElement === d }; })()");
+  check(up === 55 && down === 75 && home >= 20 && home < 55 && role.role === 'separator' && role.tabIndex === 0 && role.focused, `keyboard: 65 → Up×5 ${up} → Down×10 ${down} → Home ${home}, ${JSON.stringify(role)}`);
+  await js("document.getElementById('divider').blur()");
+  doubleClick((await js(MEASURE)).divider.centre); // later steps expect the default split
+  await wait(300);
+}
+
+export async function dividerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+  const { js } = kit;
+  const [startWidth, startHeight] = win.getContentSize();
+  await js('PastelTerm.welcome.close()'); // her state: the first-run screen is long gone
+  await js("PastelTerm.reader.setView('replies')");
+  for (const [width, height] of [[1280, 900], [800, 700]] as const) await looksAtSize(kit, win, width, height);
   await js('PastelTerm.sessionsPanel.setOpen(false)');
   await js("window.pastel.look.setReading('newspaper')");
+  resizeOffscreen(win, 1280, 900);
+  await kit.waitFor(async () => (await js('window.innerHeight')) === 900, 3000);
+  await handlingCheck(kit, win);
   resizeOffscreen(win, startWidth, startHeight);
 }

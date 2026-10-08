@@ -40,6 +40,18 @@ html, body {
   height: 7px;
   cursor: row-resize;
   background: var(--rule);
+  touch-action: none;
+  user-select: none;
+}
+/* 17px to grab, 7px to see: 5px of invisible reach above and below the line. */
+#divider::before {
+  content: '';
+  position: absolute;
+  inset: -5px 0;
+}
+#divider:focus-visible {
+  outline: none;
+  background: var(--link);
 }
 
 #terminal-pane {
