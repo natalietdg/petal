@@ -16,6 +16,7 @@ import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
+import { dividerCheck } from './snapshot-divider';
 import { notesCheck } from './snapshot-notes';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
@@ -377,6 +378,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['print axis', () => printAxisCheck(kit, win)],
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
+    ['divider', () => dividerCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
@@ -523,6 +525,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'divider') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await dividerCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
