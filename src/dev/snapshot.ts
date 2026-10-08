@@ -13,6 +13,7 @@ import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { addSessionCheck } from './snapshot-add-session';
 import { headerCheck } from './snapshot-header';
+import { notesCheck } from './snapshot-notes';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -353,6 +354,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
+    ['notes', () => notesCheck(kit)],
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],

@@ -57,7 +57,7 @@ async function start(): Promise<void> {
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
-    reader.update({ ...update, pending: tab.pending });
+    reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     cat.setBusy(update.busy);
     promptDock.showQuestion(tab.id, update.question);
     readScreen(tab);
@@ -116,7 +116,8 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
-  byId('reader').addEventListener('mouseup', () => {
+  byId('reader').addEventListener('mouseup', (event) => {
+    if ((event.target as Element).closest('#notes-view')) return; // notes keep their own keys
     if (!window.getSelection()?.toString()) focusTerminal();
   });
 

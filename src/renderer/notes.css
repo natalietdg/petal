@@ -1,0 +1,28 @@
+/* Her notes: a quiet sheet in the reading look's own font, no chrome beyond one line of status. */
+.notes { display: flex; flex-direction: column; gap: 10px; }
+.notes-bar { display: flex; align-items: center; gap: 12px; font: 500 12px/1.4 var(--ui-font); color: var(--muted); }
+.notes-private { flex: 1; }
+.notes-status:empty { display: none; }
+.notes-mode { padding: 3px 12px; font-size: 12px; }
+.notes-hint { margin: 0; font: 500 13px/1.4 var(--ui-font); color: var(--muted); }
+
+.notes-editor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 18em;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: inherit;
+  font-family: var(--body-font);
+  font-size: 0.95em;
+  line-height: 1.6;
+  resize: vertical;
+  field-sizing: content;
+}
+.notes-editor:focus { outline: none; border-color: var(--next-ink); }
+.notes-editor::placeholder { color: var(--muted); }
+.notes-editor[hidden], .notes-rendered[hidden] { display: none; }
+.notes-empty { font-family: var(--ui-font); }

@@ -13,12 +13,13 @@ import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
 import type { RepoEntry } from '../main/repo-scan';
+import type { SaveResult } from '../main/notes-store';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
 
 export interface HistoryList {
-  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[] })[];
+  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string })[];
   tags: TagsData['tags'];
   organizing: boolean;
 }
@@ -126,6 +127,9 @@ export interface InvokeChannels {
   'history:tag-remove': { args: [request: { sessionId: string; name: string }]; result: Guarded<Ok> };
   'history:tag-delete': { args: [request: { name: string }]; result: Guarded<Ok> };
   'history:tag-rename': { args: [request: { from: string; to: string }]; result: Guarded<Ok> };
+  // Her private notes for one Claude session; read and written only by Petal.
+  'notes:get': { args: [request: { sessionId: string }]; result: Guarded<{ text: string }> };
+  'notes:save': { args: [request: { sessionId: string; text: string }]; result: Guarded<SaveResult> };
 
   'flow:get': { args: [request: { target: FlowTarget }]; result: Guarded<FlowView | null> };
   'flow:create': { args: [request: { target: FlowTarget }]; result: Guarded<(StoredFlow & { stale: false }) | null> };

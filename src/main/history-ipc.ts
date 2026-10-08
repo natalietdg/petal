@@ -6,6 +6,7 @@ import * as flowStore from './flow-store';
 import * as organizer from './session-organizer';
 import * as links from './links-store';
 import * as tagsStore from './tags-store';
+import * as notesStore from './notes-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand } from './resume-command';
 import { isSnapshotRun } from './snapshot-mode';
@@ -29,12 +30,14 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   handle('history:list', () => {
     const labels = organizer.load();
     const tags = tagsStore.load();
+    const notes = notesStore.searchable();
     return {
       sessions: history.listSessions().map((s) => ({
         ...s,
         hasFlow: flowStore.has(s.sessionId),
         organizer: labels[s.sessionId] ?? null,
         tags: tags.sessions[s.sessionId]?.tags ?? [],
+        notes: notes[s.sessionId] ?? '',
       })),
       tags: tags.tags, // { [name]: { color } }, for the filter bar and suggestions
       organizing: organizer.isRunning(),
@@ -89,6 +92,9 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     session.pty.write(command);
     return { ok: true, command };
   });
+
+  handle('notes:get', (_event, { sessionId }) => ({ text: notesStore.read(sessionId) }));
+  handle('notes:save', (_event, { sessionId, text }) => notesStore.save(sessionId, text));
 
   registerTagsIpc();
   registerFlowIpc({ activeSession, currentTheme });

@@ -2,12 +2,13 @@ import * as markdown from './markdown';
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { byId, query } from './dom';
+import { createNotesEditor, type NotesEditor } from './notes';
 import { timeOf } from './format';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 
-export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null };
+export type ReaderView = 'replies' | 'flow' | 'decisions' | 'notes';
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; tabId?: string };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -85,6 +86,7 @@ export function rerender(): void {
 
 export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
+  followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null } = shown;
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
@@ -149,10 +151,11 @@ scroller.addEventListener('click', (event) => {
   window.pastel.openLink(link.href);
 });
 
-// Replies | Flow | Decisions toggle for this window's session.
+// Replies | Flow | Decisions | Notes toggle for this window's session.
 const repliesView = byId('replies-view');
 const flowView = byId('flow-view');
 const decisionsView = byId('decisions-view');
+const notesView = byId('notes-view');
 const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
 
@@ -163,15 +166,41 @@ export async function refreshFlow(): Promise<void> {
   draw(container, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
 }
 
-const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'decisions';
+const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'decisions' || value === 'notes';
 
 export function setView(next: ReaderView): void {
   view = next;
   repliesView.hidden = view !== 'replies';
   flowView.hidden = view !== 'flow';
   decisionsView.hidden = view !== 'decisions';
+  notesView.hidden = view !== 'notes';
   for (const button of toggles) button.setAttribute('aria-selected', String(button.dataset.view === view));
-  if (view !== 'replies') refreshFlow();
+  if (view === 'notes') mountNotes();
+  else if (view !== 'replies') refreshFlow();
+}
+
+// Notes follow the shown tab's Claude session; a tab whose session id changed (/clear) says where the old notes went.
+let notesEditor: NotesEditor | null = null;
+let notesSession: string | null | undefined;
+const sessionByTab = new Map<string, string | null>();
+const clearedTabs = new Set<string>();
+
+function followNotesSession({ tabId, sessionId = null }: ShownUpdate): void {
+  if (tabId) {
+    const before = sessionByTab.get(tabId);
+    if (before && sessionId && before !== sessionId) clearedTabs.add(tabId);
+    sessionByTab.set(tabId, sessionId);
+  }
+  if (view === 'notes' && sessionId !== notesSession) mountNotes();
+}
+
+function mountNotes(): void {
+  void notesEditor?.flush();
+  notesSession = lastUpdate?.sessionId ?? null;
+  const tabId = lastUpdate?.tabId;
+  const hint = tabId && clearedTabs.has(tabId) ? 'This tab started a new Claude session. Earlier notes stay with the old one, in History.' : undefined;
+  notesEditor = createNotesEditor(notesSession, { hint });
+  notesView.replaceChildren(notesEditor.element);
 }
 for (const button of toggles) {
   button.addEventListener('click', () => { if (isView(button.dataset.view)) setView(button.dataset.view); });

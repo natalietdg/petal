@@ -91,6 +91,10 @@ const api = {
     tagDelete: (name: string) => invoke('history:tag-delete', { name }),
     tagRename: (from: string, to: string) => invoke('history:tag-rename', { from, to }),
   },
+  notes: {
+    get: (sessionId: string) => invoke('notes:get', { sessionId }),
+    save: (sessionId: string, text: string) => invoke('notes:save', { sessionId, text }),
+  },
   repos: {
     list: (tabId: TabId) => invoke('repos:list', { tabId }),
     open: (tabId: TabId, path: string) => invoke('repos:open', { tabId, path }),

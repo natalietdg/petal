@@ -6,6 +6,7 @@ import { el } from './dom';
 import { timeOf } from './format';
 import { dayLabel, hooks, preview, selectedSession, state, titleOf, type Session } from './history-state';
 import { attachPreviewTags } from './history-tags';
+import { createNotesEditor, type NotesEditor } from './notes';
 
 type Turn = { index: number; prompt: string; reply: string };
 
@@ -27,8 +28,8 @@ export async function renderPreview(): Promise<void> {
   resume.type = 'button';
   resume.addEventListener('click', () => doResume(session.sessionId, note, false));
   const toggle = el('div', 'view-toggle');
-  for (const mode of ['replies', 'flow', 'decisions'] as const) {
-    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions' }[mode]);
+  for (const mode of ['replies', 'flow', 'decisions', 'notes'] as const) {
+    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions', notes: 'Notes' }[mode]);
     b.type = 'button';
     b.setAttribute('aria-selected', String(mode === state.previewMode));
     b.addEventListener('click', () => { state.previewMode = mode; renderPreview(); });
@@ -41,9 +42,12 @@ export async function renderPreview(): Promise<void> {
   head.append(resume, send, note, toggle);
 
   const body = el('div', 'history-preview-body');
+  void notesEditor?.flush(); // typing in the last notes is saved before they go
+  notesEditor = null;
   preview.replaceChildren(head, body);
   try {
-    await (state.previewMode === 'replies' ? renderRepliesBody(session, body) : renderFlowBody(session, body));
+    if (state.previewMode === 'notes') renderNotesBody(session, body);
+    else await (state.previewMode === 'replies' ? renderRepliesBody(session, body) : renderFlowBody(session, body));
   } catch (error) {
     showError(body, error);
   }
@@ -53,6 +57,16 @@ export async function renderPreview(): Promise<void> {
 function showError(body: HTMLElement, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   body.replaceChildren(el('p', 'history-error', `Couldn’t show this session: ${message}`));
+}
+
+let notesEditor: NotesEditor | null = null;
+
+// Saving updates the row's notes badge and what search finds.
+function renderNotesBody(session: Session, body: HTMLElement): void {
+  notesEditor = createNotesEditor(session.sessionId, {
+    onSaved: (text) => { session.notes = text; hooks.renderList(); },
+  });
+  body.append(notesEditor.element);
 }
 
 async function renderFlowBody(session: Session, body: HTMLElement): Promise<void> {
@@ -155,6 +169,7 @@ async function doSend(sessionId: string, note: HTMLElement): Promise<void> {
 // Preview without re-rendering the list, so hovering never steals the row under the mouse.
 export function hoverPreview(sessionId: string): void {
   if (sessionId === state.selectedId) return;
+  if (document.activeElement?.matches('#history-preview textarea')) return; // never swap the session she's typing into
   state.selectedId = sessionId;
   state.previewMode = 'replies'; // a newly picked session always opens on its replies
   for (const r of document.querySelectorAll<HTMLElement>('.history-row')) r.classList.toggle('selected', r.dataset.sessionId === sessionId);
