@@ -18,6 +18,7 @@ import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
+import './planet-reading';
 import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
