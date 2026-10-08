@@ -18,11 +18,12 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has nine sections with the documented defaults', () => {
+  it('has ten sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet']);
     expect(d.layout).toEqual({ splits: {} });
     expect(d.history).toEqual({ listCollapsed: false });
+    expect(d.pet).toEqual({ size: 'normal' });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
@@ -125,7 +126,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -271,6 +272,15 @@ describe('config-store history list', () => {
     expect(config.load().history.listCollapsed).toBe(true);
     config.save({ history: { listCollapsed: 'no' } });
     expect(config.load().history.listCollapsed).toBe(true);
+  });
+});
+
+describe('config-store pet size', () => {
+  it('saves a known size, and anything else keeps the saved one', () => {
+    expect(config.save({ pet: { size: 'large' } }).pet.size).toBe('large');
+    expect(config.save({ pet: { size: 'huge' } }).pet.size).toBe('large');
+    expect(config.save({ pet: { size: 2 } }).pet.size).toBe('large');
+    expect(config.reset('pet.size').pet.size).toBe('normal');
   });
 });
 
