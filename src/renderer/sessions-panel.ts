@@ -93,11 +93,16 @@ function rowDetail(row: SessionRow): HTMLDivElement {
 }
 
 // Under every row with active agents, expanded or not: task · what it is doing now · when it last wrote.
-function agentList(agents: SubagentRow[]): HTMLUListElement {
+function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
   const list = el('ul', 'session-agents');
   for (const agent of agents.slice(0, AGENTS_SHOWN)) {
-    const item = el('li', 'session-agent');
+    const item = el('li', 'session-agent opens-agent');
     item.dataset.agentId = agent.id;
+    item.title = 'Open what this agent is doing';
+    item.addEventListener('click', () => {
+      setOpen(false);
+      window.dispatchEvent(new CustomEvent('petal:open-agent', { detail: { sessionId, agentId: agent.id } }));
+    });
     item.append(
       el('span', 'agent-task', agent.task),
       el('span', 'agent-activity', `· ${agent.activity ?? 'Working'}`),
@@ -146,7 +151,7 @@ function renderRow(row: SessionRow): HTMLLIElement {
   if (confirming?.where === 'row' && confirming.sessionId === row.sessionId) item.append(confirmLine(row.sessionId, 'Close this Claude?'));
   const note = notes.get(row.sessionId);
   if (note) item.append(el('p', 'session-note', note));
-  if (row.subagents.length) item.append(agentList(row.subagents));
+  if (row.subagents.length) item.append(agentList(row.sessionId, row.subagents));
   if (expandedIds.has(row.sessionId)) item.append(rowDetail(row));
   return item;
 }
@@ -224,9 +229,14 @@ export async function refresh(auto = false): Promise<void> {
   } else {
     renderPill(result);
     if (open && result.rows && !(auto && confirming)) renderPanel(result);
+    for (const listener of viewListeners) listener(result);
   }
   schedule();
 }
+
+// Others ride this tick instead of running their own timer (the Agents chip and view).
+const viewListeners: ((view: SessionsView) => void)[] = [];
+export const onView = (listener: (view: SessionsView) => void): void => { viewListeners.push(listener); };
 
 function schedule(): void {
   clearTimeout(timer);

@@ -22,6 +22,7 @@ import * as tarotReading from './tarot-reading';
 import './planet-reading';
 import * as welcome from './welcome';
 import * as updatePill from './update-pill';
+import * as agentsView from './agents-view';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -29,7 +30,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome, agentsView };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
