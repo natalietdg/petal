@@ -8,6 +8,7 @@ import * as history from './history';
 import * as organizer from './session-organizer';
 import { closeSession } from './session-close';
 import { handle } from './ipc';
+import { ownAgents, subagentsDirOf } from './agents-ipc';
 import { isSnapshotRun, panelFixture } from './snapshot-mode';
 import type { ActiveSession } from './tab-session';
 
@@ -21,14 +22,16 @@ const snapshotTerminate = (): never => { throw new Error('Snapshot run: no signa
 export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSession }): void {
   handle('sessions:snapshot', (event, { detailed, expandedIds }) => {
     const live = (isSnapshotRun() && panelFixture.sessions) || sessionsMonitor.liveSessions();
-    const fixtureRoot = isSnapshotRun() ? panelFixture.subagentsRoot : null;
-    const subagentsDirOf = fixtureRoot ? (s: { sessionId: string }) => path.join(fixtureRoot, s.sessionId) : sessionsMonitor.subagentsDir;
-    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: activeSession(event.sender.id)?.feed.session?.sessionId }, live, subagentsDirOf);
+    const own = activeSession(event.sender.id)?.feed.session;
+    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId }, live, subagentsDirOf);
     const { maxOpen } = configStore.load().sessions;
-    if (!detailed) return { ...base, maxOpen };
+    const { running, agents } = ownAgents(own);
+    const here = { running, total: agents.length };
+    if (!detailed) return { ...base, maxOpen, here };
     return {
       ...base,
       maxOpen,
+      here,
       closed: closedStore.reopenable(live.map((s) => s.sessionId)).map((c) => ({ ...c, cwd: sessionsMonitor.shortCwd(c.cwd) })),
       oldestIdleId: sessionsMonitor.oldestIdle(live)?.sessionId ?? null,
     };

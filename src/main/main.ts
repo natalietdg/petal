@@ -4,6 +4,7 @@ import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
+import { registerAgentsIpc } from './agents-ipc';
 import { isSnapshotRun, userDataDir } from './snapshot-mode';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
@@ -117,6 +118,7 @@ function registerIpc(): void {
   handle('claude:installed', async (_event, request) => Boolean(await claudePath({ recheck: request?.recheck === true })));
 
   registerSessionsIpc({ activeSession });
+  registerAgentsIpc({ activeSession });
 
   on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);

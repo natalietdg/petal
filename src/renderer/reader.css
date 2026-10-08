@@ -109,6 +109,18 @@
 .prose strong { font-weight: 700; }
 /* Only four treatments carry colour (highlight, Decide, Watch out, inline code); links stay in the text's ink. */
 .prose a { color: inherit; text-underline-offset: 3px; }
+/* A long URL or token breaks inside its column instead of running past the edge. */
+.prose a, .prose :is(.headline, .headline + p, h1, h2, h3, h4) { overflow-wrap: anywhere; }
+
+/* Body size in px, inherited, so a headline's link can be sized against the body rather than the headline. */
+@property --prose-body-size { syntax: '<length>'; inherits: true; initial-value: 20px; }
+.prose { --prose-body-size: 1em; }
+/* A link in a headline sits at dek size and regular weight, so the headline's words lead. */
+:is(#latest, .prose) .headline a {
+  font-size: min(1em, calc(var(--prose-body-size) * 1.15));
+  font-weight: 400;
+  letter-spacing: normal;
+}
 .prose ul, .prose ol { padding-left: 1.4em; margin: 0 0 1em; }
 .prose li + li { margin-top: 0.45em; }
 .prose hr { border: 0; border-top: 1px solid var(--rule); margin: 2em 0; }

@@ -12,11 +12,13 @@ import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
+import { headlineLinksCheck } from './snapshot-headline-links';
 import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
 import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
+import { agentsCheck } from './snapshot-agents';
 import { statusStripCheck } from './snapshot-status-strip';
 import { notesCheck } from './snapshot-notes';
 import { notesSideCheck } from './snapshot-notes-side';
@@ -362,6 +364,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
+    ['agents view', () => agentsCheck(kit, win)],
     ['add session', () => addSessionCheck(kit)],
     ['tab limit', () => tabLimitCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],
@@ -384,6 +387,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
+    ['headline links', () => headlineLinksCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['colour key', () => colourKeyCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
@@ -537,6 +541,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'agents' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await agentsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

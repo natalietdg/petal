@@ -14,6 +14,7 @@ import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
 import type { RepoEntry } from '../main/repo-scan';
 import type { SaveResult } from '../main/notes-store';
+import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -36,7 +37,16 @@ export interface SessionsView extends SessionsSnapshot {
   maxOpen: number;
   closed?: ClosedSession[];
   oldestIdleId?: string | null;
+  here: { running: number; total: number }; // the reader's session agents, for its header chip
 }
+
+// The Agents view: a session's subagents, and the one opened in the timeline.
+export type AgentsView = AgentsList & { sessionId: string | null };
+export type AgentOpenResult = (TimelineStart & { agentId: string }) | { missing: true };
+
+// "Agents · 3 running"; with none running, how many ran today.
+export const agentsChipText = ({ running, total }: { running: number; total: number }): string =>
+  running ? `Agents · ${running} running` : `Agents · ${total} today`;
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -112,6 +122,11 @@ export interface InvokeChannels {
   'update:restart': { args: []; result: Guarded<RestartResult> };
   'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
   'sessions:close': { args: [sessionId: string]; result: Guarded<CloseResult> };
+  // sessionId null: the reader's own session.
+  'agents:list': { args: [request: { sessionId: string | null }]; result: Guarded<AgentsView> };
+  'agents:open': { args: [request: { sessionId: string; agentId: string }]; result: Guarded<AgentOpenResult> };
+  'agents:poll': { args: []; result: Guarded<Ok> };
+  'agents:close': { args: []; result: Guarded<Ok> };
 
   'config:get': { args: []; result: Guarded<CustomizeState> };
   'config:save': { args: [patch: ConfigPatch]; result: Guarded<Config> };
@@ -196,6 +211,7 @@ export interface EventChannels {
   'colour-key:open': void;
   'repos:palette': void;
   'update:ready': void;
+  'agents:timeline': TimelineUpdate & { agentId: string };
 }
 
 export type InvokeChannel = keyof InvokeChannels;

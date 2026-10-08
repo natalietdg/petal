@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
 import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
+import { linkLabel } from '../shared/link-label';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
@@ -66,6 +67,18 @@ const isElement = (node: Node | null | undefined, name: string): node is HTMLEle
 
 function labelKey(strong: Node): string | null {
   return LABELS[textOf(strong).replace(/:$/, '').toLowerCase()] ?? null;
+}
+
+// A bare URL shows a short label; the full URL stays the href and the tooltip.
+function shortenBareLinks(root: HTMLElement): void {
+  for (const link of root.querySelectorAll('a[href]')) {
+    const href = link.getAttribute('href') ?? '';
+    const label = linkLabel(href, link.textContent ?? '');
+    if (!label) continue;
+    link.textContent = label;
+    link.setAttribute('title', href);
+    link.classList.add('bare-link');
+  }
 }
 
 // A block whose first child is a label like **Decide:** becomes a tinted callout with a pill.
@@ -178,6 +191,7 @@ export function render(markdownText: string): HTMLDivElement {
   const root = document.createElement('div');
   root.className = 'prose';
   root.innerHTML = html;
+  shortenBareLinks(root); // first, so headline length counts the label, not the URL
   tagCallouts(root);
   tagHeadline(root); // after callouts, so a leading label is never the headline
   tagBackMatter(root);

@@ -40,3 +40,4 @@ import './workflow.css';
 import './customize.css';
 import './repos.css';
 import './welcome.css';
+import './agents.css';
