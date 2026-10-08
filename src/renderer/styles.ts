@@ -21,7 +21,7 @@ import './print.css';
 import './sessions.css';
 import './cat.css';
 import './scenes/winter.css';
-import './scenes/bakery.css';
+import './scenes/izakaya.css';
 import './scenes/howl.css';
 import './scenes/study.css';
 import './scenes/midcentury.css';
