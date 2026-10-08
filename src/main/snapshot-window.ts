@@ -22,10 +22,25 @@ export function offscreenWindowOptions(): BrowserWindowConstructorOptions {
   };
 }
 
-// Shown without activating and transparent until it is confirmed off every display.
+// Moves the window back past every display, invisible while it is on one.
+function park(win: BrowserWindow): void {
+  if (win.isDestroyed() || !onAnyDisplay(win.getBounds())) return;
+  win.setOpacity(0);
+  const { x, y } = offscreenWindowOptions();
+  win.setPosition(x ?? 0, y ?? 0);
+  if (!onAnyDisplay(win.getBounds())) win.setOpacity(1);
+}
+
+// Shown without activating and transparent until it is confirmed off every display; re-parked if macOS moves it.
 export function showOffscreen(win: BrowserWindow): void {
   win.setIgnoreMouseEvents(true);
   win.setOpacity(0);
   win.showInactive();
   if (!onAnyDisplay(win.getBounds())) win.setOpacity(1);
+  const repark = (): void => park(win);
+  win.on('move', repark);
+  win.on('resize', repark);
+  win.on('show', repark);
+  screen.on('display-metrics-changed', repark);
+  screen.on('display-added', repark);
 }
