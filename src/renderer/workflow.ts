@@ -174,11 +174,53 @@ function definition(name: string, description: string, className = ''): HTMLDivE
   return pair;
 }
 
+// Verified Claude Code docs pages for the pieces this tab shows.
+const SETUP_DOCS: [label: string, url: string][] = [
+  ['CLAUDE.md and memory', 'https://code.claude.com/docs/en/memory'],
+  ['Skills', 'https://code.claude.com/docs/en/skills'],
+  ['Agents', 'https://code.claude.com/docs/en/sub-agents'],
+  ['Output styles', 'https://code.claude.com/docs/en/output-styles'],
+];
+
+function docLinks(): HTMLParagraphElement {
+  const line = el('p', 'wf-doc-links');
+  for (const [text, url] of SETUP_DOCS) {
+    const link = el('a', 'wf-doc-link', text);
+    link.href = url;
+    link.addEventListener('click', (event) => { event.preventDefault(); window.pastel.openLink(url); });
+    line.append(link);
+  }
+  return line;
+}
+
+const isEmptySetup = (data: SetupData): boolean => !data.hasClaudeMd && !data.skills.length && !data.agents.length && data.style.name === 'Default';
+
+function setupEmpty(): HTMLElement[] {
+  const box = el('section', 'wf-card wf-setup-empty');
+  box.append(el('p', 'wf-empty-lead', 'Your Claude Code setup shows here: CLAUDE.md, skills, agents and output style.'), el('p', 'wf-desc', 'Nothing yet. The Claude Code docs show how to add each one.'), docLinks());
+  return [box];
+}
+
+// One sentence per piece that exists, so a setup without routing still reads true.
+function setupSummary(data: SetupData): string {
+  const parts: string[] = [];
+  if (data.routing.length) parts.push(`${plural(data.sections.length, 'rule section')} in CLAUDE.md route requests to ${plural(data.routedSkills.length, 'skill')}.`);
+  else if (data.hasClaudeMd) parts.push(`CLAUDE.md has ${plural(data.sections.length, 'section')}.`);
+  else parts.push('No CLAUDE.md yet.');
+  if (data.skills.length || data.agents.length) parts.push(`${plural(data.skills.length, 'skill')} and ${plural(data.agents.length, 'agent')} installed.`);
+  else parts.push('No skills or agents yet.');
+  parts.push(`Replies come out in ${data.style.name} style.`);
+  return parts.join(' ');
+}
+
 function renderSetup(data: SetupData, token: number): HTMLElement[] {
-  const nodes: HTMLElement[] = [summary(`${plural(data.sections.length, 'rule section')} route requests to ${plural(data.routedSkills.length, 'skill')} and ${plural(data.agents.length, 'agent')}. Replies come out in ${data.style.name} style.`)];
-  const figure = el('div', 'wf-graph');
-  nodes.push(figure);
-  graph(figure, data.mermaid, token);
+  if (isEmptySetup(data)) return setupEmpty();
+  const nodes: HTMLElement[] = [summary(setupSummary(data))];
+  if (data.mermaid) {
+    const figure = el('div', 'wf-graph');
+    nodes.push(figure);
+    graph(figure, data.mermaid, token);
+  }
 
   const routing = card('Routing: when this happens, use that', data.routing.length);
   const table = el('div', 'wf-routing');
@@ -211,13 +253,20 @@ function renderSetup(data: SetupData, token: number): HTMLElement[] {
   }
   agents.append(agentList);
 
+  // Only cards with something in them; with no main cards the side cards take the main column.
+  const mainCards = [data.routing.length && routing, data.skills.length && skills].filter((c): c is HTMLElement => Boolean(c));
+  const sideCards = [style, data.sections.length && rules, data.agents.length && agents].filter((c): c is HTMLElement => Boolean(c));
   const grid = el('div', 'wf-grid');
   const main = el('div', 'wf-main');
-  main.append(routing, skills);
-  const aside = el('aside', 'wf-aside');
-  aside.append(style, rules, agents);
-  grid.append(main, aside);
+  main.append(...(mainCards.length ? mainCards : sideCards));
+  grid.append(main);
+  if (mainCards.length) {
+    const aside = el('aside', 'wf-aside');
+    aside.append(...sideCards);
+    grid.append(aside);
+  }
   nodes.push(grid);
+  if (!data.routing.length) nodes.push(el('p', 'wf-note', 'Routing is optional: bullets like “trigger → **skill**” under a “Skills routing” heading in CLAUDE.md show up as a table here.'));
   return nodes;
 }
 
