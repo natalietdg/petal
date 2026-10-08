@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CAT_CHOICES } from '../src/main/menu';
-import { CATS, PROPS, SITTING, spriteRows } from '../src/renderer/cat-art';
+import { CATS, PROPS, SITTING, spriteCols, spriteRows } from '../src/renderer/cat-art';
 import { fromModules, LOCAL_CATS, type LocalCat } from '../src/shared/local-cats';
 
 const cat = (id: string): LocalCat => ({ id, pet: { ...CATS.mika, name: `Cat ${id}` }, prop: PROPS.mika });
@@ -29,13 +29,20 @@ describe('local cats', () => {
     warn.mockRestore();
   });
 
-  it('a local cat may stand taller than 20 rows, up to the 48-row corner', () => {
-    const tall = (rows: number): LocalCat => ({ ...cat(`tall${rows}`), pet: { ...CATS.mika, base: Array(rows).fill('.'.repeat(20)) } });
+  it('a local cat may be taller and wider than 20, up to the 48x48 corner', () => {
+    const sized = (cols: number, rows: number, ragged = false): LocalCat => ({
+      ...cat(`s${cols}x${rows}${ragged ? 'r' : ''}`),
+      pet: { ...CATS.mika, base: Array.from({ length: rows }, (_, y) => '.'.repeat(ragged && y === 1 ? cols - 1 : cols)) },
+    });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(fromModules({ './a.ts': { default: tall(30) }, './b.ts': { default: tall(48) }, './c.ts': { default: tall(49) } }).map(({ id }) => id)).toEqual(['tall30', 'tall48']);
+    const found = fromModules({
+      './a.ts': { default: sized(22, 26) }, './b.ts': { default: sized(48, 48) },
+      './c.ts': { default: sized(20, 49) }, './d.ts': { default: sized(49, 20) }, './e.ts': { default: sized(24, 30, true) },
+    });
+    expect(found.map(({ id }) => id)).toEqual(['s22x26', 's48x48']);
     warn.mockRestore();
-    expect(spriteRows(tall(30).pet)).toBe(30);
-    expect(spriteRows(CATS.mika)).toBe(SITTING.length);
+    expect([spriteCols(sized(22, 26).pet), spriteRows(sized(22, 26).pet)]).toEqual([22, 26]);
+    expect([spriteCols(CATS.mika), spriteRows(CATS.mika)]).toEqual([20, SITTING.length]);
   });
 
   it('whatever is in the folder on this Mac is listed after the built-in cats', () => {

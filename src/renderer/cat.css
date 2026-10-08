@@ -73,7 +73,7 @@
 }
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
-.cat-sprite { position: absolute; bottom: 0; right: 0; width: 60px; height: var(--cat-sprite-h, 60px); }
+.cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
 /* Narrow window: 2px per sprite pixel, still crisp, rather than hiding her. */
 #cat.compact { transform: scale(0.6667); }
 .cat-sprite svg { width: 100%; height: 100%; image-rendering: pixelated; }

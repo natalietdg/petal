@@ -15,9 +15,10 @@ export interface Pet {
   tail?: false | { up: readonly Line[]; down: readonly Line[] };
 }
 
-// A sprite is 20 wide; a pet with her own base may stand taller, up to the 48-row corner.
-export const MAX_SPRITE_ROWS = 48;
-export const spriteRows = (pet: Pet): number => Math.min((pet.base ?? SITTING).length, MAX_SPRITE_ROWS);
+// A sprite is 20x20; a pet with her own base may be taller or wider, up to the 48-cell corner.
+export const MAX_SPRITE_CELLS = 48;
+export const spriteRows = (pet: Pet): number => Math.min((pet.base ?? SITTING).length, MAX_SPRITE_CELLS);
+export const spriteCols = (pet: Pet): number => Math.min((pet.base ?? SITTING)[0]?.length ?? 20, MAX_SPRITE_CELLS);
 
 export interface Prop {
   name: string;
