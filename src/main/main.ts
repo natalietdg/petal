@@ -66,6 +66,11 @@ function openSettings(): void {
   if (contents) send(contents, 'customize:open');
 }
 
+function openWelcome(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'welcome:open');
+}
+
 function refreshMenu(): void {
   const { theme, cat, scene, reading } = settings();
   buildMenu({
@@ -84,6 +89,7 @@ function refreshMenu(): void {
     onToggleReader: () => sendToFocused('layout:toggle'),
     onToggleHistory: () => sendToFocused('history:toggle'),
     onOpenSettings: openSettings,
+    onOpenWelcome: openWelcome,
     onOpenRepo: () => sendToFocused('repos:palette'),
   });
 }
@@ -95,7 +101,7 @@ function registerIpc(): void {
   registerLookIpc();
   registerTabIpc();
 
-  handle('claude:installed', async () => Boolean(await claudePath()));
+  handle('claude:installed', async (_event, request) => Boolean(await claudePath({ recheck: request?.recheck === true })));
 
   registerSessionsIpc({ activeSession });
 
@@ -114,9 +120,10 @@ app.whenReady().then(() => {
   refreshMenu();
   const win = createWindow();
   repoIndex.refreshIfStale(); // in the background, so ⌘O opens on a fresh list
-  // The dev harness is a separate chunk, loaded only in snapshot runs; they never call Claude in the background.
+  // The organizer starts the same way in snapshot runs, so they prove the default; its passes never call Claude there.
+  organizer.start({ openSessionIds });
+  // The dev harness is a separate chunk, loaded only in snapshot runs.
   if (isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
-  else organizer.start({ openSessionIds });
 });
 
 app.on('will-quit', () => organizer.stop());

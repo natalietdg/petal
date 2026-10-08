@@ -24,7 +24,7 @@ export const fixtureSession = (): FixtureSession | null => {
 };
 
 // What the app did or skipped, so the harness can prove it (a stored flow skips the jsonl, the hook never runs).
-export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0 };
+export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0, organizerPassesSkipped: 0 };
 
 // Snapshot runs record the keys a prompt answer would type instead of sending them to the fixture tab's shell.
 export const promptWrites: string[][] = [];
@@ -37,4 +37,7 @@ export const repoWrites: { tabId: string; command: string; newTab: boolean }[] =
 
 // Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
 // subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
+// A stand-in ~/.claude for Workflow › Setup (read only); null reads the real one.
+export const setupFixture: { claudeDir: string | null } = { claudeDir: null };
+
 export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };

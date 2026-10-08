@@ -13,6 +13,7 @@ import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import type { ListedSession } from './history';
 import type { TagsData } from './tags-store';
 import { writeJsonAtomic } from './atomic-file';
+import { counters, isSnapshotRun } from './snapshot-mode';
 
 const FIRST_RUN_DELAY_MS = 20_000;
 const MINUTE_MS = 60 * 1000;
@@ -188,6 +189,7 @@ async function labelOne(session: ListedSession, store: OrganizerStore, { prompt,
 }
 
 async function pass(limit: number): Promise<PassResult> {
+  if (isSnapshotRun()) { counters.organizerPassesSkipped += 1; return { titled: 0, failed: 0, due: 0, skipped: 'snapshot run' }; } // never her Claude plan
   if (!(await claudePath())) return { titled: 0, failed: 0, due: 0, skipped: 'no claude' };
   const settings = configStore.load().organizer; // read per pass, so edits apply to the next one
   const store = load();

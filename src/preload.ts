@@ -29,7 +29,7 @@ const api = {
   getScene: () => invoke('scene:get'),
   onScene: (callback: (sceneId: string) => void) => subscribe('scene:changed', callback),
   getReading: () => invoke('reading:get'),
-  claudeInstalled: () => invoke('claude:installed'),
+  claudeInstalled: (recheck = false) => invoke('claude:installed', { recheck }),
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize) => send('pty:start', { tabId, cols, rows }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
@@ -59,6 +59,7 @@ const api = {
   reportReady: (info: SendChannels['renderer:ready'][0]) => send('renderer:ready', info),
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
+  onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
   look: {
     setTheme: (id: string) => send('look:theme', id),

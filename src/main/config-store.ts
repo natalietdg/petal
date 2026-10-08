@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -18,6 +18,8 @@ export interface Config {
   sessions: { maxOpen: number };
   // YYYY-MM-DD or '' when unset; never leaves this file.
   tarot: { birthdate: string };
+  // The first-run screen; true once it has been shown.
+  welcome: { seen: boolean };
 }
 
 type Section = keyof Config;
@@ -39,14 +41,16 @@ A step that only answered a question, explained, or asked back changed nothing: 
 Also give a 3-6 word outcome title. Plain words, sentence case, no trailing periods. Never restate the request.`;
 
 const DEFAULTS: Readonly<Config> = Object.freeze({
-  organizer: { enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: ORGANIZER_PROMPT },
+  organizer: { enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: ORGANIZER_PROMPT },
   flowTitles: { prompt: FLOW_TITLES_PROMPT },
   responseHook: { command: '', notify: false },
   sessions: { maxOpen: 8 },
   tarot: { birthdate: '' },
+  welcome: { seen: false },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
+const userDataFile = (name: string) => path.join(app.getPath('userData'), name);
 const listeners = new Set<(config: Config) => void>();
 
 export const defaults = (): Config => structuredClone(DEFAULTS);
@@ -81,6 +85,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const h = raw.responseHook ?? {};
   const s = raw.sessions ?? {};
   const t = raw.tarot ?? {};
+  const w = raw.welcome ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -96,15 +101,30 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     },
     sessions: { maxOpen: intIn(s.maxOpen, MAX_OPEN.min, MAX_OPEN.max, b.sessions.maxOpen) },
     tarot: { birthdate: birthdateOr(t.birthdate, b.tarot.birthdate) },
+    welcome: { seen: boolOr(w.seen, b.welcome.seen) },
   };
 }
 
-export function load(): Config {
+// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the first-run screen.
+function migratedBase(): Config {
+  const base = defaults();
+  const organized = fs.existsSync(userDataFile('organizer.json'));
+  base.organizer.enabled = organized;
+  base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name)));
+  return base;
+}
+
+function readSaved(): ConfigPatch {
   try {
-    return validate(JSON.parse(fs.readFileSync(configFile(), 'utf8')) as ConfigPatch);
+    const data: unknown = JSON.parse(fs.readFileSync(configFile(), 'utf8'));
+    return data && typeof data === 'object' && !Array.isArray(data) ? (data as ConfigPatch) : {};
   } catch {
-    return defaults();
+    return {};
   }
+}
+
+export function load(): Config {
+  return validate(readSaved(), migratedBase());
 }
 
 function write(config: Config): Config {

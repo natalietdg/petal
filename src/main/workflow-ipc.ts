@@ -2,6 +2,7 @@
 import * as workflow from './workflow';
 import * as links from './links-store';
 import { handle } from './ipc';
+import { isSnapshotRun, setupFixture } from './snapshot-mode';
 import type { OrganizerStore } from './session-organizer';
 import type { TabSessions } from './tab-session';
 
@@ -30,7 +31,7 @@ export function registerWorkflowIpc({ sessions, history, organizer }: WorkflowIp
     const data = inputs();
     return workflow.todayData({ ...data, openTabs: Array.isArray(openTabs) ? openTabs : openTabsFromMain(data.labels) });
   });
-  handle('workflow:setup', () => workflow.setupData());
+  handle('workflow:setup', () => workflow.setupData(isSnapshotRun() && setupFixture.claudeDir ? { claudeDir: setupFixture.claudeDir } : {}));
   handle('workflow:time', () => workflow.timeData(inputs()));
   handle('workflow:handoffs', () => {
     const { sessions: list, labels } = inputs();
