@@ -1,5 +1,5 @@
 // A 20x20 pixel pet in the reader's corner: eyes shut and dozing when Claude rests, playing when it works.
-// Three cats share one silhouette; each has her own coat, her own prop and her own busy move.
+// Four cats share one silhouette; each has her own coat, her own prop and her own busy move.
 import * as scenes from './scenes';
 import { byId, query } from './dom';
 import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, type Line, type Pet, type Prop } from './cat-art';
@@ -41,18 +41,19 @@ function sittingSvg(cat: Pet): string {
     'paw-right': region(coat, [17, 18], [10, 19]),
   };
   const groups = Object.entries(parts).map(([name, rows]) => `<g class="${name}">${rects(rows)}</g>`).join('');
-  return svg(groups + rects(without(coat, Object.values(parts)))
+  const wings = cat.wings ? `<g class="wings">${partial(cat.wings)}</g>` : '';
+  const tail = cat.tail === false ? null : cat.tail ?? { up: TAIL_UP, down: TAIL_DOWN };
+  return svg(wings + groups + rects(without(coat, Object.values(parts)))
     + `<g class="eyes-open">${partial(cat.eyesOpen)}</g><g class="eyes-closed">${partial(cat.eyesClosed ?? EYES_CLOSED)}</g>`
-    + (cat.tail === false ? '' : `<g class="tail-up">${partial(TAIL_UP)}</g><g class="tail-down">${partial(TAIL_DOWN)}</g>`));
+    + (tail ? `<g class="tail-up">${partial(tail.up)}</g><g class="tail-down">${partial(tail.down)}</g>` : ''));
 }
 
-// Tea steam is its own group so it can rise; everything else in a prop moves as one.
+// Tea steam and wand sparkles are their own groups so they can rise and twinkle; the rest moves as one.
 function propSvg(prop: Prop): string {
   const width = prop.rows[0]?.length ?? 0;
   const height = prop.rows.length;
-  const steam = prop.rows.map((row) => row.replace(/[^s]/g, '.'));
-  const solid = prop.rows.map((row) => row.replace(/s/g, '.'));
-  const inner = `<g class="steam">${rects(steam)}</g>${rects(solid)}`;
+  const only = (cells: RegExp) => prop.rows.map((row) => row.replace(cells, '.'));
+  const inner = `<g class="steam">${rects(only(/[^s]/g))}</g><g class="sparkle">${rects(only(/[^k]/g))}</g>${rects(only(/[sk]/g))}`;
   return `<svg viewBox="0 0 ${width} ${height}" width="${width * 3}" height="${height * 3}" shape-rendering="crispEdges" aria-hidden="true">${inner}</svg>`;
 }
 

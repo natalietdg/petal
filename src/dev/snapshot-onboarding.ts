@@ -77,7 +77,7 @@ async function footerInViewCheck({ js, log, wait, capture }: Kit, win: BrowserWi
 export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, log, waitFor, wait } = kit;
   const first = await js(welcomeState);
-  const catsOk = first.cats.length === 3 && first.cats.every((c: { picture: boolean }) => c.picture) && first.cats.map((c: { name: string }) => c.name).join() === 'Mika,Miki,Kira';
+  const catsOk = first.cats.length === 4 && first.cats.every((c: { picture: boolean }) => c.picture) && first.cats.map((c: { name: string }) => c.name).join() === 'Mika,Miki,Kira,Hoshi';
   log(`${first.shown && !first.reader ? 'ok' : 'FAIL'} first launch shows the welcome screen over the reader: ${JSON.stringify({ shown: first.shown, reader: first.reader })}`);
   log(`${first.tagline === TAGLINE ? 'ok' : 'FAIL'} welcome tagline: ${JSON.stringify(first.tagline)}`);
   log(`${catsOk ? 'ok' : 'FAIL'} welcome cats each show their picture: ${JSON.stringify(first.cats)}`);

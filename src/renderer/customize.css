@@ -32,6 +32,10 @@
   font: 600 13px var(--ui-font);
   cursor: pointer;
 }
+/* Pet chips carry her portrait before the name. */
+.cz-chip:has(.cat-portrait) { display: inline-flex; align-items: center; gap: 6px; padding: 2px 14px 2px 6px; }
+.cz-chip .cat-portrait { display: block; width: 40px; height: 40px; } /* 2px per sprite pixel, crisp */
+.cz-chip .cat-portrait svg { width: 100%; height: 100%; image-rendering: pixelated; }
 .cz-chip[aria-checked="true"] { background: var(--next-pill); border-color: var(--next-ink); color: var(--next-ink); }
 
 /* Formatting table: the active reading style's column is tinted. */
