@@ -16,6 +16,7 @@ import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
+import { statusStripCheck } from './snapshot-status-strip';
 import { notesCheck } from './snapshot-notes';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
@@ -380,6 +381,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['tables', () => tablesCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
+    ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
   const count: StepCount = { done: 0, total: steps.length };

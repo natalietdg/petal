@@ -37,3 +37,22 @@ export function addHistoryFixture(outDir: string): () => void {
     historyFixture.live = [];
   };
 }
+
+export const FIXTURE_STATUS = 'f3f3f3f3-0000-4000-8000-00000000000c';
+export const FIXTURE_PLAIN = 'f4f4f4f4-0000-4000-8000-00000000000d';
+
+// One session whose reply carries Doing / Recommend / Next, one without; returns a function that takes them out.
+export function addStatusFixture(outDir: string, statusReply: string): () => void {
+  const dir = path.join(outDir, 'history-status-fixture');
+  const record = (sessionId: string, title: string, prompt: string, reply: string, ageMs: number) => {
+    const file = path.join(dir, `${sessionId}.jsonl`);
+    writeLog(file, prompt, reply);
+    return { sessionId, file, cwd: path.join(dir, title.toLowerCase().replace(/\W+/g, '-')), title, firstPrompt: prompt, lastAt: Date.now() + 60_000 - ageMs, messages: 2, messagesExact: true };
+  };
+  historyFixture.records = [
+    record(FIXTURE_STATUS, 'Status fixture', 'where do cycles live?', statusReply, 0),
+    record(FIXTURE_PLAIN, 'Plain fixture', 'name the cat', 'Mika suits her.', 1000),
+  ];
+  historyFixture.live = [];
+  return () => { historyFixture.records = []; };
+}

@@ -9,6 +9,7 @@ import { attachPreviewTags } from './history-tags';
 import { createNotesEditor, type NotesEditor } from './notes';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
+import { createStrip, paintStrip } from './status-strip';
 import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 
 export async function renderPreview(): Promise<void> {
@@ -40,13 +41,29 @@ export async function renderPreview(): Promise<void> {
   send.type = 'button';
   send.title = 'Let the Claude in this window read this session';
   send.addEventListener('click', () => doSend(session.sessionId, note));
-  head.append(resume, send, note, toggle);
+  const strip = createStrip();
+  head.append(resume, send, note, toggle, strip);
 
   const body = el('div', 'history-preview-body');
   void notesEditor?.flush(); // typing in the last notes is saved before they go
   notesEditor = null;
   preview.replaceChildren(head, body, ...(state.previewMode === 'replies' ? [replyBox(session)] : []));
-  await renderBody(session, body);
+  await Promise.all([renderBody(session, body), fillStrip(session, strip)]);
+}
+
+// The session's newest replies: the live tab's when one follows it, else the log on disk.
+async function fillStrip(session: Session, strip: HTMLElement): Promise<void> {
+  const tab = liveTab(session);
+  if (tab) {
+    paintStrip(strip, (tab.update?.replies ?? []).map((r) => r.markdown));
+    return;
+  }
+  try {
+    const page = await window.pastel.history.conversation(session.sessionId);
+    paintStrip(strip, 'error' in page ? [] : [...page.turns].reverse().map((turn) => turn.reply));
+  } catch {
+    paintStrip(strip, []); // the body already shows the read error
+  }
 }
 
 async function renderBody(session: Session, body: HTMLElement): Promise<void> {
@@ -76,6 +93,8 @@ async function redrawFollowed(tabId: string | null): Promise<void> {
   await renderBody(session, fresh);
   if (ticket !== redraws || selectedSession() !== session) return; // a newer redraw or another session won
   preview.querySelector('.history-preview-body')?.replaceWith(fresh);
+  const strip = preview.querySelector<HTMLElement>('.history-preview-head .status-strip');
+  if (strip) void fillStrip(session, strip);
   repaintFollowed();
   if (atEnd) preview.scrollTop = preview.scrollHeight;
 }
