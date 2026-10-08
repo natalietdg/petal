@@ -28,7 +28,7 @@ export function registerWorkflowIpc({ sessions, history, organizer }: WorkflowIp
 
   // One failing section shows a line in its tab, never a blank view (see ipc-guard.ts).
   handle('workflow:today', (_event, { openTabs } = {}) => {
-    const data = inputs();
+    const data = { ...inputs(), tags: null }; // Today groups by project, like History's plain list
     return workflow.todayData({ ...data, openTabs: Array.isArray(openTabs) ? openTabs : openTabsFromMain(data.labels) });
   });
   handle('workflow:setup', () => workflow.setupData(isSnapshotRun() && setupFixture.claudeDir ? { claudeDir: setupFixture.claudeDir } : {}));

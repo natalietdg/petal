@@ -4,8 +4,7 @@ import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { el } from './dom';
 import { timeOf } from './format';
-import { dayLabel, hooks, notesAside, preview, selectedSession, state, titleOf, view, type Session } from './history-state';
-import { attachPreviewTags } from './history-tags';
+import { dayLabel, hooks, notesAside, openNote, preview, railTitle, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
 import { createPanel } from './notes-panel';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
@@ -15,16 +14,16 @@ import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Tu
 
 export async function renderPreview(): Promise<void> {
   const session = selectedSession();
+  if (openNote.dataset.sessionId !== session?.sessionId) openNote.replaceChildren(); // the banner speaks for one session
   if (!session) {
     preview.replaceChildren(el('p', 'status empty', 'Pick a session to preview it.'));
+    replyDock.replaceChildren();
     return;
   }
+  railTitle.textContent = titleOf(session);
   const head = el('header', 'history-preview-head');
   head.append(el('h2', 'history-preview-title', titleOf(session)),
     el('p', 'status', `${session.shortCwd} · ${dayLabel(session.lastAt)} ${timeOf(session.lastAt)}`));
-  const tagLine = el('div', 'history-preview-tags');
-  head.append(tagLine);
-  attachPreviewTags(tagLine);
 
   const note = el('p', 'history-note');
   const resume = el('button', 'flow-button resume-button', 'Open');
@@ -51,7 +50,8 @@ export async function renderPreview(): Promise<void> {
   head.append(resume, send, note, views, strip);
 
   const body = el('div', 'history-preview-body');
-  preview.replaceChildren(head, body, ...(state.previewMode === 'replies' ? [replyBox(session)] : []));
+  preview.replaceChildren(head, body);
+  replyDock.replaceChildren(...(state.previewMode === 'replies' ? [replyBox(session)] : []));
   notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
   showNotes(session);
   await Promise.all([renderBody(session, body), fillStrip(session, strip)]);
@@ -106,7 +106,7 @@ async function redrawFollowed(tabId: string | null): Promise<void> {
 
 function repaintFollowed(): void {
   const session = selectedSession();
-  const box = preview.querySelector<HTMLElement>('.history-reply-box');
+  const box = replyDock.querySelector<HTMLElement>('.history-reply-box');
   if (session && box) paintStatus(box, session);
 }
 
@@ -183,6 +183,7 @@ async function renderRepliesBody(session: Session, body: HTMLElement): Promise<v
 
 export async function doResume(sessionId: string, note: HTMLElement, confirmFork: boolean): Promise<void> {
   // A session already in a tab just gets focused; anything else starts a Claude, so her limit applies.
+  note.dataset.sessionId = sessionId;
   const limited = reply.tabFor(sessionId) ? null : await limitNote('open it here');
   if (limited) {
     note.textContent = limited;
@@ -222,7 +223,7 @@ async function doSend(sessionId: string, note: HTMLElement): Promise<void> {
 // Preview without re-rendering the list, so hovering never steals the row under the mouse.
 export function hoverPreview(sessionId: string): void {
   if (sessionId === state.selectedId) return;
-  if (document.activeElement?.matches(':is(#history-preview, #history-notes) textarea')) return; // never swap the session she's typing into
+  if (document.activeElement?.matches(':is(#history-reply-dock, #history-notes) textarea')) return; // never swap the session she's typing into
   state.selectedId = sessionId;
   state.previewMode = 'replies'; // a newly picked session always opens on its replies
   for (const r of document.querySelectorAll<HTMLElement>('.history-row')) r.classList.toggle('selected', r.dataset.sessionId === sessionId);

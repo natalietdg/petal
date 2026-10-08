@@ -29,6 +29,7 @@ const MEASURE = `(() => {
     pressed: document.getElementById('notes-toggle').getAttribute('aria-pressed'),
     panel: box(panel),
     reader: box(document.getElementById('reader')),
+    head: box(document.getElementById('reader-head')),
     cat: box(document.getElementById('cat')),
     text: { left: r(text.left), right: r(text.right), centre: r((text.left + text.right) / 2), width: r(text.right - text.left) },
     input: { centre: r((input.left + input.right) / 2), width: r(input.width) },
@@ -98,7 +99,7 @@ export async function notesSideCheck(kit: Kit, win: BrowserWindow): Promise<void
         check(m.text.right <= m.panel.left && m.reader.right <= m.panel.left, `${tag} text ends ${m.text.right}, reader ${m.reader.right}, panel starts ${m.panel.left}: no overlap`);
         check(m.cat.right <= m.panel.left, `${tag} cat ${m.cat.left}-${m.cat.right} stays left of the panel`);
       }
-      check(m.panel.top >= m.reader.top - TOLERANCE_PX, `${tag} panel starts below the fixed header: panel ${m.panel.top}, reader ${m.reader.top}`);
+      check(Math.abs(m.panel.top - m.head.top) <= TOLERANCE_PX * 2, `${tag} panel starts at the fixed header's top: panel ${m.panel.top}, header ${m.head.top}`);
       if (width === 1280) {
         await capture('notes-side-1280-light');
         applyTheme('nightPastel', { persist: false });

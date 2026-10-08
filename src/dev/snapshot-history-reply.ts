@@ -17,9 +17,9 @@ const STATE = `(() => {
     shown: t.ids().filter((id) => !t.get(id).host.hidden),
     historyOpen: !document.getElementById('history').hidden,
     lastYou: you.at(-1) ?? null,
-    note: document.querySelector('#history-preview .history-reply-note')?.textContent ?? '',
-    status: document.querySelector('#history-preview .history-reply-status')?.textContent ?? '',
-    fullShown: Boolean(document.querySelector('#history-preview .history-reply-row .history-open-full:not([hidden])')),
+    note: document.querySelector('#history-reply-dock .history-reply-note')?.textContent ?? '',
+    status: document.querySelector('#history-reply-dock .history-reply-status')?.textContent ?? '',
+    fullShown: Boolean(document.querySelector('#history-reply-dock .history-reply-row .history-open-full:not([hidden])')),
   };
 })()`;
 
@@ -32,7 +32,7 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const waitState = (test: (s: any) => boolean, ms = 6000) => waitFor(async () => { const s = await js(STATE); return test(s) ? s : null; }, ms);
   const select = (id: string) => js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(id)}); return PastelTerm.history.setPreviewMode('replies'); })`);
-  const send = (text: string) => js(`(() => { const box = document.querySelector('#history-preview .history-reply-input'); box.value = ${JSON.stringify(text)}; box.dispatchEvent(new Event('input')); box.closest('form').requestSubmit(); })()`);
+  const send = (text: string) => js(`(() => { const box = document.querySelector('#history-reply-dock .history-reply-input'); box.value = ${JSON.stringify(text)}; box.dispatchEvent(new Event('input')); box.closest('form').requestSubmit(); })()`);
   const removeFixture = addHistoryFixture(outDir);
   panelFixture.sessions = [fake(1)];
   configStore.save({ sessions: { maxOpen: 8 } });
@@ -41,7 +41,7 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
 
   try {
     await select(FIXTURE_A);
-    check(await waitFor(() => js("Boolean(document.querySelector('#history-preview .history-reply-input'))"), 8000), 'the preview has a reply box');
+    check(await waitFor(() => js("Boolean(document.querySelector('#history-reply-dock .history-reply-input'))"), 8000), 'the preview has a reply box');
     await send(MESSAGE);
     const sent = await waitState((s) => s.ids.length === start.ids.length + 1 && s.lastYou?.text === MESSAGE);
     const bg = sent?.ids.at(-1);
@@ -74,7 +74,7 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
     panelFixture.sessions = [fake(1), fake(2)];
     configStore.save({ sessions: { maxOpen: 2 } });
     await select(FIXTURE_B);
-    await waitFor(() => js("Boolean(document.querySelector('#history-preview .history-reply-input'))"), 8000);
+    await waitFor(() => js("Boolean(document.querySelector('#history-reply-dock .history-reply-input'))"), 8000);
     const beforeLimit = (await js(STATE)).ids.length;
     await send('over the limit');
     const limited = await waitState((s) => s.note.includes('your limit is 2'));
@@ -87,10 +87,10 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
     historyFixture.live = [FIXTURE_B];
     await send('fork it please');
     const warned = await waitState((s) => s.note.includes('Opening it here as well forks it'));
-    const anyway = await js("[...document.querySelectorAll('#history-preview .history-reply-note button')].map((b) => b.textContent)");
+    const anyway = await js("[...document.querySelectorAll('#history-reply-dock .history-reply-note button')].map((b) => b.textContent)");
     check(warned && anyway.includes('Open anyway') && (await js(STATE)).ids.length === beforeLimit, `live elsewhere warns before replying: ${JSON.stringify(warned?.note)}`);
     await capture('history-reply-fork-warning');
-    await js("[...document.querySelectorAll('#history-preview .history-reply-note button')].find((b) => b.textContent === 'Open anyway').click()");
+    await js("[...document.querySelectorAll('#history-reply-dock .history-reply-note button')].find((b) => b.textContent === 'Open anyway').click()");
     const forked = await waitState((s) => s.ids.length === beforeLimit + 1);
     if (forked) opened.push(forked.ids.at(-1));
     check(forked && forked.active === start.active && historyFixture.resumes.includes(FIXTURE_B), `Open anyway opens it in the background too: ${JSON.stringify(forked)}`);
@@ -98,7 +98,7 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
     // Open in full: switches to the background tab and leaves History.
     await select(FIXTURE_A);
     await waitState((s) => s.fullShown);
-    await js("document.querySelector('#history-preview .history-reply-row .history-open-full').click()");
+    await js("document.querySelector('#history-reply-dock .history-reply-row .history-open-full').click()");
     const full = await waitState((s) => s.active === bg && !s.historyOpen && s.shown.includes(bg));
     check(full, `Open in full shows tab ${bg} and closes History: ${JSON.stringify(full)}`);
     await capture('history-reply-open-full');

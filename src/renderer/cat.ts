@@ -121,14 +121,25 @@ export function setScene(id: string): void {
   render();
 }
 
-// Never hide her: when she would sit on the text column, she shrinks to 2px pixels instead.
-const column = query(byId('reader'), '.reader-column');
+// Never on the text: she shrinks to 2px pixels in a narrow gutter, and below that the reader leaves her a strip.
+const area = byId('reader-area');
+const reader = byId('reader');
+const column = query(reader, '.reader-column');
 const guard = () => {
+  if (reader.hidden) return; // an overlay is up; she is hidden there and measured again when the reader returns
   root.classList.remove('compact');
-  const textRight = column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight);
-  root.classList.toggle('compact', root.getBoundingClientRect().left < textRight + 12);
+  const contentRight = column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight);
+  // Headlines, rails and wide blocks can reach past the content box.
+  const blocks = column.querySelectorAll(':is(#latest, #older) :is(p, h1, h2, h3, pre, table, blockquote, ul, ol, .rail)');
+  const textRight = Math.max(contentRight, ...[...blocks].map((block) => block.getBoundingClientRect().right));
+  const clear = () => root.getBoundingClientRect().left >= textRight + 12;
+  const fits = clear();
+  root.classList.toggle('compact', !fits);
+  area.classList.toggle('cat-strip', !fits && !clear()); // the strip changes height only, so this never loops
 };
-new ResizeObserver(guard).observe(byId('reader-area'));
+// The reader's width moves with Notes opening and closing, and its column with the look and the reply.
+const watch = new ResizeObserver(guard);
+for (const target of [area, reader, column]) watch.observe(target);
 
 setCat('mika');
 setBusy(false);
