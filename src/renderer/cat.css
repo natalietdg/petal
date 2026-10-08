@@ -78,6 +78,8 @@
 /* No gutter wide enough: the reader ends above her, so she sits under the text, never on it.
    Only in a tall reader: a short one (the divider dragged low) keeps its height and she steps out instead. */
 #reader-area { container-type: size; } /* its grid row sizes it, never its content */
+/* Scrolled to the end, the reply stops above her corner at her chosen size: 14px offset, 4px gap, 6px spare. */
+#reader-area #reader .reader-column { padding-bottom: max(150px, calc(144px * var(--pet-scale, 1) + 24px)); }
 @container (min-height: 480px) {
   #reader-area.cat-strip #reader { margin-bottom: 112px; } /* 96px compact corner, 14px gap, 2px for subpixel scaling */
 }

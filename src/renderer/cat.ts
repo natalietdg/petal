@@ -122,13 +122,12 @@ export function setScene(id: string): void {
   render();
 }
 
-// Never on the text: only lines on screen under her corner count. She keeps her chosen size when none are there,
+// Never on the text: only text blocks on screen under her corner count. She keeps her chosen size when none are there,
 // shrinks when that clears them, and otherwise the reader leaves her a strip (a short reader steps her out).
 const area = byId('reader-area');
 const reader = byId('reader');
 const column = query(reader, '.reader-column');
 const BLOCKS = ':is(#latest, #older, #flow-view, #decisions-view) :is(p, h1, h2, h3, h4, pre, table, blockquote, ul, ol)';
-const BOXES = new Set(['PRE', 'TABLE']); // covering any part of these covers text
 const TEXT_GAP_PX = 4;
 const SCALES = Object.values(PET_SCALE).sort((a, b) => b - a);
 let chosenScale = PET_SCALE.normal;
@@ -136,11 +135,6 @@ let chosenScale = PET_SCALE.normal;
 interface Box { left: number; top: number; right: number; bottom: number }
 const meets = (a: Box, b: Box): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 const shifted = (r: Box, dy: number): Box => ({ left: r.left, right: r.right, top: r.top + dy, bottom: r.bottom + dy });
-const lineRange = document.createRange();
-const lines = (block: Element): Box[] => {
-  lineRange.selectNodeContents(block);
-  return [...lineRange.getClientRects()];
-};
 
 // Her corner at a scale, anchored bottom right; computed from styles so it works while she is stepped out.
 function cornerAt(scale: number, areaBox: Box, style: CSSStyleDeclaration): Box {
@@ -160,17 +154,14 @@ function viewWithoutStrip(): { view: Box; dy: number } {
 
 const grown = (b: Box): Box => ({ left: b.left - TEXT_GAP_PX, top: b.top - TEXT_GAP_PX, right: b.right + TEXT_GAP_PX, bottom: b.bottom + TEXT_GAP_PX });
 
-// Every text line or box on screen inside region, clipped to the reader.
+// Every text block on screen inside region, clipped to the reader.
 function textIn(region: Box): Box[] {
   const { view, dy } = viewWithoutStrip();
   const found: Box[] = [];
   for (const block of column.querySelectorAll(BLOCKS)) {
-    const outer = shifted(block.getBoundingClientRect(), dy);
-    if (!meets(outer, region) || !meets(outer, view)) continue;
-    for (const part of BOXES.has(block.tagName) ? [outer] : lines(block).map((r) => shifted(r, dy))) {
-      const clipped = { left: Math.max(part.left, view.left), top: Math.max(part.top, view.top), right: Math.min(part.right, view.right), bottom: Math.min(part.bottom, view.bottom) };
-      if (clipped.right > clipped.left && clipped.bottom > clipped.top && meets(clipped, region)) found.push(clipped);
-    }
+    const b = shifted(block.getBoundingClientRect(), dy);
+    const clipped = { left: Math.max(b.left, view.left), top: Math.max(b.top, view.top), right: Math.min(b.right, view.right), bottom: Math.min(b.bottom, view.bottom) };
+    if (clipped.right > clipped.left && clipped.bottom > clipped.top && meets(clipped, region)) found.push(clipped);
   }
   return found;
 }
@@ -182,14 +173,14 @@ function guard(): void {
   const style = getComputedStyle(root);
   const allowed = SCALES.filter((scale) => scale <= chosenScale);
   const text = textIn(grown(cornerAt(chosenScale, areaBox, style)));
-  const fit = allowed.find((scale) => !text.some((line) => meets(line, grown(cornerAt(scale, areaBox, style)))));
+  const fit = allowed.find((scale) => !text.some((block) => meets(block, grown(cornerAt(scale, areaBox, style)))));
   const scale = fit ?? allowed[allowed.length - 1];
   if (root.style.getPropertyValue('--cat-scale') !== String(scale)) root.style.setProperty('--cat-scale', String(scale));
   root.classList.toggle('compact', scale < chosenScale);
   area.classList.toggle('cat-strip', fit === undefined);
 }
 
-// Scrolling only moves lines under her: one measure per frame at most.
+// Scrolling only moves text under her: one measure per frame at most.
 let frame = 0;
 reader.addEventListener('scroll', () => {
   if (!frame) frame = requestAnimationFrame(() => { frame = 0; guard(); });
@@ -200,6 +191,7 @@ for (const target of [area, reader, column]) watch.observe(target);
 
 export function setSize(size: string): void {
   chosenScale = PET_SCALE[isPetSize(size) ? size : 'normal'];
+  area.style.setProperty('--pet-scale', String(chosenScale)); // the column ends above her at this size (cat.css)
   guard();
 }
 void window.pastel.config.get().then((state) => { if (!isIpcError(state)) setSize(state.config.pet.size); });
