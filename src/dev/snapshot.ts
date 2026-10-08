@@ -12,6 +12,7 @@ import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
+import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
@@ -371,6 +372,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
+    ['pasted', () => pastedCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // last: it appends turns to the fixture
   ];
   const count: StepCount = { done: 0, total: steps.length };
