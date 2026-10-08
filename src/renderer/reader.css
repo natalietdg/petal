@@ -178,8 +178,8 @@
   text-wrap: balance;
   margin-bottom: 0.5em;
 }
-/* Standfirst: the paragraph right after the headline, like a news deck. */
-#latest .headline + p {
+/* Standfirst: the paragraph right after the headline, like a news deck (the colour key shows it too). */
+:is(#latest, #colour-key) .headline + p {
   font-size: 1.14em;
   line-height: 1.5;
   padding-bottom: 1em;

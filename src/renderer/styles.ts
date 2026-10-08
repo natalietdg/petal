@@ -18,6 +18,7 @@ import './tabs.css';
 import './reader.css';
 import './magazine.css';
 import './print.css';
+import './colour-key.css';
 import './sessions.css';
 import './cat.css';
 import './scenes/winter.css';

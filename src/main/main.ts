@@ -72,6 +72,11 @@ function openWelcome(): void {
   if (contents) send(contents, 'welcome:open');
 }
 
+function openColourKey(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'colour-key:open');
+}
+
 function refreshMenu(): void {
   const { theme, cat, scene, reading } = settings();
   buildMenu({
@@ -91,6 +96,7 @@ function refreshMenu(): void {
     onToggleHistory: () => sendToFocused('history:toggle'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,
+    onOpenColourKey: openColourKey,
     onOpenRepo: () => sendToFocused('repos:palette'),
   });
 }

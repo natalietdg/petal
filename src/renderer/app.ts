@@ -19,6 +19,7 @@ import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
+import * as colourKey from './colour-key';
 import './planet-reading';
 import * as welcome from './welcome';
 import * as updatePill from './update-pill';
@@ -29,7 +30,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, welcome };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -76,12 +77,13 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel, the open overlay or a scene card instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay, a scene card or the colour key instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
+    else if (colourKey.isOpen()) colourKey.close();
     else return true;
     return false;
   });
@@ -141,6 +143,11 @@ async function start(): Promise<void> {
     history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
+  // Help > Colour key: back to the reader first, since an open overlay hides the header the key hangs from.
+  window.pastel.onOpenColourKey(() => {
+    overlays.hideCurrent();
+    colourKey.open();
+  });
   updatePill.init();
 
   const { term, renderer } = tabs.create();

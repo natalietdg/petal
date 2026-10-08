@@ -35,10 +35,11 @@ export interface MenuOptions {
   onToggleHistory: () => void;
   onOpenSettings: () => void;
   onOpenWelcome: () => void;
+  onOpenColourKey: () => void;
   onOpenRepo: () => void;
 }
 
-export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onOpenSettings, onOpenWelcome, onOpenRepo }: MenuOptions): void {
+export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onOpenSettings, onOpenWelcome, onOpenColourKey, onOpenRepo }: MenuOptions): void {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -116,7 +117,7 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     { label: 'Theme', submenu: themeItems },
     { label: 'Pet', submenu: [...catItems, { type: 'separator' }, { label: 'Scene', submenu: sceneItems }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Welcome', click: onOpenWelcome }] },
+    { role: 'help', submenu: [{ label: 'Welcome', click: onOpenWelcome }, { label: 'Colour key', click: onOpenColourKey }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

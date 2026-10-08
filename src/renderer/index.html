@@ -26,13 +26,17 @@
       <header id="reader-head">
         <div class="reader-head-column">
           <p id="reader-repo" class="reader-repo" hidden></p>
-          <div class="view-toggle" role="tablist">
-            <button type="button" data-view="replies" aria-selected="true">Replies</button>
-            <button type="button" data-view="flow" aria-selected="false">Flow</button>
-            <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
-            <button type="button" data-view="notes" aria-selected="false">Notes</button>
+          <div class="reader-head-row">
+            <div class="view-toggle" role="tablist">
+              <button type="button" data-view="replies" aria-selected="true">Replies</button>
+              <button type="button" data-view="flow" aria-selected="false">Flow</button>
+              <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
+              <button type="button" data-view="notes" aria-selected="false">Notes</button>
+            </div>
+            <button type="button" id="colour-key-button" class="colour-key-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="colour-key" title="What the colours in a reply mean"><span class="ck-dots" aria-hidden="true"></span>Colour key</button>
           </div>
         </div>
+        <div id="colour-key" class="colour-key" role="dialog" aria-label="Colour key" hidden></div>
       </header>
       <div id="cat"></div>
       <main id="reader" aria-live="polite">

@@ -192,6 +192,7 @@ export interface EventChannels {
   'history:toggle': void;
   'customize:open': void;
   'welcome:open': void;
+  'colour-key:open': void;
   'repos:palette': void;
   'update:ready': void;
 }

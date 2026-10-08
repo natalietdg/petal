@@ -60,6 +60,7 @@ const api = {
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
+  onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
   update: {
     status: () => invoke('update:status'),
