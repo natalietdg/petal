@@ -129,21 +129,29 @@ function menu(x: number, y: number): CellClass | null {
   return x === tag ? 'iz-tag' : 'iz-tagD';
 }
 
-// On the counter: a sake flask and cup on the left, a plate of yakitori skewers beside them.
+// On the counter: a sake set, a board of nigiri and a plate of gyoza.
+const SAKE_KEY: Record<string, CellClass> = { w: 'iz-sake', W: 'iz-sakeL', b: 'iz-sakeBand' };
+const OCHOKO = ['WW', 'bb', 'ww'];
 const ON_COUNTER = layers(
-  stamp(2, 25, [
-    '.W....',
-    '.W....',
-    'wWw...',
-    'bbb...',
-    'wWw.WW',
-    'wWw.ww',
-  ], { w: 'iz-sake', W: 'iz-sakeL', b: 'iz-sakeBand' }),
-  stamp(9, 29, [
-    '.tmMmMm',
-    'ppppppp',
-    '.PPPPP.',
-  ], { t: 'iz-stick', m: 'iz-meat', M: 'iz-meatL', p: 'iz-plate', P: 'iz-plateD' }),
+  // Tokkuri flask at the back, two ochoko cups in front.
+  stamp(0, 23, ['.W.', '.W.', 'wWw', 'bbb', 'wWw', 'wWw', 'wWw', 'www'], SAKE_KEY),
+  stamp(3, 28, OCHOKO, SAKE_KEY),
+  stamp(5, 29, OCHOKO, SAKE_KEY),
+  // A little dish of soy for the gyoza.
+  stamp(7, 30, ['SS', 'cc'], { S: 'iz-soy', c: 'iz-plate' }),
+  // Geta board of nigiri: salmon, tuna, and tamago with a nori band.
+  stamp(9, 28, [
+    '.SSs.TTt.YkY.',
+    '.rrr.rrr.rkr.',
+    '.rrr.rrr.rrr.',
+    'ggggggggggggg',
+  ], { S: 'iz-salmon', s: 'iz-salmonL', T: 'iz-tuna', t: 'iz-tunaL', Y: 'iz-tamago', k: 'iz-nori', r: 'iz-rice', g: 'iz-getaD' }),
+  // Three gyoza on a blue plate: pleated tops, crisp golden bottoms.
+  stamp(21, 29, [
+    '.Ee.Ee.Ee',
+    'pGGpGGpGG',
+    'ppppppppp',
+  ], { E: 'iz-pleatL', e: 'iz-pleat', G: 'iz-gyoza', p: 'iz-glaze' }),
 );
 
 // One long thin grain streak: a darker run from `from` to `to` on a single row.
@@ -196,7 +204,8 @@ const armDown = arm('A', [[25, 20, 'sleeve'], [26, 21, 'sleeve'], [26, 22, 'slee
 const armUp = arm('B', [[25, 20, 'sleeve'], [26, 20, 'sleeve'], [26, 19, 'sleeve'], [27, 18, 'hand'], [27, 17, 'fan'], [28, 17, 'fan'], [27, 16, 'fan'], [28, 16, 'fan'], [28, 15, 'fan']]);
 // Sparks off the coals and steam off the pot, rising and fading.
 const sparks: Cell[] = [[17, 23, 'iz-sparkA'], [21, 22, 'iz-sparkB'], [24, 23, 'iz-sparkA']];
-const steam: Cell[] = [[11, 24, 'iz-steamA'], [12, 23, 'iz-steamB'], [11, 22, 'iz-steamA'], [12, 21, 'iz-steamB'], [11, 20, 'iz-steamB'], [13, 22, 'iz-steamA']];
+const steam: Cell[] = [[11, 24, 'iz-steamA'], [12, 23, 'iz-steamB'], [11, 22, 'iz-steamA'], [12, 21, 'iz-steamB'], [11, 20, 'iz-steamB'], [13, 22, 'iz-steamA'],
+  [22, 27, 'iz-steamA'], [25, 26, 'iz-steamB'], [28, 27, 'iz-steamA']];
 
 const scene: Scene = {
   name: 'Izakaya',
