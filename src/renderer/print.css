@@ -185,7 +185,8 @@
 /* ---- Tables and code: ink rules, square corners. ---- */
 [data-reading="print"] .prose table { border-top: 1px solid var(--print-ink); border-bottom: 1px solid var(--print-ink); }
 [data-reading="print"] .prose th { font-size: 0.72em; border-bottom: 1px solid var(--print-ink); }
-[data-reading="print"] .prose td:first-child { font-weight: 600; }
+/* Row labels: the essay's one table voice, a half-step heavier than the body. */
+[data-reading="print"] .prose td:first-child { font-weight: 520; }
 [data-reading="print"] .prose pre { border: 1px solid var(--print-ink); border-radius: 0; background: var(--print-tint); }
 [data-reading="print"] .prose code { border-radius: 0; }
 [data-reading="print"] .prose p:has(> em:only-child) { font-family: var(--print-mono); font-size: 0.7em; letter-spacing: 0.04em; }

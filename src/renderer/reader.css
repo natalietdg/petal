@@ -118,13 +118,24 @@
   margin: 0.2em 0 1.25em;
   font-size: 0.9em;
   font-variant-numeric: lining-nums tabular-nums;
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  table-layout: auto;
   border-top: 2px solid var(--reader-fg);
   border-bottom: 2px solid var(--reader-fg);
 }
-/* Newspaper tables: horizontal rules only. */
-.prose th, .prose td { border-bottom: 1px solid var(--rule); padding: 0.45em 0.9em 0.45em 0; text-align: left; vertical-align: top; }
-.prose td:first-child { white-space: nowrap; font-weight: 600; }
+/* Newspaper tables: horizontal rules only. The em cap stops one wordy column starving the rest. */
+.prose th, .prose td {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.45em 0.9em 0.45em 0;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+  max-width: 18em;
+}
+/* URLs and paths may break anywhere, so one long token cannot push the table past its column. */
+.prose :is(th, td) :is(a, code) { overflow-wrap: anywhere; }
 .prose th { font-family: var(--ui-font); font-size: 0.82em; font-weight: 600; letter-spacing: 0.04em; }
 
 .prose code {
