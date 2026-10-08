@@ -4,6 +4,7 @@ import * as flow from './flow';
 import { byId, query } from './dom';
 import { createNotesEditor, type NotesEditor } from './notes';
 import { timeOf } from './format';
+import { promptBubble } from './prompt-bubble';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 
@@ -23,7 +24,7 @@ status.before(older);
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
-const youBubble = (prompt: string): HTMLDivElement => Object.assign(document.createElement('div'), { className: 'reader-you', textContent: prompt });
+const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
 
 // Sent from the reply box, not yet in Claude's log.
 function pendingBubble(echo: PendingEcho): HTMLDivElement {

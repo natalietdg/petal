@@ -1,5 +1,5 @@
 // Groups Claude Code jsonl entries into replies: all assistant text between two user prompts.
-import { contentItems, isUserTurn, promptText } from './prompts';
+import { contentItems, isUserTurn, rawPromptText } from './prompts';
 import type { TranscriptEntry } from './transcript-entry';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
@@ -28,7 +28,7 @@ export class ReplyCollector {
   add(entry: TranscriptEntry): boolean {
     if (isUserTurn(entry)) {
       this.turnOpen = false;
-      const prompt = promptText(entry);
+      const prompt = rawPromptText(entry); // the bubble splits out pasted blocks
       if (!prompt) return false;
       this.waitingPrompts.push({ id: entry.uuid, timestamp: entry.timestamp, prompt });
       this.promptCount += 1;

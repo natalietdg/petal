@@ -4,6 +4,7 @@ import * as diagrams from './diagrams';
 import * as tabs from './tabs';
 import * as reply from './history-reply';
 import { el } from './dom';
+import { promptBubble } from './prompt-bubble';
 import { hooks, type Session } from './history-state';
 import { parsePermissionPrompt } from '../shared/prompt-answer';
 import type { Tab } from './tabs';
@@ -17,7 +18,7 @@ export function turnCard(turn: Turn, youClass = ''): HTMLElement {
   const card = el('article', 'history-turn');
   card.dataset.turn = String(turn.index);
   card.append(el('p', 'history-you-label', youClass === 'queued' ? 'You · waiting for Claude to start' : 'You'),
-    el('div', `history-you ${youClass}`.trim(), turn.prompt));
+    promptBubble(`history-you ${youClass}`.trim(), turn.prompt));
   if (turn.reply) {
     const body = el('div', 'history-reply');
     body.append(markdown.render(turn.reply));

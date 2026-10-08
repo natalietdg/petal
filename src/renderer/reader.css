@@ -316,6 +316,23 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 /* Sent from the reply box; full strength once Claude has it. */
 .reader-you.pending { opacity: 0.65; }
 
+/* A paste inside her message (reader and History): quoted under a small label; long URLs wrap. */
+:is(.reader-you, .history-you) { min-width: 0; }
+:is(.reader-you, .history-you) :is(.prompt-typed, .prompt-pasted) + :is(.prompt-typed, .prompt-pasted) { margin-top: 0.6em; }
+.prompt-pasted {
+  border-left: 2px solid var(--rule);
+  padding-left: 0.75em;
+  overflow-wrap: anywhere;
+}
+.prompt-pasted-label {
+  display: block;
+  margin-bottom: 0.15em;
+  font: 600 0.72em/1.4 var(--ui-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 /* While Claude is mid-reply: the terminal shows the words first, this says more are coming. */
 .reader-writing {
   margin: 1.2em 0 0;

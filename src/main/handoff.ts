@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { app } from 'electron';
-import { promptText, commandText } from './prompts';
+import { rawPromptText, commandText } from './prompts';
+import { stripPasted } from '../shared/pasted-content';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { writeFileAtomic } from './atomic-file';
@@ -33,7 +34,7 @@ export async function readTurns(file: string): Promise<Turn[]> {
     let entry: TranscriptEntry | null;
     try { entry = line ? parseEntry(line) : null; } catch { entry = null; }
     if (!entry) continue;
-    const prompt = promptText(entry) || commandText(entry);
+    const prompt = rawPromptText(entry) || commandText(entry); // History's bubbles split out pasted blocks
     if (prompt) {
       turns.push({ prompt, reply: [] });
       continue;
@@ -45,7 +46,7 @@ export async function readTurns(file: string): Promise<Turn[]> {
 }
 
 export function toMarkdown(record: HandoffRecord, turns: Turn[]): string {
-  const blocks = turns.map((t) => `## You\n\n${t.prompt}\n\n## Claude\n\n${t.reply.join('\n\n') || '_(no text reply)_'}`);
+  const blocks = turns.map((t) => `## You\n\n${stripPasted(t.prompt)}\n\n## Claude\n\n${t.reply.join('\n\n') || '_(no text reply)_'}`);
   const kept: string[] = [];
   let size = 0;
   for (let i = blocks.length - 1; i >= 0 && size + blocks[i].length <= MAX_CHARS; i -= 1) {

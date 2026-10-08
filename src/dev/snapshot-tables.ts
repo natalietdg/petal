@@ -99,7 +99,7 @@ const scrollToTable = (js: Kit['js']): Promise<number> => js(`(() => {
   return Math.round(reader.scrollTop);
 })()`);
 
-async function resizeTo(kit: Kit, win: BrowserWindow, width: number): Promise<boolean> {
+export async function resizeTo(kit: Kit, win: BrowserWindow, width: number): Promise<boolean> {
   const { js, waitFor } = kit;
   // A resize can be dropped while the window is busy: ask again until the page really is this wide.
   for (let attempt = 0; attempt < 4; attempt++) {
