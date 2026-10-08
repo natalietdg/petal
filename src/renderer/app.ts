@@ -1,5 +1,6 @@
 // Renderer entry: loads every module in page order, then wires main's events to the active tab.
 import './styles';
+import './motion-clock';
 import * as themeKit from './theme';
 import * as reader from './reader';
 import * as terminal from './terminal';

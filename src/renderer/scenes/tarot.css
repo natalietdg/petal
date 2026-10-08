@@ -66,7 +66,7 @@
 @keyframes tr-flicker { 0%, 45% { opacity: 1; } 46%, 60% { opacity: 0; } 61%, 80% { opacity: 1; } 81%, 88% { opacity: 0.4; } }
 @keyframes tr-flame { 0%, 55% { fill: #FFB23C; } 56%, 100% { fill: #FFC85A; } }
 /* The crystal ball's mist shimmers slowly; its glint winks now and then. */
-#cat .scene-tarot .sc-tr-mist { animation: tr-mist 6s ease-in-out infinite; }
+#cat .scene-tarot .sc-tr-mist { animation: tr-mist 6s steps(4) infinite; }
 #cat .scene-tarot .sc-tr-glint { animation: tr-glint 5s steps(1) infinite; }
 @keyframes tr-mist { 0%, 100% { fill: #E7A6DE; } 50% { fill: #9FD8E8; } }
 @keyframes tr-glint { 0%, 80% { opacity: 1; } 81%, 90% { opacity: 0.3; } }

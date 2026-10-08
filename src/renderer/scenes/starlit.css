@@ -33,8 +33,8 @@
 #cat .scene-starlit :is(.sc-st-tw3, .sc-st-spark3) { animation: st-twinkle 3s steps(1) -2s infinite; }
 @keyframes st-twinkle { 0%, 60% { opacity: 1; } 61%, 85% { opacity: 0.2; } }
 /* The nebula's pink spine and teal edge shimmer slowly. */
-#cat .scene-starlit .sc-st-neb-hi { animation: st-shimmer-pink 8s ease-in-out infinite; }
-#cat .scene-starlit .sc-st-neb-teal { animation: st-shimmer-teal 8s ease-in-out -4s infinite; }
+#cat .scene-starlit .sc-st-neb-hi { animation: st-shimmer-pink 8s steps(4) infinite; }
+#cat .scene-starlit .sc-st-neb-teal { animation: st-shimmer-teal 8s steps(4) -4s infinite; }
 @keyframes st-shimmer-pink { 50% { fill: #FFD0EC; } }
 @keyframes st-shimmer-teal { 50% { fill: #4FC2C8; } }
 /* A shooting star streaks down-left across the top-right pane, then waits for the next pass. */

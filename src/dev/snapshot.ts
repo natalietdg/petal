@@ -24,6 +24,7 @@ import { latencyCheck } from './snapshot-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
 import { planetCheck } from './snapshot-planet';
+import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import * as sessionsMonitor from '../main/sessions-monitor';
@@ -507,11 +508,9 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     return app.quit();
   }
 
-  // Holds one scene idle so its CPU can be measured from outside (ps); quits after PASTEL_SNAPSHOT_IDLE_S.
+  // Holds one scene idle and logs its CPU per process type; quits after PASTEL_SNAPSHOT_IDLE_S.
   if (process.env.PASTEL_SNAPSHOT_MODE === 'scene-idle') {
-    await js(`PastelTerm.cat.setScene(${JSON.stringify(process.env.PASTEL_SNAPSHOT_SCENE ?? 'none')})`);
-    log(`idling on scene ${await js("document.getElementById('cat').dataset.scene")}`);
-    await wait(Number(process.env.PASTEL_SNAPSHOT_IDLE_S ?? 45) * 1000);
+    await sceneIdle({ win, js, log });
     return app.quit();
   }
 

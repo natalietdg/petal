@@ -37,10 +37,25 @@ export function showOffscreen(win: BrowserWindow): void {
   win.setOpacity(0);
   win.showInactive();
   if (!onAnyDisplay(win.getBounds())) win.setOpacity(1);
-  const repark = (): void => park(win);
+  keepOffscreen(win);
+}
+
+// macOS can move the window onto a display after a resize, a show or a display change: park it again, now and a beat later.
+function keepOffscreen(win: BrowserWindow): void {
+  if (process.env.PASTEL_SNAPSHOT_ONSCREEN === '1') return; // the idle CPU probe sits on-screen on purpose
+  const repark = (): void => { park(win); setTimeout(() => park(win), 1000); };
   win.on('move', repark);
   win.on('resize', repark);
   win.on('show', repark);
-  screen.on('display-metrics-changed', repark);
   screen.on('display-added', repark);
+  screen.on('display-removed', repark);
+  screen.on('display-metrics-changed', repark);
+}
+
+// Resizes without leaving the off-screen spot: macOS can pull a resized window back onto a display.
+export function resizeOffscreen(win: BrowserWindow, width: number, height: number): void {
+  const { x, y } = win.getBounds();
+  win.setContentSize(width, height);
+  const moved = win.getBounds();
+  if (moved.x !== x || moved.y !== y) win.setPosition(x, y);
 }

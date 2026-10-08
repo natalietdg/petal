@@ -2,6 +2,7 @@
 // Nothing starts under it either: the reader and History begin below the header at every look and width.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 import { READING_CHOICES } from '../main/menu';
 
@@ -86,7 +87,7 @@ export async function headerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} fixed header: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
-  win.setContentSize(1280, 900);
+  resizeOffscreen(win, 1280, 900);
   await waitFor(async () => (await js('window.innerWidth')) === 1280, 3000);
   applyTheme('paleSky', { persist: false });
   await js("PastelTerm.reader.setView('replies')");
@@ -113,5 +114,5 @@ export async function headerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await overlapCheck(kit, win);
   await js("document.getElementById('reader').scrollTop = 0");
   await js("window.pastel.look.setReading('newspaper')");
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
 }
