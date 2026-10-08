@@ -141,7 +141,7 @@
   [data-reading="editorial"] .rail blockquote.sidebar { font-size: 0.82em; }
 }
 
-/* ---------- Lifestyle: oversized grotesk, colour blocks, boxed facts ---------- */
+/* ---------- Lifestyle: oversized grotesk, colour blocks, boxed facts (the one look that keeps its extra colour) ---------- */
 [data-reading="lifestyle"] .reader-column {
   --display-font: "Bricolage Grotesque Variable", var(--ui-font);
   --body-font: "Atkinson Hyperlegible Next", system-ui, sans-serif;
@@ -150,7 +150,12 @@
   font-variant-numeric: normal;
 }
 [data-reading="lifestyle"] .status {
+  display: inline-block;
   border-bottom: 0;
+  padding: 0.35em 0.9em;
+  border-radius: 999px;
+  background: var(--why-pill);
+  color: var(--why-ink);
   letter-spacing: 0.08em;
 }
 [data-reading="lifestyle"] :is(#latest, .prose) .headline {
@@ -165,6 +170,9 @@
   font-weight: 500;
   line-height: 1.5;
   border-bottom: 0;
+  background: var(--why-wash);
+  border-radius: 20px;
+  padding: 1em 1.25em;
   margin-bottom: 1.8em;
 }
 [data-reading="lifestyle"] :is(#latest, .prose) .lede { font-size: 1.1em; }
@@ -191,7 +199,7 @@
   height: 0.55em;
   margin-right: 0.45em;
   border-radius: 3px;
-  background: var(--reader-fg);
+  background: var(--link);
   vertical-align: 0.08em;
 }
 [data-reading="lifestyle"] .prose blockquote.pull-quote {
@@ -199,17 +207,31 @@
   font-size: 1.75em;
   line-height: 1.15;
   letter-spacing: -0.02em;
-  border-left: 6px solid var(--reader-fg);
+  color: var(--link);
+  border-left: 6px solid var(--link);
   padding-left: 0.7em;
 }
 [data-reading="lifestyle"] .prose blockquote.pull-quote p { margin: 0; }
 [data-reading="lifestyle"] .prose blockquote.sidebar {
   border: 0;
-  border-left: 4px solid var(--reader-fg);
-  padding: 0.2em 0 0.2em 1.1em;
+  background: var(--next-wash);
+  border-radius: 20px;
+  padding: 1em 1.3em 0.5em;
 }
-/* Header rule thicker than the row rules; the table sits on the page's paper. */
-[data-reading="lifestyle"] .prose th { border-bottom: 2px solid var(--rule); }
+/* One rounded box, header and body on the same paper; separate borders so the corners clip. */
+[data-reading="lifestyle"] .prose table {
+  border: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--code-bg);
+  border-radius: 14px;
+  overflow: hidden;
+}
+[data-reading="lifestyle"] .prose th,
+[data-reading="lifestyle"] .prose td { padding-left: 0.9em; }
+/* Header text is 0.82em, so its inset scales up to line up with the body cells. */
+[data-reading="lifestyle"] .prose th { border-bottom: 2px solid var(--rule); padding-left: calc(0.9em / 0.82); }
+[data-reading="lifestyle"] .prose tr:last-child > td { border-bottom: 0; }
 [data-reading="lifestyle"] .prose .end-mark::after {
   content: "";
   display: inline-block;
@@ -217,16 +239,17 @@
   height: 0.5em;
   margin-left: 0.35em;
   border-radius: 50%;
-  background: var(--reader-fg);
+  background: var(--link);
 }
 
 
 /* ---------- Lifestyle, structural: colour-block hero and section cards ---------- */
 [data-reading="lifestyle"] { --reading-measure: 960px; } /* 80ch of 18.5px Atkinson */
 [data-reading="lifestyle"] .story-head {
-  padding: 0 0 1.1em;
-  border-bottom: 2px solid var(--reader-fg);
-  margin: 0.4em 0 1.4em;
+  background: var(--why-wash);
+  border-radius: 28px;
+  padding: 1.5em 1.5em 1.3em;
+  margin: 0.4em 0 1.2em;
 }
 [data-reading="lifestyle"] :is(#latest, .prose) .headline { font-size: 3.6em; margin-top: 0; }
 [data-reading="lifestyle"] :is(#latest, .prose) .headline + p {
@@ -235,9 +258,19 @@
   margin: 0;
   font-size: 1.22em;
 }
-/* Sections are separated by space alone; colour is kept for the four coded treatments. */
-[data-reading="lifestyle"] .story-section:not(.back) { margin: 0 0 1.6em; }
+/* Every section is its own card, cycling through the theme's soft colours. */
+[data-reading="lifestyle"] .story-section:not(.back) {
+  border-radius: 24px;
+  padding: 1.2em 1.4em;
+  margin: 0 0 1em;
+  background: var(--done-wash);
+}
+[data-reading="lifestyle"] .story-section:not(.back):nth-of-type(3n+2) { background: var(--next-wash); }
+[data-reading="lifestyle"] .story-section:not(.back):nth-of-type(3n) { background: var(--decide-wash); }
 [data-reading="lifestyle"] .story-section > h2:first-child { margin-top: 0; }
+[data-reading="lifestyle"] .story-section .callout-decide,
+[data-reading="lifestyle"] .story-section blockquote.sidebar,
+[data-reading="lifestyle"] .story-section table { background: var(--reader-bg); }
 
 /* Long headlines step down in the magazine looks too. */
 [data-reading] :is(#latest, .prose) .headline.headline-long { font-size: 2.2em; }
@@ -272,6 +305,12 @@
 }
 [data-reading="lifestyle"] .status-block {
   border: 0;
-  border-left: 4px solid var(--reader-fg);
-  padding: 0.2em 0 0.2em 1.1em;
+  border-radius: 20px;
+  padding: 1em 1.25em;
+  background: var(--code-bg);
 }
+/* Lifestyle keeps its colour-coded status chips (every other look shows them in plain ink). */
+[data-reading="lifestyle"] .status-doing     { --pill: var(--why-pill);  --ink: var(--why-ink); }
+[data-reading="lifestyle"] .status-recommend { --pill: var(--done-pill); --ink: var(--done-ink); }
+[data-reading="lifestyle"] .status-next      { --pill: var(--next-pill); --ink: var(--next-ink); }
+[data-reading="lifestyle"] .status-chip { padding: 0.12em 0.7em; border-radius: 999px; }

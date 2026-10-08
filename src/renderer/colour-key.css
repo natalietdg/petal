@@ -75,3 +75,17 @@
 :root #colour-key .prose .story-section { display: block; }
 :root #colour-key .prose :is(.section-body, .rail) { display: contents; }
 :root #colour-key .prose .callout-decide { padding: 0.35em 0.6em; }
+:root #colour-key .prose .story-section { padding: 0.35em 0.5em; border-radius: 10px; }
+
+/* Lifestyle's extra colour: listed only in that look. */
+.ck-look { display: none; }
+[data-reading="lifestyle"] .ck-look { display: block; }
+.ck-look-head { margin: 10px 0 4px; font: 700 11px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+:root #colour-key .ck-sample .status { margin: 0; font-size: 11px; }
+:root #colour-key .prose .story-head { margin: 0; padding: 0.4em 0.6em; border-radius: 12px; }
+:root #colour-key .prose .headline { font-size: 1.25em; line-height: 1.15; margin: 0; }
+:root #colour-key .prose .headline + p { font-size: 1em; line-height: 1.35; }
+:root #colour-key .prose :is(.status-block, blockquote.sidebar) { margin: 0; padding: 0.4em 0.6em; font-size: 0.9em; }
+:root #colour-key .prose blockquote.pull-quote { margin: 0; font-size: 1.1em; line-height: 1.2; }
+:root #colour-key .prose h2 { margin: 0; font-size: 1.1em; }
+:root #colour-key .prose table { margin: 0; font-size: 0.85em; }

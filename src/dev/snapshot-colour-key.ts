@@ -1,5 +1,6 @@
-// Colour key: opens from the header button and Help > Colour key, lists the four coded treatments, and each sample's colours
-// equal the same element in a real rendered reply, in every look × light and dark; every other treatment uses only ink and paper.
+// Colour key: opens from the header button and Help > Colour key, lists the four coded treatments (Lifestyle adds its own under
+// "In this look"), and each sample's colours equal the same element in a real rendered reply, in every look × light and dark.
+// Newspaper, Editorial and Print: every other treatment uses only ink and paper. Lifestyle: its restored colours equal the pre-cut tokens.
 // Esc and an outside click close it.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
-import { DECIDE_PROBES, KEY_ENTRIES, NEUTRAL_PROBES } from '../renderer/colour-key-entries';
+import { DECIDE_PROBES, KEY_ENTRIES, LIFESTYLE_ENTRIES, LIFESTYLE_EXPECT, NEUTRAL_PROBES, type KeyEntry } from '../renderer/colour-key-entries';
 import { SINGLE_SCREEN } from './snapshot-prompts';
 
 // A real reply carrying every treatment where replies put it: callouts, quotes and tables inside sections.
@@ -127,16 +128,30 @@ const DECIDE = `(() => {
   return { shown: true, found, total: probes.length, accents };
 })()`;
 
-// Per entry and probe: the sample's colours next to the real reply's (its last match, past the first section's quirks).
-const COMPARE = `(() => {
+// Per entry and probe: the sample's colours next to the real reply's (by default its last match, past the first section's quirks).
+const compare = (entries: readonly KeyEntry[]) => `(() => {
   ${SIG}
-  const entries = ${JSON.stringify(KEY_ENTRIES.map(({ id, probes }) => ({ id, probes })))};
-  return entries.flatMap(({ id, probes }) => probes.map((probe) => {
+  const entries = ${JSON.stringify(entries.map(({ id, probes, real }) => ({ id, probes, real: real ?? { scope: '#latest', pick: 'last' } })))};
+  return entries.flatMap(({ id, probes, real: where }) => probes.map((probe) => {
     const sample = document.querySelector('#colour-key [data-key="' + id + '"] ' + probe);
-    const reals = document.querySelectorAll('#latest ' + probe);
-    const real = reals[reals.length - 1];
+    const reals = document.querySelectorAll(where.scope + ' ' + probe);
+    const real = where.pick === 'first' ? reals[0] : reals[reals.length - 1];
     return { id, probe, sample: sample ? full(sample) : null, real: real ? full(real) : null };
   }));
+})()`;
+
+// Lifestyle: each restored colour equals its pre-cut token, resolved where the reply sits.
+const LIFESTYLE = `(() => {
+  const swatch = document.createElement('span');
+  document.getElementById('latest').append(swatch);
+  const resolve = (v) => { swatch.style.color = 'var(' + v + ')'; return getComputedStyle(swatch).color; };
+  const rows = ${JSON.stringify(LIFESTYLE_EXPECT)}.map(([selector, pseudo, prop, token]) => {
+    const node = document.querySelector(selector);
+    const got = node ? getComputedStyle(node, pseudo)[prop] : null;
+    return { selector, pseudo, prop, token, want: resolve(token), got };
+  });
+  swatch.remove();
+  return rows;
 })()`;
 
 const STATE = `(() => {
@@ -146,8 +161,9 @@ const STATE = `(() => {
   const r = popover.getBoundingClientRect();
   return {
     shown: !popover.hidden && r.height > 0,
-    keys: [...popover.querySelectorAll('.ck-entry')].map((li) => li.dataset.key),
-    meanings: [...popover.querySelectorAll('.ck-meaning')].map((p) => p.textContent),
+    keys: [...popover.querySelectorAll('.ck-entry')].filter((li) => li.getClientRects().length > 0).map((li) => li.dataset.key),
+    meanings: [...popover.querySelectorAll('.ck-meaning')].filter((p) => p.getClientRects().length > 0).map((p) => p.textContent),
+    lookHead: [...popover.querySelectorAll('.ck-look-head')].filter((p) => p.getClientRects().length > 0).map((p) => p.textContent),
     text: popover.innerText,
     buttonHeight: Math.round(button.getBoundingClientRect().height),
     toggleHeight: Math.round(toggle.getBoundingClientRect().height),
@@ -191,6 +207,7 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
   const light = Object.keys(themes).find((id) => !themes[id].dark) ?? 'paleSky';
   const dark = Object.keys(themes).find((id) => themes[id].dark) ?? 'nightPastel';
   const expectedKeys = KEY_ENTRIES.map((entry) => entry.id);
+  const lifestyleKeys = [...expectedKeys, ...LIFESTYLE_ENTRIES.map((entry) => entry.id)];
 
   for (const [look] of READING_CHOICES) {
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
@@ -203,8 +220,11 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
       await wait(200);
       const state = await js(STATE);
       check(state.shown && state.expanded === 'true', `${look} ${theme}: header button opens it`);
-      check(JSON.stringify(state.keys) === JSON.stringify(expectedKeys), `${look} ${theme}: lists all ${expectedKeys.length} treatments: ${state.keys.join(', ')}`);
-      const rows = await js(COMPARE);
+      const lifestyle = look === 'lifestyle';
+      const wantKeys = lifestyle ? lifestyleKeys : expectedKeys;
+      check(JSON.stringify(state.keys) === JSON.stringify(wantKeys) && state.lookHead.length === (lifestyle ? 1 : 0),
+        `${look} ${theme}: lists ${wantKeys.length} treatments${lifestyle ? ' (the four, then "In this look")' : ''}: ${state.keys.join(', ')}`);
+      const rows = await js(compare(lifestyle ? [...KEY_ENTRIES, ...LIFESTYLE_ENTRIES] : KEY_ENTRIES));
       // any: the rows' shape is built in COMPARE above.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const wrong = rows.filter((r: any) => !r.sample || !r.real || r.sample !== r.real);
@@ -214,9 +234,17 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
       check(decide && decide.found === decide.total && decide.accents.length === 0,
         `${look} ${theme}: question card ${decide?.found}/${decide?.total} parts use only Decide's colours and the base${decide?.accents.length ? ` accents: ${JSON.stringify(decide.accents)}` : ''}`);
       await js('PastelTerm.promptDock.readScreen(PastelTerm.tabs.active().id, [])');
-      const neutral = await js(NEUTRAL);
-      check(neutral.found === neutral.total && neutral.accents.length === 0,
-        `${look} ${theme}: ${neutral.found}/${neutral.total} uncoded treatments use only ink and paper ${JSON.stringify(neutral.base)}${neutral.accents.length ? ` accents: ${JSON.stringify(neutral.accents)}` : ''}`);
+      if (lifestyle) {
+        const restored = await js(LIFESTYLE);
+        // any: the rows' shape is built in LIFESTYLE above.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const off = restored.filter((r: any) => r.got !== r.want);
+        check(off.length === 0, `${look} ${theme}: ${restored.length - off.length}/${restored.length} restored colours equal their pre-cut tokens${off.length ? ` ${JSON.stringify(off)}` : ''}`);
+      } else {
+        const neutral = await js(NEUTRAL);
+        check(neutral.found === neutral.total && neutral.accents.length === 0,
+          `${look} ${theme}: ${neutral.found}/${neutral.total} uncoded treatments use only ink and paper ${JSON.stringify(neutral.base)}${neutral.accents.length ? ` accents: ${JSON.stringify(neutral.accents)}` : ''}`);
+      }
       await capturePopover(kit, win, `colour-key-${look}-${theme}`);
       await js(escape);
       await wait(200);

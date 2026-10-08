@@ -2,21 +2,30 @@
 // It lives inside #reader-head so the current look's tokens (Print's paper and ink) reach the samples.
 import * as markdown from './markdown';
 import { byId, el } from './dom';
-import { KEY_ENTRIES, type KeyEntry } from './colour-key-entries';
+import { KEY_ENTRIES, LIFESTYLE_ENTRIES, type KeyEntry } from './colour-key-entries';
 
 const GAP_PX = 8;
 
 const button = byId('colour-key-button');
 const popover = byId('colour-key');
 const list = el('ul', 'ck-list');
-popover.append(el('p', 'ck-title', 'Colour key'), el('p', 'ck-sub', 'What each mark in a reply means, shown in this look.'), list);
+// Lifestyle's extra colour; CSS shows this part only in that look, so it follows a look change while open.
+const lookOnly = el('div', 'ck-look');
+const lookList = el('ul', 'ck-list');
+lookOnly.append(el('p', 'ck-look-head', 'In this look'), lookList);
+popover.append(el('p', 'ck-title', 'Colour key'), el('p', 'ck-sub', 'What each mark in a reply means, shown in this look.'), list, lookOnly);
 
 // A sample is a real rendered reply fragment; section-only rows drop their placeholder heading.
 function sample(entry: KeyEntry): HTMLElement {
+  const column = el('div', 'ck-sample reader-column');
+  if (entry.kicker) {
+    column.append(el('p', 'status', 'Latest reply · 9:30 AM'));
+    return column;
+  }
   const prose = markdown.render(entry.inSection ? `## Section\n\n${entry.markdown}` : entry.markdown);
   if (entry.inSection) prose.querySelector('.story-section > h2')?.remove();
-  for (const node of prose.querySelectorAll('.end-mark, .lede')) node.classList.remove('end-mark', 'lede'); // ornaments, not part of the key
-  const column = el('div', 'ck-sample reader-column');
+  for (const node of prose.querySelectorAll('.lede')) node.classList.remove('lede'); // drop caps are not part of the key
+  if (!entry.keepEnd) for (const node of prose.querySelectorAll('.end-mark')) node.classList.remove('end-mark');
   column.append(prose);
   return column;
 }
@@ -39,7 +48,10 @@ export function close(): void {
 }
 
 export function open(): void {
-  if (!built) list.replaceChildren(...KEY_ENTRIES.map(row));
+  if (!built) {
+    list.replaceChildren(...KEY_ENTRIES.map(row));
+    lookList.replaceChildren(...LIFESTYLE_ENTRIES.map(row));
+  }
   built = true;
   const anchor = button.getBoundingClientRect();
   popover.style.top = `${Math.round(anchor.bottom + GAP_PX)}px`;
