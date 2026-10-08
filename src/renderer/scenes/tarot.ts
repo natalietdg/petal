@@ -117,13 +117,53 @@ const TABLE = { cx: 14, cy: 31, rx: 15.5, ry: 3, hem: 41 };
 const onTop = (x: number, y: number): boolean => inEllipse(x + 0.5, y + 0.5, TABLE.cx, TABLE.cy, TABLE.rx, TABLE.ry);
 const across = (x: number): number => Math.max(0, 1 - ((x + 0.5 - TABLE.cx) / TABLE.rx) ** 2);
 const hemAt = (x: number): number => TABLE.hem - 2 + Math.round(2 * Math.sqrt(across(x)));
+const onDrape = (x: number, y: number): boolean => y > TABLE.cy && across(x) > 0 && y < hemAt(x) && !onTop(x, y);
+// Two deep folds fall to the floor, each with a lit ridge on its candle side.
+const FOLDS: readonly number[] = [4, 24];
+// A soft sheen on the velvet top, right of the cards.
+const SHEEN = { y: 30, left: 23, right: 26 };
+function cloth(x: number, y: number): CellClass {
+  if (!onDrape(x, y - 1)) return 'tr-cloth-d';
+  if (FOLDS.includes(x)) return 'tr-cloth-fold';
+  return FOLDS.includes(x + 1) ? 'tr-cloth-l' : 'tr-cloth';
+}
 function table(x: number, y: number): CellClass | null {
-  if (onTop(x, y)) return onTop(x, y + 1) ? 'tr-cloth-top' : 'tr-trim';
+  if (onTop(x, y)) {
+    if (!onTop(x, y + 1)) return 'tr-trim';
+    return y === SHEEN.y && x >= SHEEN.left && x <= SHEEN.right ? 'tr-cloth-sheen' : 'tr-cloth-top';
+  }
   if (y < TABLE.cy || across(x) === 0 || y > hemAt(x)) return null;
-  if (y === hemAt(x)) return 'tr-trim';
-  const fold = (x + 2) % 6;
-  if (y >= TABLE.cy + 4 && fold === 0) return 'tr-cloth-fold';
-  return fold === 5 ? 'tr-cloth-l' : 'tr-cloth';
+  return y === hemAt(x) ? 'tr-trim' : cloth(x, y);
+}
+
+// Gold embroidery on the front drop: a sun medallion in the middle, a crescent either side, a stitched border above the hem.
+const SUN = { cx: 14, cy: 37 };
+function sunMedallion(x: number, y: number): CellClass | null {
+  const [dx, dy] = [x - SUN.cx, y - SUN.cy];
+  const [ax, ay] = [Math.abs(dx), Math.abs(dy)];
+  if (Math.max(ax, ay) <= 2 && ax + ay <= 3) {
+    if (dx + dy >= 2) return 'tr-emb';
+    return dx + dy <= -2 ? 'tr-emb-hi' : 'tr-emb-l';
+  }
+  return (ax === 3 && dy === 0) || (dx === 0 && dy === 3) ? 'tr-emb-l' : null;
+}
+const motif = (rows: readonly string[], left: number, top: number): Shape => (x, y) => (rows[y - top]?.[x - left] === '#' ? 'tr-emb' : null);
+const crescents = layers(motif(['.##', '#..', '.##'], 7, 35), motif(['##.', '..#', '##.'], 19, 35));
+// Border: a stitched line with a dot below it every four cells.
+function border(x: number, y: number): CellClass | null {
+  if (y === hemAt(x) - 2) return 'tr-emb';
+  return y === hemAt(x) - 1 && ((x % 4) + 4) % 4 === 2 ? 'tr-emb' : null;
+}
+// Gold tassels hang below the hem, one under each border dot.
+const tassels: Shape = (x, y) => {
+  if (across(x) === 0 || ((x % 4) + 4) % 4 !== 2) return null;
+  if (y === hemAt(x) + 1) return 'tr-tassel';
+  return y === hemAt(x) + 2 ? 'tr-gold-d' : null;
+};
+function embroidery(x: number, y: number): CellClass | null {
+  if (!onDrape(x, y) || !onDrape(x, y - 1)) return null;
+  if (Math.abs(x - SUN.cx) <= 3 && Math.abs(y - SUN.cy) <= 3) return sunMedallion(x, y);
+  return border(x, y) ?? crescents(x, y);
 }
 
 // A plum velvet valance along the top: lit lower fold, gold trim, a tassel every eight cells.
@@ -175,11 +215,13 @@ const HEM: Cell[] = Array.from({ length: 2 * HEM_HALF + 1 }, (_, i): Cell => {
   return [x, veilHem(x), x % 2 === 0 ? 'tr-rd-hem1' : 'tr-rd-hem2'];
 });
 const READER_MOTION: Cell[] = [...HEM, [5, 16, 'tr-rd-tail1'], [4, 16, 'tr-rd-tail2'], [12, 15, 'tr-rd-eye'], [16, 15, 'tr-rd-eye']];
+// A few gold stitches on the cloth catch the candlelight.
+const CLOTH_GLINTS: Cell[] = [[SUN.cx - 1, SUN.cy - 1, 'tr-sun-glint'], [6, hemAt(6) - 1, 'tr-stitch-glint1'], [22, hemAt(22) - 1, 'tr-stitch-glint2']];
 
 const scene: Scene = {
   name: 'Tarot Room',
   size: [48, 48],
-  paint: layers(spread, hands, ball, candles, table, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
+  paint: layers(spread, hands, ball, candles, embroidery, table, tassels, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
   moving: [
     ...flame(CANDLES[0].left, CANDLES[0].top, 1),
     ...flame(CANDLES[1].left, CANDLES[1].top, 2),
@@ -187,6 +229,7 @@ const scene: Scene = {
     [12, 24, 'tr-glint'],
     ...TWINKLES,
     ...READER_MOTION,
+    ...CLOTH_GLINTS,
   ],
   // Every card's face; tarot.css shows the day's one (data-tr-card on the root).
   variants: faces({ left: CARD.left + 1, right: CARD.right - 1, numeralTop: CARD.top + 2, emblemTop: CARD.top + 8 }),
