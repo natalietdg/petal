@@ -154,6 +154,12 @@ function border(x: number, y: number): CellClass | null {
   if (y === hemAt(x) - 2) return 'tr-emb';
   return y === hemAt(x) - 1 && ((x % 4) + 4) % 4 === 2 ? 'tr-emb' : null;
 }
+// Gold tassels hang below the hem, one under each border dot.
+const tassels: Shape = (x, y) => {
+  if (across(x) === 0 || ((x % 4) + 4) % 4 !== 2) return null;
+  if (y === hemAt(x) + 1) return 'tr-tassel';
+  return y === hemAt(x) + 2 ? 'tr-gold-d' : null;
+};
 function embroidery(x: number, y: number): CellClass | null {
   if (!onDrape(x, y) || !onDrape(x, y - 1)) return null;
   if (Math.abs(x - SUN.cx) <= 3 && Math.abs(y - SUN.cy) <= 3) return sunMedallion(x, y);
@@ -213,7 +219,7 @@ const READER_MOTION: Cell[] = [...HEM, [5, 16, 'tr-rd-tail1'], [4, 16, 'tr-rd-ta
 const scene: Scene = {
   name: 'Tarot Room',
   size: [48, 48],
-  paint: layers(spread, hands, ball, candles, embroidery, table, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
+  paint: layers(spread, hands, ball, candles, embroidery, table, tassels, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
   moving: [
     ...flame(CANDLES[0].left, CANDLES[0].top, 1),
     ...flame(CANDLES[1].left, CANDLES[1].top, 2),
