@@ -58,7 +58,8 @@ export type ResumeResult =
   | { confirm: string }
   | { ok: true; focused: boolean }
   | { ok: true; newTab: true; command: string }
-  | { ok: true; command: string };
+  | { ok: true; command: string }
+  | { ok: true; tabId: TabId }; // a background reply: this window's tab already showing the session
 
 export type FlowView = (StoredFlow & { stale: boolean }) | { empty: true; creating: boolean };
 
@@ -120,7 +121,8 @@ export interface InvokeChannels {
 
   'history:list': { args: []; result: Guarded<HistoryList> };
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
-  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean }]; result: Guarded<ResumeResult> };
+  // background: open it in a tab that isn't shown (a reply from History's preview).
+  'history:resume': { args: [request: { sessionId: string; confirmFork: boolean; background?: boolean }]; result: Guarded<ResumeResult> };
   'history:send': { args: [request: { sessionId: string }]; result: Guarded<SendResult> };
   'history:tidy': { args: []; result: Guarded<PassResult> };
   'history:tag-add': { args: [request: { sessionId: string; name: string }]; result: Guarded<Ok> };
@@ -176,7 +178,7 @@ export interface EventChannels {
   'pty:data': { tabId: TabId; data: string };
   'reader:replies': TabReaderUpdate;
   'tab:closed': { tabId: TabId };
-  'tabs:new': void;
+  'tabs:new': { background: boolean };
   'tabs:close-active': void;
   'tabs:cycle': number;
   'tabs:activate': { tabId: TabId };

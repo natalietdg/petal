@@ -5,6 +5,7 @@ import { groupToggle, hooks, list, openNote, search, state, tidyButton, type Gro
 import { renderTagBar } from './history-tags';
 import { renderList } from './history-list';
 import { renderPreview } from './history-preview';
+import * as reply from './history-reply';
 import { byId, el } from './dom';
 
 export type { PreviewMode } from './history-state';
@@ -81,6 +82,16 @@ export const rerender = (): void => { if (isOpen()) renderPreview(); };
 export function setPreviewMode(mode: PreviewMode): Promise<void> {
   state.previewMode = mode;
   return renderPreview();
+}
+
+// Tabs answering for a session shown here: app.ts reports their updates, screens and closing.
+export { adoptTab, tabUpdated, tabClosed } from './history-reply';
+const SCREEN_SETTLE_MS = 120;
+let screenTimer: ReturnType<typeof setTimeout> | undefined;
+export function tabScreen(tabId: string): void {
+  if (!isOpen()) return;
+  clearTimeout(screenTimer);
+  screenTimer = setTimeout(() => reply.hooks.repaint(tabId), SCREEN_SETTLE_MS);
 }
 
 hooks.refresh = refresh;

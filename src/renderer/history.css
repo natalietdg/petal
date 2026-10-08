@@ -137,3 +137,39 @@
   overflow-y: auto;
 }
 .history-earlier { margin: 0 0 1.2em; }
+
+/* Reply box under the preview: stays at the bottom while the conversation scrolls above it. */
+.history-reply-box {
+  position: sticky;
+  bottom: 0;
+  max-width: 66ch;
+  margin-top: 24px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--rule);
+  background: var(--reader-bg);
+  font-family: var(--ui-font);
+}
+.history-reply-row { display: flex; align-items: flex-end; gap: 8px; }
+.history-reply-input {
+  flex: 1;
+  min-height: 2.6em;
+  max-height: 10em;
+  padding: 9px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 500 15px/1.45 var(--ui-font);
+  resize: none;
+  field-sizing: content;
+}
+.history-reply-input:focus { outline: none; border-color: var(--next-ink); }
+.history-reply-input::placeholder { color: var(--muted); }
+.history-open-full[hidden] { display: none; }
+.history-reply-note { display: block; margin: 6px 0 0; }
+.history-reply-note:empty { display: none; }
+.history-reply-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--decide-wash); color: var(--reader-fg); font: 500 13px var(--ui-font); }
+.history-reply-status:empty { display: none; }
+.history-you.pending, .history-you.queued { opacity: 0.72; border: 1px dashed var(--rule); }
+.history-live-tail:empty { display: none; }
+.history-live-tail { margin-top: 1.6em; }

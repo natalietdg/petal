@@ -14,7 +14,7 @@ const subscribe = <C extends EventChannel>(channel: C, callback: (payload: Event
 };
 
 export type TabCommand =
-  | { kind: 'new' }
+  | { kind: 'new'; background: boolean }
   | { kind: 'close-active' }
   | { kind: 'cycle'; delta: number }
   | { kind: 'activate'; tabId: TabId };
@@ -47,7 +47,7 @@ const api = {
   onTabClosed: (callback: (payload: EventChannels['tab:closed']) => void) => subscribe('tab:closed', callback),
   onTabCommand: (callback: (command: TabCommand) => void) => {
     const offs = [
-      subscribe('tabs:new', () => callback({ kind: 'new' })),
+      subscribe('tabs:new', ({ background }) => callback({ kind: 'new', background })),
       subscribe('tabs:close-active', () => callback({ kind: 'close-active' })),
       subscribe('tabs:cycle', (delta) => callback({ kind: 'cycle', delta })),
       subscribe('tabs:activate', ({ tabId }) => callback({ kind: 'activate', tabId })),
@@ -83,7 +83,7 @@ const api = {
   history: {
     list: () => invoke('history:list'),
     conversation: (sessionId: string, before?: number) => invoke('history:conversation', { sessionId, before }),
-    resume: (sessionId: string, confirmFork = false) => invoke('history:resume', { sessionId, confirmFork }),
+    resume: (sessionId: string, confirmFork = false, background = false) => invoke('history:resume', { sessionId, confirmFork, background }),
     send: (sessionId: string) => invoke('history:send', { sessionId }),
     tidy: () => invoke('history:tidy'),
     tagAdd: (sessionId: string, name: string) => invoke('history:tag-add', { sessionId, name }),

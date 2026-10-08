@@ -65,6 +65,7 @@ async function start(): Promise<void> {
   // Pickers come and go with pty output; read the active screen once a burst settles.
   let screenTimer: ReturnType<typeof setTimeout> | undefined;
   const onScreen = (tab: Tab) => {
+    history.tabScreen(tab.id); // History's reply box may follow a tab in the background
     if (tab !== tabs.active()) return;
     clearTimeout(screenTimer);
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
@@ -102,10 +103,15 @@ async function start(): Promise<void> {
     tabs.setUpdate(update.tabId, update);
     const active = tabs.active();
     if (active && update.tabId === active.id) showTab(active);
+    history.tabUpdated(update.tabId);
   });
-  window.pastel.onTabClosed(({ tabId }) => tabs.remove(tabId));
+  window.pastel.onTabClosed(({ tabId }) => {
+    tabs.remove(tabId);
+    history.tabClosed(tabId);
+  });
   window.pastel.onTabCommand((command) => {
-    if (command.kind === 'new') tabs.create();
+    if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
+    else if (command.kind === 'new') tabs.create();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);
     else if (command.kind === 'activate') tabs.activate(command.tabId);
@@ -124,8 +130,10 @@ async function start(): Promise<void> {
   window.addEventListener('petal:focus-terminal', focusTerminal);
   // The reply box added or took back a pending message.
   window.addEventListener('petal:reader-refresh', (event) => {
+    const tabId = (event as CustomEvent<string>).detail;
     const active = tabs.active();
-    if (active && (event as CustomEvent<string>).detail === active.id) showTab(active);
+    if (active && tabId === active.id) showTab(active);
+    history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
 

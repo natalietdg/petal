@@ -33,6 +33,9 @@ export const promptWrites: string[][] = [];
 // Snapshot runs also record what the terminal typed, so the harness can see a pasted image's Ctrl+V.
 export const ptyWrites: { tabId: string; data: string }[] = [];
 
+// Snapshot runs also record reply-box pastes, so the harness can see a reply sent from History.
+export const pasteWrites: { tabId: string; data: string }[] = [];
+
 // Snapshot runs record Open Repo's `cd` instead of typing it, and open no tab for it.
 export const repoWrites: { tabId: string; command: string; newTab: boolean }[] = [];
 
