@@ -1,11 +1,12 @@
 // Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting.
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
-import { portrait } from './cat';
+import { portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
+import { PET_SIZE_CHOICES } from '../shared/pet-size';
 
 // picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her.
 function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
@@ -53,8 +54,10 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Theme', choices.themes, look.theme, (id) => { look.theme = id; set.setTheme(id); }),
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }, portrait),
+    chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
     birthdayCard(),
+    note('Pet size is the biggest she gets. She shrinks on her own when a line of text would sit under her.'),
     note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
   ];
 }

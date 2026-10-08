@@ -4,6 +4,7 @@
   bottom: calc(var(--composer-height, 0px) + 14px); /* sits above the reply box */
   width: 144px; /* 48x48 sprite pixels at 3px: the cat, her toy and the biggest scene around them */
   height: 144px;
+  transform: scale(var(--cat-scale, 1)); /* her chosen size, or smaller to keep text clear (cat.ts) */
   transform-origin: bottom right;
   z-index: 4;
   will-change: transform; /* own layer: a scene step repaints only the corner, measured -1% CPU */
@@ -74,8 +75,6 @@
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
-/* Narrow window: 2px per sprite pixel, still crisp, rather than hiding her. */
-#cat.compact { transform: scale(0.6667); }
 /* No gutter wide enough: the reader ends above her, so she sits under the text, never on it.
    Only in a tall reader: a short one (the divider dragged low) keeps its height and she steps out instead. */
 #reader-area { container-type: size; } /* its grid row sizes it, never its content */
