@@ -215,6 +215,8 @@ const HEM: Cell[] = Array.from({ length: 2 * HEM_HALF + 1 }, (_, i): Cell => {
   return [x, veilHem(x), x % 2 === 0 ? 'tr-rd-hem1' : 'tr-rd-hem2'];
 });
 const READER_MOTION: Cell[] = [...HEM, [5, 16, 'tr-rd-tail1'], [4, 16, 'tr-rd-tail2'], [12, 15, 'tr-rd-eye'], [16, 15, 'tr-rd-eye']];
+// A few gold stitches on the cloth catch the candlelight.
+const CLOTH_GLINTS: Cell[] = [[SUN.cx - 1, SUN.cy - 1, 'tr-sun-glint'], [6, hemAt(6) - 1, 'tr-stitch-glint1'], [22, hemAt(22) - 1, 'tr-stitch-glint2']];
 
 const scene: Scene = {
   name: 'Tarot Room',
@@ -227,6 +229,7 @@ const scene: Scene = {
     [12, 24, 'tr-glint'],
     ...TWINKLES,
     ...READER_MOTION,
+    ...CLOTH_GLINTS,
   ],
   // Every card's face; tarot.css shows the day's one (data-tr-card on the root).
   variants: faces({ left: CARD.left + 1, right: CARD.right - 1, numeralTop: CARD.top + 2, emblemTop: CARD.top + 8 }),

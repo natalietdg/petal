@@ -34,6 +34,7 @@
 /* Moving: flames, the ball's mist and glint, the stencilled stars' centres. */
 .sc-tr-flame-tip1, .sc-tr-flame-tip2 { fill: #F27A2A; } .sc-tr-flame1, .sc-tr-flame2 { fill: #FFB23C; } .sc-tr-flame-core { fill: #FFF3B8; }
 .sc-tr-mist { fill: #E7A6DE; } .sc-tr-glint { fill: #FFFFFF; } .sc-tr-twinkle { fill: #E9C77A; }
+.sc-tr-sun-glint { fill: #F3D27A; } .sc-tr-stitch-glint1, .sc-tr-stitch-glint2 { fill: #9C7436; }
 .sc-tr-rd-hem1, .sc-tr-rd-hem2 { fill: #E0B85A; } .sc-tr-rd-tail1, .sc-tr-rd-tail2 { fill: #B0386F; } .sc-tr-rd-eye { fill: #FFF3D6; }
 
 /* The day's card: every face is drawn, only the one named by data-tr-card (set by tarot-reading.ts) shows. */
@@ -76,6 +77,12 @@
 /* The stencilled stars catch the candlelight. */
 #cat .scene-tarot .sc-tr-twinkle { animation: tr-twinkle 4s steps(1) infinite; }
 @keyframes tr-twinkle { 0%, 70% { fill: #E9C77A; } 71%, 85% { fill: #8A6A3E; } }
+/* A few gold stitches on the cloth glint out of step. */
+#cat .scene-tarot .sc-tr-sun-glint { animation: tr-sun-glint 6s steps(1) -2s infinite; }
+#cat .scene-tarot .sc-tr-stitch-glint1 { animation: tr-stitch-glint 5.4s steps(1) infinite; }
+#cat .scene-tarot .sc-tr-stitch-glint2 { animation: tr-stitch-glint 5.4s steps(1) -2.7s infinite; }
+@keyframes tr-sun-glint { 0%, 85% { fill: #F3D27A; } 86%, 100% { fill: #FFF6D8; } }
+@keyframes tr-stitch-glint { 0%, 80% { fill: #9C7436; } 81%, 92% { fill: #F0C55A; } }
 
 /* The reader: her veil's hem ripples, her bandana tail sways, her eyes glint through the veil now and then. */
 #cat .scene-tarot .sc-tr-rd-hem1 { animation: tr-hem 3.6s steps(1) infinite; }
