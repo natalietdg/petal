@@ -3,6 +3,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import type { SessionFile } from './claude-session';
+import type { SessionRecord } from './history';
 
 export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
 export const snapshotOutDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
@@ -32,9 +33,16 @@ export const promptWrites: string[][] = [];
 // Snapshot runs also record what the terminal typed, so the harness can see a pasted image's Ctrl+V.
 export const ptyWrites: { tabId: string; data: string }[] = [];
 
+// Snapshot runs also record reply-box pastes, so the harness can see a reply sent from History.
+export const pasteWrites: { tabId: string; data: string }[] = [];
+
 // Snapshot runs record Open Repo's `cd` instead of typing it, and open no tab for it.
 export const repoWrites: { tabId: string; command: string; newTab: boolean }[] = [];
 
 // Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
 // subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
+// Fake History sessions the harness adds to the list; their logs live in the snapshot folder, never ~/.claude.
+// `live` marks some as running in another terminal; `resumes` records the resume a background tab echoed instead.
+export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[] } = { records: [], live: [], resumes: [] };
+
 export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };

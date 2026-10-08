@@ -6,7 +6,7 @@ import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
 import * as history from './history';
-import { fixtureSession, isSnapshotRun, promptWrites, ptyWrites } from './snapshot-mode';
+import { fixtureSession, isSnapshotRun, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { handle, on, send } from './ipc';
@@ -29,10 +29,11 @@ export const activeSession = (contentsId: number) => sessions.get(tabKey(content
 export const openSessionIds = (): string[] => [...sessions.values()].flatMap((s) => (s.feed.session?.sessionId ? [s.feed.session.sessionId] : []));
 
 // The renderer creates the tab and starts its shell; a pending command is typed into it.
-export const openTab: OpenTab = (contents, { command } = {}) => {
+// A background tab starts without being shown.
+export const openTab: OpenTab = (contents, { command, background = false } = {}) => {
   if (!contents || contents.isDestroyed()) return;
   if (command) pendingCommands.set(contents.id, command);
-  send(contents, 'tabs:new');
+  send(contents, 'tabs:new', { background });
 };
 
 // Session label: organizer title, else its first-prompt title, else its folder, else "Shell".
@@ -127,6 +128,7 @@ export function registerTabIpc(): void {
 
   handle('pty:paste', (event, { tabId, data }) => {
     const session = tabFor(event, tabId);
+    if (isSnapshotRun()) pasteWrites.push({ tabId, data });
     session?.pty.write(data);
     return { sent: Boolean(session) };
   });

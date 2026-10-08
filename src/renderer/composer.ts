@@ -31,7 +31,7 @@ function fit(): void {
 
 // C0 controls other than newline and tab could end the bracketed paste early or drive the TUI (ESC above all).
 // eslint-disable-next-line no-control-regex -- stripping C0 controls is the point
-const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
+export const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F]/g, '');
 
 const clear = (): void => {
   input.value = '';
@@ -84,20 +84,27 @@ function insertAtCursor(text: string): void {
 
 const refreshReader = (tabId: string): void => { window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: tabId })); };
 
+// Pastes a message into a tab's live Claude, echoed at once; a send that never arrived takes its echo back.
+export async function pasteToClaude(tab: tabs.Tab, text: string): Promise<boolean> {
+  const echo = tabs.addPending(tab, text);
+  refreshReader(tab.id);
+  const result = await window.pastel.paste(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
+  const sent = !isIpcError(result) && result.sent;
+  if (echo !== null && !sent) {
+    tabs.removePending(tab, echo);
+    refreshReader(tab.id);
+  }
+  return sent;
+}
+
 async function send(): Promise<void> {
   // Claude turns an image path in a pasted message into [Image #n].
   const text = [stripControls(input.value).trim(), quotePaths(attachments.map((a) => a.file))].filter(Boolean).join(' ');
   const tab = tabs.active();
   if (!text || !tab) return;
   if (tab.update?.state === 'live') {
-    const echo = tabs.addPending(tab, text);
-    refreshReader(tab.id);
     clear();
-    const result = await window.pastel.paste(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
-    if (echo !== null && (isIpcError(result) || !result.sent)) {
-      tabs.removePending(tab, echo);
-      refreshReader(tab.id);
-    }
+    await pasteToClaude(tab, text);
     return;
   }
   const repoQuery = parseRepoCommand(text);

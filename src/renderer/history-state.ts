@@ -4,7 +4,7 @@ import { byId, query } from './dom';
 import type { HistoryList } from '../shared/ipc';
 
 export type Session = HistoryList['sessions'][number];
-export type PreviewMode = 'replies' | 'flow' | 'decisions';
+export type PreviewMode = 'replies' | 'flow' | 'decisions' | 'notes';
 export type GroupBy = 'tag' | 'day' | 'project';
 
 export const state = {
@@ -38,7 +38,7 @@ export const hooks = {
 export const view = byId('history');
 view.innerHTML = `
   <div class="history-list-pane">
-    <input id="history-search" class="history-search" type="search" placeholder="Search titles and first prompts" aria-label="Search sessions">
+    <input id="history-search" class="history-search" type="search" placeholder="Search titles, first prompts and notes" aria-label="Search sessions">
     <div class="history-toolbar">
       <div id="history-group" class="view-toggle history-group" role="tablist" aria-label="Group sessions">
         <button type="button" data-group="tag" aria-selected="true">By tag</button>

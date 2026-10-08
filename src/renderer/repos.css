@@ -1,11 +1,10 @@
 /* Open Repo: a palette card at the top of the reader area; the reader and reply box hide while it's open. */
 #repos {
-  position: absolute;
-  inset: 0;
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 72px 28px 28px;
+  padding: 16px 28px 28px;
   background: var(--reader-bg);
   color: var(--reader-fg);
   font-family: var(--ui-font);

@@ -7,6 +7,7 @@ import { promptText, commandText, trimTo } from './prompts';
 import { liveSessions } from './sessions-monitor';
 import { SESSION_ID } from './session-id';
 import type { TranscriptEntry } from './transcript-entry';
+import { historyFixture, isSnapshotRun } from './snapshot-mode';
 
 const WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -90,24 +91,31 @@ function recordFor(file: string): SessionRecord | null {
   return record;
 }
 
+const fixtures = (): SessionRecord[] => (isSnapshotRun() ? historyFixture.records : []);
+
 const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd ?? '');
 
 export function listSessions(): ListedSession[] {
   const since = Date.now() - WINDOW_DAYS * DAY_MS;
   const live = new Set(liveSessions().map((s) => s.sessionId));
-  return sessionFiles()
+  if (isSnapshotRun()) historyFixture.live.forEach((id) => live.add(id));
+  const records = sessionFiles()
     .map((file) => { try { return { file, mtime: fs.statSync(file).mtimeMs }; } catch { return null; } }) // deleted mid-scan
     .filter((entry): entry is { file: string; mtime: number } => Boolean(entry && entry.mtime >= since))
     .map(({ file }) => recordFor(file))
-    .filter((record): record is SessionRecord => Boolean(record && (record.title || record.messages)))
+    .filter((record): record is SessionRecord => Boolean(record && (record.title || record.messages)));
+  return [...fixtures(), ...records]
     .map((record) => ({ ...record, shortCwd: shortCwd(record.cwd), live: live.has(record.sessionId) }))
     .sort((a, b) => b.lastAt - a.lastAt);
 }
 
 export const findRecord = (sessionId: string | null | undefined): SessionRecord | null => {
   if (!sessionId || !SESSION_ID.test(sessionId)) return null;
+  const fixture = fixtures().find((r) => r.sessionId === sessionId);
+  if (fixture) return fixture;
   const file = sessionFiles().find((f) => path.basename(f, '.jsonl') === sessionId);
   return file ? recordFor(file) : null;
 };
 
-export const isLive = (sessionId: string): boolean => liveSessions().some((s) => s.sessionId === sessionId);
+export const isLive = (sessionId: string): boolean =>
+  (isSnapshotRun() && historyFixture.live.includes(sessionId)) || liveSessions().some((s) => s.sessionId === sessionId);
