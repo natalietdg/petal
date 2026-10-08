@@ -26,3 +26,49 @@
 .notes-editor::placeholder { color: var(--muted); }
 .notes-editor[hidden], .notes-rendered[hidden] { display: none; }
 .notes-empty { font-family: var(--ui-font); }
+
+/* ---------- The side panel: beside the replies (and History's preview), scrolling on its own ---------- */
+:root { --notes-width: 320px; }
+.notes-panel {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--rule);
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-size: 17px;
+}
+.notes-panel[hidden] { display: none; }
+.notes-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0 20px; font: 600 13px/1.4 var(--ui-font); color: var(--muted); }
+.notes-panel-close { padding: 2px 10px; border: 1px solid var(--rule); border-radius: 999px; background: none; color: var(--muted); font: 600 12px var(--ui-font); cursor: pointer; }
+.notes-panel-body { flex: 1; min-height: 0; display: flex; padding: 10px 16px 16px 20px; }
+.notes-panel .notes { flex: 1; min-width: 0; }
+.notes-panel .notes-bar { flex-wrap: wrap; row-gap: 4px; }
+.notes-panel :is(.notes-editor, .notes-rendered) { flex: 1; min-height: 0; overflow-y: auto; resize: none; field-sizing: fixed; }
+.notes-panel-grip { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; z-index: 1; }
+
+/* Reader: pinned right, from below the fixed header (top set from #reader in notes-panel.ts) to the window's bottom. */
+#notes-panel { position: absolute; right: 0; bottom: 0; width: var(--notes-width); z-index: 4; }
+#reader-area:has(> #reader[hidden]) #notes-panel { display: none; }
+
+/* The open/close button: at the right end of the reader's toggle row, and beside History's toggle. */
+.reader-head-column { position: relative; }
+.reader-head-column .notes-toggle { position: absolute; right: 0; bottom: 0; }
+.history-preview-views { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.notes-toggle { padding: 6px 16px; border: 1px solid var(--rule); border-radius: 999px; background: none; color: var(--muted); font: 600 14px var(--ui-font); cursor: pointer; }
+.notes-toggle[aria-pressed="true"] { background: var(--code-bg); color: var(--reader-fg); }
+
+/* Wide: the reading axis (reader, header, prompt dock, reply box) gives up the panel's width and centres in the rest. */
+@media (min-width: 1000px) {
+  #reader-area.notes-open :is(#reader, #reader-head, #prompt-dock, #composer) { margin-right: var(--notes-width); }
+  #reader-area.notes-open:has(> #reader:not([hidden])) #cat,
+  #reader-area:has(> #history.notes-open:not([hidden])) #cat { right: calc(var(--notes-width) + 28px); }
+  #history.notes-open { grid-template-columns: minmax(260px, 34%) minmax(0, 1fr) var(--notes-width); }
+}
+/* Narrow: a drawer over the text, so the column keeps a readable measure. */
+@media (max-width: 999px) {
+  :is(#notes-panel, #history-notes) { width: min(var(--notes-width), 88vw); box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
+  #history-notes { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; }
+}

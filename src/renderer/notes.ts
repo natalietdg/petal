@@ -4,6 +4,8 @@ import * as markdown from './markdown';
 import { el, isIpcError } from './dom';
 
 const SAVE_DELAY_MS = 600;
+const SAVED_EVENT = 'petal:notes-saved';
+interface SavedNotes { sessionId: string; text: string; from: HTMLElement }
 
 export interface NotesEditor {
   element: HTMLElement;
@@ -13,6 +15,7 @@ export interface NotesEditor {
 interface Options {
   hint?: string; // one quiet line under the toolbar
   onSaved?: (text: string) => void;
+  onLoaded?: (text: string) => void; // the saved notes, once read
 }
 
 const noSession = (): NotesEditor => ({
@@ -20,7 +23,7 @@ const noSession = (): NotesEditor => ({
   flush: async () => {},
 });
 
-export function createNotesEditor(sessionId: string | null, { hint, onSaved }: Options = {}): NotesEditor {
+export function createNotesEditor(sessionId: string | null, { hint, onSaved, onLoaded }: Options = {}): NotesEditor {
   if (!sessionId) return noSession();
   const root = el('section', 'notes');
   root.dataset.sessionId = sessionId;
@@ -52,7 +55,18 @@ export function createNotesEditor(sessionId: string | null, { hint, onSaved }: O
     saved = text;
     status.textContent = 'Saved';
     onSaved?.(text);
+    window.dispatchEvent(new CustomEvent<SavedNotes>(SAVED_EVENT, { detail: { sessionId, text, from: root } }));
   };
+
+  // The same session's notes open elsewhere (reader and History) take her latest save unless she is typing here.
+  const takeSave = (event: Event): void => {
+    if (!root.isConnected) return window.removeEventListener(SAVED_EVENT, takeSave);
+    const { detail } = event as CustomEvent<SavedNotes>;
+    if (detail.sessionId !== sessionId || detail.from === root || document.activeElement === input) return;
+    input.value = saved = detail.text;
+    status.textContent = 'Saved';
+  };
+  window.addEventListener(SAVED_EVENT, takeSave);
 
   input.addEventListener('input', () => {
     status.textContent = 'Editing';
@@ -78,6 +92,7 @@ export function createNotesEditor(sessionId: string | null, { hint, onSaved }: O
     input.value = result.text;
     input.disabled = false;
     status.textContent = result.text ? 'Saved' : '';
+    onLoaded?.(result.text);
   });
 
   return { element: root, flush: save };
