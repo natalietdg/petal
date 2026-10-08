@@ -127,6 +127,8 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
       const m = await js(OVERLAP);
       const rows = await js("document.querySelectorAll('#history-preview .history-reply .status-block .status-row').length");
       check(strip && strip.insideHead && m.first >= m.header && rows === 3, `${look} History preview shows the strip and the 3-row block: ${JSON.stringify({ strip, rows, overlap: m })}`);
+      await wait(600); // the preview scrolls itself to the newest turn; take it back to the strip
+      await js("document.getElementById('history-preview').scrollTop = 0");
       await capture(`status-strip-history-${look}`);
       await js('PastelTerm.history.close()');
     }
