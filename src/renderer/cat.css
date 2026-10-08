@@ -271,8 +271,14 @@
 /* Bookshelf: rich wood with a lit top and shaded side, a dark back, jewel-toned spines with gold bands. */
 .scene-rug .sc-k { fill: #7A4A2C; } .sc-H { fill: #A8703F; } .sc-J { fill: #4E2E1A; }
 .sc-K { fill: #3E2416; } .sc-Z { fill: #2A170D; } .sc-A { fill: #E8C46A; }
-.scene-rug .sc-a { fill: #2F4E8C; } .scene-rug .sc-b { fill: #A23B4C; } .scene-rug .sc-c { fill: #2F7F86; }
-.scene-rug .sc-d { fill: #D49A2A; } .scene-rug .sc-e { fill: #4E8A4A; } .scene-rug .sc-f { fill: #7A4C9A; }
+/* Reading nook books: each colour has a lit top, a spine and a shaded side; gold and dark title bands. */
+.scene-rug .sc-nk-rust-l { fill: #F08A52; } .scene-rug .sc-nk-rust { fill: #CF4F26; } .scene-rug .sc-nk-rust-d { fill: #8E2F14; }
+.scene-rug .sc-nk-mus-l { fill: #FFD66B; } .scene-rug .sc-nk-mus { fill: #E3A51F; } .scene-rug .sc-nk-mus-d { fill: #A06E0E; }
+.scene-rug .sc-nk-olive-l { fill: #B5C45C; } .scene-rug .sc-nk-olive { fill: #84952E; } .scene-rug .sc-nk-olive-d { fill: #56621A; }
+.scene-rug .sc-nk-burg-l { fill: #C8506A; } .scene-rug .sc-nk-burg { fill: #962640; } .scene-rug .sc-nk-burg-d { fill: #5E1226; }
+.scene-rug .sc-nk-cream-l { fill: #FFF8E6; } .scene-rug .sc-nk-cream { fill: #F3E2BC; } .scene-rug .sc-nk-cream-d { fill: #C7AE7E; }
+.scene-rug .sc-nk-teal-l { fill: #5CC8BE; } .scene-rug .sc-nk-teal { fill: #23918B; } .scene-rug .sc-nk-teal-d { fill: #14605C; }
+.scene-rug .sc-nk-band { fill: #FFE08A; } .scene-rug .sc-nk-band-d { fill: #4A2414; }
 .sc-o { fill: #D9825B; } .sc-O { fill: #C26C47; } .sc-v { fill: #7DB264; } .sc-V { fill: #4F8A42; }
 /* Plant depth: leaf highlights, a lit edge and shaded side on the pot, dark soil. */
 /* Wavy striped vase from her reference: sage, cream, and a deeper sage outline. */
