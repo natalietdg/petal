@@ -1,4 +1,4 @@
-// History, Workflow, Customize and Open Repo are views over the reader, one at a time.
+// History, Workflow, Customize, Open Repo and Agents are views over the reader, one at a time.
 // Opening one closes the others; Esc closes it; the reader and reply box show only when none is open.
 import { byId, focusTerminal } from './dom';
 
