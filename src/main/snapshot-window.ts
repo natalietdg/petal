@@ -29,3 +29,11 @@ export function showOffscreen(win: BrowserWindow): void {
   win.showInactive();
   if (!onAnyDisplay(win.getBounds())) win.setOpacity(1);
 }
+
+// Resizes without leaving the off-screen spot: macOS can pull a resized window back onto a display.
+export function resizeOffscreen(win: BrowserWindow, width: number, height: number): void {
+  const { x, y } = win.getBounds();
+  win.setContentSize(width, height);
+  const moved = win.getBounds();
+  if (moved.x !== x || moved.y !== y) win.setPosition(x, y);
+}

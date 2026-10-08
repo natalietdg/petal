@@ -1,6 +1,7 @@
 // Print look axis: at several window widths the text column and the reply box share the visible reader's centre line.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 
 const WIDTHS = [800, 990, 1280, 1600];
@@ -46,7 +47,7 @@ export async function printAxisCheck(kit: Kit, win: BrowserWindow): Promise<void
   check(ready, 'print look with the long reply');
 
   for (const width of WIDTHS) {
-    win.setContentSize(width, 900);
+    resizeOffscreen(win, width, 900);
     await waitFor(async () => (await js('window.innerWidth')) === width, 3000);
     await wait(400);
     const m = await js(MEASURE);
@@ -56,6 +57,6 @@ export async function printAxisCheck(kit: Kit, win: BrowserWindow): Promise<void
     await capture(`print-axis-${width}`);
   }
 
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
   await js("window.pastel.look.setReading('newspaper')");
 }

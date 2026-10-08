@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 import { READING_CHOICES } from '../main/menu';
 
@@ -72,7 +73,7 @@ export async function columnAxisCheck(kit: Kit, win: BrowserWindow): Promise<voi
         // A resize can be dropped while the window is busy: ask again until the page really is this wide.
         let sized = false;
         for (let attempt = 0; attempt < 4 && !sized; attempt++) {
-          win.setContentSize(width, 900);
+          resizeOffscreen(win, width, 900);
           sized = Boolean(await waitFor(async () => {
             win.webContents.invalidate(); // an unfocused window can hold its old frame and size
             return (await js('window.innerWidth')) === width;
@@ -99,7 +100,7 @@ export async function columnAxisCheck(kit: Kit, win: BrowserWindow): Promise<voi
   }
 
   fs.writeFileSync(path.join(outDir, 'column-axis.json'), JSON.stringify(rows, null, 2));
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
   applyTheme('paleSky', { persist: false });
   await js("window.pastel.look.setReading('newspaper')");
 }
