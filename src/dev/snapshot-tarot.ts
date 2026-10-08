@@ -40,11 +40,11 @@ async function settle(kit: Kit, win: BrowserWindow): Promise<void> {
   await kit.wait(400);
 }
 
-// The cat's box plus whatever tarot tip or popover is open above it.
-async function captureRoom(kit: Kit, win: BrowserWindow, name: string): Promise<void> {
+// The cat's box plus whatever scene tip or card is open above it.
+export async function captureRoom(kit: Kit, win: BrowserWindow, name: string): Promise<void> {
   await settle(kit, win);
   const box = await kit.js(`(() => {
-    const rects = ['#cat', '.tarot-tip:not([hidden])', '.tarot-popover:not([hidden])'].map((s) => document.querySelector(s)).filter(Boolean).map((el) => el.getBoundingClientRect());
+    const rects = ['#cat', '.scene-tip:not([hidden])', '.scene-popover:not([hidden])'].map((s) => document.querySelector(s)).filter(Boolean).map((el) => el.getBoundingClientRect());
     const x = Math.min(...rects.map((r) => r.left)) - 20, y = Math.min(...rects.map((r) => r.top)) - 20;
     return { x: Math.floor(x), y: Math.floor(y), width: Math.ceil(Math.max(...rects.map((r) => r.right)) - x + 20), height: Math.ceil(Math.max(...rects.map((r) => r.bottom)) - y + 20) };
   })()`);

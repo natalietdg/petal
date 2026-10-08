@@ -19,6 +19,7 @@ import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
+import { planetCheck } from './snapshot-planet';
 import { sceneMotionCheck } from './snapshot-scenes';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
@@ -358,6 +359,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
+    ['planet', () => planetCheck(kit, win)],
     ['error replies', () => views.errorRepliesCheck(kit)],
     ['repos', () => reposCheck(kit, { win, ...tabs })],
     ['repo line', () => repoLineCheck(kit, { feed })], // before the print steps, which replace the fixture's replies
