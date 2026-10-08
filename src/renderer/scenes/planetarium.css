@@ -73,7 +73,7 @@
 }
 
 /* The planet card (planet-reading.ts): the day's planet colour edges it, like a lit rim. */
-.planet-popover { border-color: var(--pl-accent, #E9B949); border-left-width: 4px; }
+.scene-popover.planet-popover { border-color: var(--pl-accent, #E9B949); border-left-width: 4px; }
 .planet-popover[data-planet="mercury"] { --pl-accent: #8E8AB8; } .planet-popover[data-planet="venus"] { --pl-accent: #E8B474; }
 .planet-popover[data-planet="earth"] { --pl-accent: #3A78D8; } .planet-popover[data-planet="mars"] { --pl-accent: #E06E54; }
 .planet-popover[data-planet="jupiter"] { --pl-accent: #E0A070; } .planet-popover[data-planet="saturn"] { --pl-accent: #DCB878; }
