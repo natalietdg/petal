@@ -186,6 +186,32 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
       await js(`PastelTerm.overlays.hideCurrent()`);
     }
 
+    // Plain list: newest first, A–Z by title, no tag UI, search still filters; Today groups by project.
+    await sizeTo(1280);
+    await openHistory(LONG);
+    const ROWS = "[...document.querySelectorAll('#history-list .history-row')].map((r) => ({ id: r.dataset.sessionId, title: r.querySelector('.history-title-text').textContent }))";
+    type Row = { id: string; title: string };
+    const listed: { id: string; lastAt: number }[] = await js('window.pastel.history.list().then((r) => r.sessions.map((s) => ({ id: s.sessionId, lastAt: s.lastAt })))');
+    const recent: Row[] = await js(ROWS);
+    const newestFirst = [...listed].sort((a, b) => b.lastAt - a.lastAt).map((x) => x.id);
+    check(recent.length === listed.length && recent.every((r, i) => r.id === newestFirst[i]), `rows newest first: ${recent.length} rows, first ${JSON.stringify(recent.slice(0, 3))}`);
+    await js(`document.querySelector('#history-sort [data-sort="title"]').click()`);
+    const az: Row[] = await js(ROWS);
+    const sorted = [...az].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    check(az.length === recent.length && az.every((r, i) => r.id === sorted[i]?.id), `A–Z sorts by title: ${JSON.stringify(az.slice(0, 3).map((r) => r.title))}`);
+    await capture('history-layout-az-1280');
+    await js(`document.querySelector('#history-sort [data-sort="recent"]').click()`);
+    const tagUi = await js("['.history-tag', '.history-tagbar', '.history-tag-add', '[data-group]', '#history-tidy', '.history-group-heading', '.history-preview-tags'].filter((sel) => document.querySelector('#history ' + sel))");
+    check(tagUi.length === 0, `no tag, group or Tidy UI in History: ${JSON.stringify(tagUi)}`);
+    const searchFor = (text: string) => js(`(() => { const s = document.getElementById('history-search'); s.value = ${JSON.stringify(text)}; s.dispatchEvent(new Event('input')); })()`);
+    await searchFor('backfill re-run');
+    const found: Row[] = await js(ROWS);
+    check(found.length >= 1 && found.every((r) => /backfill re-run/i.test(r.title)) && found.some((r) => r.id === LONG), `search filters: ${JSON.stringify(found)}`);
+    await searchFor('');
+    const today = await js('window.pastel.workflow.today([])');
+    check(today.groupedBy === 'project', `Workflow Today groups by ${today.groupedBy}`);
+    await js('PastelTerm.history.close()');
+
     // History list collapse: preview takes the freed width, rail keeps the title, Cmd+\\ expands, config remembers.
     for (const width of [1280, 990]) {
       await sizeTo(width);
