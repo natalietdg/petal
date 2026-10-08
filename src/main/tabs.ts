@@ -82,19 +82,15 @@ function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId
 // A double click must not type a second answer into whatever comes after the prompt.
 const ANSWER_SETTLE_MS = 1000;
 const PICKER_SETTLE_MS = 250; // picker steps come one per screen change, e.g. ticking several boxes
-const answering = new WeakMap<TabSession, { until: number; toolUseId: string | null }>();
+const answeringUntil = new WeakMap<TabSession, number>();
 
-// Types an answer into the tab's claude; a question must still be the one pending in its transcript.
+// Types an answer into the tab's claude: the renderer only offers one while the prompt is on its screen.
 function answerPrompt(session: TabSession, answer: PromptAnswer): void {
-  const pending = session.feed.question;
-  const toolUseId = answer.kind === 'question' ? answer.toolUseId : null;
-  if (toolUseId !== null && toolUseId !== pending?.toolUseId) return;
-  const last = answering.get(session);
-  if (last && (Date.now() < last.until || (toolUseId !== null && last.toolUseId === toolUseId))) return;
-  const keys = keysFor(answer, pending?.questions ?? null);
+  if (Date.now() < (answeringUntil.get(session) ?? 0)) return;
+  const keys = keysFor(answer);
   if (!keys) return;
   const settle = answer.kind === 'picker' ? PICKER_SETTLE_MS : ANSWER_SETTLE_MS;
-  answering.set(session, { until: Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle, toolUseId });
+  answeringUntil.set(session, Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle);
   if (isSnapshotRun()) { promptWrites.push(keys); return; }
   keys.forEach((key, i) => setTimeout(() => {
     if (sessions.has(tabKey(session.contentsId, session.tabId))) session.pty.write(key);
@@ -149,7 +145,7 @@ export function registerTabIpc(): void {
 
   on('prompt:answer', (event, { tabId, answer }) => {
     const session = tabFor(event, tabId);
-    if (session && (answer?.kind === 'question' || answer?.kind === 'picker' || answer?.kind === 'permission')) answerPrompt(session, answer);
+    if (session && (answer?.kind === 'picker' || answer?.kind === 'permission')) answerPrompt(session, answer);
   });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.

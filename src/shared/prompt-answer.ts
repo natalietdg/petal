@@ -21,32 +21,10 @@
 //   " Esc to cancel · Tab to amend". Digit k picks option k at once ("1" ran the command, "3" -> "Interrupted").
 import type { TabId } from './types';
 
-export interface QuestionOption {
-  label: string;
-  description: string;
-}
-
-export interface AskQuestion {
-  question: string;
-  header: string;
-  options: QuestionOption[];
-  multiSelect: boolean;
-}
-
-// An AskUserQuestion tool_use that has no tool_result yet.
-export interface PendingQuestion {
-  toolUseId: string;
-  questions: AskQuestion[];
-}
-
-// One answer per question: option indexes (0-based), or typed text for a single-select question.
-export type QuestionAnswer = { selected: number[] } | { other: string };
-
 // One move on the picker as it stands on screen: press option k, type into the free-text slot k, or change tab.
 export type PickerStep = { pick: number } | { other: number; text: string } | { move: 'next' | 'back' };
 
 export type PromptAnswer =
-  | { kind: 'question'; toolUseId: string; answers: QuestionAnswer[] }
   | { kind: 'picker'; step: PickerStep }
   | { kind: 'permission'; option: number };
 
