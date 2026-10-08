@@ -23,6 +23,13 @@ const api = {
   getTheme: () => invoke('theme:get'),
   getSessions: (options: InvokeArgs<'sessions:snapshot'>[0]) => invoke('sessions:snapshot', options),
   closeSession: (sessionId: string) => invoke('sessions:close', sessionId),
+  agents: {
+    list: (sessionId: string | null) => invoke('agents:list', { sessionId }),
+    open: (sessionId: string, agentId: string) => invoke('agents:open', { sessionId, agentId }),
+    poll: () => invoke('agents:poll'),
+    close: () => invoke('agents:close'),
+    onTimeline: (callback: (update: EventChannels['agents:timeline']) => void) => subscribe('agents:timeline', callback),
+  },
   onTheme: (callback: (theme: EventChannels['theme:changed']) => void) => subscribe('theme:changed', callback),
   getCat: () => invoke('cat:get'),
   onCat: (callback: (catId: string) => void) => subscribe('cat:changed', callback),
