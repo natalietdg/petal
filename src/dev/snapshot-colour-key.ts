@@ -7,7 +7,8 @@ import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
-import { KEY_ENTRIES, NEUTRAL_PROBES } from '../renderer/colour-key-entries';
+import { DECIDE_PROBES, KEY_ENTRIES, NEUTRAL_PROBES } from '../renderer/colour-key-entries';
+import { SINGLE_SCREEN } from './snapshot-prompts';
 
 // A real reply carrying every treatment where replies put it: callouts, quotes and tables inside sections.
 const REPLY = [
@@ -58,7 +59,7 @@ const REPLY = [
   '- `src/renderer/colour-key.ts`',
 ].join('\n');
 
-const keyUpdate = { state: 'live', replies: [{ id: 'colour-key-reply', timestamp: '2026-10-08T09:00:00.000Z', prompt: 'add an index for the colour code', markdown: REPLY }] };
+const keyUpdate = { state: 'live', replies: [{ id: 'colour-key-reply', timestamp: '2026-10-08T09:00:00.000Z', prompt: 'add an index for the colour code\n<pasted_content id="p1">\nthe colours inside replies\n</pasted_content id="p1">', markdown: REPLY }] };
 
 // Colours of an element and its generated content; a border counts only where it is drawn.
 const SIG = `const sig = (node, pseudo) => {
@@ -100,6 +101,30 @@ const NEUTRAL = `(() => {
     }
   }
   return { base, found: found.length, total: probes.length, accents };
+})()`;
+
+// The question card, drawn from a captured picker screen: every colour is the look's base or one of Decide's.
+const DECIDE = `(() => {
+  ${PAINT}
+  const swatch = document.createElement('span');
+  document.getElementById('prompt-dock').append(swatch);
+  const resolve = (v) => { swatch.style.color = 'var(' + v + ')'; return getComputedStyle(swatch).color; };
+  const allowed = new Set(['--reader-fg', '--reader-bg', '--muted', '--rule', '--decide-ink', '--decide-pill', '--decide-wash'].map(resolve).concat('rgba(0, 0, 0, 0)'));
+  swatch.remove();
+  const card = document.querySelector('.question-card');
+  if (!card || card.hidden) return { shown: false };
+  const probes = ${JSON.stringify(DECIDE_PROBES)};
+  const accents = [];
+  let found = 0;
+  for (const probe of probes) {
+    const nodes = probe === '.question-card' ? [card] : [...card.querySelectorAll(probe)];
+    if (nodes.length) found++; else accents.push({ probe, missing: true });
+    for (const node of nodes) for (const pseudo of [null, '::before', '::after']) {
+      const bad = paint(node, pseudo).filter((c) => !allowed.has(c));
+      if (bad.length) accents.push({ probe, pseudo, bad });
+    }
+  }
+  return { shown: true, found, total: probes.length, accents };
 })()`;
 
 // Per entry and probe: the sample's colours next to the real reply's (its last match, past the first section's quirks).
@@ -184,6 +209,11 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const wrong = rows.filter((r: any) => !r.sample || !r.real || r.sample !== r.real);
       check(wrong.length === 0, `${look} ${theme}: ${rows.length - wrong.length}/${rows.length} sample colours equal the real reply's${wrong.length ? ` ${JSON.stringify(wrong)}` : ''}`);
+      await js(`PastelTerm.promptDock.readScreen(PastelTerm.tabs.active().id, ${JSON.stringify(SINGLE_SCREEN)})`);
+      const decide = await waitFor(async () => { const d = await js(DECIDE); return d.shown ? d : null; }, 3000);
+      check(decide && decide.found === decide.total && decide.accents.length === 0,
+        `${look} ${theme}: question card ${decide?.found}/${decide?.total} parts use only Decide's colours and the base${decide?.accents.length ? ` accents: ${JSON.stringify(decide.accents)}` : ''}`);
+      await js('PastelTerm.promptDock.readScreen(PastelTerm.tabs.active().id, [])');
       const neutral = await js(NEUTRAL);
       check(neutral.found === neutral.total && neutral.accents.length === 0,
         `${look} ${theme}: ${neutral.found}/${neutral.total} uncoded treatments use only ink and paper ${JSON.stringify(neutral.base)}${neutral.accents.length ? ` accents: ${JSON.stringify(neutral.accents)}` : ''}`);

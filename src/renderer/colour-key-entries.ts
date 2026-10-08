@@ -12,14 +12,14 @@ export interface KeyEntry {
 
 export const KEY_ENTRIES: readonly KeyEntry[] = [
   { id: 'highlight', label: 'Highlight', meaning: 'the one phrase that matters most', markdown: 'Keep ==this one line== in mind.', inSection: true, probes: ['mark'] },
-  { id: 'decide', label: 'Decide', meaning: 'something only you can choose', markdown: '**Decide:** ship today or wait?', inSection: true, probes: ['.callout-decide', '.callout-decide .pill'] },
+  { id: 'decide', label: 'Decide', meaning: "something only you can choose, like Claude's questions", markdown: '**Decide:** ship today or wait?', inSection: true, probes: ['.callout-decide', '.callout-decide .pill'] },
   { id: 'watch', label: 'Watch out', meaning: 'a risk or catch to keep in view', markdown: '**Watch out:** this skips the cache.', inSection: true, probes: ['.callout-watch', '.callout-watch .pill'] },
   { id: 'code', label: 'Code', meaning: 'a name, path or command, exactly as typed', markdown: 'Run `npm test` first.', inSection: true, probes: ['p > code'] },
 ];
 
 // Everything else in a reply: drawn in the look's ink and paper only (text, muted, rule colours), never an accent.
 export const NEUTRAL_PROBES: readonly string[] = [
-  '#reader-status', '#reader-head .status-strip .status-chip', '#reader-head .status-strip .status-text',
+  '#reader-status', '.reader-you', '.prompt-pasted', '.prompt-pasted-label', '.prompt-typed', '#reader-head .status-strip .status-chip', '#reader-head .status-strip .status-text',
   '.status-block', '.status-chip', '.status-text',
   '.story-head', '.headline', '.headline + p', '.lede',
   '.story-section:not(.back)', '.story-section:not(.back) > h2',
@@ -27,4 +27,9 @@ export const NEUTRAL_PROBES: readonly string[] = [
   'blockquote.sidebar', 'blockquote.sidebar > p:first-child > strong:first-child', 'blockquote.pull-quote',
   'p > a', 'pre', 'pre code', 'table', 'th', 'td', 'p:has(> em:only-child)',
   'h2.back-matter', '.story-section.back li', '.end-mark',
+];
+
+// Claude's question card wears Decide's colours and nothing else.
+export const DECIDE_PROBES: readonly string[] = [
+  '.question-card', '.qc-chip', '.qc-text', '.qc-option', '.qc-label', '.qc-desc', '.qc-other-input', '.qc-send',
 ];

@@ -1,4 +1,4 @@
-/* Answers for Claude's pickers, between the reader and the reply box. Decide colours: she must act. */
+/* Answers for Claude's pickers, between the reader and the reply box. Decide colours only: she must act. */
 #prompt-dock {
   flex: none;
   max-height: 60%;
@@ -49,7 +49,7 @@
 .qc-option:hover:not(:disabled), .pb-option:hover:not(:disabled) { border-color: var(--decide-ink); }
 .qc-option[aria-pressed="true"] { border-color: var(--decide-ink); background: var(--decide-pill); color: var(--decide-ink); }
 .qc-option:focus-visible, .pb-option:focus-visible, .qc-submit:focus-visible, .qc-send:focus-visible, .qc-other-input:focus-visible {
-  outline: 2px solid var(--link);
+  outline: 2px solid var(--decide-ink);
   outline-offset: 2px;
 }
 .qc-option:disabled, .pb-option:disabled, .qc-submit:disabled, .qc-send:disabled, .qc-other-input:disabled { opacity: 0.55; cursor: default; }
@@ -65,7 +65,7 @@
   padding: 7px 11px;
   border: 1px solid var(--rule);
   border-radius: 10px;
-  background: var(--code-bg);
+  background: var(--reader-bg);
   color: var(--reader-fg);
   font: 14px var(--ui-font);
 }
@@ -108,15 +108,14 @@
   font: 600 13px var(--ui-font);
   cursor: pointer;
 }
-.qc-nav:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.qc-nav:focus-visible { outline: 2px solid var(--decide-ink); outline-offset: 2px; }
 .qc-nav:disabled { opacity: 0.55; cursor: default; }
 
 .pb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-weight: 600; }
 .pb-details {
   margin: 8px 0 0;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--code-bg);
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--rule);
   font: 13px/1.4 var(--mono-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

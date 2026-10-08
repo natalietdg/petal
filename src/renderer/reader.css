@@ -346,14 +346,14 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 #latest .headline.headline-long { font-size: 1.75em; }
 #latest .headline.headline-very-long { font-size: 1.35em; line-height: 1.25; }
 
-/* Her message above the reply, like the History conversation view. */
+/* Her message above the reply, like the History conversation view: a ruled bubble, no fill. */
 .reader-you {
   margin: 0 0 1.4em auto;
   max-width: 80%;
   width: fit-content;
   padding: 0.6em 1em;
+  border: 1px solid var(--rule);
   border-radius: 16px 16px 4px 16px;
-  background: var(--code-bg);
   font: 0.86em/1.5 var(--ui-font);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
