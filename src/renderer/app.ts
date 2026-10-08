@@ -86,7 +86,9 @@ async function start(): Promise<void> {
     return false;
   });
 
-  tabs.init({ theme, onActivate: showTab, onCreated: catchEscape, onScreen });
+  // ⌘T and + open a tab meant for Claude, so her session limit applies.
+  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create(); };
+  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated: catchEscape, onScreen });
 
   window.pastel.onTheme((next) => {
     themeKit.applyCssVars(next);
@@ -117,6 +119,7 @@ async function start(): Promise<void> {
   window.pastel.onTabCommand((command) => {
     if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
     else if (command.kind === 'new') tabs.create();
+    else if (command.kind === 'new-session') newSessionTab();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);
     else if (command.kind === 'activate') tabs.activate(command.tabId);

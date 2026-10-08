@@ -603,15 +603,20 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   const refused = await waitState((s) => s.notes.some((n: string) => /not running/.test(n)));
   check(refused, `Yes on a session that is not live is refused by main: ${JSON.stringify(refused?.notes)}`);
 
+  // Over the limit, Reopen starts nothing and says why.
   await click(`.closed-row[data-session-id="${fake(9)}"] .closed-reopen`);
-  const reopened = await waitState((s) => s.notes.some((n: string) => /no longer on disk/.test(n)));
-  check(reopened, `Reopen goes through history:resume (fixture id has no transcript, so it says so): ${JSON.stringify(reopened?.notes)}`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: true, name: 'sessions-closed-paleSky', scrollTo: '.closed-heading' });
+  const limited = await waitState((s) => s.notes.some((n: string) => n === '4 open, your limit is 2. Close one to reopen one.'));
+  check(limited, `Reopen over the limit shows the limit note: ${JSON.stringify(limited?.notes)}`);
 
   configStore.save({ sessions: { maxOpen: 8 } });
   await panel('refresh()');
   const under = await waitState((s) => !s.pillOver && s.banner === null);
   check(under, `at or under the limit: no banner, plain pill: ${JSON.stringify(under?.pill)}`);
+
+  await click(`.closed-row[data-session-id="${fake(9)}"] .closed-reopen`);
+  const reopened = await waitState((s) => s.notes.some((n: string) => /no longer on disk/.test(n)));
+  check(reopened, `Reopen goes through history:resume (fixture id has no transcript, so it says so): ${JSON.stringify(reopened?.notes)}`);
+  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: true, name: 'sessions-closed-paleSky', scrollTo: '.closed-heading' });
 
   panelFixture.sessions = null;
   await panel('setOpen(false)');

@@ -18,6 +18,7 @@ export interface Tab {
 }
 
 interface Hooks {
+  onNewTab: () => void; // the + button
   onActivate: (tab: Tab) => void;
   onCreated: (tab: Tab) => void;
   onScreen: (tab: Tab) => void;
@@ -29,12 +30,12 @@ const tabs = new Map<TabId, Tab>();
 let activeId: TabId | null = null;
 let nextNumber = 1;
 let theme: Theme | null = null;
-let hooks: Hooks = { onActivate: () => {}, onCreated: () => {}, onScreen: () => {} };
+let hooks: Hooks = { onNewTab: () => create(), onActivate: () => {}, onCreated: () => {}, onScreen: () => {} };
 
 const newTabButton = el('button', 'tab-new', '+');
 newTabButton.type = 'button';
 newTabButton.title = 'New tab (⌘T)';
-newTabButton.addEventListener('click', () => create());
+newTabButton.addEventListener('click', () => hooks.onNewTab());
 strip.append(newTabButton);
 
 function tabElement(id: TabId): HTMLDivElement {
