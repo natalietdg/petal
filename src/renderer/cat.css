@@ -117,7 +117,7 @@
   font: 600 14px var(--ui-font);
   color: var(--muted);
   opacity: 0;
-  animation: cat-z 4.5s ease-in-out infinite;
+  animation: cat-z 4.5s steps(4) infinite; /* stepped: the motion clock only draws on a change */
 }
 @keyframes cat-z {
   0%, 30% { opacity: 0; transform: translate(0, 6px); }

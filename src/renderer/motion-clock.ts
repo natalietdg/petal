@@ -1,14 +1,16 @@
 // Idle CPU guard for every infinite CSS animation (cat, scenes, pulses).
 // A playing animation makes Chromium draw at 60 fps even when its steps() value hasn't changed:
 // measured ~5% CPU per window for the cat alone. Instead each animation is held at playbackRate 0
-// (still "running", but never ticked) and this clock advances them together a few times a second.
+// (still "running", but never ticked) and this clock moves it on only when its look changes.
 // The clock stops while the window is hidden; covered windows aren't seen.
+import { stepAt, stepTiming, type StepTiming } from './motion-steps';
 
 const TICK_MS = 120; // ~8 fps: finer than the fastest step in any scene (winter's fire, 180 ms)
 
-interface Held {
+interface Held extends StepTiming {
   offsetMs: number; // the animation's own phase (negative delays) when the clock took it over
   takenAt: number;
+  step: number | null; // last stretch written; null until the first write
 }
 
 const held = new WeakMap<Animation, Held>();
@@ -17,20 +19,24 @@ let timer: ReturnType<typeof setInterval> | undefined;
 const isInfinite = (animation: Animation): boolean => animation.effect?.getTiming().iterations === Infinity;
 
 function take(animation: Animation, now: number): Held {
-  const entry = { offsetMs: Number(animation.currentTime ?? 0), takenAt: now };
+  const entry = { ...stepTiming(animation), offsetMs: Number(animation.currentTime ?? 0), takenAt: now, step: null };
   held.set(animation, entry);
   return entry;
 }
 
-// Advances every infinite animation to where it would be at full speed.
 // Reads first, then writes: any read after a write forces a style recalc per animation.
 function tick(): void {
   const now = performance.now();
   const infinite = document.getAnimations().filter(isInfinite);
   const entries = infinite.map((animation) => held.get(animation) ?? take(animation, now));
   infinite.forEach((animation, i) => {
-    if (entries[i].takenAt === now) animation.playbackRate = 0;
-    animation.currentTime = entries[i].offsetMs + (now - entries[i].takenAt);
+    const entry = entries[i];
+    const time = entry.offsetMs + (now - entry.takenAt);
+    const step = stepAt(entry, time);
+    if (step === entry.step) return; // looks the same: no write, no frame
+    if (entry.step === null) animation.playbackRate = 0;
+    entry.step = step;
+    animation.currentTime = time;
   });
 }
 

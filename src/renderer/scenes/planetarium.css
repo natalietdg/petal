@@ -58,8 +58,8 @@
 #cat .scene-planetarium :is(.sc-pl-tw3, .sc-pl-tw3-gold, .sc-pl-spark3) { animation: pl-twinkle 3s steps(1) -2s infinite; }
 @keyframes pl-twinkle { 0%, 60% { opacity: 1; } 61%, 85% { opacity: 0.2; } }
 /* The nebula cores shimmer slowly, out of step. */
-#cat .scene-planetarium .sc-pl-teal-l { animation: pl-shimmer-teal 8s ease-in-out infinite; }
-#cat .scene-planetarium .sc-pl-pink-l { animation: pl-shimmer-pink 8s ease-in-out -4s infinite; }
+#cat .scene-planetarium .sc-pl-teal-l { animation: pl-shimmer-teal 8s steps(4) infinite; }
+#cat .scene-planetarium .sc-pl-pink-l { animation: pl-shimmer-pink 8s steps(4) -4s infinite; }
 @keyframes pl-shimmer-teal { 50% { fill: #2C5670; } }
 @keyframes pl-shimmer-pink { 50% { fill: #54386C; } }
 /* A shooting star streaks down-left across the upper right, then waits for the next pass. */

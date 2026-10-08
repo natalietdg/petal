@@ -53,7 +53,7 @@
 
 .sessions-pill.has-busy .dot {
   background: var(--decide-ink);
-  animation: pulse 2.4s ease-in-out infinite;
+  animation: pulse 2.4s steps(3) infinite; /* stepped: the motion clock only draws on a change */
 }
 
 @keyframes pulse {

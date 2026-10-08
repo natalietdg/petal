@@ -41,6 +41,7 @@ export async function sceneIdle({ win, js, log }: { win: BrowserWindow; js: Js; 
     await js("document.querySelector('.xterm-helper-textarea')?.focus()");
   }
   await js(`PastelTerm.cat.setScene(${JSON.stringify(scene)})`);
+  if (process.env.PASTEL_SNAPSHOT_AWAKE !== '1') await js("document.getElementById('cat').classList.remove('awake')"); // long idle: she dozes
   if (process.env.PASTEL_SNAPSHOT_IDLE_JS) await js(process.env.PASTEL_SNAPSHOT_IDLE_JS); // experiments: pause, hide, etc.
   await wait(WARMUP_MS);
   const before = cpuSeconds();
