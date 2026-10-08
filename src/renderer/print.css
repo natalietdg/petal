@@ -216,6 +216,7 @@
 }
 
 /* ---- Her message: a square ruled slip in mono, not a chat bubble. ---- */
+[data-reading="print"] .prompt-pasted { border-left-color: var(--print-ink); }
 [data-reading="print"] .reader-you {
   border: 1px solid var(--print-ink);
   border-radius: 0;
