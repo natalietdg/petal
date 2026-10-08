@@ -14,6 +14,7 @@ import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
 import { pastedCheck } from './snapshot-pasted';
 import { addSessionCheck } from './snapshot-add-session';
+import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
 import { notesCheck } from './snapshot-notes';
@@ -359,6 +360,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
     ['add session', () => addSessionCheck(kit)],
+    ['tab limit', () => tabLimitCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
