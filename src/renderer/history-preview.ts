@@ -1,15 +1,16 @@
-// History's preview pane: the hovered session's header, its whole conversation, or its flow, decisions or notes.
+// History's preview pane: the hovered session's header and its whole conversation, flow or decisions; notes sit beside it.
 // Replies end in a reply box; once a tab answers for the session, the conversation follows that tab live.
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { el } from './dom';
 import { timeOf } from './format';
-import { dayLabel, hooks, preview, selectedSession, state, titleOf, type Session } from './history-state';
+import { dayLabel, hooks, notesAside, preview, selectedSession, state, titleOf, view, type Session } from './history-state';
 import { attachPreviewTags } from './history-tags';
-import { createNotesEditor, type NotesEditor } from './notes';
+import { createPanel } from './notes-panel';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
 import { createStrip, paintStrip } from './status-strip';
+import { limitNote } from './sessions-panel';
 import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 
 export async function renderPreview(): Promise<void> {
@@ -30,8 +31,8 @@ export async function renderPreview(): Promise<void> {
   resume.type = 'button';
   resume.addEventListener('click', () => doResume(session.sessionId, note, false));
   const toggle = el('div', 'view-toggle');
-  for (const mode of ['replies', 'flow', 'decisions', 'notes'] as const) {
-    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions', notes: 'Notes' }[mode]);
+  for (const mode of ['replies', 'flow', 'decisions'] as const) {
+    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions' }[mode]);
     b.type = 'button';
     b.setAttribute('aria-selected', String(mode === state.previewMode));
     b.addEventListener('click', () => { state.previewMode = mode; renderPreview(); });
@@ -41,13 +42,18 @@ export async function renderPreview(): Promise<void> {
   send.type = 'button';
   send.title = 'Let the Claude in this window read this session';
   send.addEventListener('click', () => doSend(session.sessionId, note));
+  const notesToggle = el('button', 'notes-toggle', 'Notes');
+  notesToggle.type = 'button';
+  notesToggle.title = 'Your notes for this session, beside the preview';
+  const views = el('div', 'history-preview-views');
+  views.append(toggle, notesToggle);
   const strip = createStrip();
-  head.append(resume, send, note, toggle, strip);
+  head.append(resume, send, note, views, strip);
 
   const body = el('div', 'history-preview-body');
-  void notesEditor?.flush(); // typing in the last notes is saved before they go
-  notesEditor = null;
   preview.replaceChildren(head, body, ...(state.previewMode === 'replies' ? [replyBox(session)] : []));
+  notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
+  showNotes(session);
   await Promise.all([renderBody(session, body), fillStrip(session, strip)]);
 }
 
@@ -68,8 +74,7 @@ async function fillStrip(session: Session, strip: HTMLElement): Promise<void> {
 
 async function renderBody(session: Session, body: HTMLElement): Promise<void> {
   try {
-    if (state.previewMode === 'notes') renderNotesBody(session, body);
-    else if (state.previewMode !== 'replies') await renderFlowBody(session, body);
+    if (state.previewMode !== 'replies') await renderFlowBody(session, body);
     else {
       const tab = liveTab(session);
       if (tab) body.append(liveThread(tab));
@@ -114,14 +119,14 @@ function showError(body: HTMLElement, error: unknown): void {
   body.replaceChildren(el('p', 'history-error', `Couldn’t show this session: ${message}`));
 }
 
-let notesEditor: NotesEditor | null = null;
+const notes = createPanel(notesAside, view);
+let notesFor: string | null = null;
 
-// Saving updates the row's notes badge and what search finds.
-function renderNotesBody(session: Session, body: HTMLElement): void {
-  notesEditor = createNotesEditor(session.sessionId, {
-    onSaved: (text) => { session.notes = text; hooks.renderList(); },
-  });
-  body.append(notesEditor.element);
+// The panel follows the previewed session; saving updates the row's notes badge and what search finds.
+function showNotes(session: Session): void {
+  if (session.sessionId === notesFor) return;
+  notesFor = session.sessionId;
+  notes.mount({ sessionId: session.sessionId, onSaved: (text) => { session.notes = text; hooks.renderList(); } });
 }
 
 async function renderFlowBody(session: Session, body: HTMLElement): Promise<void> {
@@ -177,6 +182,12 @@ async function renderRepliesBody(session: Session, body: HTMLElement): Promise<v
 }
 
 export async function doResume(sessionId: string, note: HTMLElement, confirmFork: boolean): Promise<void> {
+  // A session already in a tab just gets focused; anything else starts a Claude, so her limit applies.
+  const limited = reply.tabFor(sessionId) ? null : await limitNote('open it here');
+  if (limited) {
+    note.textContent = limited;
+    return;
+  }
   const result = await window.pastel.history.resume(sessionId, confirmFork);
   note.replaceChildren();
   if ('ok' in result) {
@@ -211,7 +222,7 @@ async function doSend(sessionId: string, note: HTMLElement): Promise<void> {
 // Preview without re-rendering the list, so hovering never steals the row under the mouse.
 export function hoverPreview(sessionId: string): void {
   if (sessionId === state.selectedId) return;
-  if (document.activeElement?.matches('#history-preview textarea')) return; // never swap the session she's typing into
+  if (document.activeElement?.matches(':is(#history-preview, #history-notes) textarea')) return; // never swap the session she's typing into
   state.selectedId = sessionId;
   state.previewMode = 'replies'; // a newly picked session always opens on its replies
   for (const r of document.querySelectorAll<HTMLElement>('.history-row')) r.classList.toggle('selected', r.dataset.sessionId === sessionId);

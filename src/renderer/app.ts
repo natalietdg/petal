@@ -22,6 +22,7 @@ import * as tarotReading from './tarot-reading';
 import * as colourKey from './colour-key';
 import './planet-reading';
 import * as welcome from './welcome';
+import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
@@ -30,12 +31,12 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, notesPanel };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
 const SCREEN_SETTLE_MS = 80;
-const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], waiting: [], promptCount: 0, busy: false, sessionId: null, cwd: null, repo: null, question: null };
+const NO_UPDATE: ReaderUpdate = { state: 'none', replies: [], waiting: [], promptCount: 0, busy: false, sessionId: null, cwd: null, repo: null };
 
 // Startup reads that fail in main fall back to the defaults, and the reader says which ones.
 const startupProblems: string[] = [];
@@ -65,7 +66,6 @@ async function start(): Promise<void> {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     cat.setBusy(update.busy);
-    promptDock.showQuestion(tab.id, update.question);
     readScreen(tab);
   };
   // Pickers come and go with pty output; read the active screen once a burst settles.
@@ -88,7 +88,9 @@ async function start(): Promise<void> {
     return false;
   });
 
-  tabs.init({ theme, onActivate: showTab, onCreated: catchEscape, onScreen });
+  // ⌘T and + open a tab meant for Claude, so her session limit applies.
+  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create(); };
+  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated: catchEscape, onScreen });
 
   window.pastel.onTheme((next) => {
     themeKit.applyCssVars(next);
@@ -119,6 +121,7 @@ async function start(): Promise<void> {
   window.pastel.onTabCommand((command) => {
     if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
     else if (command.kind === 'new') tabs.create();
+    else if (command.kind === 'new-session') newSessionTab();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);
     else if (command.kind === 'activate') tabs.activate(command.tabId);
@@ -129,8 +132,7 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
-  byId('reader').addEventListener('mouseup', (event) => {
-    if ((event.target as Element).closest('#notes-view')) return; // notes keep their own keys
+  byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();
   });
 

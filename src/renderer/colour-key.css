@@ -1,8 +1,9 @@
 /* Colour key (colour-key.ts): header button plus a popover of live samples.
    Samples keep every colour from the reader's CSS; the :root #colour-key rules below only shrink size and spacing. */
 
-/* View toggle on the left, the key's quiet button on the right; no taller than the toggle. */
+/* View toggle on the left; the key's quiet button and the Notes toggle on the right, no taller than the toggle. */
 .reader-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.reader-head-end { display: flex; align-items: center; gap: 10px; }
 .colour-key-button {
   display: inline-flex;
   align-items: center;

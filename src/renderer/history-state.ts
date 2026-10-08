@@ -4,7 +4,7 @@ import { byId, query } from './dom';
 import type { HistoryList } from '../shared/ipc';
 
 export type Session = HistoryList['sessions'][number];
-export type PreviewMode = 'replies' | 'flow' | 'decisions' | 'notes';
+export type PreviewMode = 'replies' | 'flow' | 'decisions';
 export type GroupBy = 'tag' | 'day' | 'project';
 
 export const state = {
@@ -51,10 +51,12 @@ view.innerHTML = `
     <p id="history-open-note" class="history-note" aria-live="polite"></p>
     <div id="history-list" class="history-list"></div>
   </div>
-  <div id="history-preview" class="history-preview reader-column"></div>`;
+  <div id="history-preview" class="history-preview reader-column"></div>
+  <aside id="history-notes" hidden></aside>`;
 export const search = query<HTMLInputElement>(view, '#history-search');
 export const list = query(view, '#history-list');
 export const preview = query(view, '#history-preview');
+export const notesAside = query(view, '#history-notes');
 export const openNote = query(view, '#history-open-note');
 export const groupToggle = query(view, '#history-group');
 export const tidyButton = query<HTMLButtonElement>(view, '#history-tidy');

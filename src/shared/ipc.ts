@@ -185,6 +185,7 @@ export interface EventChannels {
   'reader:replies': TabReaderUpdate;
   'tab:closed': { tabId: TabId };
   'tabs:new': { background: boolean };
+  'tabs:new-session': void; // ⌘T: a tab meant for Claude, so her limit applies
   'tabs:close-active': void;
   'tabs:cycle': number;
   'tabs:activate': { tabId: TabId };

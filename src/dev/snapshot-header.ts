@@ -10,7 +10,7 @@ const SCROLL_PX = 1500;
 
 // y of each header button, and whether elementFromPoint at its centre lands on it.
 const PROBE = `(() => {
-  const buttons = [...document.querySelectorAll('#sessions-dock > button:not([hidden]), #reader-head .view-toggle button')];
+  const buttons = [...document.querySelectorAll('#sessions-dock > button:not([hidden]), #reader-head .view-toggle button, #notes-toggle')];
   return buttons.map((b) => {
     const r = b.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);

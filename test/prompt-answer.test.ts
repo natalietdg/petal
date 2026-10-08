@@ -1,8 +1,8 @@
-// Screens captured from a real Claude Code 2.1.291 (paths renamed): the permission parser and the question check.
+// Screens captured from real Claude Code 2.1.291 and 2.1.293 (paths renamed): the permission and question-picker parsers.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parsePermissionPrompt, questionOnScreen } from '../src/shared/prompt-answer';
+import { parsePermissionPrompt, parseQuestionPicker } from '../src/shared/prompt-answer';
 
 const screen = (name: string): string[] => fs.readFileSync(path.join(__dirname, 'fixtures', 'screens', `${name}.txt`), 'utf8').split('\n');
 
@@ -28,7 +28,7 @@ describe('parsePermissionPrompt', () => {
     expect(parsed?.options[1]?.label).not.toMatch(/\s{2}/);
   });
 
-  it.each(['question-single', 'question-two', 'question-multiselect', 'question-review', 'idle-after-answer'])('finds nothing on %s', (name) => {
+  it.each(['question-single', 'question-two', 'question-multiselect', 'question-review', 'idle-after-answer', 'q293-tabs-first', 'q293-review'])('finds nothing on %s', (name) => {
     expect(parsePermissionPrompt(screen(name))).toBeNull();
   });
 
@@ -50,29 +50,91 @@ describe('parsePermissionPrompt', () => {
   });
 });
 
-describe('questionOnScreen', () => {
-  it('is true while the picker shows that question', () => {
-    expect(questionOnScreen(screen('question-single'), 'Which fruit would you prefer?')).toBe(true);
-    expect(questionOnScreen(screen('question-two'), 'Which fruit do you prefer?')).toBe(true);
-    expect(questionOnScreen(screen('question-multiselect'), 'Which fruits do you like?')).toBe(true);
+describe('parseQuestionPicker on live 2.1.293 screens', () => {
+  it('reads the first tab of two: tab bar, question, options with descriptions, the free-text slot', () => {
+    const picker = parseQuestionPicker(screen('q293-tabs-first'));
+    expect(picker).toMatchObject({
+      page: 'question',
+      tabs: [{ header: 'Palette', answered: false }, { header: 'Accent', answered: false }],
+      header: '',
+      question: 'Which overall colour palette should we use?',
+      multiSelect: false,
+      other: { number: 4, label: 'Type something.', checked: false },
+    });
+    expect(picker?.page === 'question' && picker.options.map((o) => o.label)).toEqual(['Light neutral (Recommended)', 'Dark neutral', 'Brand colours']);
+    expect(picker?.page === 'question' && picker.options[1]?.description)
+      .toBe('Dark background with light text. Easier on the eyes at night, but harder to read in bright light.');
   });
 
-  it('is false for another question, after answering, on the review page or a permission prompt', () => {
-    expect(questionOnScreen(screen('question-single'), 'Which colour do you prefer?')).toBe(false);
-    expect(questionOnScreen(screen('idle-after-answer'), 'Which fruit do you prefer?')).toBe(false);
-    expect(questionOnScreen(screen('question-review'), 'Which fruit do you prefer?')).toBe(false);
-    expect(questionOnScreen(screen('permission-bash'), 'Do you want to proceed?')).toBe(false);
+  it('reads the second tab once the first is answered', () => {
+    const picker = parseQuestionPicker(screen('q293-tabs-second'));
+    expect(picker).toMatchObject({ page: 'question', tabs: [{ answered: true }, { answered: false }], question: 'Which accent colour should highlight key items like callouts and links?' });
   });
 
-  it('matches a question the picker wrapped across lines', () => {
-    const lines = ['Which fruit would', 'you prefer?', '❯ 1. Apple', 'Enter to select · ↑/↓ to navigate · Esc to cancel'];
-    expect(questionOnScreen(lines, 'Which fruit would you prefer?')).toBe(true);
+  it('reads a lone question by its ☐ header, and her typed text in the free-text slot', () => {
+    expect(parseQuestionPicker(screen('q293-single'))).toMatchObject({
+      page: 'question', tabs: [], header: 'Fruit', question: 'Which fruit do you prefer?', multiSelect: false,
+      options: [{ number: 1, label: 'Apple (Recommended)', description: 'Crisp and sweet, and easy to carry.' }, { number: 2, label: 'Mango' }],
+      other: { number: 3, label: 'Type something.' },
+    });
+    expect(parseQuestionPicker(screen('q293-single-typing'))).toMatchObject({ page: 'question', other: { number: 3, label: 'kiwi' } });
   });
-});
 
-describe('questionOnScreen looks only at the newest picker', () => {
-  it('ignores the same question text far above the footer', () => {
-    const lines = ['Which fruit would you prefer?', ...Array(40).fill('filler'), '❯ 1. Apple', 'Enter to select · ↑/↓ to navigate · Esc to cancel'];
-    expect(questionOnScreen(lines, 'Which fruit would you prefer?')).toBe(false);
+  it('reads multiSelect boxes and their ticks, skipping the Next row', () => {
+    const fresh = parseQuestionPicker(screen('q293-multiselect'));
+    expect(fresh).toMatchObject({ page: 'question', multiSelect: true, other: { number: 4, label: 'Type something', description: '' } });
+    expect(fresh?.page === 'question' && fresh.options.map((o) => o.checked)).toEqual([false, false, false]);
+    const ticked = parseQuestionPicker(screen('q293-multiselect-checked'));
+    expect(ticked?.page === 'question' && ticked.options.map((o) => o.checked)).toEqual([true, false, true]);
+    expect(ticked?.page === 'question' && ticked.tabs[0]?.answered).toBe(true);
+  });
+
+  it('marks the typed answer on a tab she came back to', () => {
+    expect(parseQuestionPicker(screen('q293-tabs-typed'))).toMatchObject({ page: 'question', other: { label: 'teal', checked: true } });
+  });
+
+  it('reads the review page: every answer, and whether some are missing', () => {
+    expect(parseQuestionPicker(screen('q293-review'))).toEqual({
+      page: 'review',
+      tabs: [{ header: 'Palette', answered: true }, { header: 'Accent', answered: true }],
+      answers: [
+        { question: 'Which overall colour palette should we use?', answer: 'Light neutral (Recommended)' },
+        { question: 'Which accent colour should highlight key items like callouts and links?', answer: 'Indigo' },
+      ],
+      complete: true,
+    });
+    expect(parseQuestionPicker(screen('q293-review-multi'))).toMatchObject({ page: 'review', answers: [{ answer: 'Apple, Plum' }, { answer: 'teal' }], complete: true });
+    expect(parseQuestionPicker(screen('q293-review-unanswered'))).toMatchObject({ page: 'review', answers: [], complete: false });
+  });
+
+  it('still reads the 2.1.291 screens the same way', () => {
+    expect(parseQuestionPicker(screen('question-single'))).toMatchObject({ page: 'question', header: 'Fruit choice', question: 'Which fruit would you prefer?' });
+    expect(parseQuestionPicker(screen('question-two'))).toMatchObject({ page: 'question', tabs: [{ header: 'Fruit' }, { header: 'Color' }] });
+    expect(parseQuestionPicker(screen('question-multiselect'))).toMatchObject({ page: 'question', multiSelect: true });
+    expect(parseQuestionPicker(screen('question-review'))).toMatchObject({ page: 'review', answers: [{ answer: 'Pear' }, { answer: 'Red' }] });
+  });
+
+  it('reads trailing spaces the way xterm hands them over', () => {
+    expect(parseQuestionPicker(screen('q293-tabs-first').map((line) => line.padEnd(100)))).toMatchObject({ page: 'question' });
+  });
+
+  it.each(['q293-idle-after-answer', 'idle-after-answer', 'permission-bash', 'permission-read-wrapped'])('finds nothing on %s', (name) => {
+    expect(parseQuestionPicker(screen(name))).toBeNull();
+  });
+
+  it('refuses near misses: text below the picker, a gap in the numbers, a tab bar without Submit', () => {
+    const lines = screen('q293-tabs-first');
+    const footer = lines.findIndex((line) => line.startsWith('Enter to select'));
+    expect(parseQuestionPicker([...lines.slice(0, footer + 1), '% '])).toBeNull();
+    expect(parseQuestionPicker(lines.map((line) => line.replace('  3. Brand colours', '  7. Brand colours')))).toBeNull();
+    expect(parseQuestionPicker(lines.map((line) => line.replace('✔ Submit', '✔ Done')))).toBeNull();
+    expect(parseQuestionPicker(lines.filter((line) => !line.includes('Chat about this')))).toBeNull();
+    const review = screen('q293-review');
+    expect(parseQuestionPicker(review.map((line) => line.replace('Ready to submit your answers?', 'Ready?')))).toBeNull();
+  });
+
+  it('finds nothing on an empty or blank screen', () => {
+    expect(parseQuestionPicker([])).toBeNull();
+    expect(parseQuestionPicker(['', '   '])).toBeNull();
   });
 });
