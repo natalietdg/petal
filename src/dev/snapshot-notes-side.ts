@@ -2,6 +2,7 @@
 // column's axis (docked at 1280/1600, a drawer at 990/800), its open state saved in config, and beside History's preview.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { unclippedCheck } from './snapshot-divider';
 import { load as loadConfig } from '../main/config-store';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
@@ -88,6 +89,7 @@ export async function notesSideCheck(kit: Kit, win: BrowserWindow): Promise<void
       const m = await measure();
       const drawer = width < DRAWER_BELOW_PX;
       const tag = `${width}px ${drawer ? 'drawer' : 'docked'}`;
+      await unclippedCheck(kit, `Notes ${tag}`, '#notes-panel');
       check(m.open && m.panel.right === m.viewport, `${tag} panel open at the right edge: ${JSON.stringify(m.panel)}`);
       check(Math.abs(m.text.centre - m.input.centre) <= TOLERANCE_PX && Math.abs(m.text.width - m.input.width) <= TOLERANCE_PX * 2,
         `${tag} column centre ${m.text.centre} == reply box centre ${m.input.centre}, width ${m.text.width} vs ${m.input.width}`);

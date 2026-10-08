@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { promptWrites } from '../main/snapshot-mode';
 import type { Kit, TabsDeps } from './snapshot';
+import { unclippedCheck } from './snapshot-divider';
 
 const RULE = '─'.repeat(40);
 const DASHED = '╌'.repeat(40);
@@ -111,6 +112,7 @@ export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDe
   const single = await cardWhen((c) => c.chip === 'Fruit');
   check(single && single.text === 'Which fruit do you prefer?' && single.options.length === 2 && single.options[1].desc === 'Soft, sweet and tropical.'
     && single.other && !single.tabs.length && !single.nav.length, `lone question card reads the screen: ${JSON.stringify(single)}`);
+  await unclippedCheck(kit, 'question card', '.question-card');
   await capturePair('question-card');
   check(JSON.stringify(await click('.question-card .qc-option', 1)) === JSON.stringify(['2']), 'clicking Mango writes ["2"]');
   check((await card()).status.startsWith('Sent'), 'card says it was sent');
@@ -137,6 +139,7 @@ export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDe
 
   await show('question-colour', COLOUR_SCREEN);
   const colour = await cardWhen((c) => c.text === 'Which colour do you prefer?');
+  await unclippedCheck(kit, 'colour question card', '.question-card');
   check(colour && colour.other && colour.options.length === 2, `second tab shows its own options and a typed answer: ${JSON.stringify(colour)}`);
   await js(`(() => { const input = document.querySelector('.question-card .qc-other-input'); input.value = 'teal'; input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const typed = await click('.question-card .qc-send');
@@ -146,6 +149,7 @@ export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDe
   const review = await cardWhen((c) => c.current === 'Submit');
   check(review && JSON.stringify(review.review) === JSON.stringify(['Which fruits do you like?', 'Apple, Plum', 'Which colour do you prefer?', 'teal'])
     && JSON.stringify(review.nav) === JSON.stringify(['Back', 'Cancel', 'Submit answers']), `review page lists every answer: ${JSON.stringify(review)}`);
+  await unclippedCheck(kit, 'review question card', '.question-card');
   await capturePair('question-card-review');
   check(JSON.stringify(await click('.question-card .qc-submit')) === JSON.stringify(['1']), 'Submit answers writes ["1"]');
   await clearScreen();

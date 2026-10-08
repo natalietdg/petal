@@ -18,9 +18,10 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has seven sections with the documented defaults', () => {
+  it('has eight sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout']);
+    expect(d.layout).toEqual({ splits: {} });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
@@ -123,7 +124,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -260,5 +261,19 @@ describe('first launch and the organizer migration', () => {
   it('saving welcome.seen sticks for the next launch', () => {
     config.save({ welcome: { seen: true } });
     expect(config.load().welcome.seen).toBe(true);
+  });
+});
+
+describe('config-store layout splits', () => {
+  it('saves each window slot separately, clamped to 20–85%', () => {
+    config.save({ layout: { splits: { 0: 0.4, 1: 0.95, 2: 0.05 } } });
+    expect(config.load().layout.splits).toEqual({ 0: 0.4, 1: 0.85, 2: 0.2 });
+  });
+
+  it('drops non-slot keys and non-numbers, and a non-map keeps the saved splits', () => {
+    config.save({ layout: { splits: { 0: 0.5, x: 0.3, 1: 'wide', 99: 0.4, 3: Number.NaN } } });
+    expect(config.load().layout.splits).toEqual({ 0: 0.5 });
+    config.save({ layout: { splits: [0.3] } });
+    expect(config.load().layout.splits).toEqual({ 0: 0.5 });
   });
 });

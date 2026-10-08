@@ -134,6 +134,9 @@ export interface InvokeChannels {
   'config:test-hook': { args: []; result: Guarded<HookTestResult> };
   'config:hook-runs': { args: []; result: Guarded<HookRun[]> };
   'config:organizer': { args: []; result: Guarded<OrganizerStatus> };
+  // This window's saved reader share, or null for the default.
+  'layout:get-split': { args: []; result: Guarded<number | null> };
+  'layout:save-split': { args: [fraction: number]; result: Guarded<Ok> };
 
   'workflow:today': { args: [request?: { openTabs?: OpenTab[] }]; result: Guarded<TodayData> };
   'workflow:setup': { args: []; result: Guarded<SetupData> };

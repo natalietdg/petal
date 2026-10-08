@@ -1,6 +1,7 @@
 // Planetarium: the dome shows today's planet, hover names it, click opens the card with facts and tomorrow's planet, Esc closes it.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { unclippedCheck } from './snapshot-divider';
 import { captureRoom } from './snapshot-tarot';
 import { localDayNumber } from '../renderer/scenes/daily';
 import { planetLabel } from '../renderer/scenes/planet-facts';
@@ -52,6 +53,7 @@ export async function planetCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await js(click);
   await wait(200);
   const opened = await js(STATE);
+  await unclippedCheck(kit, 'planet popover', '.scene-popover:not([hidden])');
   check(opened.popoverShown && !opened.tipShown && opened.popover.includes(today.facts.name) && today.facts.lines.every((line) => opened.popover.includes(line)) && opened.popover.includes(today.tomorrow),
     `click opens the card with ${today.facts.name}, its facts and "${today.tomorrow}": ${JSON.stringify(opened.popover)}`);
   check(!/[–—]/.test(opened.popover), 'the card has no em dashes');

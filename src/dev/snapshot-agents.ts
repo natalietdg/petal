@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { unclippedCheck } from './snapshot-divider';
 import { appendedReport, appendedStep, FINISHED_ID, HOSTILE_OUTPUT, RUNNING_ID, writeAgentsFixture } from './snapshot-agents-fixture';
 import { fixtureFile, panelFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -82,6 +83,7 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   check(list?.[0]?.id === RUNNING_ID && list[0].status === 'running' && list[0].step === 'Running npm test' && list[0].task === 'Tidy the print styles' && list[0].meta.endsWith('2 tool calls'),
     `running agent first with its step: ${JSON.stringify(list?.[0])}`);
   check(list?.[1]?.id === FINISHED_ID && list[1].status === 'finished' && list[1].task === 'Check the header spacing', `finished agent second: ${JSON.stringify(list?.[1])}`);
+  await unclippedCheck(kit, 'Agents list', '#agents');
   for (const id of ['paleSky', 'nightPastel']) {
     applyTheme(id, { persist: false });
     await capture(`agents-list-${id}`);
