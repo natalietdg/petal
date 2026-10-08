@@ -255,3 +255,15 @@
   [data-reading="print"] .rail blockquote.pull-quote { font-size: 1.2em; margin-top: 0; }
   [data-reading="print"] .rail blockquote.sidebar { font-size: 0.82em; }
 }
+
+/* ---- Doing / Recommend / Next: mono labels between ink rules. ---- */
+[data-reading="print"] .status-chip {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--print-ink, var(--reader-fg));
+  font-family: var(--print-mono, var(--mono-font));
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+[data-reading="print"] .status-block { border-top-color: var(--print-ink); border-bottom-color: var(--print-ink); }
