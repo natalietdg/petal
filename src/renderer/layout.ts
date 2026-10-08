@@ -1,13 +1,13 @@
 import { byId } from './dom';
+import { READER_SPLIT, clampSplit } from '../shared/reader-split';
 
 const app = byId('app');
 const divider = byId('divider');
-const MIN_FRACTION = 0.2;
-const MAX_FRACTION = 0.85;
-const DEFAULT_FRACTION = 0.65;
 const KEY_STEP = 0.02;
 const PAGE_STEP = 0.1;
-let readerFraction = DEFAULT_FRACTION;
+const SAVE_DELAY_MS = 300; // held arrow keys save once
+let readerFraction: number = READER_SPLIT.initial;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 // The reader's fixed bands (dock, header, prompts, reply box); the split never squeezes the reader below them.
 const CHROME = ['sessions-dock', 'reader-head', 'prompt-dock', 'composer'].map(byId);
@@ -20,7 +20,7 @@ function chromeHeight(): number {
 function shownFraction(): number {
   const rows = app.clientHeight - divider.offsetHeight;
   const chromeFloor = rows > 0 ? chromeHeight() / rows : 0;
-  return Math.min(MAX_FRACTION, Math.max(MIN_FRACTION, chromeFloor, readerFraction));
+  return clampSplit(Math.max(chromeFloor, readerFraction));
 }
 
 function applySplit(): void {
@@ -31,8 +31,13 @@ function applySplit(): void {
 }
 
 function setSplit(fraction: number): void {
-  readerFraction = Math.min(MAX_FRACTION, Math.max(MIN_FRACTION, fraction));
+  readerFraction = clampSplit(fraction);
   applySplit();
+}
+
+function saveSplit(): void {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void window.pastel.layout.saveSplit(readerFraction), SAVE_DELAY_MS);
 }
 
 export function toggleReaderOnly(): void {
@@ -43,11 +48,14 @@ divider.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   event.preventDefault(); // no text selection while dragging
   divider.setPointerCapture(event.pointerId);
+  let moved = false;
   const onMove = (move: PointerEvent) => {
     const box = app.getBoundingClientRect();
     setSplit((move.clientY - box.top) / box.height);
+    moved = true;
   };
   const end = () => {
+    if (moved) saveSplit();
     divider.removeEventListener('pointermove', onMove);
     divider.removeEventListener('pointerup', end);
     divider.removeEventListener('pointercancel', end);
@@ -57,7 +65,10 @@ divider.addEventListener('pointerdown', (event) => {
   divider.addEventListener('pointercancel', end);
 });
 
-divider.addEventListener('dblclick', () => setSplit(DEFAULT_FRACTION));
+divider.addEventListener('dblclick', () => {
+  setSplit(READER_SPLIT.initial);
+  saveSplit();
+});
 
 // Up and down move the line; steps start from where it shows, so a raised floor never eats a press.
 const KEY_MOVES: Record<string, (shown: number) => number> = {
@@ -65,17 +76,23 @@ const KEY_MOVES: Record<string, (shown: number) => number> = {
   ArrowDown: (shown) => shown + KEY_STEP,
   PageUp: (shown) => shown - PAGE_STEP,
   PageDown: (shown) => shown + PAGE_STEP,
-  Home: () => MIN_FRACTION,
-  End: () => MAX_FRACTION,
+  Home: () => READER_SPLIT.min,
+  End: () => READER_SPLIT.max,
 };
 divider.addEventListener('keydown', (event) => {
   const move = KEY_MOVES[event.key];
   if (!move) return;
   event.preventDefault();
   setSplit(move(shownFraction()));
+  saveSplit();
 });
 
 // A band growing (a prompt, a longer reply box) or the window shrinking re-checks the floor.
 const observer = new ResizeObserver(applySplit);
 for (const el of [app, ...CHROME]) observer.observe(el);
 applySplit();
+
+// This window's saved split; a failed read keeps the default.
+void window.pastel.layout.getSplit().then((saved) => {
+  if (typeof saved === 'number') setSplit(saved);
+});

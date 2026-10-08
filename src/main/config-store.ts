@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
+import { clampSplit } from '../shared/reader-split';
 
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -20,6 +21,8 @@ export interface Config {
   tarot: { birthdate: string };
   // The first-run screen; true once it has been shown.
   welcome: { seen: boolean };
+  // Reader share of each window, keyed by window slot (main/layout-ipc.ts).
+  layout: { splits: Record<string, number> };
 }
 
 type Section = keyof Config;
@@ -47,6 +50,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   sessions: { maxOpen: 8 },
   tarot: { birthdate: '' },
   welcome: { seen: false },
+  layout: { splits: {} },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -65,6 +69,13 @@ const intIn = (value: unknown, min: number, max: number, fallback: number): numb
 const promptOr = (value: unknown, saved: string, fallback: string): string => {
   if (typeof value !== 'string') return saved;
   return value.trim() ? value.replace(/\s+$/, '') : fallback;
+};
+// Slot numbers to clamped fractions; anything else in the map is dropped, a non-map keeps the saved one.
+const MAX_SLOTS = 32;
+const splitsOr = (value: unknown, fallback: Record<string, number>): Record<string, number> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
+  const usable = Object.entries(value).filter(([slot, f]) => /^\d+$/.test(slot) && Number(slot) < MAX_SLOTS && typeof f === 'number' && Number.isFinite(f));
+  return Object.fromEntries(usable.map(([slot, f]) => [slot, clampSplit(f as number)]));
 };
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 // '' clears it; anything but a real calendar date keeps the saved one.
@@ -86,6 +97,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const s = raw.sessions ?? {};
   const t = raw.tarot ?? {};
   const w = raw.welcome ?? {};
+  const l = raw.layout ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -102,6 +114,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     sessions: { maxOpen: intIn(s.maxOpen, MAX_OPEN.min, MAX_OPEN.max, b.sessions.maxOpen) },
     tarot: { birthdate: birthdateOr(t.birthdate, b.tarot.birthdate) },
     welcome: { seen: boolOr(w.seen, b.welcome.seen) },
+    layout: { splits: splitsOr(l.splits, b.layout.splits) },
   };
 }
 

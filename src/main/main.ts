@@ -11,6 +11,7 @@ import { registerWorkflowIpc } from './workflow-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
+import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
@@ -53,7 +54,11 @@ function createWindow(): BrowserWindow {
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   const contentsId = win.webContents.id;
-  win.on('closed', () => closeWindowTabs(contentsId));
+  assignSlot(contentsId);
+  win.on('closed', () => {
+    closeWindowTabs(contentsId);
+    releaseSlot(contentsId);
+  });
   return win;
 }
 
@@ -113,6 +118,7 @@ function registerIpc(): void {
   registerCustomizeIpc();
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
+  registerLayoutIpc();
   handle('update:status', () => ({ ready: isUpdateReady() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));
 }

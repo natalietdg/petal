@@ -72,6 +72,10 @@ const api = {
     setCat: (id: string) => send('look:cat', id),
     setScene: (id: string) => send('look:scene', id),
   },
+  layout: {
+    getSplit: () => invoke('layout:get-split'),
+    saveSplit: (fraction: number) => invoke('layout:save-split', fraction),
+  },
   config: {
     get: () => invoke('config:get'),
     save: (patch: InvokeArgs<'config:save'>[0]) => invoke('config:save', patch),

@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
+import * as configStore from '../main/config-store';
 
 const HEIGHT_TOLERANCE_PX = 10;
 const TARGETS = [0.3, 0.8, 0.1, 0.65];
@@ -137,8 +138,8 @@ async function handlingCheck(kit: Kit, win: BrowserWindow): Promise<void> {
 
   doubleClick(grabbed.divider.centre);
   await wait(350);
-  const reset: Measure = await js(MEASURE);
-  check((await valueNow(kit)) === 65 && Math.abs(reset.terminalPane - expectedPane(start, 0.65)) <= HEIGHT_TOLERANCE_PX, `double-click resets to 65/35: valuenow ${await valueNow(kit)}, pane ${reset.terminalPane}px`);
+  const defaults: Measure = await js(MEASURE);
+  check((await valueNow(kit)) === 65 && Math.abs(defaults.terminalPane - expectedPane(start, 0.65)) <= HEIGHT_TOLERANCE_PX, `double-click resets to 65/35: valuenow ${await valueNow(kit)}, pane ${defaults.terminalPane}px`);
 
   await js("document.getElementById('divider').focus()");
   const keys = async (keyCode: string, times: number) => {
@@ -157,13 +158,22 @@ async function handlingCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const role = await js("(() => { const d = document.getElementById('divider'); return { role: d.getAttribute('role'), tabIndex: d.tabIndex, focused: document.activeElement === d }; })()");
   check(up === 55 && down === 75 && home >= 20 && home < 55 && role.role === 'separator' && role.tabIndex === 0 && role.focused, `keyboard: 65 → Up×5 ${up} → Down×10 ${down} → Home ${home}, ${JSON.stringify(role)}`);
   await js("document.getElementById('divider').blur()");
+
+  // Saved per window in config.json: this window is slot 0.
+  const saved = async () => { await wait(700); return { file: configStore.load().layout.splits['0'], page: await js('window.pastel.layout.getSplit()') }; };
+  const before: Measure = await js(MEASURE);
+  await realDrag(kit, win, before, before.appTop + 0.4 * before.appHeight);
+  const dragged = await saved();
+  check(Math.abs(dragged.file - 0.4) < 0.01 && dragged.page === dragged.file, `drag saves the split to config.json: ${JSON.stringify(dragged)}`);
   doubleClick((await js(MEASURE)).divider.centre); // later steps expect the default split
-  await wait(300);
+  const reset = await saved();
+  check(reset.file === 0.65 && reset.page === 0.65, `double-click saves 65/35: ${JSON.stringify(reset)}`);
 }
 
 export async function dividerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
-  const { js } = kit;
+  const { js, log } = kit;
   const [startWidth, startHeight] = win.getContentSize();
+  log(`divider starts at ${await valueNow(kit)}% reader, saved ${JSON.stringify(configStore.load().layout.splits)}`);
   await js('PastelTerm.welcome.close()'); // her state: the first-run screen is long gone
   await js("PastelTerm.reader.setView('replies')");
   for (const [width, height] of [[1280, 900], [800, 700]] as const) await looksAtSize(kit, win, width, height);
