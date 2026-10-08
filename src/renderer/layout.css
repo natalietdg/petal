@@ -18,6 +18,13 @@ html, body {
   flex-direction: column;
 }
 
+/* Overlays take the column below the dock, so nothing scrolls under its buttons. */
+#reader-area > :is(#history, #workflow, #customize, #repos) {
+  order: 1;
+  flex: 1;
+  min-height: 0;
+}
+
 #reader {
   flex: 1;
   min-height: 0;

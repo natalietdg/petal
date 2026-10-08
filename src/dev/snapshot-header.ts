@@ -1,4 +1,5 @@
 // Fixed header: after scrolling the reader 1500px, the dock and the view toggle sit at the same y and still take clicks, in every look.
+// Nothing starts under it either: the reader and History begin below the header at every look and width.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { printUpdate } from './snapshot-print';
@@ -15,6 +16,69 @@ const PROBE = `(() => {
     return { label: b.textContent.trim().slice(0, 24), top: Math.round(r.top), visible: r.height > 0 && r.bottom > 0, hit: hit === b || b.contains(hit) };
   });
 })()`;
+
+const WIDTHS = [800, 990, 1280, 1600];
+
+// Header bottom vs where the column's content starts: the reader's scrollport and first element, and each open overlay's.
+const OVERLAP = `(() => {
+  const bottom = (el) => el && !el.hidden ? Math.round(el.getBoundingClientRect().bottom) : 0;
+  const header = Math.max(bottom(document.getElementById('sessions-dock')), bottom(document.getElementById('reader-head')));
+  const top = (el) => el ? Math.round(el.getBoundingClientRect().top) : null;
+  const firstShown = (root) => root ? [...root.querySelectorAll('*')].find((el) => el.getBoundingClientRect().height > 0) : null;
+  const reader = document.getElementById('reader');
+  const history = document.getElementById('history');
+  if (!history.hidden) {
+    const preview = document.getElementById('history-preview');
+    const list = document.querySelector('.history-list-pane');
+    return { header, scrollport: Math.min(top(preview), top(list)), first: Math.min(top(firstShown(preview)), top(firstShown(list))) };
+  }
+  return { header, scrollport: top(reader), first: top(firstShown(reader.querySelector('.reader-column'))) };
+})()`;
+
+// Fits the window to a width, retrying a dropped resize.
+async function sizeTo(kit: Kit, win: BrowserWindow, width: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    win.setContentSize(width, 900);
+    const sized = await kit.waitFor(async () => {
+      win.webContents.invalidate();
+      return (await kit.js('window.innerWidth')) === width;
+    }, 3000);
+    if (sized) return true;
+  }
+  return false;
+}
+
+// Every look and width: the reader and History both start below the fixed header, at the top and scrolled to the end.
+async function overlapCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+  const { js, wait, waitFor, log, capture } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} no header overlap: ${what}`);
+  // any: the probe's shape is built in the script above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clear = (m: any) => m.scrollport >= m.header && m.first !== null && m.first >= m.header;
+  for (const [look] of READING_CHOICES) {
+    await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
+    await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
+    for (const width of WIDTHS) {
+      check(await sizeTo(kit, win, width), `${look} window at ${width}px`);
+      await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+      await wait(300);
+      await js("document.getElementById('reader').scrollTop = 0");
+      const reader = await js(OVERLAP);
+      check(clear(reader), `${look} ${width}px reader starts below the header: ${JSON.stringify(reader)}`);
+      await js('PastelTerm.history.open()');
+      await waitFor(() => js("Boolean(document.querySelector('#history-preview .history-preview-head'))"), 8000);
+      await js("document.getElementById('history-preview').scrollTop = 0");
+      await wait(200);
+      const top = await js(OVERLAP);
+      await js("(() => { const p = document.getElementById('history-preview'); p.scrollTop = p.scrollHeight; })()");
+      await wait(200);
+      const end = await js(OVERLAP);
+      check(clear(top) && end.scrollport >= end.header, `${look} ${width}px History starts below the header, at the top ${JSON.stringify(top)} and scrolled ${JSON.stringify(end)}`);
+      if (width === 800) await capture(`header-history-${look}-800`);
+      await js('PastelTerm.history.close()');
+    }
+  }
+}
 
 export async function headerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme } = kit;
@@ -44,6 +108,7 @@ export async function headerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
     await capture(`header-scrolled-${look}-1280`);
   }
 
+  await overlapCheck(kit, win);
   await js("document.getElementById('reader').scrollTop = 0");
   await js("window.pastel.look.setReading('newspaper')");
   win.setContentSize(startWidth, startHeight);

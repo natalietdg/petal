@@ -1,7 +1,6 @@
-/* Workflow replaces the reader while open; the dock stays on top. */
+/* Workflow replaces the reader while open, below the dock. */
 #workflow {
-  position: absolute;
-  inset: 0;
+  position: relative;
   overflow-y: auto;
   background: var(--reader-bg);
   color: var(--reader-fg);
@@ -9,7 +8,7 @@
 }
 #workflow[hidden] { display: none; }
 
-.workflow-pane { max-width: 1180px; margin: 0 auto; padding: 72px 40px 60px; }
+.workflow-pane { max-width: 1180px; margin: 0 auto; padding: 16px 40px 60px; }
 .workflow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 22px; }
 .workflow-title { margin: 0; font: 600 2em/1.1 var(--display-font); letter-spacing: -0.02em; }
 .workflow-tabs { margin: 0; }
