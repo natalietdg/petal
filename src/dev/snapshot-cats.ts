@@ -12,7 +12,7 @@ const ZOOMS = [['3x', 1], ['10x', 10 / 3]] as const; // the sprite draws at 3px 
 
 const drawn = `(() => {
   const cat = document.getElementById('cat');
-  return { cat: cat.dataset.cat, cells: cat.querySelectorAll('.cat-sprite rect').length, wings: cat.querySelectorAll('.cat-sprite .wings rect').length,
+  return { cat: cat.dataset.cat, cells: cat.querySelectorAll('.cat-sprite rect').length, sparkle: cat.querySelectorAll('.cat-prop .sparkle rect').length,
     prop: cat.querySelectorAll('.cat-prop rect').length, tip: cat.querySelector('.cat-tip').textContent };
 })()`;
 
@@ -23,7 +23,7 @@ export async function catGallery(kit: Kit, win: BrowserWindow): Promise<void> {
   for (const id of CATS) {
     await js(`PastelTerm.cat.setCat(${JSON.stringify(id)})`);
     const state = await js(drawn);
-    log(`${state.cat === id && state.cells > 100 && state.prop > 0 && (id !== 'hoshi' || state.wings > 0) ? 'ok' : 'FAIL'} cat ${id} draws with her toy (Hoshi: and wings): ${JSON.stringify(state)}`);
+    log(`${state.cat === id && state.cells > 100 && state.prop > 0 && (id !== 'hoshi' || state.sparkle > 0) ? 'ok' : 'FAIL'} cat ${id} draws with her toy (Hoshi: and its sparkles): ${JSON.stringify(state)}`);
     for (const theme of THEMES) {
       applyTheme(theme, { persist: false });
       for (const scene of SCENES) {

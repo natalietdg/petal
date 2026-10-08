@@ -42,10 +42,11 @@ describe('cat art', () => {
     expect(used.filter((cell) => !styled.has(cell))).toEqual([]);
   });
 
-  it('Hoshi has wings, a wand that sparkles, and no tail', () => {
-    expect(CATS.hoshi.wings.length).toBeGreaterThan(0);
+  it('Hoshi wears her costume and carries a winged star wand with sparkles and a heart', () => {
+    const coat = CATS.hoshi.base.join('');
+    for (const part of ['A', 'G', 'F', 'I', 'S']) expect(coat).toContain(part); // beret, dress, frill, bow, fringe
     expect(CATS.hoshi.tail).toBe(false);
     expect(PROPS.hoshi.name).toBe('wand');
-    expect(PROPS.hoshi.rows.join('')).toContain('k');
+    for (const part of ['y', 'V', 'k', 'h']) expect(PROPS.hoshi.rows.join('')).toContain(part);
   });
 });

@@ -62,15 +62,14 @@
   --cat-patch: #DE8A45;
   --cat-white: #F6F0E6;
 }
-/* Hoshi: sakura pink with a cream muzzle, violet eyes, a ribbon collar and a plum outline. */
+/* Hoshi: a magical girl in pink, white and gold; soft pink fur with a deeper pink fringe, violet eyes. */
 #cat[data-cat="hoshi"], .cat-portrait[data-cat="hoshi"] {
-  --cat-body: #F7BCCB;
-  --cat-belly: #FFF1E2;
-  --cat-pink: #EE8FAD;
-  --cat-blush: #EE8FAD;
+  --cat-body: #FBD9E2;
+  --cat-belly: #FFF6EE;
+  --cat-pink: #F28DB2;
+  --cat-blush: #F28DB2;
   --cat-eye: #6B4FB0;
-  --cat-white: #FFF1E2;
-  --cat-collar: #E8507F;
+  --cat-stripe: #EE9AB6;
 }
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
@@ -107,7 +106,11 @@
 .px-f { fill: #6FA8DC; }
 .px-D { fill: #1E3A6E; }
 .px-e { fill: #F6EBD6; }
-.px-H { fill: #F9A8C2; }
+.px-A { fill: #FFFFFF; }
+.px-G { fill: #F06A9A; }
+.px-F { fill: #FFFFFF; }
+.px-I { fill: #D93A6E; }
+.px-h { fill: #F0508A; }
 .px-Y { fill: #FFC93C; }
 .px-V { fill: #FFFFFF; }
 .px-U { fill: #C9B8F0; }
@@ -211,7 +214,7 @@
   70%, 85% { transform: translate(-3px, 3px); }
 }
 
-/* Hoshi flies: she hovers a pixel up, wings beating fast, and her wand bobs and sparkles. */
+/* Hoshi casts: she hops, and her winged wand bobs with sparkles and a heart. */
 #cat.busy[data-cat="hoshi"] .sitting { animation: bob 1.2s steps(2) infinite; }
 #cat.busy .prop-wand { animation: bob 0.8s steps(2) infinite; }
 #cat.busy .prop-wand .sparkle { animation: sparkle 0.8s steps(1) infinite; }

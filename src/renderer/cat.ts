@@ -1,5 +1,5 @@
 // A 20x20 pixel pet in the reader's corner: eyes shut and dozing when Claude rests, playing when it works.
-// Four cats share one silhouette; each has her own coat, her own prop and her own busy move.
+// Each cat has her own coat, her own prop and her own busy move.
 import * as scenes from './scenes';
 import { byId, el, query } from './dom';
 import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, type Line, type Pet, type Prop } from './cat-art';
@@ -52,12 +52,12 @@ function sittingSvg(cat: Pet): string {
     + (tail ? `<g class="tail-up">${partial(tail.up)}</g><g class="tail-down">${partial(tail.down)}</g>` : ''));
 }
 
-// Tea steam and wand sparkles are their own groups so they can rise and twinkle; the rest moves as one.
+// Tea steam and wand sparkles (and heart) are their own groups so they can rise and twinkle; the rest moves as one.
 function propSvg(prop: Prop): string {
   const width = prop.rows[0]?.length ?? 0;
   const height = prop.rows.length;
   const only = (cells: RegExp) => prop.rows.map((row) => row.replace(cells, '.'));
-  const inner = `<g class="steam">${rects(only(/[^s]/g))}</g><g class="sparkle">${rects(only(/[^k]/g))}</g>${rects(only(/[sk]/g))}`;
+  const inner = `<g class="steam">${rects(only(/[^s]/g))}</g><g class="sparkle">${rects(only(/[^kh]/g))}</g>${rects(only(/[skh]/g))}`;
   return `<svg viewBox="0 0 ${width} ${height}" width="${width * 3}" height="${height * 3}" shape-rendering="crispEdges" aria-hidden="true">${inner}</svg>`;
 }
 
