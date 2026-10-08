@@ -13,6 +13,20 @@ afterEach(removeTempDirs);
 
 const writeSettings = (fields: Record<string, string>) => fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(fields));
 
+describe('scene settings', () => {
+  it('a saved bakery scene loads as the izakaya that replaced it', async () => {
+    writeSettings({ scene: 'bakery' });
+    const look = await import('../src/main/look');
+    expect(look.settings().scene).toBe('izakaya');
+  });
+
+  it('other saved scenes load unchanged', async () => {
+    writeSettings({ scene: 'tarot' });
+    const look = await import('../src/main/look');
+    expect(look.settings().scene).toBe('tarot');
+  });
+});
+
 describe('reading style settings', () => {
   it('lists Magazine · Print fourth, so the View menu gives it ⌘⇧4', async () => {
     const { READING_CHOICES } = await import('../src/main/menu');

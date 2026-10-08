@@ -10,6 +10,9 @@ import type { Theme, Themes } from '../shared/types';
 export const themes: Themes = themesJson;
 const DEFAULT_THEME = 'paleSky';
 
+// Retired scene ids and the scene that replaced them.
+const RENAMED_SCENES: Readonly<Record<string, string>> = { bakery: 'izakaya' };
+
 // Read on first use, after main.ts has pointed userData at the snapshot scratch folder when it needs to.
 let current: Settings | null = null;
 export function settings(): Settings {
@@ -19,6 +22,7 @@ export function settings(): Settings {
     if (!CAT_CHOICES.some(([id]) => id === current?.cat)) current.cat = 'mika';
     if (!themes[current.theme]) current.theme = DEFAULT_THEME;
     if (!isReadingChoice(current.reading)) current.reading = 'newspaper';
+    current.scene = RENAMED_SCENES[current.scene] ?? current.scene;
   }
   return current;
 }
