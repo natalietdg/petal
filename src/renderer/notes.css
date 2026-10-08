@@ -63,7 +63,7 @@
   #reader-area.notes-open :is(#reader, #reader-head, #prompt-dock, #composer) { margin-right: var(--notes-width); }
   #reader-area.notes-open:has(> #reader:not([hidden])) #cat,
   #reader-area:has(> #history.notes-open:not([hidden])) #cat { right: calc(var(--notes-width) + 28px); }
-  #history.notes-open { grid-template-columns: minmax(260px, 34%) minmax(0, 1fr) var(--notes-width); }
+  #history.notes-open { grid-template-columns: var(--history-list-width) minmax(0, 1fr) var(--notes-width); }
 }
 /* Narrow: a drawer over the text, so the column keeps a readable measure. */
 @media (max-width: 999px) {

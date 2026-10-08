@@ -2,13 +2,13 @@
 #history {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(260px, 34%) 1fr;
+  --history-list-width: minmax(260px, 34%);
+  grid-template-columns: var(--history-list-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   background: var(--reader-bg);
   color: var(--reader-fg);
 }
 #history[hidden] { display: none; }
-/* The pet stays visible over History too: she never disappears. */
 
 .history-list-pane {
   display: flex;
@@ -54,7 +54,11 @@
 .history-meta { font-size: 12px; color: var(--muted); }
 .history-empty { color: var(--muted); font-size: 14px; }
 
-.history-preview { overflow-y: auto; max-width: none; margin: 0; padding: 16px 40px 60px; }
+/* Preview column: the conversation scrolls; the fork banner above and the reply box below keep their own rows. */
+.history-preview-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.history-preview { flex: 1; min-height: 0; overflow-y: auto; max-width: none; margin: 0; padding: 16px 40px 24px; }
+.history-open-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 10px 40px; background: var(--decide-wash); }
+.history-open-note:empty { display: none; }
 .history-preview-title { margin: 0 0 4px; font: 600 1.5em/1.25 var(--ui-font); letter-spacing: -0.015em; }
 .history-preview-head { margin-bottom: 24px; }
 .resume-button { margin: 4px 12px 12px 0; }
@@ -138,15 +142,12 @@
 }
 .history-earlier { margin: 0 0 1.2em; }
 
-/* Reply box under the preview: stays at the bottom while the conversation scrolls above it. */
+/* Reply box: docked under the preview in its own opaque row, like the main reply box. */
+.history-reply-dock { flex: none; border-top: 1px solid var(--rule); background: var(--reader-bg); }
+.history-reply-dock:empty { display: none; }
 .history-reply-box {
-  position: sticky;
-  bottom: 0;
   max-width: 66ch;
-  margin-top: 24px;
-  padding: 12px 0 4px;
-  border-top: 1px solid var(--rule);
-  background: var(--reader-bg);
+  padding: 12px 40px 14px;
   font-family: var(--ui-font);
 }
 .history-reply-row { display: flex; align-items: flex-end; gap: 8px; }

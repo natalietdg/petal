@@ -48,14 +48,18 @@ view.innerHTML = `
       <button id="history-tidy" class="flow-button history-tidy" type="button" title="Give recent sessions clear titles and projects. Uses your Claude plan.">Tidy now</button>
     </div>
     <div id="history-tagbar" class="history-tagbar" role="group" aria-label="Filter by tag"></div>
-    <p id="history-open-note" class="history-note" aria-live="polite"></p>
     <div id="history-list" class="history-list"></div>
   </div>
-  <div id="history-preview" class="history-preview reader-column"></div>
+  <div class="history-preview-pane">
+    <p id="history-open-note" class="history-note history-open-note" aria-live="polite"></p>
+    <div id="history-preview" class="history-preview reader-column"></div>
+    <div id="history-reply-dock" class="history-reply-dock"></div>
+  </div>
   <aside id="history-notes" hidden></aside>`;
 export const search = query<HTMLInputElement>(view, '#history-search');
 export const list = query(view, '#history-list');
 export const preview = query(view, '#history-preview');
+export const replyDock = query(view, '#history-reply-dock');
 export const notesAside = query(view, '#history-notes');
 export const openNote = query(view, '#history-open-note');
 export const groupToggle = query(view, '#history-group');
