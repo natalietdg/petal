@@ -7,8 +7,8 @@ import { cellsOf, layers, stamp, type Cell, type CellClass, type Scene, type Sha
 const DOORWAY = { left: 0, right: 8, top: 4, bottom: 28 };
 const COUNTER = { top: 29, lip: 32, front: 34 };
 
-// Dark ceiling with a grained, lantern-lit beam the lanterns hang from.
-const ceiling: Shape = (x, y) => (y === 0 ? 'iz-ceil' : y === 1 ? grain(x, y, 'iz-beamG', 'iz-beamHi', 'iz-beamL') : null);
+// Dark ceiling with a long lantern-lit beam the lanterns hang from.
+const ceiling: Shape = (_x, y) => (y === 0 ? 'iz-ceil' : y === 1 ? 'iz-beamL' : null);
 
 // Three paper lanterns: a big one over the chef, two small ones either side. Caps, red skin, orange body, hot core.
 const BIG_LANTERN = [
@@ -146,31 +146,26 @@ const ON_COUNTER = layers(
   ], { t: 'iz-stick', m: 'iz-meat', M: 'iz-meatL', p: 'iz-plate', P: 'iz-plateD' }),
 );
 
-// Wood grain: each row breaks into staggered 6-cell runs, some a shade darker, some a shade lighter.
-function grain(x: number, y: number, dark: CellClass, light: CellClass, base: CellClass): CellClass {
-  const along = x + y * 5;
-  if (along % 7 === 0) return base;
-  const pick = (Math.floor(along / 7) * 7 + y * 3) % 5;
-  return pick === 0 ? dark : pick === 1 ? light : base;
-}
+// One long thin grain streak: a darker run from `from` to `to` on a single row.
+const streak = (x: number, from: number, to: number): boolean => x >= from && x <= to;
 
-// Horizontal planks on the counter front, 4 rows each: lit top edge, grain, dark seam; one butt joint per plank.
+// Long horizontal panels across the full width, 4 rows each: lit top edge, one long grain streak, dark seam.
 const PLANK_ROWS = 4;
-const KNOTS = ['10,36', '23,45'];
+const PLANK_STREAKS: readonly (readonly [number, number])[] = [[3, 38], [10, 47], [0, 30]];
 function counterFront(x: number, y: number): CellClass {
   const plank = Math.floor((y - COUNTER.front) / PLANK_ROWS);
   const row = (y - COUNTER.front) % PLANK_ROWS;
-  if (row === PLANK_ROWS - 1 || x === 7 + ((plank * 17) % 34)) return 'iz-panelD';
   if (row === 0) return 'iz-panelL';
-  if (KNOTS.includes(`${x},${y}`)) return 'iz-knotW';
-  return grain(x, y, 'iz-panelG', 'iz-panelHi', 'iz-panel');
+  if (row === PLANK_ROWS - 1) return 'iz-panelD';
+  const [from, to] = PLANK_STREAKS[plank % PLANK_STREAKS.length] ?? [0, 0];
+  return row === 2 && streak(x, from, to) ? 'iz-panelG' : 'iz-panel';
 }
 
-// The counter across the front: lit top edge, grained top, bright front lip, dark underside, then the planks.
+// The counter across the front: lit top edge, one long grain streak on the top, bright front lip, dark underside, then the panels.
 function counter(x: number, y: number): CellClass | null {
   if (y < COUNTER.top) return null;
   if (y === COUNTER.top) return 'iz-counterL';
-  if (y < COUNTER.lip) return grain(x, y, 'iz-counterG', 'iz-counterHi', 'iz-counter');
+  if (y < COUNTER.lip) return y === COUNTER.lip - 1 && streak(x, 6, 41) ? 'iz-counterG' : 'iz-counter';
   if (y === COUNTER.lip) return 'iz-lip';
   if (y < COUNTER.front) return 'iz-counterD';
   return counterFront(x, y);

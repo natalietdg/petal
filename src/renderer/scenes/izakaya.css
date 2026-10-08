@@ -3,7 +3,7 @@
 
 /* Ceiling, wall and the three rings of lantern glow. */
 .sc-iz-ceil { fill: #4A2012; }
-.sc-iz-beamL { fill: #C8763A; } .sc-iz-beamG { fill: #A4582A; } .sc-iz-beamHi { fill: #E09450; } .sc-iz-cord { fill: #2A1610; }
+.sc-iz-beamL { fill: #C8763A; } .sc-iz-cord { fill: #2A1610; }
 .sc-iz-wall { fill: #8A4E2A; }
 .sc-iz-halo3 { fill: #A6603A; } .sc-iz-halo2 { fill: #C67A42; } .sc-iz-halo { fill: #E89A50; }
 
@@ -41,9 +41,9 @@
 
 /* Counter, plate and stools. */
 .sc-iz-counterL { fill: #FFD890; } .sc-iz-counter { fill: #E2A250; } .sc-iz-lip { fill: #FFE4A8; }
-.sc-iz-counterG { fill: #B86E28; } .sc-iz-counterHi { fill: #FAC878; } .sc-iz-counterD { fill: #6E2C10; }
+.sc-iz-counterG { fill: #C47A30; } .sc-iz-counterD { fill: #6E2C10; }
 .sc-iz-panelL { fill: #DC8E46; } .sc-iz-panel { fill: #B4662C; } .sc-iz-panelD { fill: #5E2410; }
-.sc-iz-panelG { fill: #94501E; } .sc-iz-panelHi { fill: #C87A3A; } .sc-iz-knotW { fill: #6A2A0E; }
+.sc-iz-panelG { fill: #9A5422; }
 .sc-iz-plate { fill: #FFF8EC; } .sc-iz-plateD { fill: #C8B89E; }
 .sc-iz-seatL { fill: #FFB860; } .sc-iz-seat { fill: #C86E2A; } .sc-iz-leg { fill: #6A2C12; }
 
