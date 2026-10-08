@@ -136,6 +136,30 @@ function table(x: number, y: number): CellClass | null {
   return y === hemAt(x) ? 'tr-trim' : cloth(x, y);
 }
 
+// Gold embroidery on the front drop: a sun medallion in the middle, a crescent either side, a stitched border above the hem.
+const SUN = { cx: 14, cy: 37 };
+function sunMedallion(x: number, y: number): CellClass | null {
+  const [dx, dy] = [x - SUN.cx, y - SUN.cy];
+  const [ax, ay] = [Math.abs(dx), Math.abs(dy)];
+  if (Math.max(ax, ay) <= 2 && ax + ay <= 3) {
+    if (dx + dy >= 2) return 'tr-emb';
+    return dx + dy <= -2 ? 'tr-emb-hi' : 'tr-emb-l';
+  }
+  return (ax === 3 && dy === 0) || (dx === 0 && dy === 3) ? 'tr-emb-l' : null;
+}
+const motif = (rows: readonly string[], left: number, top: number): Shape => (x, y) => (rows[y - top]?.[x - left] === '#' ? 'tr-emb' : null);
+const crescents = layers(motif(['.##', '#..', '.##'], 7, 35), motif(['##.', '..#', '##.'], 19, 35));
+// Border: a stitched line with a dot below it every four cells.
+function border(x: number, y: number): CellClass | null {
+  if (y === hemAt(x) - 2) return 'tr-emb';
+  return y === hemAt(x) - 1 && ((x % 4) + 4) % 4 === 2 ? 'tr-emb' : null;
+}
+function embroidery(x: number, y: number): CellClass | null {
+  if (!onDrape(x, y) || !onDrape(x, y - 1)) return null;
+  if (Math.abs(x - SUN.cx) <= 3 && Math.abs(y - SUN.cy) <= 3) return sunMedallion(x, y);
+  return border(x, y) ?? crescents(x, y);
+}
+
 // A plum velvet valance along the top: lit lower fold, gold trim, a tassel every eight cells.
 function valance(x: number, y: number): CellClass | null {
   if (y <= 1) return 'tr-velvet';
@@ -189,7 +213,7 @@ const READER_MOTION: Cell[] = [...HEM, [5, 16, 'tr-rd-tail1'], [4, 16, 'tr-rd-ta
 const scene: Scene = {
   name: 'Tarot Room',
   size: [48, 48],
-  paint: layers(spread, hands, ball, candles, table, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
+  paint: layers(spread, hands, ball, candles, embroidery, table, reader, shelf, card, valance, curtain, moon, stars, candleGlow, cardGlow, floor, wall),
   moving: [
     ...flame(CANDLES[0].left, CANDLES[0].top, 1),
     ...flame(CANDLES[1].left, CANDLES[1].top, 2),
