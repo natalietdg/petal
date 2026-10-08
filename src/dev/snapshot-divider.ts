@@ -4,6 +4,7 @@ import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import * as configStore from '../main/config-store';
+import { clampSplit } from '../shared/reader-split';
 
 const HEIGHT_TOLERANCE_PX = 10;
 const TARGETS = [0.3, 0.8, 0.1, 0.65];
@@ -44,7 +45,7 @@ type Measure = any;
 // Terminal pane height a drag should give: bounds 20–85%, and never less reader than its fixed bands.
 function expectedPane(m: Measure, target: number): number {
   const rows = m.appHeight - m.divider.height;
-  const fraction = Math.min(0.85, Math.max(0.2, m.chrome / rows, target));
+  const fraction = clampSplit(Math.max(m.chrome / rows, target));
   return (1 - fraction) * rows;
 }
 
