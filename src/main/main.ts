@@ -120,7 +120,7 @@ app.whenReady().then(() => {
   // The dev harness is a separate chunk, loaded only in snapshot runs; they never call Claude in the background.
   if (isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   else organizer.start({ openSessionIds });
-  startUpdater(liveEnv()).then((off) => { if (off) console.log(`[petal] auto-update off: ${off}`); });
+  void startUpdater(liveEnv()); // off in snapshot, dev and non-Developer ID builds
 });
 
 app.on('will-quit', () => organizer.stop());

@@ -12,6 +12,7 @@ import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { addSessionCheck } from './snapshot-add-session';
+import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
@@ -350,6 +351,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
     ['add session', () => addSessionCheck(kit)],
+    ['update pill', () => updatePillCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
