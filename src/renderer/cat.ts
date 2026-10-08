@@ -2,7 +2,7 @@
 // Each cat has her own coat, her own prop and her own busy move.
 import * as scenes from './scenes';
 import { byId, el, query } from './dom';
-import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, spriteCols, spriteRows, type Line, type Pet, type Prop } from './cat-art';
+import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, type Line, type Pet, type Prop } from './cat-art';
 import { LOCAL_CATS } from '../shared/local-cats';
 
 // Built-in cats plus any private ones from cats-local/, each with her toy and her own stylesheet.
@@ -33,7 +33,7 @@ const without = (rows: readonly string[], parts: readonly string[][]): string[] 
   parts.some((part) => part[y]?.[x] !== '.') ? '.' : cell
 )).join(''));
 
-const svg = (inner: string, cols: number, rows: number): string => `<svg viewBox="0 0 ${cols} ${rows}" shape-rendering="crispEdges" aria-hidden="true">${inner}</svg>`;
+const svg = (inner: string): string => `<svg viewBox="0 0 20 20" shape-rendering="crispEdges" aria-hidden="true">${inner}</svg>`;
 
 // Ears and front paws live in their own groups so each cat's move can animate them.
 function sittingSvg(cat: Pet): string {
@@ -49,7 +49,7 @@ function sittingSvg(cat: Pet): string {
   const tail = cat.tail === false ? null : cat.tail ?? { up: TAIL_UP, down: TAIL_DOWN };
   return svg(wings + groups + rects(without(coat, Object.values(parts)))
     + `<g class="eyes-open">${partial(cat.eyesOpen)}</g><g class="eyes-closed">${partial(cat.eyesClosed ?? EYES_CLOSED)}</g>`
-    + (tail ? `<g class="tail-up">${partial(tail.up)}</g><g class="tail-down">${partial(tail.down)}</g>` : ''), spriteCols(cat), spriteRows(cat));
+    + (tail ? `<g class="tail-up">${partial(tail.up)}</g><g class="tail-down">${partial(tail.down)}</g>` : ''));
 }
 
 // Tea steam and wand sparkles (and heart) are their own groups so they can rise and twinkle; the rest moves as one.
@@ -77,8 +77,6 @@ function render() {
   const key = root.dataset.cat ?? '';
   const prop = isCatId(key) ? ALL_PROPS[key] : PROPS.mika;
   const layers = scenes.svg(scene);
-  root.style.setProperty('--cat-sprite-h', `${spriteRows(current) * 3}px`); // taller pets lift the z and the tip
-  root.style.setProperty('--cat-sprite-w', `${spriteCols(current) * 3}px`);
   root.innerHTML = layers.back
     + `<div class="cat-prop prop-${prop.name}">${propSvg(prop)}</div>`
     + `<div class="cat-sprite sitting">${sittingSvg(current)}</div>`

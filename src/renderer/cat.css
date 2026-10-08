@@ -73,7 +73,7 @@
 }
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
-.cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
+.cat-sprite { position: absolute; bottom: 0; right: 0; width: 60px; height: 60px; }
 /* Narrow window: 2px per sprite pixel, still crisp, rather than hiding her. */
 #cat.compact { transform: scale(0.6667); }
 .cat-sprite svg { width: 100%; height: 100%; image-rendering: pixelated; }
@@ -139,7 +139,7 @@
 /* Sleeping: a slow z drifts up every few seconds. */
 .cat-z {
   position: absolute;
-  bottom: calc(var(--cat-sprite-h, 60px) - 4px); /* just above her head */
+  bottom: 56px; /* just above her head */
   right: 4px;
   font: 600 14px var(--ui-font);
   color: var(--muted);
@@ -255,7 +255,7 @@
 .cat-tip {
   position: absolute;
   right: 0;
-  bottom: calc(var(--cat-sprite-h, 60px) + 6px);
+  bottom: 66px;
   padding: 4px 10px;
   border-radius: 8px;
   background: var(--code-bg);
