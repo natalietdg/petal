@@ -17,6 +17,7 @@ import { addSessionCheck } from './snapshot-add-session';
 import { updatePillCheck } from './snapshot-update-pill';
 import { headerCheck } from './snapshot-header';
 import { notesCheck } from './snapshot-notes';
+import { notesSideCheck } from './snapshot-notes-side';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
@@ -364,6 +365,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],
     ['notes', () => notesCheck(kit)],
+    ['notes side', () => notesSideCheck(kit, win)],
     ['history reply', () => historyReplyCheck(kit)],
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],

@@ -112,12 +112,15 @@ export const reader = createPanel(byId('notes-panel'), byId('reader-area'));
 reader.bindToggle(byId<HTMLButtonElement>('notes-toggle'));
 new ResizeObserver(() => { reader.aside.style.top = `${readerScroller.offsetTop}px`; }).observe(readerScroller);
 
-void window.pastel.config.get().then((state) => {
+// Reads the saved open state and width; runs once at startup.
+export async function loadPrefs(): Promise<void> {
+  const state = await window.pastel.config.get();
   if (isIpcError(state)) return;
   prefs.open = state.config.notesPanel.open;
   setWidth(state.config.notesPanel.width);
   applyAll();
-});
+}
+void loadPrefs();
 
 export const prefsNow = (): Prefs => ({ ...prefs });
 export { setOpen };

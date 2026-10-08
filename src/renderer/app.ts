@@ -128,7 +128,7 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
-  byId('reader').addEventListener('mouseup', (event) => {
+  byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();
   });
 
