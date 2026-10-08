@@ -53,9 +53,11 @@
 #notes-panel { position: absolute; right: 0; bottom: 0; width: var(--notes-width); z-index: 4; }
 #reader-area:has(> #reader[hidden]) #notes-panel { display: none; }
 
-/* The open/close button sits at the right end of the view toggle's row. */
+/* The open/close button: at the right end of the reader's toggle row, and beside History's toggle. */
 .reader-head-column { position: relative; }
-.notes-toggle { position: absolute; right: 0; bottom: 0; padding: 6px 16px; border: 1px solid var(--rule); border-radius: 999px; background: none; color: var(--muted); font: 600 14px var(--ui-font); cursor: pointer; }
+.reader-head-column .notes-toggle { position: absolute; right: 0; bottom: 0; }
+.history-preview-views { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.notes-toggle { padding: 6px 16px; border: 1px solid var(--rule); border-radius: 999px; background: none; color: var(--muted); font: 600 14px var(--ui-font); cursor: pointer; }
 .notes-toggle[aria-pressed="true"] { background: var(--code-bg); color: var(--reader-fg); }
 
 /* Wide: the reading axis (reader, header, prompt dock, reply box) gives up the panel's width and centres in the rest. */
