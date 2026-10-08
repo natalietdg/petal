@@ -30,22 +30,20 @@ export function splitCompleteLines(carry: Buffer, chunk: Buffer): { lines: strin
   return { lines, rest: Buffer.from(data.subarray(start)) };
 }
 
-export class TranscriptTail {
+// Follows one append-only jsonl: fs.watch reads new lines as they land, poll() is the tick fallback.
+export class JsonlTail {
   private readonly file: string;
-  private readonly onUpdate: OnTranscript;
+  private readonly onLines: (lines: string[]) => void;
   private offset = 0;
   private partialLine: Buffer = Buffer.alloc(0);
-  private readonly collector = new ReplyCollector();
-  private readonly question = new PendingQuestionTracker();
   private watcher: fs.FSWatcher | null = null;
 
-  constructor(file: string, onUpdate: OnTranscript) {
+  constructor(file: string, onLines: (lines: string[]) => void) {
     this.file = file;
-    this.onUpdate = onUpdate;
+    this.onLines = onLines;
     this.poll();
   }
 
-  // Called on every session tick as a fallback; fs.watch reads new lines as soon as they land.
   poll(): void {
     if (!this.watcher) this.watch();
     this.readAppended();
@@ -106,6 +104,31 @@ export class TranscriptTail {
 
     const { lines, rest } = splitCompleteLines(this.partialLine, buffer.subarray(0, read));
     this.partialLine = rest;
+    if (lines.length) this.onLines(lines);
+  }
+
+  stop(): void {
+    this.unwatch();
+  }
+}
+
+export class TranscriptTail {
+  private readonly onUpdate: OnTranscript;
+  private readonly collector = new ReplyCollector();
+  private readonly question = new PendingQuestionTracker();
+  private readonly tail: JsonlTail;
+
+  constructor(file: string, onUpdate: OnTranscript) {
+    this.onUpdate = onUpdate;
+    this.tail = new JsonlTail(file, (lines) => this.add(lines));
+  }
+
+  // Called on every session tick as a fallback; fs.watch reads new lines as soon as they land.
+  poll(): void {
+    this.tail.poll();
+  }
+
+  private add(lines: string[]): void {
     let changed = false;
     for (const line of lines) {
       try {
@@ -129,6 +152,6 @@ export class TranscriptTail {
   }
 
   stop(): void {
-    this.unwatch();
+    this.tail.stop();
   }
 }
