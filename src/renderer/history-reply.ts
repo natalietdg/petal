@@ -4,6 +4,7 @@ import * as tabs from './tabs';
 import { pasteToClaude, stripControls } from './composer';
 import { limitNote } from './sessions-panel';
 import { isIpcError } from './dom';
+import { parseQuestionPicker } from '../shared/prompt-answer';
 import type { Tab } from './tabs';
 
 // Claude needs a moment after its session appears before it reads typed input.
@@ -35,7 +36,7 @@ const sessionOf = (tabId: string): string | null =>
   [...following].find(([, id]) => id === tabId)?.[0] ?? tabs.get(tabId)?.update?.sessionId ?? null;
 
 // Ready: Claude is running there with its session file, and no question is waiting on her.
-const isReady = (tab: Tab): boolean => tab.update?.state === 'live' && Boolean(tab.update.sessionId) && !tab.update.question;
+const isReady = (tab: Tab): boolean => tab.update?.state === 'live' && Boolean(tab.update.sessionId) && !parseQuestionPicker(tabs.screenLines(tab));
 
 async function deliver(tabId: string): Promise<void> {
   const tab = tabs.get(tabId);

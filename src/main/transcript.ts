@@ -1,17 +1,14 @@
-// Tails one Claude Code session log and reports its replies and any question Claude is waiting on.
+// Tails one Claude Code session log and reports its replies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ReplyCollector } from './replies';
-import { PendingQuestionTracker } from './pending-question';
 import { parseEntry } from './transcript-entry';
-import type { PendingQuestion } from '../shared/prompt-answer';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
 export interface TranscriptView {
   replies: Reply[];
   waiting: WaitingPrompt[];
   promptCount: number;
-  question: PendingQuestion | null;
 }
 
 export type OnTranscript = (view: TranscriptView) => void;
@@ -36,7 +33,6 @@ export class TranscriptTail {
   private offset = 0;
   private partialLine: Buffer = Buffer.alloc(0);
   private readonly collector = new ReplyCollector();
-  private readonly question = new PendingQuestionTracker();
   private watcher: fs.FSWatcher | null = null;
 
   constructor(file: string, onUpdate: OnTranscript) {
@@ -110,8 +106,7 @@ export class TranscriptTail {
     for (const line of lines) {
       try {
         const entry = parseEntry(line);
-        const repliesChanged = this.collector.add(entry);
-        changed = this.question.add(entry) || repliesChanged || changed;
+        changed = this.collector.add(entry) || changed;
       } catch {
         // Skip malformed lines.
       }
@@ -124,7 +119,6 @@ export class TranscriptTail {
       replies: this.collector.newestFirst(),
       waiting: this.collector.waiting(),
       promptCount: this.collector.promptCount,
-      question: this.question.current(),
     };
   }
 
