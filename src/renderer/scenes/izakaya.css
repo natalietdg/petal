@@ -2,7 +2,8 @@
    The only cool tones are the night and noren in the doorway. */
 
 /* Ceiling, wall and the three rings of lantern glow. */
-.sc-iz-ceil { fill: #2A1610; } .sc-iz-beamL { fill: #9A5A2C; } .sc-iz-cord { fill: #2A1610; }
+.sc-iz-ceil { fill: #4A2012; }
+.sc-iz-beamL { fill: #C8763A; } .sc-iz-beamG { fill: #A4582A; } .sc-iz-beamHi { fill: #E09450; } .sc-iz-cord { fill: #2A1610; }
 .sc-iz-wall { fill: #8A4E2A; }
 .sc-iz-halo3 { fill: #A6603A; } .sc-iz-halo2 { fill: #C67A42; } .sc-iz-halo { fill: #E89A50; }
 
@@ -12,14 +13,14 @@
 .sc-iz-coreA, .sc-iz-coreB { fill: #FFE08A; }
 
 /* Doorway: dark posts, indigo noren, the cool night outside. */
-.sc-iz-post { fill: #3E1E12; }
+.sc-iz-post { fill: #7A3418; }
 .sc-iz-norenL { fill: #4A5EC0; } .sc-iz-noren { fill: #2C3E96; } .sc-iz-norenD { fill: #1C2864; }
 .sc-iz-nightD { fill: #141230; } .sc-iz-night { fill: #1E1A40; } .sc-iz-star { fill: #F4E6C0; }
 
 /* The chef. */
 .sc-iz-hair { fill: #1E1414; } .sc-iz-band { fill: #FFFFFF; } .sc-iz-knot { fill: #D8382A; }
 .sc-iz-skin { fill: #F6C894; } .sc-iz-blush { fill: #F29A7C; } .sc-iz-eye { fill: #2A1A14; } .sc-iz-mouth { fill: #A8442E; }
-.sc-iz-coatL { fill: #FFF8E8; } .sc-iz-coat { fill: #F2E2C4; } .sc-iz-coatD { fill: #6A3A22; }
+.sc-iz-coatL { fill: #4E72D0; } .sc-iz-coat { fill: #2F4FA6; } .sc-iz-coatD { fill: #1A2C6A; }
 
 /* Grill, coals, skewers and the pot. */
 .sc-iz-iron { fill: #1E1414; } .sc-iz-grill { fill: #3A2A28; } .sc-iz-grillD { fill: #2A1E1C; }
@@ -28,7 +29,7 @@
 .sc-iz-pot { fill: #2A2028; } .sc-iz-potL { fill: #8A7A80; }
 
 /* Shelves, bottles and jars. */
-.sc-iz-shelf { fill: #5A2C14; } .sc-iz-neck { fill: #2A1610; }
+.sc-iz-shelf { fill: #9A4A1C; } .sc-iz-neck { fill: #2A1610; }
 .sc-iz-greenL { fill: #9EE0A0; } .sc-iz-green { fill: #2E8A4A; }
 .sc-iz-brownL { fill: #E08A3C; } .sc-iz-brown { fill: #6A2E10; }
 .sc-iz-sakeL { fill: #FFFAF0; } .sc-iz-sake { fill: #E8DCC4; } .sc-iz-sakeBand { fill: #3A4E9A; }
@@ -39,13 +40,15 @@
 .sc-iz-rail { fill: #3E1E12; } .sc-iz-tag { fill: #FBE9C0; } .sc-iz-tagD { fill: #D8B47C; }
 
 /* Counter, plate and stools. */
-.sc-iz-counterL { fill: #FFD08A; } .sc-iz-counter { fill: #D08C48; } .sc-iz-lip { fill: #FFE0A0; }
-.sc-iz-counterD { fill: #6A3416; } .sc-iz-panel { fill: #9A5228; } .sc-iz-panelD { fill: #6E3618; }
+.sc-iz-counterL { fill: #FFD890; } .sc-iz-counter { fill: #E2A250; } .sc-iz-lip { fill: #FFE4A8; }
+.sc-iz-counterG { fill: #B86E28; } .sc-iz-counterHi { fill: #FAC878; } .sc-iz-counterD { fill: #6E2C10; }
+.sc-iz-panelL { fill: #DC8E46; } .sc-iz-panel { fill: #B4662C; } .sc-iz-panelD { fill: #5E2410; }
+.sc-iz-panelG { fill: #94501E; } .sc-iz-panelHi { fill: #C87A3A; } .sc-iz-knotW { fill: #6A2A0E; }
 .sc-iz-plate { fill: #FFF8EC; } .sc-iz-plateD { fill: #C8B89E; }
-.sc-iz-seatL { fill: #F0A050; } .sc-iz-seat { fill: #B0602A; } .sc-iz-leg { fill: #4A2414; }
+.sc-iz-seatL { fill: #FFB860; } .sc-iz-seat { fill: #C86E2A; } .sc-iz-leg { fill: #6A2C12; }
 
 /* Moving cells: the chef's arm and fan, sparks and steam. */
-.sc-iz-sleeveA, .sc-iz-sleeveB { fill: #FFF8E8; }
+.sc-iz-sleeveA, .sc-iz-sleeveB { fill: #4E72D0; }
 .sc-iz-handA, .sc-iz-handB { fill: #F6C894; }
 .sc-iz-fanA, .sc-iz-fanB { fill: #E8402C; }
 .sc-iz-sparkA, .sc-iz-sparkB { fill: #FFC24A; }

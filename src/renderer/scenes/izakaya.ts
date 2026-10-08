@@ -1,5 +1,5 @@
 // Izakaya: inside a little Japanese pub at night, sitting at the counter.
-// Focal point: the chef in his white coat and hachimaki, fanning the grill under the big lantern.
+// Focal point: the chef in his blue samue jacket and hachimaki, fanning the grill under the big lantern.
 // Golden plaster, warm wood and lantern halos everywhere; only the night through the noren is cool.
 import { cellsOf, layers, stamp, type Cell, type CellClass, type Scene, type Shape } from './kit';
 
@@ -7,8 +7,8 @@ import { cellsOf, layers, stamp, type Cell, type CellClass, type Scene, type Sha
 const DOORWAY = { left: 0, right: 8, top: 4, bottom: 28 };
 const COUNTER = { top: 29, lip: 32, front: 34 };
 
-// Dark ceiling with a lit beam the lanterns hang from.
-const ceiling: Shape = (_x, y) => (y === 0 ? 'iz-ceil' : y === 1 ? 'iz-beamL' : null);
+// Dark ceiling with a grained, lantern-lit beam the lanterns hang from.
+const ceiling: Shape = (x, y) => (y === 0 ? 'iz-ceil' : y === 1 ? grain(x, y, 'iz-beamG', 'iz-beamHi', 'iz-beamL') : null);
 
 // Three paper lanterns: a big one over the chef, two small ones either side. Caps, red skin, orange body, hot core.
 const BIG_LANTERN = [
@@ -53,7 +53,7 @@ function doorway(x: number, y: number): CellClass | null {
   return y < 18 ? 'iz-nightD' : 'iz-night';
 }
 
-// The chef: black hair, white hachimaki with a red knot, smiling eyes, lantern-lit white coat; his left hand rests on the grill.
+// The chef: black hair, white hachimaki with a red knot, smiling eyes, indigo samue jacket; his left hand rests on the grill.
 const CHEF = stamp(16, 11, [
   '...hhhh....',
   '..hhhhhh...',
@@ -146,14 +146,34 @@ const ON_COUNTER = layers(
   ], { t: 'iz-stick', m: 'iz-meat', M: 'iz-meatL', p: 'iz-plate', P: 'iz-plateD' }),
 );
 
-// The counter across the front: lit top, bright front lip, shadow, then plank panels.
+// Wood grain: each row breaks into staggered 6-cell runs, some a shade darker, some a shade lighter.
+function grain(x: number, y: number, dark: CellClass, light: CellClass, base: CellClass): CellClass {
+  const along = x + y * 5;
+  if (along % 7 === 0) return base;
+  const pick = (Math.floor(along / 7) * 7 + y * 3) % 5;
+  return pick === 0 ? dark : pick === 1 ? light : base;
+}
+
+// Horizontal planks on the counter front, 4 rows each: lit top edge, grain, dark seam; one butt joint per plank.
+const PLANK_ROWS = 4;
+const KNOTS = ['10,36', '23,45'];
+function counterFront(x: number, y: number): CellClass {
+  const plank = Math.floor((y - COUNTER.front) / PLANK_ROWS);
+  const row = (y - COUNTER.front) % PLANK_ROWS;
+  if (row === PLANK_ROWS - 1 || x === 7 + ((plank * 17) % 34)) return 'iz-panelD';
+  if (row === 0) return 'iz-panelL';
+  if (KNOTS.includes(`${x},${y}`)) return 'iz-knotW';
+  return grain(x, y, 'iz-panelG', 'iz-panelHi', 'iz-panel');
+}
+
+// The counter across the front: lit top edge, grained top, bright front lip, dark underside, then the planks.
 function counter(x: number, y: number): CellClass | null {
   if (y < COUNTER.top) return null;
   if (y === COUNTER.top) return 'iz-counterL';
-  if (y < COUNTER.lip) return 'iz-counter';
+  if (y < COUNTER.lip) return grain(x, y, 'iz-counterG', 'iz-counterHi', 'iz-counter');
   if (y === COUNTER.lip) return 'iz-lip';
   if (y < COUNTER.front) return 'iz-counterD';
-  return x % 6 === 5 ? 'iz-panelD' : 'iz-panel';
+  return counterFront(x, y);
 }
 
 // Two round wooden stools in front of the counter.
