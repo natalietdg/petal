@@ -45,7 +45,7 @@ view.innerHTML = `
         <button type="button" data-group="day" aria-selected="false">By day</button>
         <button type="button" data-group="project" aria-selected="false">By project</button>
       </div>
-      <button id="history-tidy" class="flow-button history-tidy" type="button" title="Give recent sessions clear titles and projects">Tidy now</button>
+      <button id="history-tidy" class="flow-button history-tidy" type="button" title="Give recent sessions clear titles and projects. Uses your Claude plan.">Tidy now</button>
     </div>
     <div id="history-tagbar" class="history-tagbar" role="group" aria-label="Filter by tag"></div>
     <p id="history-open-note" class="history-note" aria-live="polite"></p>

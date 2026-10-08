@@ -18,12 +18,13 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has five sections with the documented defaults', () => {
+  it('has six sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome']);
+    expect(d.welcome).toEqual({ seen: false });
     expect(d.sessions).toEqual({ maxOpen: 8 });
     expect(d.tarot).toEqual({ birthdate: '' });
-    expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
+    expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
     expect(d.organizer.prompt).toMatch(/^You label a Claude Code work session/);
     expect(d.flowTitles.prompt).toMatch(/^You turn a work log into STATE CHANGES/);
     expect(d.responseHook).toEqual({ command: '', notify: false });
@@ -43,7 +44,7 @@ describe('config-store defaults and load', () => {
 
   it('corrupt file -> defaults', () => {
     fs.writeFileSync(configFile(), '{not json');
-    expect(config.load()).toEqual(config.defaults());
+    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true } }); // a config file means a returning user
   });
 
   it('a partial file is filled in from defaults and invalid values fall back to defaults', () => {
@@ -121,7 +122,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -219,5 +220,38 @@ describe('config-store tarot.birthdate', () => {
   it('an older config.json without the section loads with no birthday', () => {
     fs.writeFileSync(configFile(), JSON.stringify({ sessions: { maxOpen: 4 } }));
     expect(config.load().tarot).toEqual({ birthdate: '' });
+  });
+});
+
+describe('first launch and the organizer migration', () => {
+  it('a fresh userData: organizer off, first-run screen not seen', () => {
+    const c = config.load();
+    expect(c.organizer.enabled).toBe(false);
+    expect(c.welcome.seen).toBe(false);
+  });
+
+  it('organizer.json without a saved choice keeps the organizer on and skips the first-run screen', () => {
+    fs.writeFileSync(path.join(dir, 'organizer.json'), '{}');
+    const c = config.load();
+    expect(c.organizer.enabled).toBe(true);
+    expect(c.welcome.seen).toBe(true);
+  });
+
+  it('a saved choice wins over organizer.json', () => {
+    fs.writeFileSync(path.join(dir, 'organizer.json'), '{}');
+    fs.writeFileSync(configFile(), JSON.stringify({ organizer: { enabled: false } }));
+    expect(config.load().organizer.enabled).toBe(false);
+  });
+
+  it('settings.json alone means a returning user: no first-run screen, organizer still off', () => {
+    fs.writeFileSync(path.join(dir, 'settings.json'), '{}');
+    const c = config.load();
+    expect(c.welcome.seen).toBe(true);
+    expect(c.organizer.enabled).toBe(false);
+  });
+
+  it('saving welcome.seen sticks for the next launch', () => {
+    config.save({ welcome: { seen: true } });
+    expect(config.load().welcome.seen).toBe(true);
   });
 });
