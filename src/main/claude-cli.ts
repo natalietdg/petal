@@ -27,8 +27,9 @@ function fromLoginShell(): Promise<string | null> {
   });
 }
 
-// Finds `claude` for whoever runs Petal: known install spots first, then their login shell's PATH. Cached.
-export function claudePath(): Promise<string | null> {
+// Finds `claude` for whoever runs Petal: known install spots first, then their login shell's PATH. Cached; recheck looks again.
+export function claudePath({ recheck = false }: { recheck?: boolean } = {}): Promise<string | null> {
+  if (recheck) resolved = null;
   resolved ??= (async () => CANDIDATES.find((file) => fs.existsSync(file)) ?? fromLoginShell())();
   return resolved;
 }

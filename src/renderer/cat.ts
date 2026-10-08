@@ -56,6 +56,9 @@ function propSvg(prop: Prop): string {
   return `<svg viewBox="0 0 ${width} ${height}" width="${width * 3}" height="${height * 3}" shape-rendering="crispEdges" aria-hidden="true">${inner}</svg>`;
 }
 
+// A still picture of one cat for pickers; wrap it in .cat-portrait[data-cat] so her coat colours apply.
+export const portrait = (id: string): string => sittingSvg(CATS[isCatId(id) ? id : 'mika']);
+
 const root = byId('cat');
 let current: Pet = CATS.mika;
 let busy = false;

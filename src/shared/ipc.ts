@@ -107,7 +107,7 @@ export interface InvokeChannels {
   'cat:get': { args: []; result: Guarded<string> };
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
-  'claude:installed': { args: []; result: Guarded<boolean> };
+  'claude:installed': { args: [request?: { recheck?: boolean }]; result: Guarded<boolean> };
   'update:status': { args: []; result: Guarded<{ ready: boolean }> };
   'update:restart': { args: []; result: Guarded<RestartResult> };
   'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
@@ -191,6 +191,7 @@ export interface EventChannels {
   'layout:toggle': void;
   'history:toggle': void;
   'customize:open': void;
+  'welcome:open': void;
   'repos:palette': void;
   'update:ready': void;
 }

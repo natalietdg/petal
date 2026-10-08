@@ -73,48 +73,68 @@ function stackedRows(prefix: string, rawNames: string[]): string[] {
   return [`    ${rows.map((row, i) => `${prefix}${i}["${label(row, LABEL_CHARS + 8)}"]`).join(' ~~~ ')}`];
 }
 
-function setupMermaid({ rulesCount, routedSkills, skillsTotal, agents, style }: { rulesCount: number; routedSkills: string[]; skillsTotal: number; agents: AgentInfo[]; style: SkillInfo }): string {
-  const topAgents = agents.filter((a) => !a.group).map((a) => a.name);
+interface SetupShape {
+  hasClaudeMd: boolean;
+  rulesCount: number;
+  routed: boolean;
+  routedSkills: string[];
+  skills: SkillInfo[];
+  agents: AgentInfo[];
+  style: SkillInfo;
+}
+
+function agentLabels(agents: AgentInfo[]): string[] {
   const groups = new Map<string, number>();
   for (const a of agents) if (a.group) groups.set(a.group, (groups.get(a.group) ?? 0) + 1);
-  const agentNames = [...topAgents, ...[...groups].map(([g, n]) => `${g} pipeline · ${n} agents`)];
-  return [
-    'flowchart LR',
-    '  req(["Request"]) --> rules["CLAUDE.md · ' + rulesCount + ' rule sections"]',
-    '  rules --> route{{"Routing table"}}',
-    '  route --> skills',
-    '  route --> agents',
-    `  subgraph skills["Skills · ${routedSkills.length} routed of ${skillsTotal}"]`,
-    '    direction TB',
-    ...(routedSkills.length ? stackedRows('s', routedSkills) : ['    s0["None yet"]']),
-    '  end',
-    `  subgraph agents["Agents · ${agents.length}"]`,
-    '    direction TB',
-    ...(agentNames.length ? stackedRows('a', agentNames) : ['    a0["None yet"]']),
-    '  end',
-    `  skills --> outstyle["Output style · ${label(style.name, 24)}"]`,
-    '  agents --> outstyle',
-    '  outstyle --> petal(["Petal reader"])',
-  ].join('\n');
+  return [...agents.filter((a) => !a.group).map((a) => a.name), ...[...groups].map(([g, n]) => `${g} pipeline · ${n} agents`)];
+}
+
+// Draws only the parts that exist; null when there are no skills, agents or routing to show.
+function setupMermaid({ hasClaudeMd, rulesCount, routed, routedSkills, skills, agents, style }: SetupShape): string | null {
+  if (!routed && !skills.length && !agents.length) return null;
+  const lines = ['flowchart LR', '  req(["Request"])'];
+  let from = 'req';
+  const step = (id: string, node: string) => { lines.push(`  ${from} --> ${id}${node}`); from = id; };
+  if (hasClaudeMd) step('rules', `["CLAUDE.md · ${rulesCount} rule sections"]`);
+  if (routed) step('route', '{{"Routing table"}}');
+  const ends: string[] = [];
+  if (skills.length) {
+    const names = routed ? routedSkills : skills.map((s) => s.name);
+    const title = routed ? `Skills · ${routedSkills.length} routed of ${skills.length}` : `Skills · ${skills.length}`;
+    lines.push(`  ${from} --> skills`, `  subgraph skills["${title}"]`, '    direction TB', ...(names.length ? stackedRows('s', names) : ['    s0["None routed yet"]']), '  end');
+    ends.push('skills');
+  }
+  if (agents.length) {
+    lines.push(`  ${from} --> agents`, `  subgraph agents["Agents · ${agents.length}"]`, '    direction TB', ...stackedRows('a', agentLabels(agents)), '  end');
+    ends.push('agents');
+  }
+  lines.push(`  outstyle["Output style · ${label(style.name, 24)}"]`);
+  for (const end of ends.length ? ends : [from]) lines.push(`  ${end} --> outstyle`);
+  lines.push('  outstyle --> petal(["Petal reader"])');
+  return lines.join('\n');
 }
 
 export interface SetupData extends ClaudeMdOutline {
+  hasClaudeMd: boolean;
   sections: string[];
   skills: SkillInfo[];
   agents: AgentInfo[];
   style: SkillInfo;
   routedSkills: string[];
-  mermaid: string;
+  mermaid: string | null; // null: nothing to draw
 }
 
 export function setupData({ claudeDir = CLAUDE_DIR }: { claudeDir?: string } = {}): SetupData {
-  const { headings, routing } = parseClaudeMd(readText(path.join(claudeDir, 'CLAUDE.md')));
+  const claudeMd = path.join(claudeDir, 'CLAUDE.md');
+  const hasClaudeMd = isFile(claudeMd);
+  const { headings, routing } = parseClaudeMd(readText(claudeMd));
   const skills = listSkills(claudeDir);
   const agents = listAgents(claudeDir);
   const style = activeOutputStyle(claudeDir);
   const routedSkills = [...new Set(routing.flatMap((r) => r.skills))];
   const sections = headings.filter((h) => h.level === 2);
   return {
+    hasClaudeMd,
     headings,
     sections: sections.map((h) => h.text),
     routing,
@@ -122,6 +142,6 @@ export function setupData({ claudeDir = CLAUDE_DIR }: { claudeDir?: string } = {
     agents,
     style,
     routedSkills,
-    mermaid: setupMermaid({ rulesCount: sections.length, routedSkills, skillsTotal: skills.length, agents, style }),
+    mermaid: setupMermaid({ hasClaudeMd, rulesCount: sections.length, routed: routing.length > 0, routedSkills, skills, agents, style }),
   };
 }

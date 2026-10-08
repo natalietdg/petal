@@ -77,3 +77,9 @@
 .wf-error { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--decide-wash); font: 500 14px var(--ui-font); }
 .wf-graph .edgeLabel, .wf-graph .edgeLabel p, .wf-graph .labelBkg { background: var(--reader-bg) !important; color: var(--muted) !important; }
 .wf-graph .edgeLabel rect { fill: var(--reader-bg) !important; }
+
+/* Setup with nothing to show yet: one card and the docs links. */
+.wf-setup-empty { max-width: 560px; }
+.wf-empty-lead { margin: 0 0 6px; font-size: 16px; }
+.wf-doc-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 0; }
+.wf-doc-link { color: var(--link, var(--reader-fg)); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }

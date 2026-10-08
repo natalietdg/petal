@@ -68,7 +68,7 @@ export function renderOrganizer(): HTMLElement[] {
 
   const settings = el('div', 'cz-fields');
   settings.append(
-    field('Run in the background', enabled, 'Tidy now works either way.'),
+    field('Name and tidy sessions with Claude · uses your Claude plan', enabled, 'Off unless you turn it on. Tidy now works either way.'),
     field('Every', numberInput(o.intervalMinutes, INTERVAL_MINUTES.min, INTERVAL_MINUTES.max, async (n) => (await save({ organizer: { intervalMinutes: n } })).organizer.intervalMinutes), 'minutes, 1–240'),
     field('Sessions per pass', numberInput(o.perPass, PER_PASS.min, PER_PASS.max, async (n) => (await save({ organizer: { perPass: n } })).organizer.perPass), '1–50, one Claude call each'),
     field('Model', model, 'haiku is fastest and cheapest'),

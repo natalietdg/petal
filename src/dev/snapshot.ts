@@ -24,6 +24,7 @@ import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
 import { planetCheck } from './snapshot-planet';
 import { sceneMotionCheck } from './snapshot-scenes';
+import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
 import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
@@ -343,7 +344,8 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   const steps: [string, () => Promise<unknown>][] = [
-    ['reply', () => fixtureReply({ js, log, pty })],
+    ['reply', () => fixtureReply({ js, log, pty })], // first: the feed must read the fixture it writes, not an older copy
+    ['welcome', async () => { organizerOffCheck(kit, 'start'); await welcomeCheck(kit, win); }], // still open from the fresh launch
     ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
     ['cat frames', () => catFrames({ js, win, capture, log, feed, themes, applyTheme })],
     ['scene motion', () => sceneMotionCheck(kit, { feed, win })],
@@ -363,6 +365,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['history reply', () => historyReplyCheck(kit)],
     ['customize', () => views.customizeScreens(kit)],
     ['overlays', () => views.overlaysCheck(kit)],
+    ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
     ['planet', () => planetCheck(kit, win)],
     ['error replies', () => views.errorRepliesCheck(kit)],
@@ -373,7 +376,8 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
-    ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // last: it appends turns to the fixture
+    ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
+    ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
   const count: StepCount = { done: 0, total: steps.length };
   log(`SNAPSHOT START steps=${count.total}`);
@@ -465,6 +469,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   const { pty, feed } = first;
   let transcript = '';
   pty.onData((data) => { transcript += data; });
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'welcome-relaunch') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await welcomeRelaunchCheck(kit);
+    await capture('welcome-relaunch');
+    return finish();
+  }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'flow-relaunch') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };

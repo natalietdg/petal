@@ -238,6 +238,7 @@ describe('session-organizer passes', () => {
 
 describe('session-organizer schedule', () => {
   it('reschedules on an interval or enabled change only', () => {
+    config.save({ organizer: { enabled: true } });
     const intervals: number[] = [];
     const realSetInterval = globalThis.setInterval;
     vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms: number) => {
@@ -261,6 +262,7 @@ describe('session-organizer schedule', () => {
   });
 
   it('start twice is a no-op', () => {
+    config.save({ organizer: { enabled: true } });
     const spy = vi.spyOn(globalThis, 'setInterval');
     organizer.start();
     organizer.start();
