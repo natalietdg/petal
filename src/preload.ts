@@ -60,6 +60,11 @@ const api = {
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
+  update: {
+    status: () => invoke('update:status'),
+    restart: () => invoke('update:restart'),
+    onReady: (callback: () => void) => subscribe('update:ready', callback),
+  },
   look: {
     setTheme: (id: string) => send('look:theme', id),
     setReading: (id: string) => send('look:reading', id),

@@ -93,6 +93,10 @@ export interface ReposList {
   claudeLive: boolean;
 }
 
+// The update pill's Restart: either it is restarting, or a note says why not.
+export type RestartResult = { restarting: true } | { note: string };
+export const UPDATE_PILL_TEXT = 'Update ready · Restart';
+
 export type RepoOpenResult = { note: string } | { ok: true; newTab: boolean; command: string };
 
 // renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle. Every reply can be { error } (main/ipc-guard.ts).
@@ -102,6 +106,8 @@ export interface InvokeChannels {
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: []; result: Guarded<boolean> };
+  'update:status': { args: []; result: Guarded<{ ready: boolean }> };
+  'update:restart': { args: []; result: Guarded<RestartResult> };
   'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
   'sessions:close': { args: [sessionId: string]; result: Guarded<CloseResult> };
 
@@ -180,6 +186,7 @@ export interface EventChannels {
   'history:toggle': void;
   'customize:open': void;
   'repos:palette': void;
+  'update:ready': void;
 }
 
 export type InvokeChannel = keyof InvokeChannels;

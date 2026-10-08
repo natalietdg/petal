@@ -17,6 +17,7 @@ import * as overlays from './overlays';
 import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as tarotReading from './tarot-reading';
+import * as updatePill from './update-pill';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -24,7 +25,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -127,6 +128,7 @@ async function start(): Promise<void> {
     if (active && (event as CustomEvent<string>).detail === active.id) showTab(active);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
+  updatePill.init();
 
   const { term, renderer } = tabs.create();
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows });
