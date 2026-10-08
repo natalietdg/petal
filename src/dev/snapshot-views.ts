@@ -370,7 +370,11 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
     const next = activeSession(win.webContents.id);
     return next && next !== session ? next : null;
   }, 8000);
-  if (!fresh) throw new Error('composer check: second tab never opened');
+  if (!fresh) {
+    // Names which side stalled: the renderer never made the tab, or main never started its pty.
+    const page = await js('({ ids: PastelTerm.tabs.ids(), active: PastelTerm.tabs.active()?.id })').catch((error: Error) => `unreadable: ${error.message}`);
+    throw new Error(`composer check: second tab never opened: renderer=${JSON.stringify(page)} mainActive=${activeSession(win.webContents.id)?.tabId}`);
+  }
   let freshOutput = '';
   const freshListener = fresh.pty.onData((data) => { freshOutput += data; });
   await wait(2500); // login shell rc files
