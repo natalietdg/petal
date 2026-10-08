@@ -15,6 +15,7 @@ import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
 import { handle, on, send } from './ipc';
+import { isUpdateReady, liveEnv, restartToUpdate, startUpdater } from './updater';
 import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions } from './tabs';
 import { applyCat, applyReading, applyScene, applyTheme, currentTheme, onLookChanged, registerLookIpc, settings, themes } from './look';
 import type { EventArgs, EventChannel } from '../shared/ipc';
@@ -106,6 +107,8 @@ function registerIpc(): void {
   registerCustomizeIpc();
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
+  handle('update:status', () => ({ ready: isUpdateReady() }));
+  handle('update:restart', () => restartToUpdate(liveEnv()));
 }
 
 app.whenReady().then(() => {
@@ -117,6 +120,7 @@ app.whenReady().then(() => {
   // The dev harness is a separate chunk, loaded only in snapshot runs; they never call Claude in the background.
   if (isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   else organizer.start({ openSessionIds });
+  startUpdater(liveEnv()).then((off) => { if (off) console.log(`[petal] auto-update off: ${off}`); });
 });
 
 app.on('will-quit', () => organizer.stop());

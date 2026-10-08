@@ -223,3 +223,17 @@
 .closed-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 15px; font-weight: 600; }
 .closed-text .session-meta { font-weight: 400; }
 .closed-reopen { flex-shrink: 0; }
+
+/* Update ready: the Sessions pill's shape in the quieter Done colours, so it never outshouts Sessions. */
+.update-pill {
+  padding: 9px 18px;
+  border: 1px solid var(--done-ink);
+  border-radius: 999px;
+  background: var(--done-pill);
+  color: var(--done-ink);
+  font: 600 15px var(--ui-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.update-pill[hidden] { display: none; }
+.update-pill.noting { background: var(--reader-bg); cursor: default; }
