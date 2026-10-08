@@ -132,9 +132,9 @@ export async function notesSideCheck(kit: Kit, win: BrowserWindow): Promise<void
       if (n.hidden || !e) return null;
       const nb = n.getBoundingClientRect(), pb = p.getBoundingClientRect();
       const tabs = [...p.querySelectorAll('.view-toggle button')].map((b) => b.textContent);
-      return { previewRight: Math.round(pb.right), notesLeft: Math.round(nb.left), notesRight: Math.round(nb.right), tabs, hasNotes: e.value.length > 0 };
+      return { previewRight: Math.round(pb.right), notesLeft: Math.round(nb.left), notesRight: Math.round(nb.right), tabs, hasNotes: e.value.length > 0, pressed: p.querySelector('.notes-toggle')?.getAttribute('aria-pressed') };
     })()`), 8000);
-    check(side && side.previewRight <= side.notesLeft && side.hasNotes && !side.tabs.includes('Notes'), `History notes beside the preview: ${JSON.stringify(side)}`);
+    check(side && side.previewRight <= side.notesLeft && side.hasNotes && side.pressed === 'true' && !side.tabs.includes('Notes'), `History notes beside the preview: ${JSON.stringify(side)}`);
     await capture('notes-side-history-1280');
     await js('PastelTerm.history.close()');
   } finally {

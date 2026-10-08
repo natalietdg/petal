@@ -46,11 +46,11 @@ export async function renderPreview(): Promise<void> {
   const views = el('div', 'history-preview-views');
   views.append(toggle, notesToggle);
   head.append(resume, send, note, views);
-  notes.bindToggle(notesToggle);
-  showNotes(session);
 
   const body = el('div', 'history-preview-body');
   preview.replaceChildren(head, body, ...(state.previewMode === 'replies' ? [replyBox(session)] : []));
+  notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
+  showNotes(session);
   await renderBody(session, body);
 }
 
