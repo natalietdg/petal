@@ -40,11 +40,18 @@
 .sc-iz-rail { fill: #3E1E12; } .sc-iz-tag { fill: #FBE9C0; } .sc-iz-tagD { fill: #D8B47C; }
 
 /* Counter, plate and stools. */
-.sc-iz-counterL { fill: #FFD890; } .sc-iz-counter { fill: #E2A250; } .sc-iz-lip { fill: #FFE4A8; }
-.sc-iz-counterG { fill: #C47A30; } .sc-iz-counterD { fill: #6E2C10; }
+.sc-iz-counterL { fill: #C4743A; } .sc-iz-counter { fill: #8E3E1A; } .sc-iz-lip { fill: #FFD890; }
+.sc-iz-counterG { fill: #7A3214; } .sc-iz-counterD { fill: #6E2C10; }
 .sc-iz-panelL { fill: #DC8E46; } .sc-iz-panel { fill: #B4662C; } .sc-iz-panelD { fill: #5E2410; }
 .sc-iz-panelG { fill: #9A5422; }
-.sc-iz-plate { fill: #FFF8EC; } .sc-iz-plateD { fill: #C8B89E; }
+.sc-iz-plate { fill: #FFF8EC; } .sc-iz-soy { fill: #4A1E0E; }
+
+/* Sushi and gyoza. */
+.sc-iz-salmon { fill: #FF7A3A; } .sc-iz-salmonL { fill: #FFC09A; }
+.sc-iz-tuna { fill: #D0243A; } .sc-iz-tunaL { fill: #FF6A70; }
+.sc-iz-tamago { fill: #FFD84A; } .sc-iz-nori { fill: #1E2A1E; } .sc-iz-rice { fill: #FFFFFF; }
+.sc-iz-getaD { fill: #7A3A16; }
+.sc-iz-pleatL { fill: #FFF2CC; } .sc-iz-pleat { fill: #F0C878; } .sc-iz-gyoza { fill: #E08A2C; }
 .sc-iz-seatL { fill: #FFB860; } .sc-iz-seat { fill: #C86E2A; } .sc-iz-leg { fill: #6A2C12; }
 
 /* Moving cells: the chef's arm and fan, sparks and steam. */
