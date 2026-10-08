@@ -128,6 +128,7 @@ const column = query(reader, '.reader-column');
 const guard = () => {
   if (reader.hidden) return; // an overlay is up; she is hidden there and measured again when the reader returns
   root.classList.remove('compact');
+  area.classList.remove('cat-strip'); // measured where she would sit, even if a short reader had stepped her out
   const contentRight = column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight);
   // Headlines, rails and wide blocks can reach past the content box.
   const blocks = column.querySelectorAll(':is(#latest, #older) :is(p, h1, h2, h3, pre, table, blockquote, ul, ol, .rail)');

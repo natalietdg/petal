@@ -76,8 +76,15 @@
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
 /* Narrow window: 2px per sprite pixel, still crisp, rather than hiding her. */
 #cat.compact { transform: scale(0.6667); }
-/* No gutter wide enough: the reader ends above her, so she sits under the text, never on it. */
-#reader-area.cat-strip #reader { margin-bottom: 112px; } /* 96px compact corner, 14px gap, 2px for subpixel scaling */
+/* No gutter wide enough: the reader ends above her, so she sits under the text, never on it.
+   Only in a tall reader: a short one (the divider dragged low) keeps its height and she steps out instead. */
+#reader-area { container-type: size; } /* its grid row sizes it, never its content */
+@container (min-height: 480px) {
+  #reader-area.cat-strip #reader { margin-bottom: 112px; } /* 96px compact corner, 14px gap, 2px for subpixel scaling */
+}
+@container (max-height: 479.98px) {
+  #reader-area.cat-strip :is(#cat, .scene-tip, .scene-popover) { display: none; }
+}
 /* Overlays use the whole column; her corner waits for the reader. */
 #reader-area:has(> :is(#history, #workflow, #customize, #repos, #welcome, #agents):not([hidden])) :is(#cat, .scene-tip, .scene-popover) { display: none; }
 .cat-sprite svg { width: 100%; height: 100%; image-rendering: pixelated; }
