@@ -172,4 +172,4 @@
 .history-reply-status:empty { display: none; }
 .history-you.pending, .history-you.queued { opacity: 0.72; border: 1px dashed var(--rule); }
 .history-live-tail:empty { display: none; }
-.history-live-tail { margin-top: 1.6em; }
+.history-preview-body > .history-thread + .history-live-tail { margin-top: 1.6em; }

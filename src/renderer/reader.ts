@@ -201,6 +201,7 @@ function mountNotes(): void {
   const hint = tabId && clearedTabs.has(tabId) ? 'This tab started a new Claude session. Earlier notes stay with the old one, in History.' : undefined;
   notesEditor = createNotesEditor(notesSession, { hint });
   notesView.replaceChildren(notesEditor.element);
+  scroller.scrollTop = 0; // the replies' scroll position means nothing here
 }
 for (const button of toggles) {
   button.addEventListener('click', () => { if (isView(button.dataset.view)) setView(button.dataset.view); });
