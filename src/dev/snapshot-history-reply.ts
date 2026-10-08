@@ -3,6 +3,7 @@
 import * as configStore from '../main/config-store';
 import { historyFixture, panelFixture, pasteWrites } from '../main/snapshot-mode';
 import { addHistoryFixture, FIXTURE_A, FIXTURE_B } from './snapshot-history-fixture';
+import { SINGLE_SCREEN } from './snapshot-prompts';
 import type { Kit } from './snapshot';
 
 const MESSAGE = 'hello from the history preview';
@@ -53,7 +54,7 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
 
     // Claude comes up in the background tab: the queued message is pasted there and echoes until it's in the log.
     const pastesBefore = pasteWrites.length;
-    const live = { state: 'live', replies: [{ id: 'r1', timestamp: new Date().toISOString(), prompt: 'plan the garden', markdown: 'Plant **tomatoes** first.' }], waiting: [], promptCount: 1, busy: false, sessionId: FIXTURE_A, cwd: null, repo: null, question: null, tabId: bg, label: 'Fixture session A' };
+    const live = { state: 'live', replies: [{ id: 'r1', timestamp: new Date().toISOString(), prompt: 'plan the garden', markdown: 'Plant **tomatoes** first.' }], waiting: [], promptCount: 1, busy: false, sessionId: FIXTURE_A, cwd: null, repo: null, tabId: bg, label: 'Fixture session A' };
     await js(`PastelTerm.tabs.setUpdate(${JSON.stringify(bg)}, ${JSON.stringify(live)}); PastelTerm.history.tabUpdated(${JSON.stringify(bg)})`);
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.tabId === bg && w.data.includes(MESSAGE)) ?? null, 6000);
     check(pasted, `pasted into the background tab once Claude was up: ${JSON.stringify(pasted)}`);
@@ -62,10 +63,12 @@ export async function historyReplyCheck(kit: Kit): Promise<void> {
     await capture('history-reply-live');
 
     // A question waiting in that tab can't be answered from here, so the preview says so.
-    await js(`PastelTerm.tabs.setUpdate(${JSON.stringify(bg)}, ${JSON.stringify({ ...live, question: { toolUseId: 'q1', questions: [{ question: 'Which bed?', header: 'Bed', options: [], multiSelect: false }] } })}); PastelTerm.history.tabUpdated(${JSON.stringify(bg)})`);
+    const drawInBg = (text: string) => js(`PastelTerm.tabs.get(${JSON.stringify(bg)}).term.write(${JSON.stringify(text)}, () => PastelTerm.history.tabScreen(${JSON.stringify(bg)}))`);
+    await drawInBg(`\x1b[2J\x1b[H${SINGLE_SCREEN.join('\r\n')}\r\n`);
     const asking = await waitState((s) => s.status.includes('Claude is asking something'));
-    check(asking, `a waiting question shows "Claude is asking something · Open in full": ${JSON.stringify(asking?.status)}`);
-    await js(`PastelTerm.tabs.setUpdate(${JSON.stringify(bg)}, ${JSON.stringify(live)}); PastelTerm.history.tabUpdated(${JSON.stringify(bg)})`);
+    check(asking, `a picker on that tab's screen shows "Claude is asking something · Open in full": ${JSON.stringify(asking?.status)}`);
+    await drawInBg('\x1b[2J\x1b[H');
+    check(await waitState((s) => !s.status.includes('Claude is asking something')), 'the note goes once the picker leaves the screen');
 
     // At her limit no tab opens for a reply.
     panelFixture.sessions = [fake(1), fake(2)];
