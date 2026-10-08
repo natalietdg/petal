@@ -1,11 +1,15 @@
 import { Menu, type MenuItemConstructorOptions } from 'electron';
 import themesJson from '../themes.json';
+import { LOCAL_CATS } from '../shared/local-cats';
 import type { Choice, Themes } from '../shared/types';
 
 const themes: Themes = themesJson;
 
-// Art lives in renderer/cat-art.ts; ids here must match its CATS keys.
-export const CAT_CHOICES: readonly Choice[] = [['mika', 'Mika'], ['miki', 'Miki'], ['kira', 'Kira'], ['corgi', 'Corgi']];
+// Art lives in renderer/cat-art.ts; ids here must match its CATS keys. Private local cats follow.
+export const CAT_CHOICES: readonly Choice[] = [
+  ['mika', 'Mika'], ['miki', 'Miki'], ['kira', 'Kira'], ['hoshi', 'Hoshi'], ['corgi', 'Corgi'],
+  ...LOCAL_CATS.map(({ id, pet }): Choice => [id, pet.name]),
+];
 // Ids match SCENES in renderer/scenes.js; 'none' shows the cat alone.
 export const SCENE_CHOICES: readonly Choice[] = [
   ['none', 'No Scene'], ['cherry', 'Sakura Picnic'], ['beach', 'Seaside Afternoon'], ['night', 'City Lights'], ['starlit', 'Starlit Window'],

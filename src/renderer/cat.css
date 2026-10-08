@@ -62,6 +62,16 @@
   --cat-patch: #DE8A45;
   --cat-white: #F6F0E6;
 }
+/* Hoshi: a magical girl in pink, white and gold; soft pink fur with a deeper pink fringe, violet eyes. */
+#cat[data-cat="hoshi"], .cat-portrait[data-cat="hoshi"] {
+  --cat-body: #FBD9E2;
+  --cat-belly: #FFF6EE;
+  --cat-pink: #F28DB2;
+  --cat-blush: #F28DB2;
+  --cat-eye: #6B4FB0;
+  --cat-stripe: #EE9AB6;
+}
+#cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: 60px; height: 60px; }
 /* Narrow window: 2px per sprite pixel, still crisp, rather than hiding her. */
@@ -96,6 +106,18 @@
 .px-f { fill: #6FA8DC; }
 .px-D { fill: #1E3A6E; }
 .px-e { fill: #F6EBD6; }
+.px-A { fill: #FFFFFF; }
+.px-G { fill: #F06A9A; }
+.px-F { fill: #FFFFFF; }
+.px-I { fill: #D93A6E; }
+.px-h { fill: #F0508A; }
+.px-Y { fill: #FFC93C; }
+.px-V { fill: #FFFFFF; }
+.px-U { fill: #C9B8F0; }
+.px-y { fill: #FFD95A; }
+.px-n { fill: #D9971E; }
+.px-p { fill: #F28DB2; }
+.px-k { fill: #FFFFFF; }
 
 /* Toys sit to the cat's left, on the same pixel grid. */
 .cat-prop { position: absolute; line-height: 0; }
@@ -103,8 +125,10 @@
 .prop-tea { right: 70px; bottom: 3px; }
 .prop-fish { right: 60px; bottom: 3px; }
 .prop-bone { right: 64px; bottom: 3px; }
+.prop-wand { right: 64px; bottom: 3px; }
 .cat-prop svg { image-rendering: pixelated; }
 .prop-tea .steam { opacity: 0; }
+.cat-prop .sparkle { opacity: 0; }
 
 /* Asleep she keeps her own drawing: eyes shut and a z drifting up, never a different pose. */
 #cat:not(.awake) .eyes-open { opacity: 0; animation: none; }
@@ -190,6 +214,12 @@
   70%, 85% { transform: translate(-3px, 3px); }
 }
 
+/* Hoshi casts: she hops, and her winged wand bobs with sparkles and a heart. */
+#cat.busy[data-cat="hoshi"] .sitting { animation: bob 1.2s steps(2) infinite; }
+#cat.busy .prop-wand { animation: bob 0.8s steps(2) infinite; }
+#cat.busy .prop-wand .sparkle { animation: sparkle 0.8s steps(1) infinite; }
+@keyframes sparkle { 50% { opacity: 1; } }
+
 /* Each cat's own small tic on top. Mika: the left ear twitches. */
 #cat[data-cat="mika"] .ear-left { animation: ear-twitch 5s steps(1) infinite; }
 /* Miki: both big ears swivel, like her listening for the fridge. */
@@ -207,6 +237,10 @@
   0% { transform: translateY(-1px); }
   50% { transform: none; }
 }
+/* Winged cats: wings flutter a pixel, slow at rest and fast while Claude works. */
+#cat .wings { animation: flutter 2.4s steps(1) infinite; }
+#cat.busy .wings { animation-duration: 0.5s; }
+@keyframes flutter { 50% { transform: translateY(-1px); } }
 /* Slow blink every ~4s while busy. */
 .eyes-closed { opacity: 0; animation: blink-closed 4.2s steps(1) infinite; }
 .eyes-open { animation: blink-open 4.2s steps(1) infinite; }
@@ -236,7 +270,7 @@
 
 /* Static frames only: tail up, ear still, z shown. */
 @media (prefers-reduced-motion: reduce) {
-  #cat *, .tail-up, .tail-down, .ear-left, .ear-right, .paw-left, .paw-right, .cat-z, .eyes-open, .eyes-closed { animation: none !important; }
+  #cat *, .tail-up, .tail-down, .ear-left, .ear-right, .paw-left, .paw-right, .wings, .cat-z, .eyes-open, .eyes-closed { animation: none !important; }
   .eyes-closed { opacity: 0; }
   .tail-down { opacity: 0; }
   .cat-z { opacity: 1; }

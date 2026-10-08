@@ -33,6 +33,7 @@ import { colourKeyCheck } from './snapshot-colour-key';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
+import { catGallery } from './snapshot-cats';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import * as sessionsMonitor from '../main/sessions-monitor';
 import { once } from '../main/ipc';
@@ -357,6 +358,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['welcome', async () => { organizerOffCheck(kit, 'start'); await welcomeCheck(kit, win); }], // still open from the fresh launch
     ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
     ['cat frames', () => catFrames({ js, win, capture, log, feed, themes, applyTheme })],
+    ['cat gallery', () => catGallery(kit, win)],
     ['scene motion', () => sceneMotionCheck(kit, { feed, win })],
     ['sessions panel', () => captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId: null })],
     ['tabs', () => views.tabsCheck(kit, { win, feed, ...tabs })], // before the flow steps, which can hang on their own

@@ -10,7 +10,7 @@ export const TAGLINE = 'A terminal for Claude Code, with a reader for its replie
 // From code.claude.com/docs/en/setup (native install, macOS and Linux).
 export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
 const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
-const WELCOME_CATS = ['mika', 'miki', 'kira'];
+const WELCOME_CATS = ['mika', 'miki', 'kira', 'hoshi'];
 
 const view = byId('welcome');
 

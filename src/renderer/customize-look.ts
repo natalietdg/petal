@@ -1,12 +1,14 @@
 // Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting.
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
+import { portrait } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 
-function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void): HTMLDivElement {
+// picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her.
+function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
   const group = el('div', 'cz-chips');
   group.setAttribute('role', 'radiogroup');
   group.setAttribute('aria-label', label);
@@ -17,6 +19,12 @@ function chipGroup(label: string, choices: readonly Choice[], current: string, o
     }, 'cz-chip');
     chip.setAttribute('role', 'radio');
     chip.setAttribute('aria-checked', String(id === current));
+    if (picture) {
+      const portraitBox = el('span', 'cat-portrait');
+      portraitBox.dataset.cat = id;
+      portraitBox.innerHTML = picture(id); // built from Petal's own pixel data, no outside text
+      chip.prepend(portraitBox);
+    }
     group.append(chip);
   }
   return card(label, group);
@@ -44,7 +52,7 @@ export function renderLook(): HTMLElement[] {
   return [
     chipGroup('Theme', choices.themes, look.theme, (id) => { look.theme = id; set.setTheme(id); }),
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
-    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }),
+    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }, portrait),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
     birthdayCard(),
     note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),

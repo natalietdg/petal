@@ -1,4 +1,4 @@
-// The pets' pixel art: three cats sharing one silhouette, the corgi, and each pet's toy. cat.ts draws them.
+// The pets' pixel art: three cats sharing one silhouette, Hoshi and the corgi in their own, the corgi, and each pet's toy. cat.ts draws them.
 // One row of a sprite drawn over the base at row y.
 export type Line = readonly [y: number, row: string];
 
@@ -9,7 +9,10 @@ export interface Pet {
   eyesOpen: readonly Line[];
   eyesClosed?: readonly Line[];
   sitting: readonly Line[];
-  tail?: false;
+  // Drawn behind the body in their own group, so they can flutter.
+  wings?: readonly Line[];
+  // false for none; her own two frames, or the shared TAIL_UP/TAIL_DOWN.
+  tail?: false | { up: readonly Line[]; down: readonly Line[] };
 }
 
 export interface Prop {
@@ -64,7 +67,8 @@ export const TAIL_DOWN: readonly Line[] = [
 ];
 
 // Markings drawn over the shared silhouette.
-// S stripe · R orange patch · M white fur · C collar · T collar tag.
+// S stripe · R orange patch · M white fur · C collar · T collar tag · Y star · V/U wing and its shade
+// · A beret · G dress · F frill · I bow.
 export const CATS = {
   // Mika, an orange tabby: forehead and cheek stripes, green eyes, cream chest, brown outline.
   mika: {
@@ -149,9 +153,47 @@ export const CATS = {
       [17, '....M.M....M.M......'],
     ],
   },
+  // Hoshi, an original magical-girl cat: a white beret with a gold star, a fringe of deeper pink fur,
+  // violet eyes, a pink puff dress with a white frill and a big rose bow. No tail under the dress.
+  hoshi: {
+    name: 'Hoshi',
+    base: [
+      '...O....O.....O.....',
+      '..OPO..OAO...OPO....',
+      '..OPPOOAYAOOOPPO....',
+      '..OBBOAAAAAAOBBO....',
+      '.OBBBOOOOOOOOBBBO...',
+      '.OSSSSSSSSSSSSSSO...',
+      'OBSSBSSBSSBSSBSSBO..',
+      'OBSBBBSBBBBSBBBSBO..',
+      'OBBBBBBBBBBBBBBBBO..',
+      'OBBBBBBBPPBBBBBBBO..',
+      'OBBKKBBOBBOBBKKBBO..',
+      '.OBBBBBBOOBBBBBBO...',
+      '..OOBBBBBBBBBBOO....',
+      '...OGGIIGGIIGGO.....',
+      '...OGGIIOOIIGGO.....',
+      '..OGGGGIGGIGGGGO....',
+      '..OGGGGGGGGGGGGO....',
+      '..OFFFFFFFFFFFFO....',
+      '...OOBPBOOBPBOO.....',
+      '.....OOO..OOO.......',
+    ],
+    eyesOpen: [
+      [7, '...EEE......EEE.....'],
+      [8, '...EWO......EWO.....'],
+      [9, '...EOO......EOO.....'],
+    ],
+    eyesClosed: [
+      [8, '...OOO......OOO.....'],
+    ],
+    sitting: [],
+    tail: false,
+  },
 } satisfies Record<string, Pet>;
 
-// Each cat's toy, on the same 3px grid. r/d ball · c/g cup and tea · s steam · f/D fish and its outline · e bone.
+// Each cat's toy, on the same 3px grid. r/d ball · c/g cup and tea · s steam · f/D fish and its outline · e bone
+// · y/n star and its shade · p wand · k sparkle · h heart (k and h show only while busy).
 export const PROPS = {
   mika: {
     name: 'fish',
@@ -198,6 +240,26 @@ export const PROPS = {
       'OccccO.O',
       'OccccOO.',
       '.OOOO...',
+    ],
+  },
+  hoshi: {
+    name: 'wand',
+    rows: [
+      '.k.....k....',
+      '....y....h.h',
+      'U..yyy..Uhhh',
+      'UVyyyyyVU.h.',
+      '.UUywyUU....',
+      '...ynyn.....',
+      '...y.n......',
+      '....p.......',
+      '...rpr......',
+      '....p.......',
+      '....p.......',
+      '....p.......',
+      '....p.......',
+      '....p.......',
+      '....p.......',
     ],
   },
 } satisfies Record<string, Prop>;
