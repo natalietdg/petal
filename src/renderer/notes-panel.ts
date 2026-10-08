@@ -21,8 +21,6 @@ export interface Panel {
   aside: HTMLElement;
   mount: (next: Mount) => void;
   bindToggle: (button: HTMLButtonElement) => void;
-  flush: () => Promise<void>;
-  isOpen: () => boolean;
 }
 
 const setWidth = (px: number): void => {
@@ -32,12 +30,11 @@ const setWidth = (px: number): void => {
 
 const save = (patch: Partial<Prefs>): void => void window.pastel.config.save({ notesPanel: patch });
 
-function setOpen(open: boolean): void {
+export function setOpen(open: boolean): void {
   prefs.open = open ? 'open' : 'closed';
   save({ open: prefs.open });
   applyAll();
 }
-
 
 // aside: the panel element; host: the container that makes room for it (class notes-open).
 export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
@@ -70,7 +67,7 @@ export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
   };
   appliers.push(apply);
 
-  const panel: Panel = {
+  return {
     aside,
     mount: ({ sessionId, hint, onSaved }) => {
       void editor?.flush(); // typing in the last notes is saved before they go
@@ -84,10 +81,7 @@ export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
       button.addEventListener('click', () => setOpen(!open()));
       apply();
     },
-    flush: async () => { await editor?.flush(); },
-    isOpen: open,
   };
-  return panel;
 }
 
 // Drag the panel's left edge; the width is saved when she lets go.
@@ -121,6 +115,3 @@ export async function loadPrefs(): Promise<void> {
   applyAll();
 }
 void loadPrefs();
-
-export const prefsNow = (): Prefs => ({ ...prefs });
-export { setOpen };

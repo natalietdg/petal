@@ -4,6 +4,8 @@ import * as markdown from './markdown';
 import { el, isIpcError } from './dom';
 
 const SAVE_DELAY_MS = 600;
+const SAVED_EVENT = 'petal:notes-saved';
+interface SavedNotes { sessionId: string; text: string; from: HTMLElement }
 
 export interface NotesEditor {
   element: HTMLElement;
@@ -53,7 +55,18 @@ export function createNotesEditor(sessionId: string | null, { hint, onSaved, onL
     saved = text;
     status.textContent = 'Saved';
     onSaved?.(text);
+    window.dispatchEvent(new CustomEvent<SavedNotes>(SAVED_EVENT, { detail: { sessionId, text, from: root } }));
   };
+
+  // The same session's notes open elsewhere (reader and History) take her latest save unless she is typing here.
+  const takeSave = (event: Event): void => {
+    if (!root.isConnected) return window.removeEventListener(SAVED_EVENT, takeSave);
+    const { detail } = event as CustomEvent<SavedNotes>;
+    if (detail.sessionId !== sessionId || detail.from === root || document.activeElement === input) return;
+    input.value = saved = detail.text;
+    status.textContent = 'Saved';
+  };
+  window.addEventListener(SAVED_EVENT, takeSave);
 
   input.addEventListener('input', () => {
     status.textContent = 'Editing';
