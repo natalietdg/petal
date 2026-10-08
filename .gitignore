@@ -3,3 +3,5 @@ dist/
 dist.noindex/
 out/
 .claude/
+# Private cats for one Mac (src/shared/local-cats.ts); never committed.
+src/renderer/cats-local/

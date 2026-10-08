@@ -1,11 +1,15 @@
 // A 20x20 pixel pet in the reader's corner: eyes shut and dozing when Claude rests, playing when it works.
 // Four cats share one silhouette; each has her own coat, her own prop and her own busy move.
 import * as scenes from './scenes';
-import { byId, query } from './dom';
+import { byId, el, query } from './dom';
 import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, type Line, type Pet, type Prop } from './cat-art';
+import { LOCAL_CATS } from '../shared/local-cats';
 
-type CatId = keyof typeof CATS;
-const isCatId = (id: string): id is CatId => Object.hasOwn(CATS, id);
+// Built-in cats plus any private ones from cats-local/, each with her toy and her own stylesheet.
+const ALL_CATS: Readonly<Record<string, Pet>> = { ...CATS, ...Object.fromEntries(LOCAL_CATS.map(({ id, pet }) => [id, pet])) };
+const ALL_PROPS: Readonly<Record<string, Prop>> = { ...PROPS, ...Object.fromEntries(LOCAL_CATS.map(({ id, prop }) => [id, prop])) };
+for (const { css } of LOCAL_CATS) if (css) document.head.append(el('style', null, css));
+const isCatId = (id: string): boolean => Object.hasOwn(ALL_CATS, id);
 
 // The eye sparkle (W) sits in the pupil at 2/3 size: 2px at 3px per pixel, so it stays crisp.
 const SPARKLE = 2 / 3;
@@ -58,7 +62,7 @@ function propSvg(prop: Prop): string {
 }
 
 // A still picture of one cat for pickers; wrap it in .cat-portrait[data-cat] so her coat colours apply.
-export const portrait = (id: string): string => sittingSvg(CATS[isCatId(id) ? id : 'mika']);
+export const portrait = (id: string): string => sittingSvg(ALL_CATS[isCatId(id) ? id : 'mika']);
 
 const root = byId('cat');
 let current: Pet = CATS.mika;
@@ -71,7 +75,7 @@ const updateTip = () => {
 
 function render() {
   const key = root.dataset.cat ?? '';
-  const prop = isCatId(key) ? PROPS[key] : PROPS.mika;
+  const prop = isCatId(key) ? ALL_PROPS[key] : PROPS.mika;
   const layers = scenes.svg(scene);
   root.innerHTML = layers.back
     + `<div class="cat-prop prop-${prop.name}">${propSvg(prop)}</div>`
@@ -104,7 +108,7 @@ export function setBusy(next: boolean): void {
 // Unknown ids (an old settings file, a retired or renamed cat) fall back to Mika.
 export function setCat(id: string): void {
   const key = isCatId(id) ? id : 'mika';
-  current = CATS[key];
+  current = ALL_CATS[key];
   root.dataset.cat = key;
   render();
 }
