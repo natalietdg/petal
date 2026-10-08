@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { unclippedCheck } from './snapshot-divider';
 import { DECK, birthCardNumber, cardFor } from '../renderer/scenes/tarot-deck';
 import { userDataDir } from '../main/snapshot-mode';
 
@@ -90,6 +91,7 @@ async function birthdayCheck(kit: Kit, win: BrowserWindow, check: (ok: unknown, 
   await js(click);
   await wait(200);
   const set = await js(STATE);
+  await unclippedCheck(kit, 'tarot popover', '.scene-popover:not([hidden])');
   check(set.popoverShown && set.popover.includes(`Your birth card: ${birth.numeral} ${birth.name}`) && set.popover.includes(personal.name) && set.popover.includes(personal.reading) && set.trCard === String(personal.number),
     `with a birthday the reading shows the personal card (${personal.numeral} ${personal.name}) and the birth card (${birth.numeral} ${birth.name}): ${JSON.stringify(set.popover)} data-tr-card=${set.trCard}`);
   check(!/[–—]/.test(set.popover), 'birthday lines have no em dashes');

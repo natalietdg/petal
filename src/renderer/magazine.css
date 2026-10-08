@@ -297,3 +297,17 @@
 }
 [data-reading] .status.empty::before,
 [data-reading] .status.empty::after { content: none; }
+
+/* Doing / Recommend / Next in the magazine looks. */
+[data-reading="editorial"] .status-chip {
+  padding: 0;
+  background: none;
+  color: var(--link);
+  letter-spacing: 0.18em;
+}
+[data-reading="lifestyle"] .status-block {
+  border: 0;
+  border-radius: 20px;
+  padding: 1em 1.25em;
+  background: var(--code-bg);
+}

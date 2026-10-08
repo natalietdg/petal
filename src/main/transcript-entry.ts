@@ -5,6 +5,11 @@ export interface ToolInput {
   description?: string;
   command?: string;
   questions?: unknown; // AskUserQuestion; validated in pending-question.ts
+  pattern?: string;
+  query?: string;
+  url?: string;
+  skill?: string;
+  message?: string; // SubagentHandback: the agent's final report
 }
 
 export interface ContentItem {
@@ -14,6 +19,8 @@ export interface ContentItem {
   id?: string;
   tool_use_id?: string;
   input?: ToolInput;
+  content?: unknown; // tool_result payload: a string or text blocks
+  is_error?: boolean;
 }
 
 export type TextItem = ContentItem & { type: 'text'; text: string };
@@ -26,7 +33,7 @@ export interface TranscriptEntry {
   isSidechain?: boolean;
   cwd?: unknown;
   aiTitle?: string;
-  message?: { role?: string; content?: string | ContentItem[] };
+  message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
 }
 
 export const isTextItem = (item: ContentItem): item is TextItem => item.type === 'text';

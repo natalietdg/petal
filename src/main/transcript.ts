@@ -1,17 +1,14 @@
-// Tails one Claude Code session log and reports its replies and any question Claude is waiting on.
+// Tails one Claude Code session log and reports its replies.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ReplyCollector } from './replies';
-import { PendingQuestionTracker } from './pending-question';
 import { parseEntry } from './transcript-entry';
-import type { PendingQuestion } from '../shared/prompt-answer';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
 export interface TranscriptView {
   replies: Reply[];
   waiting: WaitingPrompt[];
   promptCount: number;
-  question: PendingQuestion | null;
 }
 
 export type OnTranscript = (view: TranscriptView) => void;
@@ -30,22 +27,20 @@ export function splitCompleteLines(carry: Buffer, chunk: Buffer): { lines: strin
   return { lines, rest: Buffer.from(data.subarray(start)) };
 }
 
-export class TranscriptTail {
+// Follows one append-only jsonl: fs.watch reads new lines as they land, poll() is the tick fallback.
+export class JsonlTail {
   private readonly file: string;
-  private readonly onUpdate: OnTranscript;
+  private readonly onLines: (lines: string[]) => void;
   private offset = 0;
   private partialLine: Buffer = Buffer.alloc(0);
-  private readonly collector = new ReplyCollector();
-  private readonly question = new PendingQuestionTracker();
   private watcher: fs.FSWatcher | null = null;
 
-  constructor(file: string, onUpdate: OnTranscript) {
+  constructor(file: string, onLines: (lines: string[]) => void) {
     this.file = file;
-    this.onUpdate = onUpdate;
+    this.onLines = onLines;
     this.poll();
   }
 
-  // Called on every session tick as a fallback; fs.watch reads new lines as soon as they land.
   poll(): void {
     if (!this.watcher) this.watch();
     this.readAppended();
@@ -106,12 +101,35 @@ export class TranscriptTail {
 
     const { lines, rest } = splitCompleteLines(this.partialLine, buffer.subarray(0, read));
     this.partialLine = rest;
+    if (lines.length) this.onLines(lines);
+  }
+
+  stop(): void {
+    this.unwatch();
+  }
+}
+
+export class TranscriptTail {
+  private readonly onUpdate: OnTranscript;
+  private readonly collector = new ReplyCollector();
+  private readonly tail: JsonlTail;
+
+  constructor(file: string, onUpdate: OnTranscript) {
+    this.onUpdate = onUpdate;
+    this.tail = new JsonlTail(file, (lines) => this.add(lines));
+  }
+
+  // Called on every session tick as a fallback; fs.watch reads new lines as soon as they land.
+  poll(): void {
+    this.tail.poll();
+  }
+
+  private add(lines: string[]): void {
     let changed = false;
     for (const line of lines) {
       try {
         const entry = parseEntry(line);
-        const repliesChanged = this.collector.add(entry);
-        changed = this.question.add(entry) || repliesChanged || changed;
+        changed = this.collector.add(entry) || changed;
       } catch {
         // Skip malformed lines.
       }
@@ -124,11 +142,10 @@ export class TranscriptTail {
       replies: this.collector.newestFirst(),
       waiting: this.collector.waiting(),
       promptCount: this.collector.promptCount,
-      question: this.question.current(),
     };
   }
 
   stop(): void {
-    this.unwatch();
+    this.tail.stop();
   }
 }

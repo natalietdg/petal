@@ -185,3 +185,15 @@ export async function dividerCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await handlingCheck(kit, win);
   resizeOffscreen(win, startWidth, startHeight);
 }
+
+// #reader-area clips (so nothing paints over the divider): anything shown inside it must fit whole.
+export async function unclippedCheck(kit: Kit, what: string, selector: string): Promise<void> {
+  const fit = await kit.js(`(() => {
+    const area = document.getElementById('reader-area').getBoundingClientRect();
+    const shown = [...document.querySelectorAll(${JSON.stringify(selector)})].filter((el) => el.getBoundingClientRect().height > 0);
+    const cut = shown.map((el) => el.getBoundingClientRect()).filter((r) => r.top < area.top - 1 || r.bottom > area.bottom + 1 || r.left < area.left - 1 || r.right > area.right + 1)
+      .map((r) => ({ top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) }));
+    return { shown: shown.length, cut, area: { top: Math.round(area.top), bottom: Math.round(area.bottom) } };
+  })()`);
+  kit.log(`${fit.shown > 0 && fit.cut.length === 0 ? 'ok' : 'FAIL'} not clipped by the reader area: ${what} ${JSON.stringify(fit)}`);
+}

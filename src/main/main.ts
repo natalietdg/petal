@@ -4,6 +4,7 @@ import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
+import { registerAgentsIpc } from './agents-ipc';
 import { isSnapshotRun, userDataDir } from './snapshot-mode';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
@@ -67,6 +68,12 @@ const sendToFocused = <C extends EventChannel>(channel: C, ...payload: EventArgs
   if (contents) send(contents, channel, ...payload);
 };
 
+// ⌘T: the renderer checks her session limit before opening the tab.
+function newSessionTab(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'tabs:new-session');
+}
+
 function openSettings(): void {
   const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
   if (contents) send(contents, 'customize:open');
@@ -89,7 +96,7 @@ function refreshMenu(): void {
     currentReading: reading,
     onReadingSelected: applyReading,
     onNewWindow: () => createWindow(),
-    onNewTab: () => openTab(focusedContents()),
+    onNewTab: newSessionTab,
     onCloseTab: () => sendToFocused('tabs:close-active'),
     onCycleTab: (delta) => sendToFocused('tabs:cycle', delta),
     onToggleReader: () => sendToFocused('layout:toggle'),
@@ -110,6 +117,7 @@ function registerIpc(): void {
   handle('claude:installed', async (_event, request) => Boolean(await claudePath({ recheck: request?.recheck === true })));
 
   registerSessionsIpc({ activeSession });
+  registerAgentsIpc({ activeSession });
 
   on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);

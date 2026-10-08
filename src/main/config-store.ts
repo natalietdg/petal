@@ -12,6 +12,10 @@ export const MAX_OPEN = { min: 1, max: 50 };
 
 export const MODELS = ['haiku', 'sonnet', 'opus'];
 
+// Notes side panel: 'auto' opens it for sessions that already have notes, until she toggles it herself.
+export const NOTES_OPEN = ['auto', 'open', 'closed'] as const;
+export const NOTES_WIDTH = { min: 260, max: 520 };
+
 export interface Config {
   organizer: { enabled: boolean; intervalMinutes: number; perPass: number; model: string; prompt: string };
   flowTitles: { prompt: string };
@@ -21,6 +25,7 @@ export interface Config {
   tarot: { birthdate: string };
   // The first-run screen; true once it has been shown.
   welcome: { seen: boolean };
+  notesPanel: { open: (typeof NOTES_OPEN)[number]; width: number };
   // Reader share of each window, keyed by window slot (main/layout-ipc.ts).
   layout: { splits: Record<string, number> };
 }
@@ -50,6 +55,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   sessions: { maxOpen: 8 },
   tarot: { birthdate: '' },
   welcome: { seen: false },
+  notesPanel: { open: 'auto' as const, width: 320 },
   layout: { splits: {} },
 });
 
@@ -97,6 +103,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const s = raw.sessions ?? {};
   const t = raw.tarot ?? {};
   const w = raw.welcome ?? {};
+  const n = raw.notesPanel ?? {};
   const l = raw.layout ?? {};
   return {
     organizer: {
@@ -114,6 +121,10 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     sessions: { maxOpen: intIn(s.maxOpen, MAX_OPEN.min, MAX_OPEN.max, b.sessions.maxOpen) },
     tarot: { birthdate: birthdateOr(t.birthdate, b.tarot.birthdate) },
     welcome: { seen: boolOr(w.seen, b.welcome.seen) },
+    notesPanel: {
+      open: NOTES_OPEN.find((v) => v === n.open) ?? b.notesPanel.open,
+      width: intIn(n.width, NOTES_WIDTH.min, NOTES_WIDTH.max, b.notesPanel.width),
+    },
     layout: { splits: splitsOr(l.splits, b.layout.splits) },
   };
 }

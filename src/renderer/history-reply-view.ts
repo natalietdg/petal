@@ -6,7 +6,7 @@ import * as reply from './history-reply';
 import { el } from './dom';
 import { promptBubble } from './prompt-bubble';
 import { hooks, type Session } from './history-state';
-import { parsePermissionPrompt } from '../shared/prompt-answer';
+import { parsePermissionPrompt, parseQuestionPicker } from '../shared/prompt-answer';
 import type { Tab } from './tabs';
 
 export type Turn = { index: number; prompt: string; reply: string };
@@ -74,11 +74,12 @@ export function paintStatus(box: HTMLElement, session: Session): void {
   if (!status) return;
   status.replaceChildren();
   if (!tab) return;
-  if (tab.update?.question) {
+  const screen = tabs.screenLines(tab);
+  if (parseQuestionPicker(screen)) {
     status.append(el('span', '', 'Claude is asking something ·'), fullButton(session));
     return;
   }
-  const permission = parsePermissionPrompt(tabs.screenLines(tab));
+  const permission = parsePermissionPrompt(screen);
   if (!permission) return;
   status.append(el('span', '', `${permission.title} · ${permission.question}`));
   for (const option of permission.options) {

@@ -4,9 +4,10 @@ import * as tabs from './tabs';
 import * as composer from './composer';
 import * as overlays from './overlays';
 import { byId, el, isIpcError } from './dom';
-import type { SessionCounts, SessionRow, SubagentRow } from '../main/sessions-monitor';
+import type { SessionRow, SubagentRow } from '../main/sessions-monitor';
 import type { ClosedSession } from '../main/closed-store';
 import { agentsBadgeText, sessionsPillText, type SessionsView } from '../shared/ipc';
+import { limitReached, limitText, overLimit } from '../shared/session-limit';
 
 const OPEN_REFRESH_MS = 2000;
 const COLLAPSED_REFRESH_MS = 5000;
@@ -39,12 +40,10 @@ function sinceText(ms: number | null, verb = ''): string {
   return verb ? `${verb} ${ago}` : ago;
 }
 
-const overLimit = ({ total }: SessionCounts, maxOpen: number): boolean => total > maxOpen;
-const atLimit = ({ total }: SessionCounts, maxOpen: number): boolean => total >= maxOpen;
-const limitText = (total: number, maxOpen: number) => `${total} open, your limit is ${maxOpen}`;
 
-function renderPill({ counts, maxOpen }: SessionsView): void {
-  const over = overLimit(counts, maxOpen);
+function renderPill(view: SessionsView): void {
+  const { counts, maxOpen } = view;
+  const over = overLimit(view);
   pill.classList.toggle('has-busy', counts.busy > 0);
   pill.classList.toggle('over-limit', over);
   pill.replaceChildren(el('span', 'dot'), el('span', '', sessionsPillText(counts)));
@@ -93,11 +92,16 @@ function rowDetail(row: SessionRow): HTMLDivElement {
 }
 
 // Under every row with active agents, expanded or not: task · what it is doing now · when it last wrote.
-function agentList(agents: SubagentRow[]): HTMLUListElement {
+function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
   const list = el('ul', 'session-agents');
   for (const agent of agents.slice(0, AGENTS_SHOWN)) {
-    const item = el('li', 'session-agent');
+    const item = el('li', 'session-agent opens-agent');
     item.dataset.agentId = agent.id;
+    item.title = 'Open what this agent is doing';
+    item.addEventListener('click', () => {
+      setOpen(false);
+      window.dispatchEvent(new CustomEvent('petal:open-agent', { detail: { sessionId, agentId: agent.id } }));
+    });
     item.append(
       el('span', 'agent-task', agent.task),
       el('span', 'agent-activity', `· ${agent.activity ?? 'Working'}`),
@@ -146,7 +150,7 @@ function renderRow(row: SessionRow): HTMLLIElement {
   if (confirming?.where === 'row' && confirming.sessionId === row.sessionId) item.append(confirmLine(row.sessionId, 'Close this Claude?'));
   const note = notes.get(row.sessionId);
   if (note) item.append(el('p', 'session-note', note));
-  if (row.subagents.length) item.append(agentList(row.subagents));
+  if (row.subagents.length) item.append(agentList(row.sessionId, row.subagents));
   if (expandedIds.has(row.sessionId)) item.append(rowDetail(row));
   return item;
 }
@@ -169,6 +173,12 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
 }
 
 async function reopen(entry: ClosedSession, confirmFork: boolean): Promise<void> {
+  const limited = await limitNote('reopen one');
+  if (limited) {
+    notes.set(entry.sessionId, limited);
+    refresh();
+    return;
+  }
   notes.set(entry.sessionId, 'Opening…');
   refresh();
   const result = await window.pastel.history.resume(entry.sessionId, confirmFork);
@@ -198,7 +208,7 @@ function renderPanel(view: SessionsView): void {
     textButton('Add Session', 'flow-button sessions-add', () => addSession()),
     el('p', 'sessions-heading', 'Claude sessions on this Mac'),
   ];
-  if ((addBlocked && atLimit(view.counts, view.maxOpen)) || overLimit(view.counts, view.maxOpen)) parts.push(limitBanner(view, rows));
+  if ((addBlocked && limitReached(view)) || overLimit(view)) parts.push(limitBanner(view, rows));
   parts.push(list);
   if (view.closed?.length) {
     const closed = el('ul', 'session-list closed-list');
@@ -224,9 +234,14 @@ export async function refresh(auto = false): Promise<void> {
   } else {
     renderPill(result);
     if (open && result.rows && !(auto && confirming)) renderPanel(result);
+    for (const listener of viewListeners) listener(result);
   }
   schedule();
 }
+
+// Others ride this tick instead of running their own timer (the Agents chip and view).
+const viewListeners: ((view: SessionsView) => void)[] = [];
+export const onView = (listener: (view: SessionsView) => void): void => { viewListeners.push(listener); };
 
 function schedule(): void {
   clearTimeout(timer);
@@ -240,15 +255,21 @@ export function setOpen(open: boolean): void {
   refresh();
 }
 
+// The one limit check for every path that starts a Claude: the limit note, or null when there's room.
+export async function sessionLimitNote(): Promise<string | null> {
+  return limitReached(await window.pastel.getSessions({ detailed: false, expandedIds: [] }));
+}
+
+// New-tab paths (Add Session, ⌘T, +): at her limit, open this panel with the note and report no room.
+export async function roomForSession(): Promise<boolean> {
+  addBlocked = (await sessionLimitNote()) !== null;
+  if (addBlocked) setOpen(true);
+  return !addBlocked;
+}
+
 // A new tab the ⌘T way, then the reply box, so she can type the first message. At her limit, the panel says why instead.
 export async function addSession(): Promise<void> {
-  const view = await window.pastel.getSessions({ detailed: false, expandedIds: [] });
-  if (!isIpcError(view) && atLimit(view.counts, view.maxOpen)) {
-    addBlocked = true;
-    setOpen(true);
-    return;
-  }
-  addBlocked = false;
+  if (!(await roomForSession())) return;
   const open = overlays.current();
   if (open) overlays.hide(open);
   if (isOpen()) setOpen(false);
@@ -256,10 +277,10 @@ export async function addSession(): Promise<void> {
   composer.focus();
 }
 
-// Why a new tab can't open right now, or null; History's reply box asks before opening one.
-export async function limitNote(): Promise<string | null> {
-  const view = await window.pastel.getSessions({ detailed: false, expandedIds: [] });
-  return !isIpcError(view) && atLimit(view.counts, view.maxOpen) ? `${limitText(view.counts.total, view.maxOpen)}. Close one to reply from here.` : null;
+// Why a session can't start from History right now, or null; the action names what she tried.
+export async function limitNote(action: string): Promise<string | null> {
+  const note = await sessionLimitNote();
+  return note && `${note}. Close one to ${action}.`;
 }
 
 pill.addEventListener('click', () => setOpen(!isOpen()));

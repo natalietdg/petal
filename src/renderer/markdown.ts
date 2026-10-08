@@ -1,5 +1,7 @@
 import DOMPurify from 'dompurify';
-import { marked, type TokenizerAndRendererExtension } from 'marked';
+import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
+import { linkLabel } from '../shared/link-label';
+import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
 
@@ -20,9 +22,39 @@ const highlight: TokenizerAndRendererExtension = {
   },
 };
 
+// A run of Doing / Recommend / Next lines becomes one block of labelled rows.
+const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next)(?:\*\*|__)?\s*:/i;
+interface StatusRow { key: StatusKey; tokens: Token[] }
+const statusBlock: TokenizerAndRendererExtension = {
+  name: 'statusBlock',
+  level: 'block',
+  start(src) {
+    const match = STATUS_START.exec(src);
+    return match ? match.index + 1 : undefined;
+  },
+  tokenizer(src) {
+    if (!this.lexer.state.top) return undefined;
+    let length = 0;
+    const rows: StatusRow[] = [];
+    for (const line of src.split('\n')) {
+      const status = parseStatusLine(line);
+      if (!status) break;
+      length += line.length + 1;
+      rows.push({ key: status.key, tokens: this.lexer.inlineTokens(status.text) });
+    }
+    const raw = src.slice(0, length);
+    return rows.length ? { type: 'statusBlock', raw, rows } : undefined;
+  },
+  renderer(token) {
+    const rows = (token.rows as StatusRow[]).map(({ key, tokens }) =>
+      `<div class="status-row status-${key}"><span class="status-chip">${STATUS_TITLES[key]}</span><span class="status-text">${this.parser.parseInline(tokens)}</span></div>`);
+    return `<div class="status-block">${rows.join('')}</div>`;
+  },
+};
+
 marked.use({
   gfm: true,
-  extensions: [highlight],
+  extensions: [highlight, statusBlock],
   renderer: { html: ({ text }) => escapeHtml(text) }, // raw HTML shows as text
 });
 
@@ -35,6 +67,18 @@ const isElement = (node: Node | null | undefined, name: string): node is HTMLEle
 
 function labelKey(strong: Node): string | null {
   return LABELS[textOf(strong).replace(/:$/, '').toLowerCase()] ?? null;
+}
+
+// A bare URL shows a short label; the full URL stays the href and the tooltip.
+function shortenBareLinks(root: HTMLElement): void {
+  for (const link of root.querySelectorAll('a[href]')) {
+    const href = link.getAttribute('href') ?? '';
+    const label = linkLabel(href, link.textContent ?? '');
+    if (!label) continue;
+    link.textContent = label;
+    link.setAttribute('title', href);
+    link.classList.add('bare-link');
+  }
 }
 
 // A block whose first child is a label like **Decide:** becomes a tinted callout with a pill.
@@ -90,7 +134,7 @@ function tagLede(root: HTMLElement): void {
   const dek = root.querySelector(':scope > .headline')?.nextElementSibling;
   if (dek?.nodeName !== 'P') return;
   for (let node = dek.nextElementSibling; node; node = node.nextElementSibling) {
-    if (node.nodeName === 'H2' || node.nodeName === 'H3') continue;
+    if (node.nodeName === 'H2' || node.nodeName === 'H3' || node.classList.contains('status-block')) continue;
     // A drop cap needs room: on a one- or two-line opener it hangs below the text.
     if (isPlainParagraph(node) && textOf(node).length >= LEDE_MIN_CHARS) node.classList.add('lede');
     return;
@@ -147,6 +191,7 @@ export function render(markdownText: string): HTMLDivElement {
   const root = document.createElement('div');
   root.className = 'prose';
   root.innerHTML = html;
+  shortenBareLinks(root); // first, so headline length counts the label, not the URL
   tagCallouts(root);
   tagHeadline(root); // after callouts, so a leading label is never the headline
   tagBackMatter(root);

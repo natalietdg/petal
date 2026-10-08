@@ -14,6 +14,7 @@
       <section id="customize" hidden></section>
       <section id="repos" hidden aria-label="Open Repo"></section>
       <section id="welcome" hidden aria-label="Welcome to Petal"></section>
+      <section id="agents" hidden aria-label="Agents" tabindex="-1"></section>
       <aside id="sessions-dock">
         <button id="customize-button" class="dock-button" type="button" aria-pressed="false">Customize</button>
         <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
@@ -30,11 +31,13 @@
             <button type="button" data-view="replies" aria-selected="true">Replies</button>
             <button type="button" data-view="flow" aria-selected="false">Flow</button>
             <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
-            <button type="button" data-view="notes" aria-selected="false">Notes</button>
           </div>
+          <button id="notes-toggle" class="notes-toggle" type="button" aria-pressed="false" title="Your notes for this session, beside the replies">Notes</button>
+          <button id="agents-chip" class="agents-chip" type="button" hidden></button>
         </div>
       </header>
       <div id="cat"></div>
+      <aside id="notes-panel" hidden></aside>
       <main id="reader" aria-live="polite">
         <div class="reader-column">
           <div id="replies-view">
@@ -44,7 +47,6 @@
           </div>
           <section id="flow-view" class="prose" hidden></section>
           <section id="decisions-view" class="prose" hidden></section>
-          <section id="notes-view" hidden></section>
         </div>
       </main>
       <section id="prompt-dock" aria-live="polite"></section>

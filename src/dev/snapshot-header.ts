@@ -10,7 +10,7 @@ const SCROLL_PX = 1500;
 
 // y of each header button, and whether elementFromPoint at its centre lands on it.
 const PROBE = `(() => {
-  const buttons = [...document.querySelectorAll('#sessions-dock > button:not([hidden]), #reader-head .view-toggle button')];
+  const buttons = [...document.querySelectorAll('#sessions-dock > button:not([hidden]), #reader-head .view-toggle button, #notes-toggle')];
   return buttons.map((b) => {
     const r = b.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -22,7 +22,7 @@ const WIDTHS = [800, 990, 1280, 1600];
 
 // Header bottom vs where the column's content starts: the scrollport, and the first element's top when scrolled to 0
 // (its top now plus the scroll, so a pane that scrolls itself to the newest turn still measures).
-const OVERLAP = `(() => {
+export const OVERLAP = `(() => {
   const bottom = (el) => el && !el.hidden ? Math.round(el.getBoundingClientRect().bottom) : 0;
   const header = Math.max(bottom(document.getElementById('sessions-dock')), bottom(document.getElementById('reader-head')));
   const scrolledBy = (el) => { let y = 0; for (let p = el?.parentElement; p; p = p.parentElement) y += p.scrollTop; return y; };
