@@ -48,9 +48,11 @@ interface CardState {
   current: string | null;
   chip: string | null;
   text: string | null;
-  options: { label: string; desc?: string; pressed: string | null; disabled: boolean }[];
+  options: { num: string | null; label: string; desc?: string; pressed: string | null; disabled: boolean }[];
   other: boolean;
   nav: string[];
+  chat: string | null;
+  hint: string | null;
   review: string[];
   status: string;
 }
@@ -64,19 +66,19 @@ const CARD = `(() => {
     current: c.querySelector('.qc-tab[aria-current]')?.textContent ?? null,
     chip: c.querySelector('.qc-chip')?.textContent ?? null,
     text: c.querySelector('.qc-text')?.textContent ?? null,
-    options: [...c.querySelectorAll('.qc-option')].map((b) => ({ label: b.querySelector('.qc-label').textContent, desc: b.querySelector('.qc-desc')?.textContent, pressed: b.getAttribute('aria-pressed'), disabled: b.disabled })),
+    options: [...c.querySelectorAll('.qc-option')].map((b) => ({ num: b.querySelector('.qc-num')?.textContent ?? null, label: b.querySelector('.qc-label').textContent, desc: b.querySelector('.qc-desc')?.textContent, pressed: b.getAttribute('aria-pressed'), disabled: b.disabled })),
     other: Boolean(c.querySelector('.qc-other-input')),
     nav: texts('.qc-nav, .qc-submit'),
+    chat: c.querySelector('.qc-chat')?.textContent ?? null,
+    hint: c.querySelector('.qc-hidden')?.textContent ?? null,
     review: texts('.qc-review dt, .qc-review dd'),
     status: c.querySelector('.qc-status')?.textContent ?? '',
   };
 })()`;
 
-export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDeps, 'activeSession'> & { win: BrowserWindow }): Promise<void> {
-  const { js, wait, waitFor, log, themes, applyTheme, verifiedCapture, outDir } = kit;
-  const session = activeSession(win.webContents.id);
-  if (!session) throw new Error('prompts check: needs the fixture tab');
-  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} ${what}`);
+// Draws captured screens into the fixture tab's shell and reads the card back; clicks are recorded, never typed.
+function screenDriver(kit: Kit, session: NonNullable<ReturnType<TabsDeps['activeSession']>>) {
+  const { js, wait, waitFor, outDir } = kit;
   const card = (): Promise<CardState> => js(CARD);
   const writesAfter = async (count: number) => waitFor(() => (promptWrites.length > count ? promptWrites.at(-1) ?? null : null), 5000);
   const click = async (selector: string, index = 0) => {
@@ -101,11 +103,20 @@ export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDe
     waitFor(async () => { const c = await card(); return !c.hidden && ok(c) ? c : null; }, 8000);
   const capturePair = async (name: string) => {
     for (const id of ['paleSky', 'nightPastel']) {
-      applyTheme(id, { persist: false });
-      await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `${name}-${id}`, scrollTo: '#prompt-dock' });
+      kit.applyTheme(id, { persist: false });
+      await kit.verifiedCapture({ ...kit, theme: kit.themes[id], panelOpen: false, name: `${name}-${id}`, scrollTo: '#prompt-dock' });
     }
-    applyTheme('paleSky', { persist: false });
+    kit.applyTheme('paleSky', { persist: false });
   };
+  return { card, click, show, clearScreen, cardWhen, capturePair };
+}
+
+export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDeps, 'activeSession'> & { win: BrowserWindow }): Promise<void> {
+  const { js, wait, waitFor, log } = kit;
+  const session = activeSession(win.webContents.id);
+  if (!session) throw new Error('prompts check: needs the fixture tab');
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} ${what}`);
+  const { card, click, show, clearScreen, cardWhen, capturePair } = screenDriver(kit, session);
 
   // A lone single-select question: the card mirrors the picker, one click answers.
   await show('question-single', SINGLE_SCREEN);
@@ -182,5 +193,68 @@ export async function promptsCheck(kit: Kit, { win, activeSession }: Pick<TabsDe
   await wait(1500);
   check((await card()).hidden, 'no card for a picker that only nearly matches');
   await clearScreen();
+  await wait(500);
+}
+
+// The shape seen live on 2.1.295 (wording generic, narrowed to the snapshot terminal): a │ gutter question with no
+// header, options 1-2 on screen, ↓ marking more below, option 3 and "Type something." scrolled away, Chat as 5.
+export const SCROLLED_SCREEN = [
+  '│ "Combine both": which do you mean? The switch to',
+  '│ the new contract stopped halfway.',
+  '',
+  '❯ 1. Combine both contracts (Recommended)',
+  '     The new contract plus what ours has that it',
+  '     lacks, rebuild, then report.',
+  '↓ 2. Merge the two open changes now',
+  '     Merge the current versions to main.',
+  RULE, '  5. Chat about this', '', 'Enter to select · ↑/↓ to navigate · Esc to cancel',
+];
+
+// Her case: she has spoken, Claude's newest log lines are a tool result, and the picker waits on the terminal.
+function appendOpenTurn(file: string): void {
+  const line = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
+  fs.appendFileSync(file, [
+    line({ type: 'user', uuid: 'picker-u1', message: { role: 'user', content: 'so combine both' } }),
+    line({ type: 'assistant', uuid: 'picker-a1', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'picker-t1', name: 'Bash', input: { command: 'git status' } }] } }),
+    line({ type: 'user', uuid: 'picker-r1', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'picker-t1', content: 'ok' }] } }),
+  ].join(''));
+}
+
+// Narrow mode question-picker: the scrolled picker's card, the reader's waiting line, and the keys each answer sends.
+export async function questionPickerCheck(kit: Kit, { win, activeSession, file }: Pick<TabsDeps, 'activeSession'> & { win: BrowserWindow; file: string }): Promise<void> {
+  const { js, wait, waitFor, log } = kit;
+  const session = activeSession(win.webContents.id);
+  if (!session) throw new Error('question-picker check: needs the fixture tab');
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} ${what}`);
+  const { card, click, show, clearScreen, cardWhen, capturePair } = screenDriver(kit, session);
+  const latestText = (): Promise<string> => js("document.getElementById('latest').innerText");
+  await js('PastelTerm.welcome.close()'); // her state: the first-run screen is long gone
+
+  appendOpenTurn(file);
+  const open = await waitFor(async () => ((await latestText()).includes('so combine both') ? true : null), 10000);
+  check(open, `reader shows her open turn: ${JSON.stringify(await latestText())}`);
+
+  await show('question-scrolled', SCROLLED_SCREEN);
+  const c = await cardWhen((x) => x.options.length > 0);
+  check(c?.text === '"Combine both": which do you mean? The switch to the new contract stopped halfway.', `question joined across │ rows: ${JSON.stringify(c?.text)}`);
+  check(JSON.stringify(c?.options.map((o) => [o.num, o.label, o.desc])) === JSON.stringify([
+    ['1.', 'Combine both contracts (Recommended)', 'The new contract plus what ours has that it lacks, rebuild, then report.'],
+    ['2.', 'Merge the two open changes now', 'Merge the current versions to main.'],
+  ]), `options 1 and 2 with full descriptions: ${JSON.stringify(c?.options)}`);
+  check(c?.chat === '5. Chat about this', `Chat about this keeps its number 5: ${JSON.stringify(c?.chat)}`);
+  check(c?.hint?.startsWith('Option 3 is scrolled out of view'), `hint for the scrolled-away option: ${JSON.stringify(c?.hint)}`);
+  check(c?.other, 'free-text answer still offered (digit 4 focuses it even off screen)');
+  const asking = await waitFor(async () => (await js("document.querySelector('#latest .reader-asking')?.textContent ?? null")) as string | null, 5000);
+  check(asking === 'Claude is asking you something · answer below', `reader's open turn says Claude is waiting on her: ${JSON.stringify(asking)}`);
+  await capturePair('question-picker');
+
+  check(JSON.stringify(await click('.question-card .qc-option', 0)) === JSON.stringify(['1']), 'clicking option 1 writes ["1"]');
+  await wait(1800); // the card unlocks when the picker ignores a step (here the screen stays put)
+  check(JSON.stringify(await click('.question-card .qc-chat')) === JSON.stringify(['5']), 'clicking Chat about this writes ["5"]');
+
+  await clearScreen();
+  check(await waitFor(async () => (await card()).hidden || null, 8000), 'card disappears when the picker leaves the screen');
+  const gone = await waitFor(async () => ((await js("document.querySelector('#latest .reader-asking')")) === null ? true : null), 5000);
+  check(gone, 'reader drops the waiting line once the picker is gone');
   await wait(500);
 }

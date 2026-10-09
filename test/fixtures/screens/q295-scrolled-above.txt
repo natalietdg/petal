@@ -1,0 +1,16 @@
+⏺ Both changes are open. Which one should land first?
+
+────────────────────────────────────────────────────────────────
+ ☐ Merge
+│ "Combine both": which do you mean? Note: the switch to the new contract stopped halfway (uncommitted …
+│ on the server are still the old reused-route version.
+
+  1. Combine both contracts (Recommended)
+     The new contract plus what ours has that it lacks (pending states, past records, code mapp…
+     rebuild, then report.
+↓ 2. Merge the two open changes now
+     Merge the current versions (old reused-route design) to main. The half-done rebuild…
+────────────────────────────────────────────────────────────────
+❯ 5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

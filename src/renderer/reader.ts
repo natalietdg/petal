@@ -42,6 +42,19 @@ function pendingBubble(echo: PendingEcho): HTMLDivElement {
 
 const writingLine = (): HTMLParagraphElement => Object.assign(document.createElement('p'), { className: 'reader-writing', textContent: 'Claude is writing…' });
 
+// A picker on the terminal: Claude has stopped to wait on her, which the log won't show until she answers.
+type Asking = 'question' | 'permission' | null;
+const ASKING_TEXT = { question: 'Claude is asking you something · answer below', permission: 'Claude needs your permission · answer below' };
+let asking: Asking = null;
+const askingLine = (kind: 'question' | 'permission'): HTMLParagraphElement =>
+  Object.assign(document.createElement('p'), { className: 'reader-writing reader-asking', textContent: ASKING_TEXT[kind] });
+
+export function setAsking(next: Asking): void {
+  if (next === asking) return;
+  asking = next;
+  rerender();
+}
+
 // Her messages after Claude's newest reply: from the log first, then reply-box sends still on their way.
 interface OpenTurn {
   id: string;
@@ -101,7 +114,7 @@ export function update(shown: ShownUpdate): void {
   column.classList.toggle('ended', state === 'ended');
   const live = state === 'live';
   const open = live ? openTurn(waiting, pending) : null;
-  const writing = live && (busy || pending.length > 0) ? [writingLine()] : [];
+  const writing = !live ? [] : asking ? [askingLine(asking)] : busy || pending.length > 0 ? [writingLine()] : [];
   if (open) {
     showOpenTurn(open, replies, writing);
     return;

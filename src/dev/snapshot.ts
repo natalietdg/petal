@@ -7,7 +7,7 @@ import path from 'node:path';
 import { app, BrowserWindow, screen } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
-import { promptsCheck } from './snapshot-prompts';
+import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
@@ -615,6 +615,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'term-contrast') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await termContrastCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'question-picker' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await questionPickerCheck(kit, { win, activeSession, file: fakeTranscript() ?? '' }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

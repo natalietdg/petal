@@ -15,6 +15,10 @@
 //   transcript only with its tool_result, after she answers. So the picker is read off the screen, not the transcript.
 //   → or Tab moves to the next tab, ← back, without answering. A digit on a single-select tab answers and moves on.
 //   Typed text: digit N+1, text, Enter. The review page has no footer; "1" submits, "2" cancels.
+// Seen live on 2.1.295, 2026-10-09: a long question is drawn bold behind a "│ " gutter, wrapped, sometimes with no
+//   header row. When the options don't fit, the list scrolls: "↓"/"↑" replace the gutter of the edge row (unless the
+//   cursor sits there), the rows out of view (even "Type something.") are simply absent, and Chat keeps its number N+2.
+//   The 2.1.295 bundle maps digit k to option k of the whole list, so a digit reaches an option scrolled out of view.
 // Tool permission prompt (Bash, Read outside the project), not in the transcript until answered:
 //   "────" rule / " Bash command" / details between "╌╌╌" rules / " Do you want to proceed?" /
 //   " ❯ 1. Yes" / "   2. Yes, allow reading from <dir> from this project" (wraps, indented) / "   3. No" /
@@ -103,6 +107,7 @@ export interface PickerOption {
   label: string;
   description: string;
   checked: boolean; // multiSelect [✔], or the ✔ after a single-select answer
+  focused: boolean; // the picker's ❯ cursor is on it
 }
 
 export interface QuestionPage {
@@ -113,6 +118,9 @@ export interface QuestionPage {
   multiSelect: boolean;
   options: PickerOption[];
   other: PickerOption; // the free-text slot: "Type something." or her typed text
+  otherShown: boolean; // false: the slot is scrolled out of view, so its label is the placeholder, not read
+  hidden: number[]; // options scrolled out of view; a digit still picks them, but their labels aren't on screen
+  chat: number; // "Chat about this", always N+2
 }
 
 export interface ReviewPage {
@@ -129,11 +137,14 @@ const QUESTION_FOOTER = /^Enter to select · .*Esc to cancel$/;
 const TAB_BAR = /^←\s+(.+?)\s+→$/;
 const TAB = /^([☐☒✔]) (\S.*)$/;
 const LONE_HEADER = /^ ([☐☒]) (\S.*)$/;
-const PICK = /^(?:❯ | {2})(\d)\. (?:\[([ ✔])\] )?(\S.*)$/;
+// Gutter: the ❯ cursor, a scroll marker (↓ more below, ↑ more above), or blank.
+const PICK = /^(❯ |↓ |↑ | {2})(\d)\. (?:\[([ ✔])\] )?(\S.*)$/;
 const CHAT = /^(?:❯ | {2})(\d)\. Chat about this$/;
 const NEXT_ROW = /^(?:❯| ) {4}Next$/; // multiSelect's own "Next" row under the options
 const DESCRIPTION = /^ {5,}(\S.*)$/;
+const GUTTER = /^│(?: (.*))?$/; // a long question's left bar
 const ANSWERED_MARK = / ✔$/;
+const FREE_TEXT_PLACEHOLDER = { single: 'Type something.', multi: 'Type something' };
 const REVIEW_TITLE = 'Review your answers';
 const REVIEW_QUESTION = 'Ready to submit your answers?';
 const REVIEW_WARNING = /^⚠ You have not answered all questions$/;
@@ -147,6 +158,8 @@ const lastFilled = (lines: readonly string[], from = lines.length - 1): number =
   return at;
 };
 
+const isHeader = (line: string): boolean => TAB_BAR.test(line) || LONE_HEADER.test(line);
+
 // The tabs above a picker page, or null if the row isn't a tab bar ending in Submit.
 function parseTabBar(line: string): PickerTab[] | null {
   const bar = TAB_BAR.exec(line);
@@ -158,6 +171,7 @@ function parseTabBar(line: string): PickerTab[] | null {
   return items.map((item) => ({ header: item?.[2] ?? '', answered: item?.[1] === '☒' }));
 }
 
+// The option rows on screen (a window of the list when it scrolls), with wrapped descriptions joined.
 function parseOptions(rows: readonly string[]): { options: PickerOption[]; boxed: boolean } | null {
   const options: PickerOption[] = [];
   let boxes = 0;
@@ -165,9 +179,12 @@ function parseOptions(rows: readonly string[]): { options: PickerOption[]; boxed
     if (NEXT_ROW.test(row)) continue;
     const pick = PICK.exec(row);
     if (pick) {
-      if (pick[2] !== undefined) boxes += 1;
-      const raw = pick[3] ?? '';
-      options.push({ number: Number(pick[1]), label: raw.replace(ANSWERED_MARK, ''), description: '', checked: pick[2] === '✔' || ANSWERED_MARK.test(raw) });
+      if (pick[3] !== undefined) boxes += 1;
+      const raw = pick[4] ?? '';
+      options.push({
+        number: Number(pick[2]), label: raw.replace(ANSWERED_MARK, ''), description: '',
+        checked: pick[3] === '✔' || ANSWERED_MARK.test(raw), focused: pick[1] === '❯ ',
+      });
       continue;
     }
     const more = DESCRIPTION.exec(row);
@@ -175,37 +192,58 @@ function parseOptions(rows: readonly string[]): { options: PickerOption[]; boxed
     if (!more || !last) return null;
     last.description = [last.description, more[1]].filter(Boolean).join(' ');
   }
-  if (boxes && boxes !== options.length) return null;
-  if (!options.every((option, i) => option.number === i + 1)) return null;
+  if (!options.length || (boxes && boxes !== options.length)) return null;
+  const first = options[0]?.number ?? 0;
+  if (first < 1 || !options.every((option, i) => option.number === first + i)) return null;
   return { options, boxed: boxes > 0 };
+}
+
+// The question rows directly above the options' blank gap, and the header row (if any) above those.
+function parseQuestionHead(lines: readonly string[], gapAt: number): { question: string; headAt: number } | null {
+  let top = gapAt;
+  while (top > 0 && lines[top - 1]?.trim() && !RULE.test(lines[top - 1] ?? '') && !isHeader(lines[top - 1] ?? '')) top -= 1;
+  const rows = lines.slice(top, gapAt);
+  if (!rows.length) return null;
+  const gutter = rows.some((row) => GUTTER.test(row));
+  if (gutter && !rows.every((row) => GUTTER.test(row))) return null;
+  const question = rows.map((row) => (gutter ? GUTTER.exec(row)?.[1] ?? '' : row).trim()).filter(Boolean).join(' ');
+  // Above the question: a header row, the picker's top rule, or the top of the screen (a tall picker is cut there).
+  const above = lastFilled(lines, top - 1);
+  if (above >= 0 && !isHeader(lines[above] ?? '') && !RULE.test(lines[above] ?? '')) return null;
+  return question ? { question, headAt: above } : null;
 }
 
 function parseQuestionPage(lines: readonly string[], footerAt: number): QuestionPage | null {
   const chatAt = lastFilled(lines, footerAt - 1);
-  const chat = CHAT.exec(lines[chatAt] ?? '');
+  const chatRow = CHAT.exec(lines[chatAt] ?? '');
   const ruleAt = chatAt - 1;
-  if (!chat || !RULE.test(lines[ruleAt] ?? '')) return null;
+  if (!chatRow || !RULE.test(lines[ruleAt] ?? '')) return null;
+  const chat = Number(chatRow[1]);
 
-  // The header row (tab bar or lone ☐ header) sits right under the picker's top rule.
-  let headAt = ruleAt - 1;
-  while (headAt >= 0 && !(RULE.test(lines[headAt - 1] ?? '') && (TAB_BAR.test(lines[headAt] ?? '') || LONE_HEADER.test(lines[headAt] ?? '')))) headAt -= 1;
-  if (headAt < 0) return null;
-  const tabs = parseTabBar(lines[headAt] ?? '');
-  const lone = tabs ? null : LONE_HEADER.exec(lines[headAt] ?? '');
-  if (!tabs && !lone) return null;
+  // Up from the rule: the option rows, then the blank row that sets them off from the question.
+  let gapAt = ruleAt - 1;
+  while (gapAt >= 0 && lines[gapAt]?.trim()) gapAt -= 1;
+  const parsed = parseOptions(lines.slice(gapAt + 1, ruleAt));
+  const head = gapAt > 0 ? parseQuestionHead(lines, lastFilled(lines, gapAt) + 1) : null;
+  if (!parsed || !head) return null;
 
-  // Below the header: blank, the question (may wrap), blank, the options.
-  const body = lines.slice(headAt + 1, ruleAt);
-  const questionStart = body.findIndex((row) => row.trim());
-  const gap = body.findIndex((row, i) => i > questionStart && !row.trim());
-  if (questionStart < 0 || gap < 0) return null;
-  const question = body.slice(questionStart, gap).map((row) => row.trim()).join(' ');
-  const parsed = parseOptions(body.slice(gap).filter((row) => row.trim()));
-  if (!parsed) return null;
-  const { options, boxed } = parsed;
-  const other = options.pop();
-  if (!other || options.length < 2 || Number(chat[1]) !== other.number + 1) return null;
-  return { page: 'question', tabs: tabs ?? [], header: lone?.[2] ?? '', question, multiSelect: boxed, options, other };
+  const headLine = lines[head.headAt] ?? '';
+  const tabs = head.headAt >= 0 ? parseTabBar(headLine) : null;
+  if (TAB_BAR.test(headLine) && !tabs) return null;
+  const lone = tabs ? null : LONE_HEADER.exec(headLine);
+
+  // Options run 1..chat-2, the free-text slot is chat-1; the screen shows a window of that list.
+  const { options: shown, boxed } = parsed;
+  const otherNumber = chat - 1;
+  const optionCount = chat - 2;
+  if (optionCount < 2 || (shown.at(-1)?.number ?? chat) > otherNumber) return null;
+  const otherShown = shown.at(-1)?.number === otherNumber;
+  const options = shown.filter((option) => option.number <= optionCount);
+  const other = otherShown ? shown.at(-1) as PickerOption
+    : { number: otherNumber, label: boxed ? FREE_TEXT_PLACEHOLDER.multi : FREE_TEXT_PLACEHOLDER.single, description: '', checked: false, focused: false };
+  const onScreen = new Set(options.map((option) => option.number));
+  const hidden = Array.from({ length: optionCount }, (_, i) => i + 1).filter((n) => !onScreen.has(n));
+  return { page: 'question', tabs: tabs ?? [], header: lone?.[2] ?? '', question: head.question, multiSelect: boxed, options, other, otherShown, hidden, chat };
 }
 
 function parseReviewPage(lines: readonly string[], cancelAt: number): ReviewPage | null {

@@ -53,7 +53,10 @@
   outline-offset: 2px;
 }
 .qc-option:disabled, .pb-option:disabled, .qc-submit:disabled, .qc-send:disabled, .qc-other-input:disabled { opacity: 0.55; cursor: default; }
+.qc-option-head { display: flex; align-items: baseline; gap: 6px; }
+.qc-num { color: var(--muted); font: 600 12px var(--ui-font); font-variant-numeric: tabular-nums; }
 .qc-label { font-weight: 600; }
+.qc-option[data-focused="true"] { border-color: var(--decide-ink); }
 .qc-desc { color: var(--muted); font-size: 13px; }
 .qc-option[aria-pressed="true"] .qc-desc { color: inherit; }
 .qc-hint { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
@@ -110,6 +113,18 @@
 }
 .qc-nav:focus-visible { outline: 2px solid var(--decide-ink); outline-offset: 2px; }
 .qc-nav:disabled { opacity: 0.55; cursor: default; }
+.qc-chat {
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.qc-chat:hover:not(:disabled) { border-color: var(--decide-ink); }
+.qc-chat:focus-visible { outline: 2px solid var(--decide-ink); outline-offset: 2px; }
+.qc-chat:disabled { opacity: 0.55; cursor: default; }
 
 .pb-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-weight: 600; }
 .pb-details {

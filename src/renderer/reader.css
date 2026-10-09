@@ -499,3 +499,4 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 }
 @keyframes writing-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .reader-writing { animation: none; } }
+.reader-asking { animation: none; font-style: normal; font-weight: 600; color: var(--decide-ink); }

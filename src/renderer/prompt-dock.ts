@@ -27,6 +27,11 @@ let permission: PermissionPrompt | null = null;
 let permissionKey = '';
 let permissionSent = false;
 
+// What the reader says while the open turn waits on her: set by app.ts.
+export type Asking = 'question' | 'permission' | null;
+export const hooks = { askingChanged: (_asking: Asking): void => {} };
+let asking: Asking = null;
+
 function sendStep(step: PickerStep): void {
   if (!tabId || !picker || pickerSent) return;
   pickerSent = true;
@@ -66,6 +71,7 @@ function navRow(page: QuestionPicker): HTMLElement {
   row.append(status);
   if (page.tabs.length) row.append(button('qc-nav', 'Back', { move: 'back' }));
   if (page.page === 'question' && page.tabs.length) row.append(button('qc-nav', 'Next', { move: 'next' }));
+  if (page.page === 'question') row.append(button('qc-chat', `${page.chat}. Chat about this`, { pick: page.chat }));
   if (page.page === 'review') row.append(button('qc-nav', 'Cancel', { pick: 2 }), button('qc-submit', 'Submit answers', { pick: 1 }));
   return row;
 }
@@ -100,14 +106,24 @@ function questionBody(page: QuestionPage): HTMLElement {
   const options = el('div', 'qc-options');
   for (const option of page.options) {
     const b = button('qc-option', '', { pick: option.number });
-    b.append(el('span', 'qc-label', option.label), ...(option.description ? [el('span', 'qc-desc', option.description)] : []));
+    const head = el('span', 'qc-option-head');
+    head.append(el('span', 'qc-num', `${option.number}.`), el('span', 'qc-label', option.label));
+    b.append(head, ...(option.description ? [el('span', 'qc-desc', option.description)] : []));
     if (page.multiSelect) b.setAttribute('aria-pressed', String(option.checked));
+    if (option.focused) b.dataset.focused = 'true';
     options.append(b);
   }
   group.append(legend, options);
+  if (page.hidden.length) group.append(el('p', 'qc-hint qc-hidden', hiddenHint(page.hidden)));
   // The picker takes typed text only on single-select questions.
   group.append(page.multiSelect ? el('p', 'qc-hint', page.tabs.length ? 'Pick any, then Next' : 'Pick any') : freeText(page));
   return group;
+}
+
+// Labels of scrolled-away options aren't on screen, so the card names them by number only.
+function hiddenHint(hidden: readonly number[]): string {
+  const numbers = hidden.length === 1 ? `Option ${hidden[0]} is` : `Options ${hidden.slice(0, -1).join(', ')} and ${hidden.at(-1)} are`;
+  return `${numbers} scrolled out of view in the terminal. Use ↑/↓ there to read ${hidden.length === 1 ? 'it' : 'them'}.`;
 }
 
 function reviewBody(page: ReviewPage): HTMLElement {
@@ -186,11 +202,18 @@ export function readScreen(screenTab: TabId, lines: readonly string[]): void {
 
   const next = parsePermissionPrompt(lines);
   const key = next ? JSON.stringify(next) : '';
-  if (key === permissionKey && (next || bar.hidden)) return;
-  permissionKey = key;
-  permission = next;
-  permissionSent = false;
-  renderBar();
+  if (key !== permissionKey || (!next && !bar.hidden)) {
+    permissionKey = key;
+    permission = next;
+    permissionSent = false;
+    renderBar();
+  }
+
+  const nextAsking: Asking = picker ? 'question' : permission ? 'permission' : null;
+  if (nextAsking !== asking) {
+    asking = nextAsking;
+    hooks.askingChanged(asking);
+  }
 }
 
 export const state = () => ({ tabId, picker, pickerSent, permission });

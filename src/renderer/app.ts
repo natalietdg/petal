@@ -63,6 +63,7 @@ async function start(): Promise<void> {
   const focusTerminal = () => tabs.active()?.term.focus();
 
   // The reader and the pet always follow the active tab, from its last update.
+  promptDock.hooks.askingChanged = reader.setAsking;
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
