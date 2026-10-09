@@ -122,77 +122,11 @@ export function setScene(id: string): void {
   render();
 }
 
-// Never on the text: only text blocks on screen under her corner count. She keeps her chosen size when none are there,
-// shrinks when that clears them, and otherwise the reader leaves her a strip (a short reader steps her out).
+// Her corner at her chosen size; the reader always ends above it (cat.css), so scrolling never moves her.
 const area = byId('reader-area');
-const reader = byId('reader');
-const column = query(reader, '.reader-column');
-const BLOCKS = ':is(#latest, #older, #flow-view, #decisions-view) :is(p, h1, h2, h3, h4, pre, table, blockquote, ul, ol)';
-const TEXT_GAP_PX = 4;
-const SCALES = Object.values(PET_SCALE).sort((a, b) => b - a);
-let chosenScale = PET_SCALE.normal;
-
-interface Box { left: number; top: number; right: number; bottom: number }
-const meets = (a: Box, b: Box): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-const shifted = (r: Box, dy: number): Box => ({ left: r.left, right: r.right, top: r.top + dy, bottom: r.bottom + dy });
-
-// Her corner at a scale, anchored bottom right; computed from styles so it works while she is stepped out.
-function cornerAt(scale: number, areaBox: Box, style: CSSStyleDeclaration): Box {
-  const right = areaBox.right - parseFloat(style.right);
-  const bottom = areaBox.bottom - parseFloat(style.bottom);
-  return { left: right - parseFloat(style.width) * scale, top: bottom - parseFloat(style.height) * scale, right, bottom };
-}
-
-// The reader as it would be without the strip, so turning the strip on or off never flips the answer.
-function viewWithoutStrip(): { view: Box; dy: number } {
-  const box = reader.getBoundingClientRect();
-  const strip = area.classList.contains('cat-strip') ? parseFloat(getComputedStyle(reader).marginBottom) || 0 : 0;
-  const maxScroll = reader.scrollHeight - reader.clientHeight;
-  const dy = Math.max(0, reader.scrollTop - Math.max(0, maxScroll - strip)); // a taller reader clamps the scroll down
-  return { view: { left: box.left, top: box.top, right: box.right, bottom: box.bottom + strip }, dy };
-}
-
-const grown = (b: Box): Box => ({ left: b.left - TEXT_GAP_PX, top: b.top - TEXT_GAP_PX, right: b.right + TEXT_GAP_PX, bottom: b.bottom + TEXT_GAP_PX });
-
-// Every text block on screen inside region, clipped to the reader.
-function textIn(region: Box): Box[] {
-  const { view, dy } = viewWithoutStrip();
-  const found: Box[] = [];
-  for (const block of column.querySelectorAll(BLOCKS)) {
-    const b = shifted(block.getBoundingClientRect(), dy);
-    const clipped = { left: Math.max(b.left, view.left), top: Math.max(b.top, view.top), right: Math.min(b.right, view.right), bottom: Math.min(b.bottom, view.bottom) };
-    if (clipped.right > clipped.left && clipped.bottom > clipped.top && meets(clipped, region)) found.push(clipped);
-  }
-  return found;
-}
-
-// Reads everything first, then writes only what changed.
-function guard(): void {
-  if (reader.hidden) return; // an overlay is up; she is hidden there and measured again when the reader returns
-  const areaBox = area.getBoundingClientRect();
-  const style = getComputedStyle(root);
-  const allowed = SCALES.filter((scale) => scale <= chosenScale);
-  const text = textIn(grown(cornerAt(chosenScale, areaBox, style)));
-  const fit = allowed.find((scale) => !text.some((block) => meets(block, grown(cornerAt(scale, areaBox, style)))));
-  const scale = fit ?? allowed[allowed.length - 1];
-  if (root.style.getPropertyValue('--cat-scale') !== String(scale)) root.style.setProperty('--cat-scale', String(scale));
-  root.classList.toggle('compact', scale < chosenScale);
-  area.classList.toggle('cat-strip', fit === undefined);
-}
-
-// Scrolling only moves text under her: one measure per frame at most.
-let frame = 0;
-reader.addEventListener('scroll', () => {
-  if (!frame) frame = requestAnimationFrame(() => { frame = 0; guard(); });
-}, { passive: true });
-// The reader's width moves with Notes opening and closing, and its column with the look and the reply.
-const watch = new ResizeObserver(guard);
-for (const target of [area, reader, column]) watch.observe(target);
-
 export function setSize(size: string): void {
-  chosenScale = PET_SCALE[isPetSize(size) ? size : 'normal'];
-  area.style.setProperty('--pet-scale', String(chosenScale)); // the column ends above her at this size (cat.css)
-  guard();
+  const scale = PET_SCALE[isPetSize(size) ? size : 'normal'];
+  area.style.setProperty('--pet-scale', String(scale)); // her size, and the strip the reader leaves her (cat.css)
 }
 void window.pastel.config.get().then((state) => { if (!isIpcError(state)) setSize(state.config.pet.size); });
 

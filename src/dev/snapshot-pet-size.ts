@@ -1,5 +1,5 @@
-// Pet size (PASTEL_SNAPSHOT_MODE=pet-size): a wide table at the top of the reply never shrinks her once it has
-// scrolled away, a visible text block under her corner does, scrolling alone re-checks, and the Customize size sets her box.
+// Pet size (PASTEL_SNAPSHOT_MODE=pet-size): she stays the size picked in Customize at every scroll position,
+// for every look and window width, and the reader ends above her so no text sits under her.
 import fs from 'node:fs';
 import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
@@ -30,7 +30,7 @@ function appendReply(file: string): void {
   fs.appendFileSync(file, lines.map((line) => JSON.stringify(line)).join('\n') + '\n'); // the tail reads on from its offset
 }
 
-// Her box, what the guard chose, every visible text block under her, and how far the widest block reaches.
+// Her box, the chosen scale, the strip the reader leaves her, and every visible text block under her.
 const MEASURE = `(() => {
   const R = (b) => ({ left: Math.round(b.left), right: Math.round(b.right), top: Math.round(b.top), bottom: Math.round(b.bottom), width: Math.round(b.width), height: Math.round(b.height) });
   const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -45,12 +45,9 @@ const MEASURE = `(() => {
     const c = { left: Math.max(r.left, view.left), right: Math.min(r.right, view.right), top: Math.max(r.top, view.top), bottom: Math.min(r.bottom, view.bottom) };
     if (shown && c.right > c.left && c.bottom > c.top && meets(c, box)) hits.push(block.tagName + ':' + block.textContent.trim().slice(0, 24));
   }
-  const blocks = [...document.querySelectorAll('#latest :is(p, h1, h2, h3, pre, table, blockquote, ul, ol, .rail)')];
   return {
-    cat: R(box), shown, scale: cat.style.getPropertyValue('--cat-scale'), compact: cat.classList.contains('compact'),
-    strip: document.getElementById('reader-area').classList.contains('cat-strip'), hits: [...new Set(hits)].slice(0, 4),
-    widestBlockRight: Math.round(Math.max(...blocks.map((b) => b.getBoundingClientRect().right))),
-    tableRight: Math.round(document.querySelector('#latest table')?.getBoundingClientRect().right ?? 0),
+    cat: R(box), shown, scale: getComputedStyle(cat).getPropertyValue('--pet-scale').trim(),
+    strip: parseFloat(getComputedStyle(reader).marginBottom) || 0, hits: [...new Set(hits)].slice(0, 4),
     scrollTop: Math.round(reader.scrollTop), scrollMax: reader.scrollHeight - reader.clientHeight,
   };
 })()`;
@@ -81,64 +78,57 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await js("PastelTerm.reader.setView('replies')");
   await js("PastelTerm.cat.setScene('none')");
 
-  // 1. Every look, 1280 and 990: the wide table at the top has scrolled away, so she is full size.
+  // Top, middle and bottom: one size and one place at all three, and no visible line under her at any.
+  const steady = async (tag: string, want: number) => {
+    const at: Measure[] = [];
+    for (const where of ['top', 'middle', 'bottom'] as const) {
+      await scrollTo('top');
+      if (where !== 'top') await scrollTo(where === 'bottom' ? 'bottom' : Math.round((await measure()).scrollMax / 2));
+      const m: Measure = await measure();
+      at.push(m);
+      check(m.shown && Math.abs(m.cat.width - want) <= 1 && Math.abs(m.cat.height - want) <= 1 && m.hits.length === 0,
+        `${tag} at the ${where} (${m.scrollTop}/${m.scrollMax}): cat ${m.cat.width}x${m.cat.height} (want ${want}), scale ${m.scale}, strip ${m.strip}px, hits ${JSON.stringify(m.hits)}`);
+    }
+    check(at.every((m) => JSON.stringify(m.cat) === JSON.stringify(at[0].cat)) && at[0].scrollMax > 0, `${tag}: same rect at top, middle and bottom ${JSON.stringify(at.map((m) => m.cat))}`);
+  };
+
+  // 1. Every look, 1280 and 990: Normal stays Normal wherever the reader is scrolled.
   for (const width of [1280, 990]) {
     check(await sizeTo(width), `${width}px window sized`);
     for (const [look] of READING_CHOICES) {
       await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
       await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
-      await scrollTo('top');
-      const top: Measure = await measure();
-      log(`pet size: ${width}px ${look} at the top: table right ${top.tableRight}, widest block right ${top.widestBlockRight}, cat left ${top.cat.left}, scale ${top.scale}, strip ${top.strip}, hits ${JSON.stringify(top.hits)}`);
-      check(top.hits.length === 0, `${width}px ${look} at the top covers no visible line`);
-      await scrollTo('bottom');
-      const m: Measure = await measure();
-      const full = m.shown && m.scale === '1' && !m.compact && !m.strip && Math.abs(m.cat.width - 144) <= 1;
-      check(full && m.hits.length === 0, `${width}px ${look} scrolled to the bottom (${m.scrollTop}/${m.scrollMax}): full size ${JSON.stringify(m.cat)} scale ${m.scale}, strip ${m.strip}, hits ${JSON.stringify(m.hits)}; old guard would shrink: ${m.widestBlockRight + 12 > m.cat.left}`);
+      await steady(`${width}px ${look}`, 144);
       if (look === 'newspaper' || look === 'editorial') await capture(`pet-size-${width}-${look}-bottom`);
     }
   }
 
-  // 2. A visible line under her corner shrinks her, and scrolling alone (no resize) re-checks.
+  // 2. A narrow window: still Normal at every scroll position.
   await js("window.pastel.look.setReading('newspaper')");
   check(await sizeTo(800), '800px window sized');
-  await scrollTo('top');
-  const middle = Math.round((await measure()).scrollMax / 2);
-  await scrollTo(middle);
-  const under: Measure = await measure();
-  check((under.compact || under.strip) && under.hits.length === 0, `800px mid-reply: a line under her shrinks or strips her, none left covered: scale ${under.scale}, compact ${under.compact}, strip ${under.strip}, hits ${JSON.stringify(under.hits)}`);
-  await capture('pet-size-800-line-under');
-  await scrollTo('bottom');
-  const end: Measure = await measure();
-  check(end.hits.length === 0 && JSON.stringify([end.scale, end.strip]) !== JSON.stringify([under.scale, under.strip]), `scroll alone re-checks: middle ${under.scale}/${under.strip ? 'strip' : 'no strip'} → bottom ${end.scale}/${end.strip ? 'strip' : 'no strip'}, hits ${JSON.stringify(end.hits)}`);
+  await steady('800px newspaper', 144);
+  await capture('pet-size-800-bottom');
 
-  // 3. Customize › Pet size sets her box at 1280 and is saved in config.json; never grown above the choice.
-  check(await sizeTo(1280), '1280px window sized');
-  await scrollTo('bottom');
+  // 3. Customize › Pet size sets her box at 1280 and 800, is saved in config.json, and scrolling never changes it.
   const widths: Record<string, number> = {};
   for (const [size, want] of [['large', 180], ['small', 96], ['normal', 144]] as const) {
+    check(await sizeTo(1280), '1280px window sized');
     await js("PastelTerm.customize.open('look')");
     await waitFor(() => js("Boolean(document.querySelector('#customize [aria-label=\"Pet size\"]'))"), 3000);
     await js(`[...document.querySelectorAll('#customize [aria-label="Pet size"] .cz-chip')].find((c) => c.textContent.trim().toLowerCase() === ${JSON.stringify(size)}).click()`);
     await waitFor(() => loadConfig().pet.size === size, 3000);
     await js('PastelTerm.overlays.hideCurrent()');
     await wait(300);
-    const m: Measure = await measure();
-    widths[size] = m.cat.width;
-    check(Math.abs(m.cat.width - want) <= 1 && m.hits.length === 0 && loadConfig().pet.size === size, `${size}: cat ${m.cat.width}x${m.cat.height} (want ${want}), scale ${m.scale}, saved ${loadConfig().pet.size}`);
+    check(loadConfig().pet.size === size, `${size}: saved ${loadConfig().pet.size}`);
+    widths[size] = (await measure()).cat.width;
+    await steady(`${size} 1280px`, want);
     if (size === 'large') await capture('pet-size-1280-large');
-    if (size === 'large') {
-      await sizeTo(800);
-      await scrollTo(middle);
-      const narrow: Measure = await measure();
-      check(Number(narrow.scale) < 1.25 && narrow.hits.length === 0, `large at 800px mid-reply shrinks below her choice: scale ${narrow.scale}, strip ${narrow.strip}`);
-      await sizeTo(1280);
-      await scrollTo('bottom');
-    }
+    check(await sizeTo(800), '800px window sized');
+    await steady(`${size} 800px`, want);
   }
   check(widths.large > widths.normal && widths.normal > widths.small, `size changes her rect: ${JSON.stringify(widths)}`);
 
-  // 4. Idle: no scroll, no guard work; the renderer stays near zero.
+  // 4. Idle: nothing to measure; the renderer stays near zero.
   const cpu = () => app.getAppMetrics().filter((m) => m.type === 'Tab').reduce((sum, m) => sum + (m.cpu.cumulativeCPUUsage ?? 0), 0);
   await wait(2000);
   const before = cpu();

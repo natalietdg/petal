@@ -4,7 +4,7 @@
   bottom: calc(var(--composer-height, 0px) + 14px); /* sits above the reply box */
   width: 144px; /* 48x48 sprite pixels at 3px: the cat, her toy and the biggest scene around them */
   height: 144px;
-  transform: scale(var(--cat-scale, 1)); /* her chosen size, or smaller to keep text clear (cat.ts) */
+  transform: scale(var(--pet-scale, 1)); /* her chosen size, set from Customize (cat.ts) */
   transform-origin: bottom right;
   z-index: 4;
   will-change: transform; /* own layer: a scene step repaints only the corner, measured -1% CPU */
@@ -75,16 +75,14 @@
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
-/* No gutter wide enough: the reader ends above her, so she sits under the text, never on it.
+/* The reader always ends above her at her chosen size, so text never sits under her and scrolling changes nothing.
    Only in a tall reader: a short one (the divider dragged low) keeps its height and she steps out instead. */
 #reader-area { container-type: size; } /* its grid row sizes it, never its content */
-/* Scrolled to the end, the reply stops above her corner at her chosen size: 14px offset, 4px gap, 6px spare. */
-#reader-area #reader .reader-column { padding-bottom: max(150px, calc(144px * var(--pet-scale, 1) + 24px)); }
 @container (min-height: 480px) {
-  #reader-area.cat-strip #reader { margin-bottom: 112px; } /* 96px compact corner, 14px gap, 2px for subpixel scaling */
+  #reader-area #reader { margin-bottom: calc(144px * var(--pet-scale, 1) + 20px); } /* 14px offset, 4px gap, 2px for subpixel scaling */
 }
 @container (max-height: 479.98px) {
-  #reader-area.cat-strip :is(#cat, .scene-tip, .scene-popover) { display: none; }
+  #reader-area :is(#cat, .scene-tip, .scene-popover) { display: none; }
 }
 /* Overlays use the whole column; her corner waits for the reader. */
 #reader-area:has(> :is(#history, #workflow, #customize, #repos, #welcome, #agents):not([hidden])) :is(#cat, .scene-tip, .scene-popover) { display: none; }

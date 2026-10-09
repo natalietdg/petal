@@ -113,7 +113,7 @@ const READER = `(() => { ${HELPERS}
   const reader = document.getElementById('reader');
   const cat = catBox();
   const hits = cat ? visibleText(reader, reader).filter(({ box }) => meets(box, cat)).map(({ e, box }) => label(e) + ' ' + JSON.stringify(R({ ...box, width: 0, height: 0 }))) : [];
-  const where = { reader: R(reader.getBoundingClientRect()), strip: document.getElementById('reader-area').classList.contains('cat-strip'), compact: document.getElementById('cat').classList.contains('compact') };
+  const where = { reader: R(reader.getBoundingClientRect()), strip: getComputedStyle(reader).marginBottom };
   const panel = document.getElementById('notes-panel');
   const head = document.getElementById('reader-head').getBoundingClientRect();
   const composer = document.getElementById('composer').getBoundingClientRect();
