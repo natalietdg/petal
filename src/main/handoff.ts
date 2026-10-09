@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { app } from 'electron';
-import { rawPromptText, commandText } from './prompts';
+import { rawPromptText, commandText, isHandback } from './prompts';
 import { stripPasted } from '../shared/pasted-content';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
@@ -29,6 +29,7 @@ const handoffsDir = () => path.join(app.getPath('userData'), 'handoffs');
 // Streams the jsonl line by line: transcripts can be hundreds of MB.
 export async function readTurns(file: string): Promise<Turn[]> {
   const turns: Turn[] = [];
+  let afterHandback = false; // Claude's answer to a subagent's report is its own turn, with no prompt of hers
   const lines = readline.createInterface({ input: fs.createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const line of lines) {
     let entry: TranscriptEntry | null;
@@ -37,16 +38,21 @@ export async function readTurns(file: string): Promise<Turn[]> {
     const prompt = rawPromptText(entry) || commandText(entry); // History's bubbles split out pasted blocks
     if (prompt) {
       turns.push({ prompt, reply: [] });
+      afterHandback = false;
       continue;
     }
+    if (isHandback(entry)) afterHandback = true;
     const text = assistantText(entry);
-    if (text) turns.at(-1)?.reply.push(text);
+    if (!text) continue;
+    if (afterHandback) turns.push({ prompt: '', reply: [] });
+    afterHandback = false;
+    turns.at(-1)?.reply.push(text);
   }
   return turns;
 }
 
 export function toMarkdown(record: HandoffRecord, turns: Turn[]): string {
-  const blocks = turns.map((t) => `## You\n\n${stripPasted(t.prompt)}\n\n## Claude\n\n${t.reply.join('\n\n') || '_(no text reply)_'}`);
+  const blocks = turns.map((t) => `${t.prompt ? `## You\n\n${stripPasted(t.prompt)}\n\n` : ''}## Claude\n\n${t.reply.join('\n\n') || '_(no text reply)_'}`);
   const kept: string[] = [];
   let size = 0;
   for (let i = blocks.length - 1; i >= 0 && size + blocks[i].length <= MAX_CHARS; i -= 1) {
