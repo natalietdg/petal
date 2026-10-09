@@ -33,6 +33,7 @@ export interface TranscriptEntry {
   isSidechain?: boolean;
   cwd?: unknown;
   aiTitle?: string;
+  origin?: { kind?: string; handback?: boolean }; // a subagent's hand-back arrives as a meta user entry with handback: true
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
 }
 
