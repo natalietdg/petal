@@ -1,0 +1,39 @@
+/* Favorites: one star button, used on History rows, in History's preview header and in the reader header. */
+.fav-star {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.fav-star svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+.fav-star:hover { color: var(--reader-fg); background: var(--code-bg); }
+.fav-star[aria-pressed="true"] { color: var(--watch-ink); }
+.fav-star[aria-pressed="true"] svg { fill: currentColor; }
+.fav-star:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.fav-star[hidden] { display: none; }
+
+/* History list: All · Favorites above the search box. */
+.history-tabs { align-self: flex-start; margin: 0 16px 10px 0; }
+.history-tabs button { padding: 4px 14px; font-size: 13px; }
+
+/* Row star: top right of the row, shown on hover or focus, and always once starred. */
+.history-item { position: relative; }
+.history-item .history-row { padding-right: 40px; }
+.history-row-star { position: absolute; top: 6px; right: 6px; opacity: 0; }
+.history-item:hover .history-row-star, .history-row-star:focus-visible, .history-row-star[aria-pressed="true"] { opacity: 1; }
+.history-row.selected + .history-row-star:hover, .history-row:hover + .history-row-star:hover { background: var(--reader-bg); }
+
+/* Preview header: the star rides beside the title. */
+.history-preview-title-row { display: flex; align-items: flex-start; gap: 6px; }
+.history-preview-title-row .history-preview-title { min-width: 0; overflow-wrap: anywhere; }
+.history-preview-star { margin-top: 2px; }
+
+/* Reader header: small, just before Notes. */
+.reader-star { width: 30px; height: 30px; border: 1px solid var(--rule); }

@@ -5,6 +5,8 @@ import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
 import { clampSplit } from '../shared/reader-split';
 import { isPetSize, type PetSize } from '../shared/pet-size';
+import { MAX_FAVORITES } from '../shared/favorites';
+import { SESSION_ID } from './session-id';
 
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -29,8 +31,8 @@ export interface Config {
   notesPanel: { open: (typeof NOTES_OPEN)[number]; width: number };
   // Reader share of each window, keyed by window slot (main/layout-ipc.ts).
   layout: { splits: Record<string, number> };
-  // History's session list folded to a slim rail.
-  history: { listCollapsed: boolean };
+  // History's session list folded to a slim rail; favorites are starred session ids, oldest star first.
+  history: { listCollapsed: boolean; favorites: string[] };
   // The reader cat's size; the reader may shrink her below it to keep text clear.
   pet: { size: PetSize };
 }
@@ -62,7 +64,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   welcome: { seen: false },
   notesPanel: { open: 'auto' as const, width: 320 },
   layout: { splits: {} },
-  history: { listCollapsed: false },
+  history: { listCollapsed: false, favorites: [] },
   pet: { size: 'normal' as const },
 });
 
@@ -89,6 +91,12 @@ const splitsOr = (value: unknown, fallback: Record<string, number>): Record<stri
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   const usable = Object.entries(value).filter(([slot, f]) => /^\d+$/.test(slot) && Number(slot) < MAX_SLOTS && typeof f === 'number' && Number.isFinite(f));
   return Object.fromEntries(usable.map(([slot, f]) => [slot, clampSplit(f as number)]));
+};
+// Session ids only, each once, newest MAX_FAVORITES kept; a non-list keeps the saved one.
+const favoritesOr = (value: unknown, fallback: string[]): string[] => {
+  if (!Array.isArray(value)) return fallback;
+  const ids = value.filter((id): id is string => typeof id === 'string' && SESSION_ID.test(id));
+  return [...new Set(ids)].slice(-MAX_FAVORITES);
 };
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 // '' clears it; anything but a real calendar date keeps the saved one.
@@ -135,7 +143,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       width: intIn(n.width, NOTES_WIDTH.min, NOTES_WIDTH.max, b.notesPanel.width),
     },
     layout: { splits: splitsOr(l.splits, b.layout.splits) },
-    history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed) },
+    history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed), favorites: favoritesOr(hi.favorites, b.history.favorites) },
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
   };
 }

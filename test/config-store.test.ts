@@ -22,7 +22,7 @@ describe('config-store defaults and load', () => {
     const d = config.defaults();
     expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet']);
     expect(d.layout).toEqual({ splits: {} });
-    expect(d.history).toEqual({ listCollapsed: false });
+    expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
@@ -272,6 +272,51 @@ describe('config-store history list', () => {
     expect(config.load().history.listCollapsed).toBe(true);
     config.save({ history: { listCollapsed: 'no' } });
     expect(config.load().history.listCollapsed).toBe(true);
+  });
+});
+
+describe('config-store history favorites', () => {
+  const A = 'a1a1a1a1-0000-4000-8000-0000000000a1';
+  const B = 'b2b2b2b2-0000-4000-8000-0000000000b2';
+
+  it('saves starred session ids and reloads them from config.json', () => {
+    config.save({ history: { favorites: [A, B] } });
+    expect(config.load().history.favorites).toEqual([A, B]);
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).history.favorites).toEqual([A, B]);
+  });
+
+  it('keeps only session ids, each once, and drops non-strings', () => {
+    const saved = config.save({ history: { favorites: [A, 'not-an-id', 7, null, A, B, `${B}/../x`, A.toUpperCase()] } });
+    expect(saved.history.favorites).toEqual([A, B]);
+  });
+
+  it('a non-list keeps the saved favorites; an empty list clears them', () => {
+    config.save({ history: { favorites: [A] } });
+    expect(config.save({ history: { favorites: 'all' } }).history.favorites).toEqual([A]);
+    expect(config.save({ history: { favorites: { 0: B } } }).history.favorites).toEqual([A]);
+    expect(config.save({ history: { favorites: [] } }).history.favorites).toEqual([]);
+  });
+
+  it('saving the collapsed list keeps the favorites, and the other way round', () => {
+    config.save({ history: { favorites: [A] } });
+    config.save({ history: { listCollapsed: true } });
+    expect(config.load().history).toEqual({ listCollapsed: true, favorites: [A] });
+    config.save({ history: { favorites: [B] } });
+    expect(config.load().history).toEqual({ listCollapsed: true, favorites: [B] });
+  });
+
+  it('a hand-edited file with junk favorites loads the usable ids', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ history: { favorites: [B, 'x', B] } }));
+    expect(config.load().history.favorites).toEqual([B]);
+  });
+
+  it('keeps the newest stars past the cap', async () => {
+    const { MAX_FAVORITES } = await import('../src/shared/favorites');
+    const many = Array.from({ length: MAX_FAVORITES + 3 }, (_, i) => `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`);
+    const kept = config.save({ history: { favorites: many } }).history.favorites;
+    expect(kept).toHaveLength(MAX_FAVORITES);
+    expect(kept[0]).toBe(many[3]);
+    expect(kept.at(-1)).toBe(many.at(-1));
   });
 });
 

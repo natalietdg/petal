@@ -3,6 +3,7 @@
 import { byId, query } from './dom';
 import { stripPasted } from '../shared/pasted-content';
 import type { HistoryList } from '../shared/ipc';
+import type { HistoryListKind } from '../shared/favorites';
 
 export type Session = HistoryList['sessions'][number];
 export type PreviewMode = 'replies' | 'flow' | 'decisions';
@@ -13,6 +14,7 @@ export const state = {
   selectedId: null as string | null,
   previewMode: 'replies' as PreviewMode,
   sort: 'recent' as SortBy,
+  listKind: 'all' as HistoryListKind,
 };
 
 export const hooks = {
@@ -26,6 +28,10 @@ view.innerHTML = `
     <div class="history-rail">
       <button class="history-list-toggle" type="button" aria-expanded="false" aria-label="Show the session list" title="Show the list (⌘\\)">›</button>
       <span class="history-rail-title"></span>
+    </div>
+    <div id="history-tabs" class="view-toggle history-tabs" role="tablist" aria-label="Which sessions">
+      <button type="button" data-list="all" aria-selected="true">All</button>
+      <button type="button" data-list="favorites" aria-selected="false">Favorites</button>
     </div>
     <input id="history-search" class="history-search" type="search" placeholder="Search titles, first prompts and notes" aria-label="Search sessions">
     <div class="history-toolbar">
@@ -50,6 +56,7 @@ export const replyDock = query(view, '#history-reply-dock');
 export const notesAside = query(view, '#history-notes');
 export const openNote = query(view, '#history-open-note');
 export const sortToggle = query(view, '#history-sort');
+export const listTabs = query(view, '#history-tabs');
 export const railTitle = query(view, '.history-rail-title');
 
 // Organizer labels win over Claude Code's own title when present.

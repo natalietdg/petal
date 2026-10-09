@@ -6,6 +6,7 @@ import { el } from './dom';
 import { timeOf } from './format';
 import { dayLabel, hooks, notesAside, openNote, preview, railTitle, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
 import { createPanel } from './notes-panel';
+import * as favorites from './favorites';
 import * as overlays from './overlays';
 import * as reply from './history-reply';
 import { createStrip, paintStrip } from './status-strip';
@@ -22,7 +23,9 @@ export async function renderPreview(): Promise<void> {
   }
   railTitle.textContent = titleOf(session);
   const head = el('header', 'history-preview-head');
-  head.append(el('h2', 'history-preview-title', titleOf(session)),
+  const titleRow = el('div', 'history-preview-title-row');
+  titleRow.append(el('h2', 'history-preview-title', titleOf(session)), favorites.star(session.sessionId, 'history-preview-star'));
+  head.append(titleRow,
     el('p', 'status', `${session.shortCwd} · ${dayLabel(session.lastAt)} ${timeOf(session.lastAt)}`));
 
   const note = el('p', 'history-note');
