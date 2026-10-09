@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReplyCollector, assistantText } from '../src/main/replies';
 import { assistantEntry, toolResultEntry, toolUseEntry, userEntry } from './helpers';
+import type { TranscriptEntry } from '../src/main/transcript-entry';
 
 describe('assistantText', () => {
   it('joins trimmed text items with blank lines and skips tool use', () => {
@@ -101,6 +102,21 @@ describe('ReplyCollector', () => {
     expect(c.newestFirst().map((r) => [r.id, r.markdown, r.prompt])).toEqual([['a2', 'The agent finished.', ''], ['a1', '## Plan\n\nDelegated to an agent.', 'q']]);
     expect(c.waiting()).toEqual([]);
     expect(c.promptCount).toBe(1);
+  });
+
+  it('her message queued mid-turn ends the turn, waits and counts; an agent or task notification does not', () => {
+    const c = new ReplyCollector();
+    c.add(userEntry('q'));
+    c.add(assistantEntry('## Plan\n\nWorking on it.', 'a1'));
+    const queued = (prompt: unknown, origin = 'human', commandMode = 'prompt') => ({ type: 'attachment', uuid: `q-${origin}-${commandMode}`, attachment: { type: 'queued_command', prompt, commandMode, origin: { kind: origin } } }) as TranscriptEntry;
+    expect(c.add(queued('<task-notification>done</task-notification>', 'task-notification', 'task-notification'))).toBe(false);
+    expect(c.add(queued('from another agent', 'peer'))).toBe(false);
+    expect(c.add(queued([{ type: 'text', text: 'also check the tests' }]))).toBe(true);
+    expect(c.waiting().map((w) => [w.id, w.prompt])).toEqual([['q-human-prompt', 'also check the tests']]);
+    expect(c.promptCount).toBe(2);
+    c.add(assistantEntry('Tests pass.', 'a2'));
+    expect(c.newestFirst().map((r) => [r.id, r.markdown, r.prompt])).toEqual([['a2', 'Tests pass.', 'also check the tests'], ['a1', '## Plan\n\nWorking on it.', 'q']]);
+    expect(c.waiting()).toEqual([]);
   });
 
   it('wrappers and tool results are not prompts: not waiting, not counted', () => {
