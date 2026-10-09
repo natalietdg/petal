@@ -35,6 +35,7 @@ export interface TranscriptEntry {
   aiTitle?: string;
   origin?: { kind?: string; handback?: boolean }; // a subagent's hand-back arrives as a meta user entry with handback: true
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
+  attachment?: { type?: string; commandMode?: string; prompt?: string | ContentItem[]; origin?: { kind?: string } }; // queued_command: her message sent while Claude works
 }
 
 export const isTextItem = (item: ContentItem): item is TextItem => item.type === 'text';

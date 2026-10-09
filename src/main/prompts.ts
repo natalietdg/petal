@@ -20,15 +20,26 @@ export function isUserTurn(entry: TranscriptEntry): boolean {
 // A subagent's final report delivered back into the session: no prompt of hers, but Claude answers it in a new turn.
 export const isHandback = (entry: TranscriptEntry): boolean => entry.type === 'user' && !entry.isSidechain && entry.origin?.handback === true;
 
-// The prompt as logged, paste wrappers kept for the bubbles; '' when the turn is a wrapper, reminder or interruption.
-export function rawPromptText(entry: TranscriptEntry): string {
-  if (!isUserTurn(entry)) return '';
-  const text = contentItems(entry)
+const promptOf = (items: ContentItem[]): string => {
+  const text = items
     .filter(isTextItem)
     .map((item) => item.text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, ''))
     .join(' ')
     .trim();
   return WRAPPER.test(text) || INTERRUPTED.test(text) ? '' : text;
+};
+
+// The prompt as logged, paste wrappers kept for the bubbles; '' when the turn is a wrapper, reminder or interruption.
+export function rawPromptText(entry: TranscriptEntry): string {
+  return isUserTurn(entry) ? promptOf(contentItems(entry)) : '';
+}
+
+// Her message sent while Claude works: Claude Code logs it only as a queued_command attachment, never a user entry.
+export function queuedPromptText(entry: TranscriptEntry): string {
+  const queued = entry.type === 'attachment' && !entry.isSidechain ? entry.attachment : undefined;
+  if (queued?.type !== 'queued_command' || queued.commandMode !== 'prompt' || (queued.origin?.kind ?? 'human') !== 'human') return '';
+  const { prompt } = queued;
+  return promptOf(typeof prompt === 'string' ? [{ type: 'text', text: prompt }] : Array.isArray(prompt) ? prompt : []);
 }
 
 // The prompt as plain text for titles, previews and search: paste wrapper tags removed.

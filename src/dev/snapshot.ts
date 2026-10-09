@@ -27,6 +27,7 @@ import { historyReplyCheck } from './snapshot-history-reply';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
+import { replyLatencyCheck } from './snapshot-reply-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
 import { colourKeyCheck } from './snapshot-colour-key';
@@ -401,6 +402,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
+    ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
@@ -563,6 +565,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'reader-steps') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await readerStepsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'reply-latency' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', sessions, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
