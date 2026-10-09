@@ -1,6 +1,8 @@
 // Folding a reply's ## sections under their headings, so the summary is what she reads first.
 import { el } from './dom';
 import { allOpen, isOpen, layoutReply, newFold, setAll, toggleSection, type BlockKind, type FoldState } from '../shared/reply-fold';
+import { isStepsHeading } from '../shared/reply-steps';
+import { buildSteps } from './steps';
 
 const MAX_REMEMBERED = 200; // replies whose opened sections this window remembers; never saved
 const folds = new Map<string, FoldState>();
@@ -36,15 +38,30 @@ function paint(section: Element, open: boolean): void {
   section.querySelector(':scope > h2 > .fold-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
+// Steps sections render as step rows and start open: they are what she acts on.
+function markSteps(sections: HTMLElement[], state: FoldState): Set<number> {
+  const steps = new Set<number>();
+  sections.forEach((section, index) => {
+    const body = section.querySelector(':scope > .section-body');
+    if (!body || !isStepsHeading(section.querySelector(':scope > h2')?.textContent ?? '')) return;
+    section.classList.add('steps-section');
+    buildSteps(body, index, state);
+    steps.add(index);
+  });
+  return steps;
+}
+
 // After sections are wrapped: each heading becomes a row that opens its section; one control opens them all.
 export function foldSections(root: HTMLElement, key: string): void {
   const sections = [...root.querySelectorAll<HTMLElement>(':scope > .story-section')];
   const first = sections[0];
   if (!first) return;
   const state = foldFor(key);
+  const steps = markSteps(sections, state);
+  const opened = (index: number) => isOpen(state, index, steps.has(index));
   const all = el('button', 'fold-all');
   all.type = 'button';
-  const label = () => { all.textContent = allOpen(state, sections.length) ? 'Collapse all' : 'Expand all'; };
+  const label = () => { all.textContent = allOpen(state, sections.length, steps) ? 'Collapse all' : 'Expand all'; };
   sections.forEach((section, index) => {
     const heading = section.querySelector<HTMLElement>(':scope > h2');
     if (!heading) return;
@@ -57,14 +74,14 @@ export function foldSections(root: HTMLElement, key: string): void {
     heading.addEventListener('click', (event) => {
       if ((event.target as Element).closest('a')) return;
       toggleSection(state, index);
-      paint(section, isOpen(state, index));
+      paint(section, opened(index));
       label();
     });
-    paint(section, isOpen(state, index));
+    paint(section, opened(index));
   });
   all.addEventListener('click', () => {
-    setAll(state, !allOpen(state, sections.length));
-    sections.forEach((section, index) => paint(section, isOpen(state, index)));
+    setAll(state, !allOpen(state, sections.length, steps));
+    sections.forEach((section, index) => paint(section, opened(index)));
     label();
   });
   label();

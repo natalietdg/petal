@@ -149,6 +149,54 @@ h2.foldable:hover .fold-toggle { color: var(--reader-fg); }
   cursor: pointer;
 }
 .fold-all:hover { color: var(--reader-fg); text-decoration: underline; text-underline-offset: 3px; }
+
+/* Steps: a numbered badge per action, a thin line joining the badges, the Check line muted underneath. */
+.prose ol.steps { --badge: 1.6em; list-style: none; padding: 0; margin: 0.3em 0 1em; }
+.prose ol.steps > li.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--badge) minmax(0, 1fr);
+  column-gap: 0.75em;
+  margin: 0;
+  padding-bottom: 1em;
+}
+.prose ol.steps > li.step:last-child { padding-bottom: 0; }
+.prose ol.steps > li.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--badge) / 2 - 1px);
+  top: calc(var(--badge) + 0.2em);
+  bottom: 0.2em;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--rule);
+}
+.step-badge {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: calc(var(--badge) / 0.72); /* --badge is in the row's em; this font is 0.72 of it */
+  height: calc(var(--badge) / 0.72);
+  padding: 0;
+  border: 2px solid var(--reader-fg);
+  border-radius: 50%;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 700 0.72em/1 var(--ui-font);
+  font-variant-numeric: lining-nums tabular-nums;
+  cursor: pointer;
+}
+.step-badge:hover { background: var(--rule); }
+.step-badge:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+.step-body { grid-column: 2; min-width: 0; padding-top: 0.12em; overflow-wrap: anywhere; }
+.prose ol.steps .step-body > :last-child { margin-bottom: 0; } /* outranks a look's .prose p spacing */
+.prose ol.steps .step-check { grid-column: 2; margin: 0.3em 0 0; color: var(--muted); font-size: 0.86em; line-height: 1.5; overflow-wrap: anywhere; }
+.step-check-label { font: 600 0.78em/1 var(--ui-font); letter-spacing: 0.06em; text-transform: uppercase; }
+/* Ticked: light strikethrough, badge filled with a tick. */
+.step.done > .step-body { color: var(--muted); text-decoration: line-through 1px; text-decoration-color: var(--muted); }
+.prose ol.steps > li.step.done > .step-badge { background: var(--reader-fg); color: var(--reader-bg); }
 /* A paragraph that is only italics ("*Figure 1. ...*") is a caption. */
 .prose p:has(> em:only-child) {
   margin-top: -0.4em;

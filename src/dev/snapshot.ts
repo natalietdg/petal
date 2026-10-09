@@ -31,6 +31,7 @@ import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
 import { colourKeyCheck } from './snapshot-colour-key';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
+import { readerStepsCheck } from './snapshot-reader-steps';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -398,6 +399,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['pasted', () => pastedCheck(kit, win)],
     ['colour key', () => colourKeyCheck(kit, win)],
     ['reader collapse', () => readerCollapseCheck(kit, win)],
+    ['reader steps', () => readerStepsCheck(kit, win)],
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
@@ -555,6 +557,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'reader-collapse') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await readerCollapseCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'reader-steps') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await readerStepsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

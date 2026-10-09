@@ -19,15 +19,18 @@ export function layoutReply(blocks: readonly BlockKind[]): ReplyLayout {
   return { order: [...head, ...strips, ...rest], sections: blocks.filter((kind) => kind === 'heading').length };
 }
 
-// Which sections she opened: everything follows `all`, except the ones she flipped by hand.
+// Which sections she opened: everything follows `all` (null: each section's own default), except the ones she flipped.
+// done: Steps she ticked, as "section:step"; kept as long as the fold state, never saved.
 export interface FoldState {
-  all: boolean;
+  all: boolean | null;
   flipped: Set<number>;
+  done: Set<string>;
 }
 
-export const newFold = (): FoldState => ({ all: false, flipped: new Set() });
+export const newFold = (): FoldState => ({ all: null, flipped: new Set(), done: new Set() });
 
-export const isOpen = (state: FoldState, index: number): boolean => state.all !== state.flipped.has(index);
+// startsOpen: a section that opens by default (Steps), until Expand all or Collapse all decides for every section.
+export const isOpen = (state: FoldState, index: number, startsOpen = false): boolean => (state.all ?? startsOpen) !== state.flipped.has(index);
 
 export function toggleSection(state: FoldState, index: number): void {
   if (!state.flipped.delete(index)) state.flipped.add(index);
@@ -38,7 +41,14 @@ export function setAll(state: FoldState, open: boolean): void {
   state.flipped.clear();
 }
 
-export function allOpen(state: FoldState, count: number): boolean {
-  for (let i = 0; i < count; i++) if (!isOpen(state, i)) return false;
+export function allOpen(state: FoldState, count: number, startsOpen: ReadonlySet<number> = new Set()): boolean {
+  for (let i = 0; i < count; i++) if (!isOpen(state, i, startsOpen.has(i))) return false;
+  return true;
+}
+
+// Ticks or unticks one step; returns whether it is now done.
+export function toggleDone(state: FoldState, step: string): boolean {
+  if (state.done.delete(step)) return false;
+  state.done.add(step);
   return true;
 }
