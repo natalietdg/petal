@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { DECIDE_PROBES, KEY_ENTRIES, LIFESTYLE_ENTRIES, LIFESTYLE_EXPECT, NEUTRAL_PROBES, type KeyEntry } from '../renderer/colour-key-entries';
@@ -199,7 +200,7 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
   await js("PastelTerm.reader.setView('replies')");
   // The fixture feed can redraw its own reply; re-send the sample before each look and theme.
   const showReply = async () => {
-    await js(`PastelTerm.reader.update(${JSON.stringify(keyUpdate)})`);
+    await js(`PastelTerm.reader.update(${JSON.stringify(keyUpdate)}); ${OPEN_SECTIONS}`);
     return waitFor(() => js("Boolean(document.querySelector('#latest .callout-done'))"), 5000);
   };
   check(await showReply(), 'real reply with every treatment is on screen');

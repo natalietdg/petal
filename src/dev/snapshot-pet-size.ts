@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { load as loadConfig } from '../main/config-store';
 import { fixtureFile } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -74,6 +75,7 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await wait(2500); // login shell rc files
   appendReply(file);
   check(await waitFor(() => js(`document.getElementById('latest').innerText.includes(${JSON.stringify(MARKER)})`), 10000), 'fixture reply shown');
+  await js(OPEN_SECTIONS); // her size is measured against the full reply
   await js('PastelTerm.welcome.close()');
   await js("PastelTerm.reader.setView('replies')");
   await js("PastelTerm.cat.setScene('none')");

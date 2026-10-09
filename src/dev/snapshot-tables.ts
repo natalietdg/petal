@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { READING_CHOICES } from '../main/menu';
 
 const WIDTHS = [990, 1280];
@@ -122,7 +123,7 @@ export async function tablesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   // The fixture feed can redraw its own reply; re-send the sample whenever it is gone.
   const showSample = async () => {
     if (await js("document.getElementById('latest').dataset.replyId === 'tables-new'")) return true;
-    await js(`PastelTerm.reader.update(${JSON.stringify(tableUpdate)})`);
+    await js(`PastelTerm.reader.update(${JSON.stringify(tableUpdate)}); ${OPEN_SECTIONS}`);
     return waitFor(() => js("document.querySelectorAll('#latest table').length === 3"), 5000);
   };
   check(await showSample(), 'sample reply with a 3-column, a 6-column and a sidebar table');

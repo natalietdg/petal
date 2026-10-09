@@ -2,6 +2,7 @@
 // Nothing starts under it either: the reader and History begin below the header at every look and width.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 import { READING_CHOICES } from '../main/menu';
@@ -63,7 +64,7 @@ async function overlapCheck(kit: Kit, win: BrowserWindow): Promise<void> {
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
     for (const width of WIDTHS) {
       check(await sizeTo(kit, win, width), `${look} window at ${width}px`);
-      await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+      await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)}); ${OPEN_SECTIONS}`);
       await wait(300);
       await js("document.getElementById('reader').scrollTop = 0");
       const reader = await js(OVERLAP);
@@ -91,7 +92,7 @@ export async function headerCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await waitFor(async () => (await js('window.innerWidth')) === 1280, 3000);
   applyTheme('paleSky', { persist: false });
   await js("PastelTerm.reader.setView('replies')");
-  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)}); ${OPEN_SECTIONS}`);
 
   for (const [look] of READING_CHOICES) {
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);

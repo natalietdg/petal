@@ -99,6 +99,56 @@
 .story-section + .story-section { margin-top: 1.4em; }
 /* Section wrappers are layout hooks for the magazine looks; elsewhere they vanish. */
 .section-body, .rail { display: contents; }
+
+/* Folded sections: the heading row stays; [data-reading] outranks every look's section-body and rail display. */
+[data-reading] .prose .story-section.folded > :not(h2) { display: none; }
+.prose h2.foldable { cursor: pointer; }
+/* The chevron is the row's keyboard handle; the heading text stays a heading. */
+.fold-toggle {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.3em;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8em;
+  vertical-align: 0.05em;
+  cursor: pointer;
+}
+.fold-toggle::before {
+  content: "";
+  display: block;
+  width: 0.42em;
+  height: 0.42em;
+  margin: 0.14em auto 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); /* points down: open */
+  transition: transform 160ms ease;
+}
+.folded .fold-toggle::before { transform: rotate(-45deg); margin-top: 0.24em; } /* points right: folded */
+h2.foldable:hover .fold-toggle { color: var(--reader-fg); }
+.fold-toggle:focus-visible, .fold-all:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .fold-toggle::before { transition: none; } }
+/* Folded rows sit closer, like a contents list. */
+.story-section.folded + .story-section { margin-top: 0.4em; }
+
+/* Expand all / Collapse all: one quiet text button above the first section. */
+.fold-bar { margin: 0 0 0.2em; text-align: right; }
+.fold-all {
+  padding: 0.1em 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 11px/1.5 var(--ui-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.fold-all:hover { color: var(--reader-fg); text-decoration: underline; text-underline-offset: 3px; }
 /* A paragraph that is only italics ("*Figure 1. ...*") is a caption. */
 .prose p:has(> em:only-child) {
   margin-top: -0.4em;
@@ -201,7 +251,7 @@
 }
 
 /* The standfirst already draws a rule; the first section must not add a second. */
-#latest .story-head + .story-section > h2:first-child { border-top: 0; padding-top: 0; margin-top: 0.4em; }
+#latest :is(.story-head, .fold-bar) + .story-section > h2:first-child { border-top: 0; padding-top: 0; margin-top: 0.4em; }
 
 /* The standfirst's run-in label ("Abstract.") in small caps, like a section slug. */
 #latest .headline + p > strong:first-child {

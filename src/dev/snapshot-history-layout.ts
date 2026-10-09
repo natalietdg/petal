@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { load as loadConfig } from '../main/config-store';
 import { historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -143,7 +144,7 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const probe = (code: string): Promise<any> => js(code);
-  const openHistory = (id: string) => js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(id)}); return PastelTerm.history.setPreviewMode('replies'); })`);
+  const openHistory = (id: string) => js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(id)}); return PastelTerm.history.setPreviewMode('replies'); }).then(() => { ${OPEN_SECTIONS}; })`);
   const replyShown = () => waitFor(() => js("document.querySelectorAll('#history-preview .history-reply table').length >= 4"), 8000);
 
   try {
@@ -262,7 +263,7 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
     // 4 Notes: ended tab keeps its session's notes, a fresh tab says so, History has notes for a past session.
     await js('PastelTerm.notesPanel.setOpen(true)');
     const reply = { id: 'r1', timestamp: new Date().toISOString(), prompt: 'is it safe?', markdown: LONG_REPLY };
-    const update = (state: string, sessionId: string | null, tabId: string) => js(`PastelTerm.reader.update(${JSON.stringify({ state, replies: state === 'none' ? [] : [reply], waiting: [], promptCount: 1, busy: false, sessionId, cwd: null, repo: null, tabId })})`);
+    const update = (state: string, sessionId: string | null, tabId: string) => js(`PastelTerm.reader.update(${JSON.stringify({ state, replies: state === 'none' ? [] : [reply], waiting: [], promptCount: 1, busy: false, sessionId, cwd: null, repo: null, tabId })}); ${OPEN_SECTIONS}`);
     await update('live', LONG, 'ended-probe');
     await update('ended', null, 'ended-probe');
     const ended = await waitFor(() => js(`document.querySelector('#notes-panel .notes[data-session-id="${LONG}"] .notes-editor:not([disabled])') ? true : null`), 5000);

@@ -27,6 +27,9 @@ status.before(older);
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
+// Which reply a fold state belongs to; a reply without an id falls back to its opening words.
+const foldKey = (reply: Reply): string => reply.id ?? `text:${reply.markdown.slice(0, 120)}`;
+
 const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
 
 // Sent from the reply box, not yet in Claude's log.
@@ -63,7 +66,7 @@ function olderTurn(reply: Reply): HTMLElement {
   turn.className = 'reply older-turn';
   turn.dataset.replyId = reply.id;
   const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) });
-  const body = markdown.render(reply.markdown);
+  const body = markdown.render(reply.markdown, { fold: foldKey(reply) });
   turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), body);
   diagrams.render(body);
   return turn;
@@ -117,7 +120,7 @@ export function update(shown: ShownUpdate): void {
     ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
     : `Latest reply · ${timeOfReply(newest.timestamp)}`;
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown), ...writing);
+  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown, { fold: foldKey(newest) }), ...writing);
   latest.dataset.replyId = newest.id;
   older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
   diagrams.render(latest);

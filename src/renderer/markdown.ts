@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
 import { linkLabel } from '../shared/link-label';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
+import { foldSections, liftSummary } from './fold';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
 
@@ -186,7 +187,8 @@ function wrapStory(root: HTMLElement): void {
   }
 }
 
-export function render(markdownText: string): HTMLDivElement {
+// fold: a reply's key, so its sections fold and keep what she opened across redraws; other prose never folds.
+export function render(markdownText: string, options: { fold?: string } = {}): HTMLDivElement {
   const html = DOMPurify.sanitize(marked.parse(markdownText, { async: false }), { FORBID_ATTR: ['style'] });
   const root = document.createElement('div');
   root.className = 'prose';
@@ -196,8 +198,10 @@ export function render(markdownText: string): HTMLDivElement {
   tagHeadline(root); // after callouts, so a leading label is never the headline
   tagBackMatter(root);
   tagQuotes(root);
+  const folds = options.fold !== undefined && liftSummary(root); // before lede and end, which read the final order
   tagLede(root);
   tagEnd(root);
   wrapStory(root); // last: the taggers above look at top-level siblings
+  if (folds) foldSections(root, options.fold ?? '');
   return root;
 }

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 
 const LONG_REPLY = [
   '**The reader keeps its place when a long reply lands.**',
@@ -99,7 +100,7 @@ export async function printLookCheck(kit: Kit, win: BrowserWindow): Promise<void
   await js('PastelTerm.customize.close()');
 
   // The long reply: headline, dek, sections, rail, callouts, table, code, back matter, one earlier turn.
-  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)}); ${OPEN_SECTIONS}`);
   const shaped = await waitFor(() => js(`(() => {
     const latest = document.getElementById('latest');
     const ok = latest.dataset.replyId === 'print-new' && latest.querySelector('.rail');

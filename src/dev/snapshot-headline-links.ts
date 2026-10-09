@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeTo } from './snapshot-tables';
 import { READING_CHOICES } from '../main/menu';
 
@@ -63,7 +64,7 @@ export async function headlineLinksCheck(kit: Kit, win: BrowserWindow): Promise<
   // The fixture feed can redraw its own reply; re-send the sample whenever it is gone.
   const showSample = async () => {
     if (await js("document.getElementById('latest').dataset.replyId === 'headline-links'")) return true;
-    await js(`PastelTerm.reader.update(${JSON.stringify(linksUpdate)})`);
+    await js(`PastelTerm.reader.update(${JSON.stringify(linksUpdate)}); ${OPEN_SECTIONS}`);
     return waitFor(() => js("Boolean(document.querySelector('#latest .headline a'))"), 5000);
   };
   check(await showSample(), 'sample reply with a GitHub PR URL in the headline');

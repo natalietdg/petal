@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 import { READING_CHOICES } from '../main/menu';
@@ -59,7 +60,7 @@ export async function columnAxisCheck(kit: Kit, win: BrowserWindow): Promise<voi
 
   // The fixture feed can redraw its own reply; re-send the long sample (it has margin rails) before each reading.
   const showSample = async () => {
-    await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+    await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)}); ${OPEN_SECTIONS}`);
     return waitFor(() => js("Boolean(document.querySelector('#latest .rail'))"), 5000);
   };
   check(await showSample(), 'long reply with sidebars and pull quotes');

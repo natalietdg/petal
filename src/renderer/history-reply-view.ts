@@ -21,7 +21,8 @@ export function turnCard(turn: Turn, youClass = ''): HTMLElement {
     promptBubble(`history-you ${youClass}`.trim(), turn.prompt));
   if (turn.reply) {
     const body = el('div', 'history-reply');
-    body.append(markdown.render(turn.reply));
+    // Keyed by its opening words, which a streaming reply never rewrites, so redraws keep what she opened.
+    body.append(markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}` }));
     card.append(body);
   }
   return card;

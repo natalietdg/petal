@@ -2,6 +2,7 @@
 // column's axis (docked at 1280/1600, a drawer at 990/800), its open state saved in config, and beside History's preview.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { unclippedCheck } from './snapshot-divider';
 import { load as loadConfig } from '../main/config-store';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -62,7 +63,7 @@ export async function notesSideCheck(kit: Kit, win: BrowserWindow): Promise<void
     }
     return false;
   };
-  const showLongReply = () => js(`PastelTerm.reader.update(${JSON.stringify({ ...printUpdate, sessionId: FIXTURE_A, tabId: 'notes-side-probe' })})`);
+  const showLongReply = () => js(`PastelTerm.reader.update(${JSON.stringify({ ...printUpdate, sessionId: FIXTURE_A, tabId: 'notes-side-probe' })}); ${OPEN_SECTIONS}`);
 
   try {
     applyTheme('paleSky', { persist: false });

@@ -99,7 +99,7 @@
 
 /* ---- Sections: bold serif heads, no rules; space does the separating. ---- */
 [data-reading="print"] .story-section + .story-section { margin-top: 2em; }
-[data-reading="print"] #latest .story-head + .story-section > h2:first-child { margin-top: 0; }
+[data-reading="print"] #latest :is(.story-head, .fold-bar) + .story-section > h2:first-child { margin-top: 0; }
 [data-reading="print"] .prose h2:not(.back-matter) {
   border-top: 0;
   padding-top: 0;

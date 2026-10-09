@@ -1,6 +1,7 @@
 // Print look axis: at several window widths the text column and the reply box share the visible reader's centre line.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { printUpdate } from './snapshot-print';
 
@@ -42,7 +43,7 @@ export async function printAxisCheck(kit: Kit, win: BrowserWindow): Promise<void
   const [startWidth, startHeight] = win.getContentSize();
 
   await js("window.pastel.look.setReading('print')");
-  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)})`);
+  await js(`PastelTerm.reader.update(${JSON.stringify(printUpdate)}); ${OPEN_SECTIONS}`);
   const ready = await waitFor(async () => (await js('document.documentElement.dataset.reading')) === 'print' && js("Boolean(document.querySelector('#latest .rail'))"), 5000);
   check(ready, 'print look with the long reply');
 
