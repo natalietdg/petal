@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { contentItems, isUserTurn, promptText, commandText, trimTo } from './prompts';
+import { contentItems, isHandback, isUserTurn, promptText, commandText, trimTo } from './prompts';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { counters } from './snapshot-mode';
@@ -147,6 +147,7 @@ async function extract(file: string): Promise<Flow> {
       }
       continue;
     }
+    if (isHandback(entry)) turnOpen = false; // the reader starts a new reply here, so the step gets its id too
     if (entry.type !== 'assistant' || entry.isSidechain || !step) continue;
 
     for (const item of contentItems(entry)) {

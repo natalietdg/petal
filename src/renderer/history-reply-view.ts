@@ -17,8 +17,11 @@ const drafts = new Map<string, string>(); // sessionId -> unsent text, so switch
 export function turnCard(turn: Turn, youClass = ''): HTMLElement {
   const card = el('article', 'history-turn');
   card.dataset.turn = String(turn.index);
-  card.append(el('p', 'history-you-label', youClass === 'queued' ? 'You · waiting for Claude to start' : 'You'),
-    promptBubble(`history-you ${youClass}`.trim(), turn.prompt));
+  // No prompt: Claude answering a subagent's report, so no empty bubble of hers.
+  if (turn.prompt) {
+    card.append(el('p', 'history-you-label', youClass === 'queued' ? 'You · waiting for Claude to start' : 'You'),
+      promptBubble(`history-you ${youClass}`.trim(), turn.prompt));
+  }
   if (turn.reply) {
     const body = el('div', 'history-reply');
     // Keyed by its opening words, which a streaming reply never rewrites, so redraws keep what she opened.
