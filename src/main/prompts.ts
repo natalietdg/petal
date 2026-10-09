@@ -17,6 +17,9 @@ export function isUserTurn(entry: TranscriptEntry): boolean {
   return !contentItems(entry).some((item) => item.type === 'tool_result');
 }
 
+// A subagent's final report delivered back into the session: no prompt of hers, but Claude answers it in a new turn.
+export const isHandback = (entry: TranscriptEntry): boolean => entry.type === 'user' && !entry.isSidechain && entry.origin?.handback === true;
+
 // The prompt as logged, paste wrappers kept for the bubbles; '' when the turn is a wrapper, reminder or interruption.
 export function rawPromptText(entry: TranscriptEntry): string {
   if (!isUserTurn(entry)) return '';

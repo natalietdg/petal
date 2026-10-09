@@ -91,6 +91,18 @@ describe('ReplyCollector', () => {
     expect(c.newestFirst()[0]?.prompt).toBe('one\n\ntwo');
   });
 
+  it('a subagent hand-back ends the turn: Claude answering it is a new reply with no prompt', () => {
+    const c = new ReplyCollector();
+    c.add(userEntry('q'));
+    c.add(assistantEntry('## Plan\n\nDelegated to an agent.', 'a1'));
+    const handback = userEntry('Another Claude session reports back.', { isMeta: true, origin: { kind: 'peer', handback: true } });
+    expect(c.add(handback)).toBe(false);
+    c.add(assistantEntry('The agent finished.', 'a2'));
+    expect(c.newestFirst().map((r) => [r.id, r.markdown, r.prompt])).toEqual([['a2', 'The agent finished.', ''], ['a1', '## Plan\n\nDelegated to an agent.', 'q']]);
+    expect(c.waiting()).toEqual([]);
+    expect(c.promptCount).toBe(1);
+  });
+
   it('wrappers and tool results are not prompts: not waiting, not counted', () => {
     const c = new ReplyCollector();
     expect(c.add(userEntry('<command-name>/clear</command-name>'))).toBe(false);
