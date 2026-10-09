@@ -75,14 +75,15 @@
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
-/* The reader always ends above her at her chosen size, so text never sits under her and scrolling changes nothing.
-   Only in a tall reader: a short one (the divider dragged low) keeps its height and she steps out instead. */
+/* Too narrow a gutter for her (cat.ts): a small sticky in the header bar, in a slot just left of Colour key. */
+#reader-area.cat-docked .reader-head-end { padding-left: calc(var(--cat-dock-size) + 10px); }
+#reader-area.cat-docked #cat { top: var(--cat-dock-top); right: var(--cat-dock-right); bottom: auto; transform: scale(var(--cat-dock-scale)); transform-origin: top right; }
+#reader-area.cat-docked .cat-tip { top: 100%; bottom: auto; transform: scale(calc(1 / var(--cat-dock-scale))) translateY(6px); transform-origin: top right; } /* full size, below her */
+#reader-area.cat-docked :is(.scene-tip, .scene-popover) { top: calc(var(--cat-dock-top) + var(--cat-dock-size) + 6px); right: var(--cat-dock-right); bottom: auto; }
+/* In the corner, a short reader (the divider dragged low) would push her up into the header: she steps out. */
 #reader-area { container-type: size; } /* its grid row sizes it, never its content */
-@container (min-height: 480px) {
-  #reader-area #reader { margin-bottom: calc(144px * var(--pet-scale, 1) + 20px); } /* 14px offset, 4px gap, 2px for subpixel scaling */
-}
 @container (max-height: 479.98px) {
-  #reader-area :is(#cat, .scene-tip, .scene-popover) { display: none; }
+  #reader-area:not(.cat-docked) :is(#cat, .scene-tip, .scene-popover) { display: none; }
 }
 /* Overlays use the whole column; her corner waits for the reader. */
 #reader-area:has(> :is(#history, #workflow, #customize, #repos, #welcome, #agents):not([hidden])) :is(#cat, .scene-tip, .scene-popover) { display: none; }
