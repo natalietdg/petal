@@ -1,5 +1,5 @@
 // Pet size (PASTEL_SNAPSHOT_MODE=pet-size): she stays the size picked in Customize and in one place at every scroll position:
-// beside the text at 1280, docked in the header bar at 800, never over text, and the reader keeps its full height.
+// beside the text at 1280, docked in the header bar at 800 (64px for Normal, the bar grown to fit), never over text, and the reader keeps its full height.
 import fs from 'node:fs';
 import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
@@ -18,6 +18,7 @@ const REPLY = [
   'A long reply whose first block is a table wider than the column, then plenty of plain text below it.', '',
   '| Source | Destination | Container | Idempotent | Rows | Owner | Notes |', '|---|---|---|---|---|---|---|', WIDE_ROW, WIDE_ROW, '',
   ...[1, 2, 3, 4, 5, 6].flatMap((n) => [`## ${n}. Section`, '', PARAGRAPH, '', PARAGRAPH, '']),
+  '**Doing:** checking the pet size.', '**Recommend:** keep her visible.', '**Next:** run the narrow modes.', '',
   'Done.',
 ].join('\n');
 
@@ -47,18 +48,20 @@ const MEASURE = `(() => {
     const c = { left: Math.max(r.left, view.left), right: Math.min(r.right, view.right), top: Math.max(r.top, view.top), bottom: Math.min(r.bottom, view.bottom) };
     if (shown && c.right > c.left && c.bottom > c.top && meets(c, box)) hits.push(block.tagName + ':' + block.textContent.trim().slice(0, 24));
   }
-  for (const control of document.querySelectorAll('#reader-head :is(button, .reader-repo)')) {
+  for (const control of document.querySelectorAll('#reader-head :is(button, .reader-repo, .status-strip)')) {
     if (control.getClientRects().length && meets(control.getBoundingClientRect(), box)) hits.push('header:' + control.textContent.trim().slice(0, 24));
   }
   const column = document.querySelector('#reader .reader-column');
   const textRight = column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight);
-  const bar = document.querySelector('#reader-head .reader-head-end').getBoundingClientRect();
+  const bar = document.querySelector('#reader-head .reader-head-row').getBoundingClientRect();
+  const strip = document.querySelector('#reader-head .status-strip');
   const key = document.getElementById('colour-key-button').getBoundingClientRect();
   const toggle = document.querySelector('#reader-head .view-toggle').getBoundingClientRect();
   const below = Math.min(...['prompt-dock', 'composer'].map((id) => document.getElementById(id).getBoundingClientRect().top));
   return {
     cat: R(box), shown, scale: getComputedStyle(cat).getPropertyValue('--pet-scale').trim(), docked: area.classList.contains('cat-docked'),
     textRight: Math.round(textRight), viewBottom: Math.round(view.bottom), bar: R(bar), key: R(key), toggle: R(toggle),
+    strip: strip && !strip.hidden ? R(strip.getBoundingClientRect()) : null,
     margin: parseFloat(getComputedStyle(reader).marginBottom) || 0, gapBelow: Math.round(below - view.bottom),
     hits: [...new Set(hits)].slice(0, 4), scrollTop: Math.round(reader.scrollTop), scrollMax: reader.scrollHeight - reader.clientHeight,
   };
@@ -68,11 +71,13 @@ const MEASURE = `(() => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Measure = any;
 
-// Her corner beside the text, or her slot in the header bar left of Colour key.
+// Her corner beside the text, or her slot in the header bar left of Colour key: her docked height, inside the bar's row, above the strip.
 const inGutter = (m: Measure, want: number): boolean => !m.docked && Math.abs(m.cat.width - want) <= 1 && Math.abs(m.cat.height - want) <= 1
   && m.cat.left > m.textRight && m.cat.bottom <= m.viewBottom;
-const inBar = (m: Measure): boolean => m.docked && Math.abs(m.cat.height - m.bar.height) <= 1 && m.cat.top >= m.bar.top - 1 && m.cat.bottom <= m.bar.bottom + 1
-  && m.cat.right <= m.key.left && m.cat.left >= m.toggle.right;
+const inBar = (m: Measure, dock: number): boolean => m.docked && Math.abs(m.cat.height - dock) <= 1 && Math.abs(m.bar.height - dock) <= 1
+  && m.cat.top >= m.bar.top - 1 && m.cat.bottom <= m.bar.bottom + 1 && m.cat.right <= m.key.left && m.cat.left >= m.toggle.right
+  && m.strip !== null && m.cat.bottom <= m.strip.top;
+const DOCK_PX = { small: 48, normal: 64, large: 80 } as const; // DOCK_PX in cat.ts
 
 // Lifestyle's 960px measure leaves a 1280 gutter only Small fits; larger, she docks there too.
 const gutterAt1280 = (look: string, size: string): boolean => look !== 'lifestyle' || size === 'small';
@@ -101,15 +106,15 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await js("PastelTerm.cat.setScene('cherry')");
 
   // Top, middle and bottom: one place at all three, the expected one, and nothing under her; no band below the reader.
-  const steady = async (tag: string, want: number, gutter: boolean) => {
+  const steady = async (tag: string, want: number, dock: number, gutter: boolean) => {
     const at: Measure[] = [];
     for (const where of ['top', 'middle', 'bottom'] as const) {
       await scrollTo('top');
       if (where !== 'top') await scrollTo(where === 'bottom' ? 'bottom' : Math.round((await measure()).scrollMax / 2));
       const m: Measure = await measure();
       at.push(m);
-      check(m.shown && (gutter ? inGutter(m, want) : inBar(m)) && m.hits.length === 0,
-        `${tag} at the ${where} (${m.scrollTop}/${m.scrollMax}): ${gutter ? `gutter, want ${want}` : `bar ${m.bar.height}px`}, docked ${m.docked}, cat ${JSON.stringify(m.cat)}, text right ${m.textRight}, scale ${m.scale}, hits ${JSON.stringify(m.hits)}`);
+      check(m.shown && (gutter ? inGutter(m, want) : inBar(m, dock)) && m.hits.length === 0,
+        `${tag} at the ${where} (${m.scrollTop}/${m.scrollMax}): ${gutter ? `gutter, want ${want}` : `bar, want ${dock}, bar ${JSON.stringify(m.bar)}, strip ${JSON.stringify(m.strip)}`}, docked ${m.docked}, cat ${JSON.stringify(m.cat)}, text right ${m.textRight}, scale ${m.scale}, hits ${JSON.stringify(m.hits)}`);
       check(m.margin === 0 && Math.abs(m.gapBelow) <= 1, `${tag} at the ${where}: no band, reader margin ${m.margin}px, gap to the reply box ${m.gapBelow}px`);
     }
     check(at.every((m) => JSON.stringify(m.cat) === JSON.stringify(at[0].cat)) && at[0].scrollMax > 0, `${tag}: same rect at top, middle and bottom ${JSON.stringify(at.map((m) => m.cat))}`);
@@ -134,7 +139,7 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
         await wait(200);
         const gutter = width === 1280 && gutterAt1280(look, size);
         if (width === 1280 && look === 'newspaper') widths[size] = (await measure()).cat.width;
-        await steady(`${size} ${width}px ${look}`, want, gutter);
+        await steady(`${size} ${width}px ${look}`, want, DOCK_PX[size], gutter);
         if (look === 'newspaper') await capture(`pet-size-${size}-${width}-${gutter ? 'gutter' : 'bar'}`);
       }
     }

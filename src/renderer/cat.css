@@ -75,7 +75,8 @@
 #cat[data-cat="hoshi"] .px-O, .cat-portrait[data-cat="hoshi"] .px-O { fill: #5A2E48; }
 
 .cat-sprite { position: absolute; bottom: 0; right: 0; width: var(--cat-sprite-w, 60px); height: var(--cat-sprite-h, 60px); }
-/* Too narrow a gutter for her (cat.ts): a small sticky in the header bar, in a slot just left of Colour key. */
+/* Too narrow a gutter for her (cat.ts): docked in the header bar, in a slot just left of Colour key; the row grows to her height. */
+#reader-area.cat-docked .reader-head-row { min-height: var(--cat-dock-size); }
 #reader-area.cat-docked .reader-head-end { padding-left: calc(var(--cat-dock-size) + 10px); }
 #reader-area.cat-docked #cat { top: var(--cat-dock-top); right: var(--cat-dock-right); bottom: auto; transform: scale(var(--cat-dock-scale)); transform-origin: top right; }
 #reader-area.cat-docked .cat-tip { top: 100%; bottom: auto; transform: scale(calc(1 / var(--cat-dock-scale))) translateY(6px); transform-origin: top right; } /* full size, below her */

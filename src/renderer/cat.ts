@@ -1,10 +1,10 @@
-// A 20x20 pixel pet in the reader's corner (or its header bar): eyes shut and dozing when Claude rests, playing when it works.
+// A 20x20 pixel pet in the reader's corner (or docked in its header bar): eyes shut and dozing when Claude rests, playing when it works.
 // Each cat has her own coat, her own prop and her own busy move.
 import * as scenes from './scenes';
 import { byId, el, isIpcError, query } from './dom';
 import { CATS, EYES_CLOSED, PROPS, SITTING, TAIL_DOWN, TAIL_UP, spriteCols, spriteRows, type Line, type Pet, type Prop } from './cat-art';
 import { LOCAL_CATS } from '../shared/local-cats';
-import { PET_SCALE, isPetSize } from '../shared/pet-size';
+import { PET_SCALE, isPetSize, type PetSize } from '../shared/pet-size';
 
 // Built-in cats plus any private ones from cats-local/, each with her toy and her own stylesheet.
 const ALL_CATS: Readonly<Record<string, Pet>> = { ...CATS, ...Object.fromEntries(LOCAL_CATS.map(({ id, pet }) => [id, pet])) };
@@ -122,7 +122,7 @@ export function setScene(id: string): void {
   render();
 }
 
-// Her place: the reader's corner beside the text if the right gutter fits her chosen size, else a small sticky in the header bar.
+// Her place: the reader's corner beside the text if the right gutter fits her chosen size, else docked in the header bar.
 // Widths and her size decide it, never scroll; she sits outside #reader, so scrolling never moves her.
 const area = byId('reader-area');
 const reader = byId('reader');
@@ -131,7 +131,8 @@ const headEnd = query(byId('reader-head'), '.reader-head-end');
 const BOX_PX = 144; // #cat's box in cat.css
 const CORNER_RIGHT_PX = 28; // #cat's right in cat.css
 const TEXT_GAP_PX = 16;
-let scale = 1;
+const DOCK_PX: Readonly<Record<PetSize, number>> = { small: 48, normal: 64, large: 80 }; // her height docked; the bar grows to fit
+let size: PetSize = 'normal';
 
 // Right edge of the text: the column's content, or a magazine rail hanging in its padding.
 function textRight(): number {
@@ -140,25 +141,25 @@ function textRight(): number {
 }
 
 function place(): void {
-  const cornerLeft = reader.getBoundingClientRect().right - CORNER_RIGHT_PX - BOX_PX * scale;
+  const cornerLeft = reader.getBoundingClientRect().right - CORNER_RIGHT_PX - BOX_PX * PET_SCALE[size];
   const docked = cornerLeft < textRight() + TEXT_GAP_PX;
   area.classList.toggle('cat-docked', docked);
   if (!docked) return;
-  const bar = headEnd.getBoundingClientRect().height;
-  area.style.setProperty('--cat-dock-size', `${bar}px`); // reserves her slot left of Colour key (cat.css)
-  area.style.setProperty('--cat-dock-scale', String(bar / BOX_PX));
+  const dock = DOCK_PX[size];
+  area.style.setProperty('--cat-dock-size', `${dock}px`); // the bar's row height and her slot left of Colour key (cat.css)
+  area.style.setProperty('--cat-dock-scale', String(dock / BOX_PX));
   const slot = headEnd.getBoundingClientRect();
   const box = area.getBoundingClientRect();
-  area.style.setProperty('--cat-dock-top', `${slot.top - box.top}px`);
-  area.style.setProperty('--cat-dock-right', `${box.right - slot.left - bar}px`);
+  area.style.setProperty('--cat-dock-top', `${slot.top + (slot.height - dock) / 2 - box.top}px`);
+  area.style.setProperty('--cat-dock-right', `${box.right - slot.left - dock}px`);
 }
 new ResizeObserver(place).observe(reader);
 new ResizeObserver(place).observe(column); // a look's measure or a rail changes the text's edge
 new ResizeObserver(place).observe(byId('reader-head'));
 
-export function setSize(size: string): void {
-  scale = PET_SCALE[isPetSize(size) ? size : 'normal'];
-  area.style.setProperty('--pet-scale', String(scale));
+export function setSize(next: string): void {
+  size = isPetSize(next) ? next : 'normal';
+  area.style.setProperty('--pet-scale', String(PET_SCALE[size]));
   place();
 }
 void window.pastel.config.get().then((state) => { if (!isIpcError(state)) setSize(state.config.pet.size); });
