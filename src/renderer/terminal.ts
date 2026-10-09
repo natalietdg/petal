@@ -2,7 +2,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { toXterm } from './theme';
+import { MIN_CONTRAST, toXterm } from './theme';
 import { pathsFromUriList, quotePaths } from '../shared/quote-path';
 import type { TabId, Theme } from '../shared/types';
 
@@ -84,6 +84,7 @@ export function create(container: HTMLElement, theme: Theme, tabId: TabId): Term
     cursorBlink: false,
     macOptionIsMeta: true,
     theme: toXterm(theme),
+    minimumContrastRatio: MIN_CONTRAST,
   });
   const fit = new FitAddon();
   term.loadAddon(fit);

@@ -7,6 +7,9 @@ const ANSI_KEYS = [
   'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
 ] as const;
 
+// WCAG AA: xterm darkens or lightens any colour below this, incl. Claude Code's truecolor white on cream.
+export const MIN_CONTRAST = 4.5;
+
 export function toXterm({ terminal }: Theme): ITheme {
   const xtermTheme: ITheme = {
     background: terminal.background,
