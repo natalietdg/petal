@@ -95,13 +95,15 @@ const fixtures = (): SessionRecord[] => (isSnapshotRun() ? historyFixture.record
 
 const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd ?? '');
 
-export function listSessions(): ListedSession[] {
+// The past week, plus any older session she starred (kept) that is still on disk.
+export function listSessions(kept: ReadonlySet<string> = new Set()): ListedSession[] {
   const since = Date.now() - WINDOW_DAYS * DAY_MS;
+  const wanted = (file: string, mtime: number) => mtime >= since || kept.has(path.basename(file, '.jsonl'));
   const live = new Set(liveSessions().map((s) => s.sessionId));
   if (isSnapshotRun()) historyFixture.live.forEach((id) => live.add(id));
   const records = sessionFiles()
     .map((file) => { try { return { file, mtime: fs.statSync(file).mtimeMs }; } catch { return null; } }) // deleted mid-scan
-    .filter((entry): entry is { file: string; mtime: number } => Boolean(entry && entry.mtime >= since))
+    .filter((entry): entry is { file: string; mtime: number } => Boolean(entry && wanted(entry.file, entry.mtime)))
     .map(({ file }) => recordFor(file))
     .filter((record): record is SessionRecord => Boolean(record && (record.title || record.messages)));
   return [...fixtures(), ...records]

@@ -7,6 +7,7 @@ import * as organizer from './session-organizer';
 import * as links from './links-store';
 import * as tagsStore from './tags-store';
 import * as notesStore from './notes-store';
+import { load as loadConfig } from './config-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand, resumeArgs } from './resume-command';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
@@ -32,7 +33,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     const tags = tagsStore.load();
     const notes = notesStore.searchable();
     return {
-      sessions: history.listSessions().map((s) => ({
+      sessions: history.listSessions(new Set(loadConfig().history.favorites)).map((s) => ({
         ...s,
         hasFlow: flowStore.has(s.sessionId),
         organizer: labels[s.sessionId] ?? null,

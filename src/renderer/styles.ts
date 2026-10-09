@@ -33,6 +33,7 @@ import './scenes/tarot.css';
 import './scenes/scene-card.css';
 import './flow.css';
 import './history.css';
+import './favorites.css';
 import './notes.css';
 import './composer.css';
 import './prompt-dock.css';

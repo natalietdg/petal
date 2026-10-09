@@ -1,12 +1,14 @@
-// History's session list: one flat list, newest first or A–Z by title, filtered by the search box.
+// History's session list: all sessions or only starred ones, newest first or A–Z by title, filtered by the search box.
 import { el } from './dom';
 import { timeOf } from './format';
 import { dayLabel, list, openNote, search, state, titleOf, type Session } from './history-state';
 import { doResume, hoverPreview } from './history-preview';
+import * as favorites from './favorites';
+import { listedFor } from '../shared/favorites';
 
 const STATUSES = new Set(['done', 'in progress', 'blocked']);
 
-function row(session: Session): HTMLButtonElement {
+function row(session: Session): HTMLElement {
   const item = el('button', `history-row${session.sessionId === state.selectedId ? ' selected' : ''}`);
   item.type = 'button';
   item.dataset.sessionId = session.sessionId;
@@ -26,7 +28,10 @@ function row(session: Session): HTMLButtonElement {
   item.addEventListener('click', () => doResume(session.sessionId, openNote, false));
   item.addEventListener('mouseenter', () => hoverPreview(session.sessionId));
   item.addEventListener('focus', () => hoverPreview(session.sessionId));
-  return item;
+  // The star sits beside the row button, never inside it, so a click on it only stars.
+  const wrap = el('div', 'history-item');
+  wrap.append(item, favorites.star(session.sessionId, 'history-row-star'));
+  return wrap;
 }
 
 const byTitle = (a: Session, b: Session): number => titleOf(a).localeCompare(titleOf(b), undefined, { sensitivity: 'base' });
@@ -34,9 +39,13 @@ const byTitle = (a: Session, b: Session): number => titleOf(a).localeCompare(tit
 export function renderList(): void {
   const query = search.value.trim().toLowerCase();
   const haystack = (s: Session) => `${titleOf(s)} ${s.title} ${s.firstPrompt} ${s.organizer?.project ?? ''} ${s.notes ?? ''}`.toLowerCase();
-  const shown = state.sessions.filter((s) => !query || haystack(s).includes(query));
+  const listed = listedFor(state.sessions, favorites.ids(), state.listKind);
+  const shown = listed.filter((s) => !query || haystack(s).includes(query));
   // Sessions arrive newest first.
   if (state.sort === 'title') shown.sort(byTitle);
   list.replaceChildren(...shown.map(row));
-  if (!shown.length) list.append(el('p', 'history-empty', query ? 'No sessions match.' : 'No sessions this past week.'));
+  if (shown.length) return;
+  const favs = state.listKind === 'favorites';
+  const empty = query ? 'No sessions match.' : favs ? 'Star a session to keep it here.' : 'No sessions this past week.';
+  list.append(el('p', 'history-empty', empty));
 }

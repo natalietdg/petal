@@ -1,10 +1,12 @@
 // History: this past week's Claude sessions. Replaces the reader while open; Esc or Cmd+Y goes back.
 // The list and preview live in history-*.ts; this is the overlay shell that opens, refreshes and wires them.
 import * as overlays from './overlays';
-import { hooks, list, search, sortToggle, state, view, type PreviewMode, type SortBy } from './history-state';
+import { hooks, list, listTabs, search, sortToggle, state, view, type PreviewMode, type SortBy } from './history-state';
 import { renderList } from './history-list';
 import { renderPreview } from './history-preview';
 import * as reply from './history-reply';
+import * as favorites from './favorites';
+import type { HistoryListKind } from '../shared/favorites';
 import { byId, el, isIpcError } from './dom';
 
 export type { PreviewMode } from './history-state';
@@ -45,6 +47,18 @@ export async function open(): Promise<void> {
 export const close = (): void => overlays.hide('history');
 export const isOpen = (): boolean => overlays.isOpen('history');
 export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
+
+// All or Favorites: same rows, sort and preview; only which sessions are listed changes.
+function setListKind(kind: HistoryListKind): void {
+  state.listKind = kind;
+  for (const b of listTabs.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-selected', String(b.dataset.list === kind));
+  renderList();
+}
+listTabs.addEventListener('click', (event) => {
+  const kind = (event.target as HTMLElement).closest<HTMLElement>('[data-list]')?.dataset.list;
+  if (kind === 'all' || kind === 'favorites') setListKind(kind);
+});
+favorites.onChange(() => { if (isOpen()) renderList(); });
 
 button.addEventListener('click', toggle);
 search.addEventListener('input', renderList);
