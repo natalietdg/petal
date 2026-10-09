@@ -44,6 +44,10 @@ export const repoWrites: { tabId: string; command: string; newTab: boolean }[] =
 // A stand-in ~/.claude for Workflow › Setup (read only); null reads the real one.
 export const setupFixture: { claudeDir: string | null } = { claudeDir: null };
 
+// A stand-in ~/.claude for Customize › Formatting's output styles (read only); null reads the real one.
+// `opened` records Open in editor instead of launching an editor.
+export const stylesFixture: { claudeDir: string | null; opened: string[] } = { claudeDir: null, opened: [] };
+
 // Fake History sessions the harness adds to the list; their logs live in the snapshot folder, never ~/.claude.
 // `live` marks some as running in another terminal; `resumes` records the resume a background tab echoed instead.
 export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[] } = { records: [], live: [], resumes: [] };

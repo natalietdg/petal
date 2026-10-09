@@ -14,7 +14,7 @@ const button = byId('customize-button');
 
 const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'look', name: 'Look', summary: 'Theme, reading style, pet and her size, scene and your tarot birthday. Changes apply at once and tick the same menu items.' },
-  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style.' },
+  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, and the Claude Code output styles that ask for them.' },
   { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
   { id: 'organizer', name: 'Organizer', summary: 'An optional background agent that titles, files and tags your recent sessions for History. Off by default; it uses your Claude plan.' },
   { id: 'flowTitles', name: 'Flow titles', summary: 'The prompt that turns each step of a session into the state changes on the Flow view.' },

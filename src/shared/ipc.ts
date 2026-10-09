@@ -7,6 +7,7 @@ import type { ListedSession } from '../main/history';
 import type { StoredFlow } from '../main/flow-store';
 import type { MermaidExport } from '../main/flow-mermaid';
 import type { HookRun, HookTestResult } from '../main/response-hook';
+import type { OutputStyles } from '../main/output-styles';
 import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/session-organizer';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { TagsData } from '../main/tags-store';
@@ -87,6 +88,7 @@ export interface CustomizeState {
   look: { theme: string; reading: string; cat: string; scene: string };
   choices: { themes: Choice[]; reading: readonly Choice[]; cats: readonly Choice[]; scenes: readonly Choice[] };
   outputStyle: string | null;
+  outputStyles: OutputStyles;
   magazinePath: string | null;
   organizer: OrganizerStatus;
   hookRuns: HookRun[];
@@ -134,6 +136,7 @@ export interface InvokeChannels {
   'config:test-hook': { args: []; result: Guarded<HookTestResult> };
   'config:hook-runs': { args: []; result: Guarded<HookRun[]> };
   'config:organizer': { args: []; result: Guarded<OrganizerStatus> };
+  'config:open-style': { args: [file: string]; result: Guarded<Ok> };
   // This window's saved reader share, or null for the default.
   'layout:get-split': { args: []; result: Guarded<number | null> };
   'layout:save-split': { args: [fraction: number]; result: Guarded<Ok> };

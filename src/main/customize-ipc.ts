@@ -1,8 +1,7 @@
 // IPC for the Customize page: everything it shows in one read, config edits, the hook test, and Look setters.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import { CAT_CHOICES, SCENE_CHOICES, READING_CHOICES, isReadingChoice } from './menu';
 import * as organizer from './session-organizer';
 import * as configStore from './config-store';
@@ -10,16 +9,24 @@ import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
 import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from './look';
 import { handle, on } from './ipc';
+import { activeStyleName, defaultClaudeDir, listOutputStyles } from './output-styles';
+import { isSnapshotRun, stylesFixture } from './snapshot-mode';
 import type { CustomizeState } from '../shared/ipc';
 import type { Choice } from '../shared/types';
 
-// Her active Claude Code output style, read-only; null when unset or unreadable.
-function outputStyle(): string | null {
-  try {
-    return (JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8')) as { outputStyle?: string }).outputStyle ?? null;
-  } catch {
-    return null;
+// Snapshot runs read a stand-in ~/.claude when the harness sets one.
+const claudeDir = (): string => (isSnapshotRun() && stylesFixture.claudeDir) || defaultClaudeDir();
+
+// Opens a listed style in her default editor; any other path is refused.
+async function openStyle(file: string): Promise<{ ok: true }> {
+  if (!listOutputStyles(claudeDir()).styles.some((s) => s.file === file)) throw new Error('not one of your output styles');
+  if (isSnapshotRun()) {
+    stylesFixture.opened.push(file);
+    return { ok: true };
   }
+  const failure = await shell.openPath(file);
+  if (failure) throw new Error(failure);
+  return { ok: true };
 }
 
 const HANDOFF_SAMPLE = {
@@ -29,7 +36,7 @@ const HANDOFF_SAMPLE = {
 
 // Everything the Customize page shows, in one read.
 function customizeState(): CustomizeState {
-  const magazinePath = path.join(os.homedir(), '.claude', 'output-styles', 'magazine.md');
+  const magazinePath = path.join(claudeDir(), 'output-styles', 'magazine.md');
   const { theme, reading, cat, scene } = settings();
   return {
     config: configStore.load(),
@@ -42,7 +49,8 @@ function customizeState(): CustomizeState {
       cats: CAT_CHOICES,
       scenes: SCENE_CHOICES,
     },
-    outputStyle: outputStyle(),
+    outputStyle: activeStyleName(claudeDir()),
+    outputStyles: listOutputStyles(claudeDir()),
     magazinePath: fs.existsSync(magazinePath) ? magazinePath : null,
     organizer: organizer.status(),
     hookRuns: responseHook.recentRuns(),
@@ -61,6 +69,7 @@ export function registerCustomizeIpc(): void {
   handle('config:test-hook', () => responseHook.test());
   handle('config:hook-runs', () => responseHook.recentRuns());
   handle('config:organizer', () => organizer.status());
+  handle('config:open-style', (_event, file) => openStyle(file));
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
   on('look:reading', (_event, id) => { if (isReadingChoice(id)) applyReading(id); });
   on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });

@@ -1,9 +1,10 @@
-// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting.
+// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (shapes, output styles, preview).
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
 import { portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
+import { outputStylesCard } from './customize-styles';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
@@ -136,6 +137,7 @@ export function renderFormatting(): HTMLElement[] {
   column.append(markdown.render(PREVIEW));
   return [
     card('Shapes and treatments', table, style),
+    outputStylesCard(),
     card(`Live preview · ${readingName}`, note('Switch the reading style under Look to see this change.'), column),
   ];
 }

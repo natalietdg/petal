@@ -93,6 +93,7 @@ const api = {
     testHook: () => invoke('config:test-hook'),
     hookRuns: () => invoke('config:hook-runs'),
     organizer: () => invoke('config:organizer'),
+    openStyle: (file: string) => invoke('config:open-style', file),
   },
   workflow: {
     today: (openTabs?: NonNullable<InvokeArgs<'workflow:today'>[0]>['openTabs']) => invoke('workflow:today', { openTabs }),

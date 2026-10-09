@@ -52,6 +52,44 @@
 .cz-preview .headline { font-family: var(--display-font); font-size: 1.9em; line-height: 1.1; font-weight: 620; letter-spacing: -0.02em; margin-bottom: 0.5em; }
 .cz-preview .headline + p { font-size: 1.1em; padding-bottom: 0.8em; border-bottom: 1px solid var(--rule); }
 
+/* Output styles: one row per file; the open one shows its prompt as plain text in its own scroll box. */
+.cz-styles { display: flex; flex-direction: column; }
+.cz-style { border-top: 1px solid var(--rule); }
+.cz-style:first-child { border-top: 0; }
+.cz-style-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--reader-fg);
+  font: 14px var(--ui-font);
+  text-align: left;
+  cursor: pointer;
+}
+.cz-style-head[aria-expanded="true"] .cz-style-name { color: var(--next-ink); }
+.cz-style-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600; }
+.cz-style-desc { font-size: 13px; line-height: 1.4; color: var(--muted); }
+.cz-style-panel { padding: 0 0 12px; min-width: 0; }
+.cz-style-where { margin: 0 0 8px; }
+.cz-style-path { min-width: 0; font: 12px var(--mono-font); color: var(--muted); overflow-wrap: anywhere; }
+.cz-style-text {
+  box-sizing: border-box;
+  max-height: 420px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 12.5px/1.5 var(--mono-font);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden auto;
+}
+
 /* Settings rows: label, control, hint. */
 .cz-fields { display: grid; gap: 10px; }
 .cz-field { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 4px 14px; font-size: 14px; }

@@ -1,0 +1,169 @@
+// Customize › Formatting › Output styles (PASTEL_SNAPSHOT_MODE=customize-styles), against a stand-in ~/.claude:
+// every style listed with the right Active badge, a click shows the full prompt as plain text with its path,
+// a long prompt scrolls inside its box, nothing overflows sideways at 800px, in every theme; the folder is never written.
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { BrowserWindow } from 'electron';
+import type { Kit } from './snapshot';
+import { stylesFixture } from '../main/snapshot-mode';
+import { resizeOffscreen } from '../main/snapshot-window';
+
+const WIDTH = 800;
+const HEIGHT = 900;
+const LONG_TOKEN = `https://example.com/${'a-very-long-unbroken-path-segment-'.repeat(40)}end`;
+const LONG_PROMPT = [
+  'You are a careful assistant. This style has no frontmatter, so Petal names it after the file.',
+  '',
+  ...Array.from({ length: 220 }, (_, i) => `${i + 1}. **Rule ${i + 1}:** keep <tags> & markdown *as typed*, never rendered.`),
+  LONG_TOKEN,
+  'Last line of the long prompt.',
+].join('\n');
+const FILES: Record<string, string> = {
+  'research-paper.md': '---\nname: Research Paper\ndescription: Abstract first, numbered sections, references last.\n---\n\n# Research paper\n\nWrite like a short paper.\n',
+  'magazine.md': '---\nname: Magazine\ndescription: >\n  Headline, dek, sidebars and pull quotes\n  for Petal.\n---\n\nLay replies out like a magazine.\n',
+  'plain-notes.md': LONG_PROMPT,
+};
+const ACTIVE = 'Research Paper';
+
+// any: the page scripts below build their own shapes.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Page = any;
+
+const LIST = `(() => [...document.querySelectorAll('#customize .cz-style')].map((row) => ({
+  file: row.dataset.file,
+  name: row.querySelector('.cz-style-name').firstChild.textContent,
+  active: Boolean(row.querySelector('.cz-style-active')),
+  desc: row.querySelector('.cz-style-desc')?.textContent ?? '',
+  expanded: row.querySelector('.cz-style-head').getAttribute('aria-expanded'),
+})))()`;
+
+const OPEN_PANEL = `(() => {
+  const pre = document.querySelector('#customize .cz-style-text');
+  const pane = document.getElementById('customize');
+  if (!pre) return null;
+  const card = pre.closest('.cz-card').getBoundingClientRect();
+  const box = pre.getBoundingClientRect();
+  return {
+    text: pre.textContent, children: pre.children.length,
+    path: document.querySelector('#customize .cz-style-path')?.textContent,
+    scrollHeight: pre.scrollHeight, clientHeight: pre.clientHeight, scrollWidth: pre.scrollWidth, clientWidth: pre.clientWidth,
+    overflowY: getComputedStyle(pre).overflowY, whiteSpace: getComputedStyle(pre).whiteSpace,
+    boxRight: Math.round(box.right), cardRight: Math.round(card.right),
+    pageScrollWidth: pane.scrollWidth, pageClientWidth: pane.clientWidth,
+    docScrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
+  };
+})()`;
+
+const clickHead = (name: string): string => `[...document.querySelectorAll('#customize .cz-style')].find((row) => row.querySelector('.cz-style-name').firstChild.textContent === ${JSON.stringify(name)}).querySelector('.cz-style-head').click()`;
+
+const hashDir = (dir: string): string => {
+  const hash = crypto.createHash('sha256');
+  for (const name of fs.readdirSync(dir, { recursive: true }).map(String).sort()) {
+    const file = path.join(dir, name);
+    const stat = fs.statSync(file);
+    hash.update(`${name}:${stat.mtimeMs}:${stat.isFile() ? fs.readFileSync(file, 'utf8') : 'dir'}\n`);
+  }
+  return hash.digest('hex');
+};
+
+export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+  const { js, log, wait, waitFor, capture, themes, applyTheme, outDir } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} customize styles: ${what}`);
+  const [startWidth, startHeight] = win.getContentSize();
+
+  // The stand-in ~/.claude lives in the snapshot folder; her real one is never read here.
+  const claudeDir = path.join(outDir, 'styles-claude');
+  const stylesDir = path.join(claudeDir, 'output-styles');
+  fs.rmSync(claudeDir, { recursive: true, force: true });
+  fs.mkdirSync(stylesDir, { recursive: true });
+  for (const [name, text] of Object.entries(FILES)) fs.writeFileSync(path.join(stylesDir, name), text);
+  fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({ outputStyle: ACTIVE }));
+  const before = hashDir(claudeDir);
+  stylesFixture.claudeDir = claudeDir;
+  stylesFixture.opened = [];
+
+  const showFormatting = async () => {
+    await js("PastelTerm.customize.open('formatting')");
+    return waitFor(() => js("document.querySelector('#customize-tabs [aria-selected=\"true\"]')?.dataset.section === 'formatting' && document.querySelector('#customize .cz-card') !== null"), 5000);
+  };
+  const expected = Object.entries(FILES).map(([file, text]) => ({
+    file: path.join(stylesDir, file),
+    name: /^name: (.+)$/m.exec(text)?.[1] ?? path.basename(file, '.md'),
+  })).sort((a, b) => a.name.localeCompare(b.name));
+
+  try {
+    await js('PastelTerm.welcome?.close?.()');
+    resizeOffscreen(win, WIDTH, HEIGHT);
+    check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
+
+    const state: Page = await js('window.pastel.config.get()');
+    check(state.outputStyles?.dir === stylesDir && state.outputStyle === ACTIVE, `state reads the stand-in folder: ${state.outputStyles?.dir}, active ${state.outputStyle}`);
+
+    for (const theme of Object.keys(themes)) {
+      applyTheme(theme, { persist: false });
+      check(await showFormatting(), `${theme}: Formatting open`);
+      const rows: Page[] = await js(LIST);
+      if (rows.some((r) => r.expanded === 'true')) await js(clickHead(rows.find((r) => r.expanded === 'true').name)); // start collapsed
+      const listed: Page[] = await js(LIST);
+      check(JSON.stringify(listed.map((r) => [r.name, r.file])) === JSON.stringify(expected.map((e) => [e.name, e.file])), `${theme}: lists every style ${JSON.stringify(listed.map((r) => r.name))}`);
+      check(listed.filter((r) => r.active).map((r) => r.name).join() === ACTIVE, `${theme}: Active badge only on ${ACTIVE}: ${JSON.stringify(listed.filter((r) => r.active).map((r) => r.name))}`);
+      check(listed.find((r) => r.name === 'Magazine')?.desc === 'Headline, dek, sidebars and pull quotes for Petal.' && listed.find((r) => r.name === 'plain-notes')?.desc === '', `${theme}: descriptions from frontmatter, none without it`);
+      check(listed.every((r) => r.expanded === 'false') && !(await js("Boolean(document.querySelector('#customize .cz-style-text'))")), `${theme}: collapsed shows no prompt`);
+      await js("document.querySelector('#customize .cz-styles').closest('.cz-card').scrollIntoView({ block: 'start' })");
+      await capture(`customize-styles-collapsed-${theme}`);
+
+      await js(clickHead('plain-notes'));
+      const panel: Page = await waitFor(() => js(OPEN_PANEL), 3000);
+      check(panel && panel.text === LONG_PROMPT && panel.children === 0, `${theme}: click shows the full prompt as plain text (${panel?.text.length}/${LONG_PROMPT.length} chars, ${panel?.children} child elements)`);
+      check(panel?.path === path.join(stylesDir, 'plain-notes.md'), `${theme}: shows the file path ${panel?.path}`);
+      check(panel && panel.overflowY === 'auto' && panel.scrollHeight > panel.clientHeight + 200 && panel.clientHeight <= 420, `${theme}: long prompt scrolls inside its box (${panel?.clientHeight}px of ${panel?.scrollHeight}px)`);
+      const scrolled = await js("(() => { const pre = document.querySelector('#customize .cz-style-text'); pre.scrollTop = 300; return pre.scrollTop; })()");
+      check(scrolled > 0, `${theme}: the box scrolls (${scrolled}px)`);
+      check(panel && panel.scrollWidth <= panel.clientWidth && panel.boxRight <= panel.cardRight && panel.pageScrollWidth <= panel.pageClientWidth && panel.docScrollWidth <= panel.innerWidth,
+        `${theme}: no horizontal overflow at ${WIDTH}px ${JSON.stringify({ box: [panel?.scrollWidth, panel?.clientWidth], right: [panel?.boxRight, panel?.cardRight], page: [panel?.pageScrollWidth, panel?.pageClientWidth], doc: [panel?.docScrollWidth, panel?.innerWidth] })}`);
+      await js("document.querySelector('#customize .cz-style-text').scrollTop = 0; document.querySelector('#customize .cz-style-head[aria-expanded=\"true\"]').scrollIntoView({ block: 'start' })");
+      await capture(`customize-styles-open-${theme}`);
+
+      const opened = stylesFixture.opened.length;
+      await js("[...document.querySelectorAll('#customize .cz-style-panel button')].find((b) => b.textContent === 'Open in editor').click()");
+      check(await waitFor(() => stylesFixture.opened.length === opened + 1, 3000) && stylesFixture.opened.at(-1) === path.join(stylesDir, 'plain-notes.md'), `${theme}: Open in editor asks main to open ${stylesFixture.opened.at(-1)}`);
+
+      await js(clickHead('plain-notes'));
+      await wait(200);
+      check(!(await js("Boolean(document.querySelector('#customize .cz-style-text'))")), `${theme}: a second click collapses it`);
+      await js('PastelTerm.customize.close()');
+    }
+    applyTheme('paleSky', { persist: false });
+
+    // Open in editor refuses a path that is not one of the listed styles.
+    const refused: Page = await js(`window.pastel.config.openStyle(${JSON.stringify(path.join(claudeDir, 'settings.json'))})`);
+    check(refused?.error && stylesFixture.opened.every((f) => f.startsWith(stylesDir)), `Open in editor refuses other paths: ${JSON.stringify(refused)}`);
+
+    // Read-only: the folder is byte for byte what the harness wrote.
+    check(hashDir(claudeDir) === before, 'the stand-in ~/.claude is unchanged after every click');
+
+    // Reload on open: a file added while Customize is shut shows on the next open.
+    const added = path.join(stylesDir, 'added-later.md');
+    fs.writeFileSync(added, '---\nname: Added Later\n---\nNew.\n');
+    await showFormatting();
+    const afterAdd: Page[] = await js(LIST);
+    check(afterAdd.length === expected.length + 1 && afterAdd.some((r) => r.name === 'Added Later'), `reopening reloads the list: ${JSON.stringify(afterAdd.map((r) => r.name))}`);
+    await js('PastelTerm.customize.close()');
+    fs.rmSync(added);
+
+    // A missing folder: one short line, no list.
+    const empty = path.join(outDir, 'styles-claude-missing');
+    fs.rmSync(empty, { recursive: true, force: true });
+    fs.mkdirSync(empty);
+    stylesFixture.claudeDir = empty;
+    await showFormatting();
+    const missing: Page = await js("({ line: document.querySelector('#customize .cz-empty')?.textContent ?? null, rows: document.querySelectorAll('#customize .cz-style').length })");
+    check(missing.rows === 0 && /^No output styles folder at .+\.$/.test(missing.line ?? ''), `missing folder shows one line: ${JSON.stringify(missing)}`);
+    await js('PastelTerm.customize.close()');
+  } finally {
+    stylesFixture.claudeDir = null;
+    stylesFixture.opened = [];
+    resizeOffscreen(win, startWidth, startHeight);
+  }
+}
