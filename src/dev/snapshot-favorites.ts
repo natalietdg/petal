@@ -50,7 +50,7 @@ const READER_STAR = `(() => {
     .map((e) => e.getBoundingClientRect()).filter((o) => o.left < b.right && b.left < o.right && o.top < b.bottom && b.top < o.bottom);
   const head = document.getElementById('reader-head');
   return { shown: !s.hidden && b.width > 0, size: [Math.round(b.width), Math.round(b.height)], pressed: s.getAttribute('aria-pressed'),
-    session: s.dataset.sessionId, inEnd: Boolean(s.closest('.reader-head-end')), reachable: at === s || s.contains(at), overlaps: others.length,
+    session: s.dataset.sessionId, inEnd: Boolean(s.closest('.reader-head-end')), reachable: at === s || s.contains(at), at: at ? at.id || (typeof at.className === 'string' && at.className) || at.tagName : null, overlaps: others.length,
     sideways: head.scrollWidth - head.clientWidth };
 })()`;
 
@@ -134,7 +134,7 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
 
     // 4 Star from the reader header: the shown tab follows session B.
     await js(`(() => { const t = PastelTerm.tabs.active(); window.__favUpdate = t.update; PastelTerm.tabs.setUpdate(t.id, { ...(t.update ?? { state: 'live', replies: [], waiting: [], promptCount: 0, busy: false, cwd: null, repo: null, label: 'fixture' }), sessionId: ${JSON.stringify(FIXTURE_B)} }); window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: t.id })); })()`);
-    const reader = await waitFor(async () => { const r = await js(READER_STAR); return r.shown && r.session === FIXTURE_B ? r : null; }, 3000);
+    const reader = await waitFor(async () => { const r = await js(READER_STAR); return r.shown && r.session === FIXTURE_B && r.reachable ? r : null; }, 4000); // History may still be closing
     check(reader && reader.pressed === 'false' && reader.inEnd && reader.reachable && reader.overlaps === 0 && reader.size[0] <= 32 && reader.size[1] <= 32,
       `reader header star small, beside Notes, clickable, off: ${JSON.stringify(reader ?? await js(READER_STAR))}`);
     await js("document.getElementById('reader-star').click()");
