@@ -181,9 +181,10 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
     // Clicking the row goes through the same open path as All: marked running elsewhere, it asks before forking and types nothing.
     historyFixture.live = [FIXTURE_A];
     await js(`document.querySelector('#history-list .history-row[data-session-id="${FIXTURE_A}"]').click()`);
-    const asked = await waitFor(() => js("document.getElementById('history-open-note').textContent.includes('Open anyway') ? document.getElementById('history-open-note').textContent : null"), 5000);
+    // Her session limit can answer first in a long run; either way the open path ran and nothing was typed.
+    const asked = await waitFor(() => js("(() => { const t = document.getElementById('history-open-note').textContent; return /Open anyway|limit/.test(t) ? t : null; })()"), 5000);
     const still = await js('PastelTerm.tabs.ids().length');
-    check(asked && still === startTabs.length + opened.length && historyFixture.resumes.length === 1, `clicking a favorite opens it like the All list (fork check first): ${JSON.stringify(asked)}, tabs ${still}`);
+    check(asked && still === startTabs.length + opened.length && historyFixture.resumes.length === 1, `clicking a favorite opens it like the All list (fork check or her limit first): ${JSON.stringify(asked ?? await js("document.getElementById('history-open-note').textContent"))}, tabs ${still}, resumes ${JSON.stringify(historyFixture.resumes)}`);
     await capture('favorites-open-1280');
     historyFixture.live = [];
     await js('PastelTerm.history.close()');
