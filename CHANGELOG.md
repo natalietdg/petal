@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.1] · 2026-10-12
+
+- Removes developer test code from the app bundle.
+
 ## [1.0.0] · unreleased
 
 The first public Petal: a calm, readable terminal for Claude Code.

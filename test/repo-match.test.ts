@@ -18,7 +18,7 @@ describe('fuzzyScore', () => {
 
 describe('rankRepos', () => {
   const repos = [
-    repo('admin-v3', '~/work/admin-v3', 1),
+    repo('admin-console', '~/work/admin-console', 1),
     repo('pastel-term', '~/Code/pastel-term', 2),
     repo('sweep', '~/side/sweep', 3),
     repo('notes', '~/petal-notes/notes', 4),
@@ -30,11 +30,11 @@ describe('rankRepos', () => {
 
   it('ranks the tighter name match first', () => {
     expect(rankRepos('sweep', repos)[0]?.name).toBe('sweep');
-    expect(rankRepos('adm', repos)[0]?.name).toBe('admin-v3');
+    expect(rankRepos('adm', repos)[0]?.name).toBe('admin-console');
   });
 
   it('with no query, lists the most recently touched first', () => {
-    expect(rankRepos('  ', repos).map((r) => r.name)).toEqual(['notes', 'sweep', 'pastel-term', 'admin-v3']);
+    expect(rankRepos('  ', repos).map((r) => r.name)).toEqual(['notes', 'sweep', 'pastel-term', 'admin-console']);
   });
 
   it('drops repos that match neither name nor path', () => {
@@ -51,7 +51,7 @@ describe('parseRepoCommand', () => {
   it('reads checkout and cd with one name, any case', () => {
     expect(parseRepoCommand('checkout pastel-term')).toBe('pastel-term');
     expect(parseRepoCommand('  CD  Petal ')).toBe('Petal');
-    expect(parseRepoCommand('Checkout admin-v3')).toBe('admin-v3');
+    expect(parseRepoCommand('Checkout admin-console')).toBe('admin-console');
   });
 
   it('leaves paths, flags, variables and sentences to the shell or Claude', () => {

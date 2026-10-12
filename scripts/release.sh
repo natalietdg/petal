@@ -52,7 +52,7 @@ print "release: preflight ok (Petal $VERSION, ${CSC_NAME#$PREFIX}, profile $PROF
 # Build, sign and notarise. electron-builder wants the identity without its "Developer ID Application: " prefix,
 # and reads the notary profile from APPLE_KEYCHAIN_PROFILE; @electron/notarize staples the .app.
 rm -rf "$OUT"
-npx electron-vite build
+PASTEL_RELEASE_BUILD=1 npx electron-vite build # compiles the src/dev snapshot harness out
 env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_API_KEY -u APPLE_API_KEY_ID -u APPLE_API_ISSUER \
   APPLE_KEYCHAIN_PROFILE="$PROFILE" \
   npx electron-builder --mac --publish never -c.mac.identity="${CSC_NAME#$PREFIX}" -c.mac.notarize=true
@@ -73,11 +73,13 @@ for f in "$DMG" "${ZIP[1]}" "$OUT/latest-mac.yml"; do
   [[ -f $f ]] || { print -u2 "release: missing $f"; exit 1; }
 done
 verify_app "$OUT/mac-universal/Petal.app" "the built app"
+scripts/privacy-scan.sh "$OUT/mac-universal/Petal.app" "the built app"
 
 SCRATCH=$(mktemp -d)
 trap 'hdiutil detach -quiet "$SCRATCH/dmg" 2>/dev/null; rm -rf "$SCRATCH"' EXIT
 hdiutil attach -quiet -nobrowse -readonly -mountpoint "$SCRATCH/dmg" "$DMG"
 verify_app "$SCRATCH/dmg/Petal.app" "the app inside the dmg"
+scripts/privacy-scan.sh "$SCRATCH/dmg/Petal.app" "the app inside the dmg"
 ditto -x -k "${ZIP[1]}" "$SCRATCH/zip"
 verify_app "$SCRATCH/zip/Petal.app" "the app inside the zip"
 

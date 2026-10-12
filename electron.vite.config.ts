@@ -1,8 +1,12 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'electron-vite';
 
+// PASTEL_RELEASE_BUILD=1 (set by scripts/release.sh) compiles the src/dev snapshot harness out of the bundle.
+const includeDevHarness = process.env.PASTEL_RELEASE_BUILD !== '1';
+
 export default defineConfig({
   main: {
+    define: { __PASTEL_DEV_HARNESS__: JSON.stringify(includeDevHarness) },
     build: {
       rollupOptions: { input: { index: resolve(__dirname, 'src/main/main.ts') } },
     },

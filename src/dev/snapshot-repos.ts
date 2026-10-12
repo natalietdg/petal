@@ -21,12 +21,12 @@ function makeRepo(root: string, relative: string, head: string): void {
 function buildFakeHome(root: string): void {
   fs.rmSync(root, { recursive: true, force: true });
   makeRepo(root, 'petal-notes', 'ref: refs/heads/main\n');
-  makeRepo(root, 'Code/admin-v3', 'ref: refs/heads/feature/auth-migration\n');
+  makeRepo(root, 'Code/admin-console', 'ref: refs/heads/feature/login-refresh\n');
   makeRepo(root, 'Code/side/projects/sweep', 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678\n');
   makeRepo(root, `Code/${QUOTED_NAME}`, 'ref: refs/heads/main\n');
   makeRepo(root, 'Library/hidden', 'ref: refs/heads/main\n');
   makeRepo(root, 'Code/node_modules/dep', 'ref: refs/heads/main\n');
-  makeRepo(root, 'Code/admin-v3/vendor/nested', 'ref: refs/heads/main\n');
+  makeRepo(root, 'Code/admin-console/vendor/nested', 'ref: refs/heads/main\n');
 }
 
 export async function reposCheck(kit: Kit, { win, activeSession, openTab }: TabsDeps & { win: BrowserWindow }): Promise<void> {
@@ -41,7 +41,7 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
   buildFakeHome(fakeHome);
   const index = await repoIndex.refresh();
   const found = index.repos.map((r) => `${r.shortPath}@${r.branch}`).sort();
-  const expected = ['~/Code/admin-v3@feature/auth-migration', `~/Code/${QUOTED_NAME}@main`, '~/Code/side/projects/sweep@a1b2c3d', '~/petal-notes@main'].sort();
+  const expected = ['~/Code/admin-console@feature/login-refresh', `~/Code/${QUOTED_NAME}@main`, '~/Code/side/projects/sweep@a1b2c3d', '~/petal-notes@main'].sort();
   check(JSON.stringify(found) === JSON.stringify(expected),
     `scan found the 4 fake repos, skipped Library, node_modules and nested: ${JSON.stringify(found)}`);
 
@@ -72,7 +72,7 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
 
   await type('adm');
   const filtered = await state();
-  check(filtered.rows[0] === 'admin-v3' && filtered.rows.length === 1, `typing "adm" filters to admin-v3: ${JSON.stringify(filtered.rows)}`);
+  check(filtered.rows[0] === 'admin-console' && filtered.rows.length === 1, `typing "adm" filters to admin-console: ${JSON.stringify(filtered.rows)}`);
   await type('code');
   await key('ArrowDown');
   const moved = await state();

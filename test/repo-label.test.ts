@@ -22,10 +22,10 @@ describe('repoLabel', () => {
   });
 
   it('walks up from a subfolder to the toplevel', () => {
-    const repo = makeRepo(tempDir(), 'admin-v3', 'ref: refs/heads/feature/auth-migration\n');
+    const repo = makeRepo(tempDir(), 'admin-console', 'ref: refs/heads/feature/login-refresh\n');
     const deep = path.join(repo, 'src', 'pages');
     fs.mkdirSync(deep, { recursive: true });
-    expect(repoLabel(deep)).toBe('admin-v3 · feature/auth-migration');
+    expect(repoLabel(deep)).toBe('admin-console · feature/login-refresh');
   });
 
   it('shows a short sha when HEAD is detached', () => {

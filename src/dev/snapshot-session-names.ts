@@ -22,15 +22,15 @@ interface Fixture {
 }
 
 // Titled by the organizer, by Claude Code (long, so it is cut), by her first prompt only, and not at all yet.
-const ORGANIZED: Fixture = { id: '5e5e5e01-0000-4000-8000-0000000000e1', folder: 'BusinessLogic-Report', claudeName: 'businesslogic-report-59', organizer: 'Send countryCode to VN email template', aiTitle: 'Email template country', prompt: 'the VN email template needs the countryCode' };
-const AI_TITLED: Fixture = { id: '5e5e5e02-0000-4000-8000-0000000000e2', folder: 'BusinessLogic-Finance', claudeName: 'businesslogic-finance-02', organizer: null, aiTitle: 'Traced stale fees spec to the settlement job that still reads the old fee table every night', prompt: 'why are the fees stale?' };
-const PROMPT_ONLY: Fixture = { id: '5e5e5e03-0000-4000-8000-0000000000e3', folder: 'BusinessLogic-Report', claudeName: 'businesslogic-report-99', organizer: null, aiTitle: null, prompt: 'Bank name Vietnamese update to staging' };
-const UNTITLED: Fixture = { id: '5e5e5e04-0000-4000-8000-0000000000e4', folder: 'natalieleong', claudeName: 'natalieleong-a7', organizer: null, aiTitle: null, prompt: '' };
+const ORGANIZED: Fixture = { id: '5e5e5e01-0000-4000-8000-0000000000e1', folder: 'widget-service', claudeName: 'widget-service-59', organizer: 'Send locale to the welcome email template', aiTitle: 'Email template locale', prompt: 'the welcome email template needs the locale' };
+const AI_TITLED: Fixture = { id: '5e5e5e02-0000-4000-8000-0000000000e2', folder: 'billing-service', claudeName: 'billing-service-02', organizer: null, aiTitle: 'Traced stale prices spec to the nightly job that still reads the old price table every night', prompt: 'why are the prices stale?' };
+const PROMPT_ONLY: Fixture = { id: '5e5e5e03-0000-4000-8000-0000000000e3', folder: 'widget-service', claudeName: 'widget-service-99', organizer: null, aiTitle: null, prompt: 'Product name translations update to test' };
+const UNTITLED: Fixture = { id: '5e5e5e04-0000-4000-8000-0000000000e4', folder: 'acme', claudeName: 'acme-a7', organizer: null, aiTitle: null, prompt: '' };
 const OPEN = [ORGANIZED, AI_TITLED, PROMPT_ONLY, UNTITLED];
 // Closed from the panel under the old rule's folder name; listed again it gets its real title.
-const CLOSED: Fixture = { id: '5e5e5e05-0000-4000-8000-0000000000e5', folder: 'Patch-Script', claudeName: 'patch-script-3c', organizer: null, aiTitle: 'Fix settlement invoice dates and currency symbols in the monthly PDF', prompt: 'invoice dates are off' };
+const CLOSED: Fixture = { id: '5e5e5e05-0000-4000-8000-0000000000e5', folder: 'Patch-Script', claudeName: 'patch-script-3c', organizer: null, aiTitle: 'Fix invoice dates and currency symbols in the monthly PDF', prompt: 'invoice dates are off' };
 const LATE_TITLE = 'Monthly statement job trigger';
-const HOST_ID = /^[\w.]+-[0-9a-f]{2,4}$/; // "natalieleong-a7"
+const HOST_ID = /^[\w.]+-[0-9a-f]{2,4}$/; // "acme-a7"
 
 const fullTitle = (f: Fixture, organizer = f.organizer): string =>
   sessionTitle({ organizerTitle: organizer, title: f.aiTitle ?? f.prompt, firstPrompt: f.prompt, cwd: f.folder });
@@ -174,7 +174,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     check(expected(ORGANIZED).text === ORGANIZED.organizer, `organizer title wins: ${expected(ORGANIZED).text}`);
     check(expected(AI_TITLED).text.length <= 60 && expected(AI_TITLED).text.endsWith('…'), `a long title is cut at 60 with an ellipsis: ${expected(AI_TITLED).text}`);
     check(expected(PROMPT_ONLY).text === PROMPT_ONLY.prompt, `no title yet: the first prompt: ${expected(PROMPT_ONLY).text}`);
-    check(expected(UNTITLED).text === 'natalieleong · new session', `no title or prompt: folder + new session: ${expected(UNTITLED).text}`);
+    check(expected(UNTITLED).text === 'acme · new session', `no title or prompt: folder + new session: ${expected(UNTITLED).text}`);
 
     // History's preview header and the reader header say the same.
     const preview = await waitFor(() => js("(() => { const h = document.querySelector('#history-preview .history-preview-title'); return h ? { text: h.textContent, tip: h.title } : null; })()"), 5000);
@@ -217,8 +217,8 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     const inHistory = await waitFor(() => surfacesAgree(UNTITLED, LATE_TITLE, ['history']), 5000);
     check(inHistory, `and History: ${JSON.stringify(inHistory ?? (await js(SURFACES)).out[UNTITLED.id])}`);
     // History already open when it lands: it re-lists on its own.
-    writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE, [PROMPT_ONLY.id]: 'Vietnamese bank names on staging' });
-    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, 'Vietnamese bank names on staging'), 8000);
+    writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE, [PROMPT_ONLY.id]: 'Product name translations on test' });
+    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, 'Product name translations on test'), 8000);
     check(live, `a title landing while History is open renames its row, tab and panel row: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
     await js('PastelTerm.history.close()');
 

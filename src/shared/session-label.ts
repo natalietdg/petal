@@ -15,7 +15,7 @@ export const NO_SESSION_LABEL = 'Shell'; // a tab with no Claude in it is not a 
 
 const flat = (text: string | null | undefined): string => stripPasted(text ?? '').replace(/\s+/g, ' ').trim();
 
-// "~/BusinessLogic-Report" or "/Users/x/BusinessLogic-Report" -> "BusinessLogic-Report".
+// "~/widget-service" or "/home/x/widget-service" -> "widget-service".
 export const folderName = (cwd: string | null | undefined): string => (cwd ?? '').replace(/\/+$/, '').split('/').pop() ?? '';
 
 // Full title: organizer, Claude Code's title, first prompt, then "<folder> · new session".

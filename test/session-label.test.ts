@@ -6,7 +6,7 @@ import { folderName, NEW_SESSION, SESSION_LABEL_MAX, sessionLabelText, sessionTi
 import { snapshot } from '../src/main/sessions-monitor';
 
 describe('sessionTitle priority (History order)', () => {
-  const all = { organizerTitle: 'Organizer title', title: 'Claude title', firstPrompt: 'first prompt', cwd: '/Users/n/BusinessLogic-Report' };
+  const all = { organizerTitle: 'Organizer title', title: 'Claude title', firstPrompt: 'first prompt', cwd: '/Users/n/widget-service' };
 
   it('prefers the organizer title', () => {
     expect(sessionTitle(all)).toBe('Organizer title');
@@ -22,8 +22,8 @@ describe('sessionTitle priority (History order)', () => {
   });
 
   it('then the folder name and "new session"', () => {
-    expect(sessionTitle({ cwd: '/Users/n/BusinessLogic-Report' })).toBe(`BusinessLogic-Report · ${NEW_SESSION}`);
-    expect(sessionTitle({ cwd: '~/BusinessLogic-Report/' })).toBe(`BusinessLogic-Report · ${NEW_SESSION}`);
+    expect(sessionTitle({ cwd: '/Users/n/widget-service' })).toBe(`widget-service · ${NEW_SESSION}`);
+    expect(sessionTitle({ cwd: '~/widget-service/' })).toBe(`widget-service · ${NEW_SESSION}`);
   });
 
   it('says "New session" with nothing at all', () => {
@@ -36,18 +36,18 @@ describe('sessionTitle priority (History order)', () => {
   });
 
   it('never returns the "<folder>-<id>" name Claude Code writes to its session file', () => {
-    expect(sessionTitle({ cwd: '/Users/natalieleong' })).toBe('natalieleong · new session');
-    expect(sessionTitle({ cwd: '/Users/natalieleong' })).not.toMatch(/^[\w.-]+-[0-9a-f]{2,}$/);
+    expect(sessionTitle({ cwd: '/Users/acme' })).toBe('acme · new session');
+    expect(sessionTitle({ cwd: '/Users/acme' })).not.toMatch(/^[\w.-]+-[0-9a-f]{2,}$/);
   });
 });
 
 describe('sessionLabelText truncation', () => {
   it('keeps short titles whole', () => {
-    expect(sessionLabelText('Send countryCode to VN email')).toBe('Send countryCode to VN email');
+    expect(sessionLabelText('Send locale to welcome email')).toBe('Send locale to welcome email');
   });
 
   it(`cuts long ones at ${SESSION_LABEL_MAX} characters with an ellipsis`, () => {
-    const long = 'Fix settlement invoice dates and currency symbols across every report we send out monthly';
+    const long = 'Fix invoice dates and currency symbols across every report we send out monthly';
     const cut = sessionLabelText(long);
     expect(cut.length).toBeLessThanOrEqual(SESSION_LABEL_MAX);
     expect(cut.endsWith('…')).toBe(true);
@@ -71,9 +71,9 @@ describe('folderName', () => {
 describe('Sessions panel rows', () => {
   it("never use Claude Code's session-file name", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-label-'));
-    const session = { pid: 1, sessionId: 'aaaaaaaa-0000-4000-8000-000000000001', cwd: '/Users/natalieleong', kind: 'interactive', status: 'idle', name: 'natalieleong-a7' };
+    const session = { pid: 1, sessionId: 'aaaaaaaa-0000-4000-8000-000000000001', cwd: '/Users/acme', kind: 'interactive', status: 'idle', name: 'acme-a7' };
     const [row] = snapshot({ detailed: true }, [session], () => dir).rows ?? [];
-    expect(row?.name).toBe('natalieleong · new session');
+    expect(row?.name).toBe('acme · new session');
     const named = snapshot({ detailed: true, nameOf: () => 'Traced stale fees spec' }, [session], () => dir).rows ?? [];
     expect(named[0]?.name).toBe('Traced stale fees spec');
   });

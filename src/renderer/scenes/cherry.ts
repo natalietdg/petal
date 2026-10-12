@@ -1,5 +1,5 @@
 // Twice the cats' height, with a long branch reaching out over the cat; that canopy is drawn in front of her.
-// Sakura picnic: gingham blanket and wicker basket at the tree's foot, a far torii on rolling hills.
+// Cherry blossom picnic: gingham blanket and wicker basket at the tree's foot, a far torii on rolling hills.
 import {
   NEIGHBOURS, inCircle, layers, onSegments, outlined, stamp, tidy, barkCell, type CellClass, type Scene, type Segment, type Shape, type Circle, type Trunk,
 } from './kit';

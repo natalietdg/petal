@@ -25,12 +25,12 @@ const section = (n: number) => [
   '',
   '| Step | Source | Destination | Idempotent | Rows | Owner | Notes |',
   '|---|---|---|---|---|---|---|',
-  '| Read | employer_payroll_cycles_with_a_very_long_name | payroll_cycle_destination_table_name_for_vietnam | yes | 12,480 | platform-data-engineering | reads in pages of 500 rows |',
-  '| Write | cosmos://paywatch-my/containers/cycles_VN_with_suffix | postgres://staging.paywatch.internal/payroll_cycles | yes | 12,480 | platform-data-engineering | skips rows already present |',
-  '| Code | `employer_payroll_cycles_with_a_very_long_name` | `payroll_cycle_destination_table_name` | yes | 1 | you | code spans |',
+  '| Read | widget_order_history_with_a_very_long_name | order_history_destination_table_name_for_archive | yes | 12,480 | widget-data-engineering | reads in pages of 500 rows |',
+  '| Write | nosql://acme-store/containers/orders_archive_with_suffix | postgres://db.example.test/orders_archive | yes | 12,480 | widget-data-engineering | skips rows already present |',
+  '| Code | `widget_order_history_with_a_very_long_name` | `order_history_destination_table_name` | yes | 1 | you | code spans |',
   '',
   '```',
-  'npx tsx scripts/backfill-cycles.ts --dry-run --country VN --from 2026-01-01 --to 2026-10-01 --page-size 500',
+  'npx tsx scripts/backfill-orders.ts --dry-run --region eu --from 2026-01-01 --to 2026-10-01 --page-size 500',
   '```',
   '',
 ].join('\n');
@@ -149,7 +149,7 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
 
   try {
     applyTheme('paleSky', { persist: false });
-    await js("PastelTerm.cat.setCat('kero'); PastelTerm.cat.setScene('planetarium')");
+    await js("PastelTerm.cat.setCat('mika'); PastelTerm.cat.setScene('planetarium')");
     await js("window.pastel.config.save({ history: { listCollapsed: false } })");
 
     // 1-3 in History: docked reply box, no sideways scroll, cat off the content; notes closed and open.

@@ -145,8 +145,8 @@ app.whenReady().then(() => {
   repoIndex.refreshIfStale(); // in the background, so ⌘O opens on a fresh list
   // The organizer starts the same way in snapshot runs, so they prove the default; its passes never call Claude there.
   organizer.start({ openSessionIds });
-  // The dev harness is a separate chunk, loaded only in snapshot runs.
-  if (isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
+  // The dev harness is a separate chunk, loaded only in snapshot runs; release builds compile it out.
+  if (__PASTEL_DEV_HARNESS__ && isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   void startUpdater(liveEnv()); // off in snapshot, dev and non-Developer ID builds
 });
 

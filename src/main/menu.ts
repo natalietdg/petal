@@ -12,7 +12,7 @@ export const CAT_CHOICES: readonly Choice[] = [
 ];
 // Ids match SCENES in renderer/scenes.js; 'none' shows the cat alone.
 export const SCENE_CHOICES: readonly Choice[] = [
-  ['none', 'No Scene'], ['cherry', 'Sakura Picnic'], ['beach', 'Seaside Afternoon'], ['night', 'City Lights'], ['starlit', 'Starlit Window'],
+  ['none', 'No Scene'], ['cherry', 'Cherry Blossom Picnic'], ['beach', 'Seaside Afternoon'], ['night', 'City Lights'], ['starlit', 'Starlit Window'],
   ['planetarium', 'Planetarium'], ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['izakaya', 'Izakaya'], ['howl', "Wizard's Loft"],
   ['study', "Wizard's Study"], ['midcentury', 'Vinyl Lounge'], ['tarot', 'Tarot Room'],
 ];

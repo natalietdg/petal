@@ -7,7 +7,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { addStatusFixture, FIXTURE_STATUS } from './snapshot-history-fixture';
 import { READING_CHOICES } from '../main/menu';
 
-const LONG_PATH = '/Users/natalieleong/CascadeProjects/pastel-reader-steps/src/renderer/some/deeply/nested/folder/with/a/very-long-file-name.ts';
+const LONG_PATH = '/Users/you/Code/side-projects/pastel-reader-steps/src/renderer/some/deeply/nested/folder/with/a/very-long-file-name.ts';
 
 // Check lines in each form she might get: under the action, a blank line apart, a sub-item, and outside the list.
 const SECTIONED = [

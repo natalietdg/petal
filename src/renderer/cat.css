@@ -328,7 +328,7 @@
 /* Every scene always moves: petals and leaves drift, waves roll, stars twinkle, lights glow.
    Working speeds the lights up and adds extras (crab, windsurfer, shooting star). */
 #cat .scene-rug .scene-moving { animation: petals 3.6s steps(12) infinite; }
-/* Sakura petals: four waves, each its own pink, pace and start, falling in whole sprite pixels. */
+/* Cherry blossom petals: four waves, each its own pink, pace and start, falling in whole sprite pixels. */
 .scene-cherry .sc-pa { fill: #EE9DB5; } .scene-cherry .sc-pb { fill: #F4B6C8; }
 .scene-cherry .sc-pc { fill: #E07FA0; } .scene-cherry .sc-pd { fill: #F2A7BF; }
 #cat .scene-cherry .sc-pa { animation: petal-fall 5s steps(7) infinite; }

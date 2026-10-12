@@ -12,7 +12,7 @@ import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 
 const MARKER = 'Pet size fixture';
-const WIDE_ROW = '| employer_payroll_cycles_with_a_very_long_name | payroll_cycle_destination_table_name_for_vietnam | cosmos://paywatch-my/containers/cycles_VN_with_suffix | yes | 12,480 | platform-data-engineering | reads in pages of 500 rows |';
+const WIDE_ROW = '| widget_order_history_with_a_very_long_name | order_history_destination_table_name_for_archive | nosql://acme-store/containers/orders_archive_with_suffix | yes | 12,480 | widget-data-engineering | reads in pages of 500 rows |';
 const PARAGRAPH = 'The backfill checks each row before it writes, so a second run finds the rows already there and moves on. That is what makes it safe to stop halfway and start again later without cleaning anything up first, even after a long pause.';
 const REPLY = [
   `**${MARKER}: the wide table sits at the top.**`, '',
