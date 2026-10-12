@@ -4,6 +4,8 @@ import * as tabs from './tabs';
 import * as composer from './composer';
 import * as overlays from './overlays';
 import { byId, el, isIpcError } from './dom';
+import { sessionNameEl } from './session-name';
+import { sessionLabelText } from '../shared/session-label';
 import type { SessionRow, SubagentRow } from '../main/sessions-monitor';
 import type { ClosedSession } from '../main/closed-store';
 import { agentsBadgeText, sessionsPillText, type SessionsView } from '../shared/ipc';
@@ -122,7 +124,7 @@ function renderRow(row: SessionRow): HTMLLIElement {
   head.setAttribute('aria-expanded', String(expandedIds.has(row.sessionId)));
 
   const title = el('span', 'session-title');
-  title.append(el('span', 'session-name', row.name));
+  title.append(sessionNameEl('span', 'session-name', row.name));
   if (row.isOwn) title.append(el('span', 'session-own', 'this window'));
   if (row.subagents.length) {
     const badge = el('span', 'session-agents-badge', agentsBadgeText(row.subagents.length));
@@ -165,7 +167,7 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
   if (!oldest) {
     banner.append(el('p', 'sessions-limit-hint', 'None of them are idle right now.'));
   } else if (confirming?.where === 'limit' && confirming.sessionId === oldest.sessionId) {
-    banner.append(confirmLine(oldest.sessionId, `Close the oldest idle Claude, “${oldest.name}”?`));
+    banner.append(confirmLine(oldest.sessionId, `Close the oldest idle Claude, “${sessionLabelText(oldest.name)}”?`));
   } else {
     banner.append(textButton('Close oldest idle', 'flow-button sessions-limit-close', () => { confirming = { sessionId: oldest.sessionId, where: 'limit' }; refresh(); }));
   }
@@ -193,7 +195,7 @@ function renderClosed(entry: ClosedSession): HTMLLIElement {
   const item = el('li', 'closed-row');
   item.dataset.sessionId = entry.sessionId;
   const text = el('div', 'closed-text');
-  text.append(el('span', 'session-name', entry.title), el('span', 'session-meta', [entry.cwd, sinceText(entry.closedAt, 'closed')].filter(Boolean).join(' · ')));
+  text.append(sessionNameEl('span', 'session-name', entry.title), el('span', 'session-meta', [entry.cwd, sinceText(entry.closedAt, 'closed')].filter(Boolean).join(' · ')));
   item.append(text, textButton('Reopen', 'flow-button closed-reopen', () => reopen(entry, false)));
   const note = notes.get(entry.sessionId);
   if (note) item.append(el('p', 'session-note', note));

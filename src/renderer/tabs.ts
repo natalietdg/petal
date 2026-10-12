@@ -3,6 +3,8 @@ import * as terminal from './terminal';
 import { toXterm } from './theme';
 import * as pendingEcho from './pending-echo';
 import { byId, el, query } from './dom';
+import { setSessionName } from './session-name';
+import { NO_SESSION_LABEL } from '../shared/session-label';
 import type { Terminal } from '@xterm/xterm';
 import type { TabId, TabReaderUpdate, Theme } from '../shared/types';
 
@@ -46,7 +48,7 @@ function tabElement(id: TabId): HTMLDivElement {
   close.type = 'button';
   close.title = 'Close tab (⌘W)';
   close.addEventListener('click', (event) => { event.stopPropagation(); requestClose(id); });
-  element.append(el('span', 'tab-dot'), el('span', 'tab-label', 'Shell'), close);
+  element.append(el('span', 'tab-dot'), el('span', 'tab-label', NO_SESSION_LABEL), close);
   element.addEventListener('click', () => activate(id));
   return element;
 }
@@ -123,8 +125,21 @@ export function setUpdate(id: TabId, update: TabReaderUpdate): void {
   tab.update = update;
   tab.pending = pendingEcho.reconcile(tab.pending, update);
   tab.element.classList.toggle('busy', Boolean(update.busy));
-  query(tab.element, '.tab-label').textContent = update.label;
-  tab.element.title = update.label;
+  showLabel(tab, update.label);
+}
+
+// The session's shared name on the tab; the whole tab hovers with the full title.
+function showLabel(tab: Tab, label: string): void {
+  setSessionName(query(tab.element, '.tab-label'), label);
+  tab.element.title = label;
+}
+
+// A title that landed after the last reader update (the organizer named it, Claude Code titled it).
+export function setLabel(id: TabId, label: string): void {
+  const tab = tabs.get(id);
+  if (!tab?.update) return;
+  tab.update = { ...tab.update, label };
+  showLabel(tab, label);
 }
 
 export function applyTheme(next: Theme): void {

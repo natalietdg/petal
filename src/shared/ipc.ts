@@ -44,7 +44,7 @@ export interface SessionsView extends SessionsSnapshot {
 }
 
 // The Agents dropdown: a session's subagents, and the one opened in the right panel.
-export type AgentsView = AgentsList & { sessionId: string | null };
+export type AgentsView = AgentsList & { sessionId: string | null; sessionLabel: string | null }; // the shared session name
 export type AgentOpenResult = (TimelineStart & { agentId: string }) | { missing: true };
 
 // "Agents · 3 running"; with none running, how many ran today.
@@ -210,6 +210,8 @@ export interface EventChannels {
   'pty:data': { tabId: TabId; data: string };
   'reader:replies': TabReaderUpdate;
   'tab:closed': { tabId: TabId };
+  'tab:label': { tabId: TabId; label: string }; // its session got a (new) title after the last reader update
+  'session:titles': void; // some open session's title changed; History re-lists
   'tabs:new': { background: boolean };
   'tabs:new-session': void; // ⌘T: a tab meant for Claude, so her limit applies
   'tabs:close-active': void;

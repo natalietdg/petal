@@ -91,7 +91,7 @@ describe('toMarkdown', () => {
   it('keeps only the newest turns under the 120 KB cap', () => {
     const big = 'x'.repeat(50 * 1024);
     const md = toMarkdown({ ...record, title: '' }, [1, 2, 3, 4].map((n) => ({ prompt: `q${n}`, reply: [big] })));
-    expect(md).toContain('# Earlier session: Untitled session');
+    expect(md).toContain('# Earlier session: w · new session');
     expect(md).toContain('- Showing the newest 2 of 4 turns');
     expect(md).not.toContain('## You\n\nq2');
     expect(md).toContain('## You\n\nq3');

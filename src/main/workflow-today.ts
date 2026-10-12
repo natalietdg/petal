@@ -1,5 +1,6 @@
 // Workflow, Today tab: today's sessions grouped by tag or project, Petal's open tabs, and recently tidied sessions.
 import { bucket, cap, groupsFor, startOfDay, titleOf, type DashboardInputs, type GroupKey } from './workflow-common';
+import { NO_SESSION_LABEL, sessionTitle } from '../shared/session-label';
 
 const RECENT_TIDIED = 6;
 const OPEN_TAB_TITLE_CHARS = 80;
@@ -64,7 +65,7 @@ export function todayData({ sessions, labels, tags, openTabs = [], now = Date.no
     groups: [...groups.values()].sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name)),
     openTabs: openTabs.map((t) => ({
       sessionId: t?.sessionId ?? null,
-      title: cap(t?.title || (t?.sessionId ? labels[t.sessionId]?.title : undefined) || 'Shell', OPEN_TAB_TITLE_CHARS),
+      title: cap(t?.title || (t?.sessionId ? sessionTitle({ organizerTitle: labels[t.sessionId]?.title }) : NO_SESSION_LABEL), OPEN_TAB_TITLE_CHARS),
       busy: Boolean(t?.busy),
     })),
     recentlyTidied,

@@ -2,6 +2,7 @@ import * as markdown from './markdown';
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { byId, query } from './dom';
+import { setSessionName } from './session-name';
 import * as notesPanel from './notes-panel';
 import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
@@ -12,12 +13,13 @@ import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import type { Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; tabId?: string; conclusion?: Conclusion | null };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null };
 
 const latest = byId('latest');
 const older = byId('older');
 const status = byId('reader-status');
 const repoLine = byId('reader-repo');
+const sessionLine = byId('reader-session');
 const scroller = byId('reader');
 const strip = createStrip();
 query(byId('reader-head'), '.reader-head-column').append(strip);
@@ -119,6 +121,9 @@ export function update(shown: ShownUpdate): void {
   paintStrip(strip, replies.map((r) => r.markdown));
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
+  const named = Boolean(shown.sessionId && shown.label); // the tab's own session name, the same one its tab and History show
+  if (named) setSessionName(sessionLine, shown.label ?? ''); else sessionLine.textContent = '';
+  sessionLine.hidden = !named;
   column.classList.toggle('ended', state === 'ended');
   const live = state === 'live';
   const open = live ? openTurn(waiting, pending) : null;

@@ -5,6 +5,7 @@ import readline from 'node:readline';
 import { app } from 'electron';
 import { rawPromptText, commandText, isHandback } from './prompts';
 import { stripPasted } from '../shared/pasted-content';
+import { sessionTitle } from '../shared/session-label';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { writeFileAtomic } from './atomic-file';
@@ -61,7 +62,7 @@ export function toMarkdown(record: HandoffRecord, turns: Turn[]): string {
   }
   const dropped = blocks.length - kept.length;
   const head = [
-    `# Earlier session: ${record.title || 'Untitled session'}`,
+    `# Earlier session: ${sessionTitle({ title: record.title, cwd: record.cwd })}`, // the caller passes the shared name; this covers an empty one
     '',
     `- Folder: ${record.cwd ?? 'unknown'}`,
     `- Session id: ${record.sessionId}`,

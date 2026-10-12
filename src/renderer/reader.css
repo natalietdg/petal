@@ -42,8 +42,32 @@
 #reader-head .view-toggle { justify-self: start; margin: 0; }
 
 /* Which repo this session is in: one quiet line above the toggle. */
-.reader-repo {
+/* Session name, then repo and branch, on one line; a long name gives way first. */
+.reader-context {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
   margin: 0 0 8px;
+}
+.reader-context:not(:has(> :not([hidden]))) { display: none; }
+.reader-session {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: 600 12px/1.4 var(--ui-font);
+  letter-spacing: 0.02em;
+  color: var(--reader-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-session[hidden] { display: none; }
+.reader-session:not([hidden]) + .reader-repo:not([hidden])::before { content: '· '; }
+.reader-repo {
+  flex: 0 1000 auto;
+  min-width: 0;
+  margin: 0;
   font: 500 12px/1.4 var(--ui-font);
   letter-spacing: 0.02em;
   color: var(--muted);

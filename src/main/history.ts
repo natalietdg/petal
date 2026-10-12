@@ -111,11 +111,18 @@ export function listSessions(kept: ReadonlySet<string> = new Set()): ListedSessi
     .sort((a, b) => b.lastAt - a.lastAt);
 }
 
+// A session's log stays in one folder, so a found path skips the scan of every project next time.
+const fileById = new Map<string, string>();
+
 export const findRecord = (sessionId: string | null | undefined): SessionRecord | null => {
   if (!sessionId || !SESSION_ID.test(sessionId)) return null;
   const fixture = fixtures().find((r) => r.sessionId === sessionId);
   if (fixture) return fixture;
+  const known = fileById.get(sessionId);
+  const knownRecord = known ? recordFor(known) : null;
+  if (knownRecord) return knownRecord;
   const file = sessionFiles().find((f) => path.basename(f, '.jsonl') === sessionId);
+  if (file) fileById.set(sessionId, file); else fileById.delete(sessionId);
   return file ? recordFor(file) : null;
 };
 

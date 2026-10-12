@@ -119,6 +119,11 @@ async function start(): Promise<void> {
     if (active && update.tabId === active.id) showTab(active);
     history.tabUpdated(update.tabId);
   });
+  window.pastel.onTabLabel(({ tabId, label }) => {
+    tabs.setLabel(tabId, label);
+    const active = tabs.active();
+    if (active && tabId === active.id) showTab(active); // the reader header names it too
+  });
   window.pastel.onTabClosed(({ tabId }) => {
     tabs.remove(tabId);
     history.tabClosed(tabId);

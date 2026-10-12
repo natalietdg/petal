@@ -229,7 +229,7 @@
 [data-reading="print"] #reader #older .headline + p { font-size: 1.1em; padding-top: 0.5em; }
 
 /* Repo line: the essay's mono label voice. */
-[data-reading="print"] .reader-repo { font: 400 12px/1.4 var(--print-mono); letter-spacing: 0.08em; color: var(--print-ink); }
+[data-reading="print"] :is(.reader-repo, .reader-session) { font: 400 12px/1.4 var(--print-mono); letter-spacing: 0.08em; color: var(--print-ink); }
 
 /* Empty reader: the plain message, in the essay serif. */
 [data-reading="print"] .status.empty { font-family: var(--body-font); letter-spacing: normal; }

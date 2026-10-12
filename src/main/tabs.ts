@@ -1,18 +1,18 @@
 // Terminal tabs: one shell and one reader feed per tab, keyed by window and tab id, plus their IPC.
-import path from 'node:path';
-import { BrowserWindow, type WebContents } from 'electron';
+import { BrowserWindow, webContents, type WebContents } from 'electron';
 import { spawnShell } from './pty';
 import { ReaderFeed, type ReplyFinished } from './reader-feed';
-import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
-import * as history from './history';
-import { fixtureSession, isSnapshotRun, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
+import * as organizer from './session-organizer';
+import { sessionTitleFor } from './session-title';
+import { isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { handle, on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { PromptAnswer } from '../shared/prompt-answer';
-import type { TabId, TermSize } from '../shared/types';
+import { NO_SESSION_LABEL } from '../shared/session-label';
+import type { ReaderUpdate, TabId, TermSize } from '../shared/types';
 
 // A tab opened from History waits this long after its shell's first output before typing the resume command.
 const PENDING_COMMAND_DELAY_MS = 150;
@@ -36,27 +36,48 @@ export const openTab: OpenTab = (contents, { command, background = false } = {})
   send(contents, 'tabs:new', { background });
 };
 
-// Session label: organizer title, else its first-prompt title, else its folder, else "Shell".
-const recordTitles = new Map<string, string | null>(); // sessionId -> title from the transcript head (scanning is slow)
-function labelFor({ sessionId, cwd }: { sessionId: string | null; cwd: string | null }): string {
-  if (!sessionId) return 'Shell';
-  const organized = organizer.loadCached()[sessionId]?.title;
-  if (organized) return organized;
-  if (!recordTitles.has(sessionId)) recordTitles.set(sessionId, history.findRecord(sessionId)?.title || null);
-  return recordTitles.get(sessionId) || (cwd ? path.basename(cwd) : 'Shell');
+// What each tab was last called, so a title that lands later (organizer, Claude Code's ai-title) is pushed once.
+const RELABEL_MS = 2000;
+const shownLabels = new Map<string, { label: string; update: ReaderUpdate }>(); // tabKey -> last label sent
+
+// The shared session name; a tab with no Claude in it is just a shell.
+function labelFor({ sessionId, cwd, replies = [] }: Pick<ReaderUpdate, 'sessionId' | 'cwd'> & { replies?: ReaderUpdate['replies'] }): string {
+  if (!sessionId) return NO_SESSION_LABEL;
+  return sessionTitleFor(sessionId, { cwd, firstPrompt: replies.at(-1)?.prompt });
+}
+
+// Every tab, every window: a label that changed since it was sent goes to the tab, and History re-lists.
+let organizerSeen: Readonly<organizer.OrganizerStore> | null = null; // loadCached hands back a new object once the file changes
+function relabelTabs(): void {
+  const store = organizer.loadCached();
+  let changed = organizerSeen !== null && store !== organizerSeen; // a pass named sessions, open in a tab or not
+  organizerSeen = store;
+  for (const [key, shown] of shownLabels) {
+    const session = sessions.get(key);
+    if (!session) { shownLabels.delete(key); continue; }
+    const label = labelFor(shown.update);
+    if (label === shown.label) continue;
+    shown.label = label;
+    changed = true;
+    const contents = webContents.fromId(session.contentsId);
+    if (contents && !contents.isDestroyed()) send(contents, 'tab:label', { tabId: session.tabId, label });
+  }
+  if (changed) for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'session:titles');
 }
 
 function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId } & TermSize): void {
   const win = BrowserWindow.fromWebContents(sender);
   const contentsId = sender.id;
 
-  // Snapshot runs replay the fixture in the window's first tab only, so later tabs stay distinct.
-  const fixture = tabsOf(contentsId).length ? null : fixtureSession();
+  // Snapshot runs replay the fixture in the window's first tab only, so later tabs stay distinct (unless a check queued its own).
+  const fixture = tabFixture(!tabsOf(contentsId).length);
   const pty = spawnShell({ cols, rows });
   // Fire and forget: the hook never holds up the reader.
   const onReplyFinished = ({ reply, sessionId, cwd }: ReplyFinished) => responseHook.onReplyFinished({ reply, sessionId, cwd, title: labelFor({ sessionId, cwd }) });
   const feed = new ReaderFeed(pty.pid, (channel, update) => {
-    if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label: labelFor(update) });
+    const label = labelFor(update);
+    shownLabels.set(tabKey(contentsId, tabId), { label, update });
+    if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
   }, { fixture, onReplyFinished });
   const session: TabSession = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
@@ -113,6 +134,7 @@ export function closeWindowTabs(contentsId: number): void {
 }
 
 export function registerTabIpc(): void {
+  setInterval(relabelTabs, RELABEL_MS);
   const tabFor = (event: { sender: { id: number } }, tabId: TabId) => sessions.get(tabKey(event.sender.id, tabId));
 
   on('pty:start', (event, { tabId, cols, rows }) => {

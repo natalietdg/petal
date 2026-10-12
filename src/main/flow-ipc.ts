@@ -6,6 +6,7 @@ import { BrowserWindow, clipboard, dialog, type IpcMainInvokeEvent } from 'elect
 import * as history from './history';
 import * as flowStore from './flow-store';
 import { handle } from './ipc';
+import { sessionTitleFor } from './session-title';
 import type { ActiveSession } from './tab-session';
 import type { FlowExportRequest, MermaidResult } from '../shared/ipc';
 import type { FlowTarget, Theme } from '../shared/types';
@@ -32,14 +33,14 @@ export function registerFlowIpc({ activeSession, currentTheme }: FlowIpcDeps): v
   function resolveTarget(event: IpcMainInvokeEvent, target: FlowTarget | undefined): ResolvedTarget | null {
     if (target?.kind === 'history') {
       const record = history.findRecord(target.sessionId);
-      return record ? { sessionId: record.sessionId, file: record.file, title: record.title, cwd: record.cwd } : null;
+      return record ? { sessionId: record.sessionId, file: record.file, title: sessionTitleFor(record.sessionId, { cwd: record.cwd }), cwd: record.cwd } : null;
     }
     const session = own(event)?.feed.session;
     const file = session?.transcript;
     if (!file || !fs.existsSync(file)) return null;
     const sessionId = path.basename(file, '.jsonl');
     const record = history.findRecord(sessionId);
-    return { sessionId, file, title: record?.title ?? 'current session', cwd: session.cwd ?? record?.cwd ?? null };
+    return { sessionId, file, title: sessionTitleFor(sessionId, { cwd: session.cwd }), cwd: session.cwd ?? record?.cwd ?? null };
   }
 
   // Export always uses the stored chart source; nothing is re-parsed here.

@@ -1,7 +1,7 @@
 // History's shared state and page skeleton. The list and preview modules render into these elements;
 // the shell (history.ts) wires `hooks` so they can reach it without importing it.
 import { byId, query } from './dom';
-import { stripPasted } from '../shared/pasted-content';
+import { sessionTitle } from '../shared/session-label';
 import type { HistoryList } from '../shared/ipc';
 import type { HistoryListKind } from '../shared/favorites';
 
@@ -59,8 +59,9 @@ export const sortToggle = query(view, '#history-sort');
 export const listTabs = query(view, '#history-tabs');
 export const railTitle = query(view, '.history-rail-title');
 
-// Organizer labels win over Claude Code's own title when present.
-export const titleOf = (session: Session): string => session.organizer?.title || stripPasted(session.title).trim() || 'Untitled session';
+// The shared naming rule, so History, the tabs and the Sessions panel call a session the same thing.
+export const titleOf = (session: Session): string =>
+  sessionTitle({ organizerTitle: session.organizer?.title, title: session.title, firstPrompt: session.firstPrompt, cwd: session.cwd });
 export const selectedSession = (): Session | undefined => state.sessions.find((s) => s.sessionId === state.selectedId);
 
 const DAY_MS = 86_400_000;

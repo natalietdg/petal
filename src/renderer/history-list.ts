@@ -1,5 +1,6 @@
 // History's session list: all sessions or only starred ones, newest first or A–Z by title, filtered by the search box.
 import { el } from './dom';
+import { sessionNameEl } from './session-name';
 import { timeOf } from './format';
 import { dayLabel, list, openNote, search, state, titleOf, type Session } from './history-state';
 import { doResume, hoverPreview } from './history-preview';
@@ -14,7 +15,7 @@ function row(session: Session): HTMLElement {
   item.type = 'button';
   item.dataset.sessionId = session.sessionId;
   const title = el('span', 'history-title');
-  title.append(el('span', 'history-title-text', titleOf(session)));
+  title.append(sessionNameEl('span', 'history-title-text', titleOf(session)));
   const status = session.organizer?.status;
   if (status && STATUSES.has(status)) title.append(el('span', `history-status history-status-${status.replace(/\s+/g, '-')}`, status));
   if (session.live) title.append(el('span', 'history-live', 'live'));

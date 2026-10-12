@@ -53,6 +53,8 @@ const api = {
   onData: (callback: (payload: EventChannels['pty:data']) => void) => subscribe('pty:data', callback),
   onReplies: (callback: (update: EventChannels['reader:replies']) => void) => subscribe('reader:replies', callback),
   onTabClosed: (callback: (payload: EventChannels['tab:closed']) => void) => subscribe('tab:closed', callback),
+  onTabLabel: (callback: (payload: EventChannels['tab:label']) => void) => subscribe('tab:label', callback),
+  onSessionTitles: (callback: () => void) => subscribe('session:titles', callback),
   onTabCommand: (callback: (command: TabCommand) => void) => {
     const offs = [
       subscribe('tabs:new', ({ background }) => callback({ kind: 'new', background })),

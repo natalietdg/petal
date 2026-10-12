@@ -4,6 +4,7 @@ import * as history from './history';
 import * as links from './links-store';
 import { writeHandoff } from './handoff';
 import { handle } from './ipc';
+import { sessionTitleFor } from './session-title';
 import type { ActiveSession } from './tab-session';
 
 export function registerHandoffIpc({ activeSession }: { activeSession: ActiveSession }): void {
@@ -16,9 +17,10 @@ export function registerHandoffIpc({ activeSession }: { activeSession: ActiveSes
     if (!session || !record) return { note: 'That session is no longer on disk.' };
     if (!session.feed.claudePid) return { note: 'Start Claude in this tab first, then send.' };
     if (session.feed.session?.sessionId === sessionId) return { note: 'That is the session running here already.' };
-    const { file, turns } = await writeHandoff(record);
+    const title = sessionTitleFor(record.sessionId, { cwd: record.cwd });
+    const { file, turns } = await writeHandoff({ ...record, title });
     clipboard.writeText(file);
-    session.pty.write(`Read "${file}", my earlier session "${record.title || 'Untitled'}" (${turns} turns). `);
+    session.pty.write(`Read "${file}", my earlier session "${title}" (${turns} turns). `);
     links.addLink({ from: sessionId, to: session.feed.session?.sessionId ?? null, kind: 'send' });
     return { ok: true, file };
   });

@@ -4,6 +4,7 @@ import type { WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { AgentTimeline, agentFile, isAgentId, listAgents, type AgentsList } from './agents';
 import * as sessionsMonitor from './sessions-monitor';
+import { sessionTitleFor } from './session-title';
 import { isSnapshotRun, panelFixture } from './snapshot-mode';
 import type { SessionFile } from './claude-session';
 import type { ActiveSession } from './tab-session';
@@ -45,7 +46,8 @@ export function registerAgentsIpc({ activeSession }: { activeSession: ActiveSess
     const own = activeSession(event.sender.id)?.feed.session;
     const id = typeof sessionId === 'string' && sessionId ? sessionId : own?.sessionId ?? null;
     const dir = id ? agentsDir(id, own) : null;
-    return { sessionId: id, ...(dir ? listAgents(dir) : NONE) };
+    const sessionLabel = id ? sessionTitleFor(id, { cwd: id === own?.sessionId ? own.cwd : null }) : null;
+    return { sessionId: id, sessionLabel, ...(dir ? listAgents(dir) : NONE) };
   });
 
   handle('agents:open', (event, { sessionId, agentId }) => {

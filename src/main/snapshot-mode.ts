@@ -24,6 +24,12 @@ export const fixtureSession = (): FixtureSession | null => {
   return transcript ? { sessionId: 'snapshot-fixture', transcript, status: 'idle' } : null;
 };
 
+// Fixtures for tabs opened after the first, taken in order (the session-names check); empty in every other run.
+export const extraTabFixtures: FixtureSession[] = [];
+const takeExtraFixture = (): FixtureSession | null => (isSnapshotRun() ? extraTabFixtures.shift() ?? null : null);
+// The first tab replays the fixture; a later one replays a queued extra fixture, if any.
+export const tabFixture = (isFirstTab: boolean): FixtureSession | null => (isFirstTab ? fixtureSession() : takeExtraFixture());
+
 // What the app did or skipped, so the harness can prove it (a stored flow skips the jsonl, the hook never runs).
 export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0, organizerPassesSkipped: 0 };
 

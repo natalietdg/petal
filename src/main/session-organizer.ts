@@ -80,6 +80,7 @@ export function load(): OrganizerStore {
 }
 
 // Read-only view for hot paths (every tab label, every reader tick): re-read only when the file changes.
+const NO_LABELS: Readonly<OrganizerStore> = Object.freeze({}); // one object, so callers can tell "unchanged" by identity
 let readCache: { mtimeMs: number; size: number; store: Readonly<OrganizerStore> } | null = null;
 export function loadCached(): Readonly<OrganizerStore> {
   let stat: fs.Stats;
@@ -87,7 +88,7 @@ export function loadCached(): Readonly<OrganizerStore> {
     stat = fs.statSync(storeFile());
   } catch {
     readCache = null;
-    return {};
+    return NO_LABELS;
   }
   if (readCache?.mtimeMs !== stat.mtimeMs || readCache.size !== stat.size) readCache = { mtimeMs: stat.mtimeMs, size: stat.size, store: load() };
   return readCache.store;

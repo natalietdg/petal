@@ -3,6 +3,7 @@
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { el } from './dom';
+import { sessionNameEl, setSessionName } from './session-name';
 import { timeOf } from './format';
 import { dayLabel, hooks, notesAside, openNote, preview, railTitle, replyDock, selectedSession, state, titleOf, view, type Session } from './history-state';
 import { createPanel } from './notes-panel';
@@ -14,6 +15,15 @@ import { limitNote } from './sessions-panel';
 import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 import { paintConclusion } from './conclusion-banner';
 
+// A title that landed while the preview is up: rename it in place instead of reloading the replies.
+export function repaintTitle(): void {
+  const session = selectedSession();
+  const heading = preview.querySelector<HTMLElement>('.history-preview-title');
+  if (!session) return;
+  setSessionName(railTitle, titleOf(session));
+  if (heading && preview.dataset.sessionId === session.sessionId) setSessionName(heading, titleOf(session));
+}
+
 export async function renderPreview(): Promise<void> {
   const session = selectedSession();
   if (openNote.dataset.sessionId !== session?.sessionId) openNote.replaceChildren(); // the banner speaks for one session
@@ -22,10 +32,10 @@ export async function renderPreview(): Promise<void> {
     replyDock.replaceChildren();
     return;
   }
-  railTitle.textContent = titleOf(session);
+  setSessionName(railTitle, titleOf(session));
   const head = el('header', 'history-preview-head');
   const titleRow = el('div', 'history-preview-title-row');
-  titleRow.append(el('h2', 'history-preview-title', titleOf(session)), favorites.star(session.sessionId, 'history-preview-star'));
+  titleRow.append(sessionNameEl('h2', 'history-preview-title', titleOf(session)), favorites.star(session.sessionId, 'history-preview-star'));
   head.append(titleRow,
     el('p', 'status', `${session.shortCwd} · ${dayLabel(session.lastAt)} ${timeOf(session.lastAt)}`));
 
@@ -57,6 +67,7 @@ export async function renderPreview(): Promise<void> {
   paintConclusion(conclusion, session.sessionId, session.conclusion);
   const body = el('div', 'history-preview-body');
   preview.replaceChildren(head, conclusion, body);
+  preview.dataset.sessionId = session.sessionId; // which session the heading names, for repaintTitle
   replyDock.replaceChildren(...(state.previewMode === 'replies' ? [replyBox(session)] : []));
   notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
   showNotes(session);

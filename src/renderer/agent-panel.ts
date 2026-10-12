@@ -5,6 +5,7 @@ import * as sessionsPanel from './sessions-panel';
 import { appendItems, settle } from './agents-timeline';
 import { dotStatus, duration } from './agents-menu-rows';
 import { byId, el, isIpcError } from './dom';
+import { setSessionName } from './session-name';
 import type { AgentSummary } from '../main/agents';
 import type { TimelineItem } from '../main/agent-steps';
 
@@ -20,10 +21,11 @@ const head = el('div', 'notes-panel-head agent-panel-head');
 const titles = el('div', 'agent-panel-titles');
 const title = el('span', 'notes-panel-title agent-panel-title');
 const meta = el('span', 'agent-panel-meta');
+const sessionName = el('span', 'agent-panel-session'); // which session the agent works for, by its shared name
 const close = el('button', 'notes-panel-close', 'Close');
 close.type = 'button';
 close.addEventListener('click', () => hide());
-titles.append(title, meta);
+titles.append(title, meta, sessionName);
 head.append(titles, close);
 const body = el('div', 'agent-panel-body');
 aside.append(grip, head, body);
@@ -65,6 +67,8 @@ async function refreshHead(): Promise<void> {
   const result = await window.pastel.agents.list(sessionId);
   if (isIpcError(result) || !openId) return;
   summary = result.agents.find((a) => a.id === openId) ?? summary;
+  if (result.sessionLabel) setSessionName(sessionName, result.sessionLabel);
+  sessionName.hidden = !result.sessionLabel;
   renderHead();
 }
 

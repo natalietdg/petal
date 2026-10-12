@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
+import { sessionTitle } from '../shared/session-label';
 import type { ListedSession } from './history';
 import type { OrganizerStore } from './session-organizer';
 import type { TagsData } from './tags-store';
@@ -69,7 +70,8 @@ export function loadTags(): Tags | null {
   return { tags: data.tags ?? {}, sessions: data.sessions ?? {} };
 }
 
-export const titleOf = (session: ListedSession, labels: OrganizerStore): string => labels[session.sessionId]?.title || session.title || 'Untitled session';
+export const titleOf = (session: ListedSession, labels: OrganizerStore): string =>
+  sessionTitle({ organizerTitle: labels[session.sessionId]?.title, title: session.title, firstPrompt: session.firstPrompt, cwd: session.cwd });
 function folderName(cwd: string | null): string {
   if (!cwd) return 'Unsorted';
   return path.resolve(cwd) === os.homedir() ? 'Home folder' : path.basename(cwd);

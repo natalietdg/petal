@@ -6,6 +6,7 @@ import { readSessionFile, transcriptPath, SESSIONS_DIR, type SessionFile } from 
 import { recentActivity } from './activity';
 import { readHead } from './jsonl-window';
 import { promptText, trimTo } from './prompts';
+import { sessionTitle } from '../shared/session-label';
 
 const SHOWN_KINDS = new Set(['interactive', 'bg']);
 export const SUBAGENT_WINDOW_MS = 2 * 60 * 1000; // an agent with no write for longer counts as idle and is hidden
@@ -52,6 +53,7 @@ export interface SnapshotOptions {
   detailed?: boolean;
   expandedIds?: string[];
   ownSessionId?: string | null;
+  nameOf?: (session: SessionFile) => string; // the shared session name; never Claude Code's "<folder>-<id>" session name
 }
 
 // Session files outlive their process; signal 0 only checks it exists.
@@ -161,7 +163,7 @@ export function oldestIdle(sessions: readonly SessionFile[]): SessionFile | null
 
 // Collapsed pill needs counts only (agents by stat); the open panel reads jsonl tails.
 export function snapshot(
-  { detailed, expandedIds = [], ownSessionId = null }: SnapshotOptions,
+  { detailed, expandedIds = [], ownSessionId = null, nameOf = (s) => sessionTitle({ cwd: s.cwd }) }: SnapshotOptions,
   sessions: SessionFile[] = liveSessions(),
   subagentsDirOf: SubagentsDirOf = subagentsDir,
 ): SessionsSnapshot {
@@ -179,7 +181,7 @@ export function snapshot(
     for (const f of files) seen.add(f.file);
     return {
       sessionId: s.sessionId,
-      name: s.name || shortCwd(s.cwd),
+      name: nameOf(s),
       cwd: shortCwd(s.cwd),
       kind: s.kind,
       status: s.status === 'busy' ? 'busy' : 'idle',
