@@ -375,7 +375,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
-    ['agents view', () => agentsCheck(kit, win)],
+    ['agents dropdown', () => agentsCheck(kit, win)],
     ['add session', () => addSessionCheck(kit)],
     ['tab limit', () => tabLimitCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],

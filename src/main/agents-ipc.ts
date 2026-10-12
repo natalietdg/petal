@@ -1,4 +1,4 @@
-// IPC for the Agents view: a session's subagents, and one followed live per window. Read only, never ~/.claude writes.
+// IPC for the Agents dropdown and panel: a session's subagents, and one followed live per window. Read only, never ~/.claude writes.
 import path from 'node:path';
 import type { WebContents } from 'electron';
 import { handle, send } from './ipc';

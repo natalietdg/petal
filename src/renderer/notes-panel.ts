@@ -11,6 +11,13 @@ const prefs: Prefs = { open: 'auto', width: 320 };
 const appliers: (() => void)[] = []; // one per panel: shows or hides it from prefs
 const applyAll = (): void => { for (const apply of appliers) apply(); };
 
+// The agent panel can borrow the reader's slot; Notes hides meanwhile and its button hands the slot back.
+let slotLentTo: (() => void) | null = null;
+export function lendReaderSlot(giveBack: (() => void) | null): void {
+  slotLentTo = giveBack;
+  applyAll();
+}
+
 interface Mount {
   sessionId: string | null;
   hint?: string;
@@ -36,8 +43,8 @@ export function setOpen(open: boolean): void {
   applyAll();
 }
 
-// aside: the panel element; host: the container that makes room for it (class notes-open).
-export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
+// aside: the panel element; host: the container that makes room for it (class notes-open); sharesSlot: the reader's.
+export function createPanel(aside: HTMLElement, host: HTMLElement, sharesSlot = false): Panel {
   aside.classList.add('notes-panel');
   aside.setAttribute('aria-label', 'Your notes');
   const head = el('div', 'notes-panel-head');
@@ -56,10 +63,11 @@ export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
   let hasNotes = false;
   const toggles = new Set<HTMLButtonElement>();
   const open = (): boolean => prefs.open === 'open' || (prefs.open === 'auto' && hasNotes);
+  const lent = (): boolean => sharesSlot && slotLentTo !== null;
   const apply = (): void => {
-    const shown = open();
+    const shown = open() && !lent();
     aside.hidden = !shown;
-    host.classList.toggle('notes-open', shown);
+    host.classList.toggle('notes-open', shown || lent()); // the agent panel takes the same room
     for (const button of toggles) {
       if (!button.isConnected) toggles.delete(button); // History rebuilds its head on every preview
       else button.setAttribute('aria-pressed', String(shown));
@@ -78,14 +86,18 @@ export function createPanel(aside: HTMLElement, host: HTMLElement): Panel {
     },
     bindToggle: (button) => {
       toggles.add(button);
-      button.addEventListener('click', () => setOpen(!open()));
+      button.addEventListener('click', () => {
+        if (!lent()) return setOpen(!open());
+        slotLentTo?.();
+        setOpen(true);
+      });
       apply();
     },
   };
 }
 
 // Drag the panel's left edge; the width is saved when she lets go.
-function dragToResize(grip: HTMLElement, aside: HTMLElement): void {
+export function dragToResize(grip: HTMLElement, aside: HTMLElement): void {
   grip.addEventListener('pointerdown', (down) => {
     down.preventDefault();
     grip.setPointerCapture(down.pointerId);
@@ -102,7 +114,7 @@ function dragToResize(grip: HTMLElement, aside: HTMLElement): void {
 
 // The reader's panel runs from the top of the fixed header (just under the dock) to the reply box's bottom.
 const readerHead = byId('reader-head');
-export const reader = createPanel(byId('notes-panel'), byId('reader-area'));
+export const reader = createPanel(byId('notes-panel'), byId('reader-area'), true);
 reader.bindToggle(byId<HTMLButtonElement>('notes-toggle'));
 new ResizeObserver(() => { reader.aside.style.top = `${readerHead.offsetTop}px`; }).observe(byId('reader'));
 

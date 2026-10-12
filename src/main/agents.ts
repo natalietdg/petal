@@ -1,4 +1,4 @@
-// A session's subagents for the Agents view (read only): listed from meta + jsonl tails, one followed live.
+// A session's subagents for the Agents dropdown and panel (read only): listed from meta + jsonl tails, one followed live.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readHead, readTail } from './jsonl-window';

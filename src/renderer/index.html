@@ -14,7 +14,6 @@
       <section id="customize" hidden></section>
       <section id="repos" hidden aria-label="Open Repo"></section>
       <section id="welcome" hidden aria-label="Welcome to Petal"></section>
-      <section id="agents" hidden aria-label="Agents" tabindex="-1"></section>
       <aside id="sessions-dock">
         <button id="customize-button" class="dock-button" type="button" aria-pressed="false">Customize</button>
         <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
@@ -42,9 +41,11 @@
           </div>
         </div>
         <div id="colour-key" class="colour-key" role="dialog" aria-label="Colour key" hidden></div>
+        <div id="agents-menu" class="agents-menu" role="menu" aria-label="Agents today" tabindex="-1" hidden></div>
       </header>
       <div id="cat"></div>
       <aside id="notes-panel" hidden></aside>
+      <aside id="agent-panel" hidden></aside>
       <main id="reader" aria-live="polite">
         <div class="reader-column">
           <div id="replies-view">

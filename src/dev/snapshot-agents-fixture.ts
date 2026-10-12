@@ -15,6 +15,7 @@ export const HOSTILE_OUTPUT = `<img src="x" id="agents-xss-probe" onerror="windo
 
 export const RUNNING_ID = 'fx1running';
 export const FINISHED_ID = 'fx2finished';
+export const NEWER_ID = 'fx3newer'; // finished, but started after the running one: running still lists first
 
 function writeAgent(dir: string, id: string, description: string, body: string, mtimeMsAgo: number): string {
   const file = path.join(dir, `agent-${id}.jsonl`);
@@ -28,7 +29,7 @@ function writeAgent(dir: string, id: string, description: string, body: string, 
 }
 
 // <fixture dir>/snapshot-fixture/subagents: where the fixture session's agents live, like a real session's.
-export function writeAgentsFixture(dir: string): { running: string; finished: string } {
+export function writeAgentsFixture(dir: string): { running: string; finished: string; newer: string } {
   fs.rmSync(dir, { recursive: true, force: true });
   const running = writeAgent(dir, RUNNING_ID, 'Tidy the print styles', [
     prompt('<system-reminder>context</system-reminder>\nTidy the print stylesheet, then run the tests.', 240_000),
@@ -44,9 +45,22 @@ export function writeAgentsFixture(dir: string): { running: string; finished: st
     say([use('h1', 'SubagentHandback', { message: '**Header spacing checked.** Nothing overlaps at 800px.' })], 540_000),
     result('h1', 'Report delivered to your caller.', 539_000),
   ].join(''), 180_000);
-  return { running, finished };
+  const newer = writeAgent(dir, NEWER_ID, 'Proof the colour key', [
+    prompt('Proof the colour key labels.', 60_000),
+    say([use('n1', 'Read', { file_path: '/demo/app/src/colour-key.ts' })], 50_000),
+    result('n1', 'ok', 49_000),
+    say([{ type: 'text', text: 'Labels read fine.' }], 40_000, 'end_turn'),
+  ].join(''), 40_000);
+  return { running, finished, newer };
 }
 
 // Lines the step appends while the timeline is open.
 export const appendedStep = (): string => say([use('e2', 'Edit', { file_path: '/demo/app/src/print.css' })], 0);
 export const appendedReport = (): string => say([{ type: 'text', text: '**Print styles tidied.** All tests pass.' }], 0, 'end_turn');
+
+// Many finished agents, so the dropdown has to scroll inside its cap.
+export function writeManyAgents(dir: string, count: number): void {
+  for (let i = 0; i < count; i++) {
+    writeAgent(dir, `fxmany${i}`, `Filler agent ${i + 1}`, [prompt(`Filler ${i + 1}.`, 900_000 + i * 1000), say([{ type: 'text', text: 'Done.' }], 850_000 + i * 1000, 'end_turn')].join(''), 850_000 + i * 1000);
+  }
+}

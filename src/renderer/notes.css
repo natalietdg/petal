@@ -50,8 +50,9 @@
 .notes-panel-grip { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; z-index: 1; }
 
 /* Reader: pinned right, from the header's top (set in notes-panel.ts) to the reply box's bottom. */
-#notes-panel { position: absolute; right: 0; bottom: 0; width: var(--notes-width); z-index: 4; }
-#reader-area:has(> #reader[hidden]) #notes-panel { display: none; }
+/* The agent panel (agent-panel.ts) takes the same slot while Notes steps aside. */
+:is(#notes-panel, #agent-panel) { position: absolute; right: 0; bottom: 0; width: var(--notes-width); z-index: 4; }
+#reader-area:has(> #reader[hidden]) :is(#notes-panel, #agent-panel) { display: none; }
 
 /* The open/close button: at the right end of the reader's toggle row (after the colour key), and beside History's toggle. */
 .history-preview-views { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
@@ -66,9 +67,10 @@
 }
 /* Narrow: a drawer over the text, so the column keeps a readable measure. */
 @media (max-width: 999px) {
-  :is(#notes-panel, #history-notes) { width: min(var(--notes-width), 88vw); box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
+  :is(#notes-panel, #agent-panel, #history-notes) { width: min(var(--notes-width), 88vw); box-shadow: -14px 0 32px rgba(0, 0, 0, 0.16); }
   /* The header row gives up the drawer's width, so its Notes toggle stays in reach. */
   #reader-area.notes-open #reader-head { margin-right: min(var(--notes-width), 88vw); }
   #reader-area.notes-open .reader-head-row { flex-wrap: wrap; }
+  #reader-area.notes-open .reader-head-end { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; }
   #history-notes { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; }
 }

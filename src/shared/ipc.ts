@@ -41,7 +41,7 @@ export interface SessionsView extends SessionsSnapshot {
   here: { running: number; total: number }; // the reader's session agents, for its header chip
 }
 
-// The Agents view: a session's subagents, and the one opened in the timeline.
+// The Agents dropdown: a session's subagents, and the one opened in the right panel.
 export type AgentsView = AgentsList & { sessionId: string | null };
 export type AgentOpenResult = (TimelineStart & { agentId: string }) | { missing: true };
 

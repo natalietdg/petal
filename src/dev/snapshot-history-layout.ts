@@ -179,7 +179,7 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
 
     // 3 in every other overlay.
     await sizeTo(1280);
-    for (const [id, opener] of [['workflow', 'PastelTerm.workflow.open()'], ['customize', 'PastelTerm.customize.open()'], ['repos', 'PastelTerm.repos.open()'], ['agents', 'PastelTerm.agentsView.openList()']] as const) {
+    for (const [id, opener] of [['workflow', 'PastelTerm.workflow.open()'], ['customize', 'PastelTerm.customize.open()'], ['repos', 'PastelTerm.repos.open()']] as const) {
       await js(`Promise.resolve(${opener}).catch(() => PastelTerm.overlays.show(${JSON.stringify(id)}))`);
       await wait(600);
       const m = await probe(OVERLAY(id));

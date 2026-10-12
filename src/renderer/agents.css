@@ -1,51 +1,72 @@
-/* Agents view: a session's subagents, then one agent's timeline. No looping animation (the motion clock keeps idle low). */
-#reader-area > #agents {
-  order: 1;
-  flex: 1;
-  min-height: 0;
+/* Agents: the header chip's dropdown and one agent's timeline in the right panel. No looping animation (the motion clock keeps idle low). */
+
+/* Header chip: flows in the head's end group, between the Colour key and Notes. */
+.agents-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: 600 12px var(--ui-font);
+  white-space: nowrap;
+  cursor: pointer;
 }
-#agents {
+.agents-chip.has-running { background: var(--next-pill); color: var(--next-ink); border-color: transparent; }
+.agents-chip[aria-expanded="true"] { border-color: var(--muted); }
+.agents-chip[hidden] { display: none; }
+
+/* Dropdown: under the chip (agents-menu.ts sets top/right), the Colour key's popover frame, scrolling past its cap. */
+.agents-menu {
+  position: fixed;
+  z-index: 20;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 160px));
   overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
-  padding: 16px 28px 40px;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
   background: var(--reader-bg);
   color: var(--reader-fg);
-  font: 14px/1.45 var(--ui-font);
+  font: 400 13px/1.4 var(--ui-font);
+  box-shadow: 0 4px 18px rgba(20, 10, 30, 0.22);
   outline: none;
 }
-#agents[hidden] { display: none; }
-
-.agents-card { max-width: 760px; margin: 0 auto; }
-.agents-heading, .agent-title { margin: 4px 0 2px; font: 600 20px/1.3 var(--ui-font); }
-.agents-hint, .agents-empty, .agent-meta { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-.agents-list { list-style: none; margin: 0; padding: 0; }
-.agents-item + .agents-item { border-top: 1px solid var(--rule); }
-.agents-row {
+.agents-menu[hidden] { display: none; }
+.agents-menu-list { display: grid; gap: 1px; }
+.agents-menu-row {
   display: grid;
-  gap: 2px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  padding: 10px 8px;
+  padding: 7px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.agents-row:hover, .agents-row:focus-visible { background: var(--code-bg); }
-.agents-row-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.agents-row-task { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.agents-row-meta { color: var(--muted); font-size: 12px; }
-.agents-row-step { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agents-menu-row:hover, .agents-menu-row:focus-visible { background: var(--code-bg); outline: none; }
+.agents-menu-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.agents-menu-time { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.agents-menu-empty { margin: 0; padding: 8px 10px; color: var(--muted); }
+/* Status dots in the theme's own quiet inks: running, stalled, done. */
+.agents-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.agents-dot.running { background: var(--next-ink); }
+.agents-dot.stalled { background: var(--watch-ink); }
+.agents-dot.done { background: none; box-shadow: inset 0 0 0 1.5px var(--muted); }
 
-.agent-status { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
-.agent-status.running { background: var(--next-pill); color: var(--next-ink); }
-.agent-status.stalled { background: var(--watch-pill); color: var(--watch-ink); }
-.agent-status.finished { background: var(--done-pill); color: var(--done-ink); }
+/* Right panel: the Notes frame (notes.css places it); a name and status line over the scrolling timeline. */
+.agent-panel-head { align-items: flex-start; gap: 12px; }
+.agent-panel-titles { display: grid; gap: 2px; min-width: 0; }
+.agent-panel-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--reader-fg); }
+.agent-panel-meta { font-weight: 500; font-size: 12px; }
+.agent-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px 20px; font: 14px/1.45 var(--ui-font); }
+.agents-hint, .agents-empty { margin: 0; color: var(--muted); font-size: 13px; }
 
-.agent-head { position: sticky; top: -16px; z-index: 1; padding: 12px 0 6px; background: var(--reader-bg); border-bottom: 1px solid var(--rule); }
-.agent-back { margin-bottom: 6px; }
 .agent-timeline { list-style: none; margin: 10px 0 0; padding: 0; }
 .agent-line { padding: 6px 0; }
 .agent-step { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 13px; }
@@ -61,22 +82,5 @@
 .agent-report { margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: var(--done-wash); }
 .agent-report-label { margin: 0 0 4px; font: 600 12px var(--ui-font); letter-spacing: 0.04em; color: var(--done-ink); }
 
-/* Header chip: on the toggle row, inside the column; agents-view.ts sets top/right beside the Notes toggle. */
-.reader-head-column { position: relative; }
-.agents-chip {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 3px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  font: 600 12px var(--ui-font);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.agents-chip.has-running { background: var(--next-pill); color: var(--next-ink); border-color: transparent; }
-.agents-chip[hidden] { display: none; }
 .session-agent.opens-agent { cursor: pointer; }
 .session-agent.opens-agent:hover .agent-task { text-decoration: underline; }
