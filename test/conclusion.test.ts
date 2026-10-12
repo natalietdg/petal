@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isConcludePrompt, parseConclusion } from '../src/shared/conclusion';
 import { addEntry, currentConclusion, emptyScan, scanFile } from '../src/main/conclusion-scan';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
-import { assistantEntry, removeTempDirs, tempDir, toolResultEntry, toolUseEntry, useTempUserData, userEntry, writeJsonl } from './helpers';
+import { assistantEntry, removeTempDirs, tempDir, toolResultEntry, toolUseEntry, allowClaudeFolder, userEntry, writeJsonl } from './helpers';
 
 afterEach(() => {
   removeTempDirs();
@@ -156,7 +156,7 @@ describe('conclusions store', () => {
   };
 
   it('stores per session in userData, re-reads only growth, and starts over on a rewritten log', async () => {
-    const userData = useTempUserData();
+    const userData = allowClaudeFolder();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const store = await load();
     const file = path.join(tempDir(), 'a.jsonl');
@@ -178,7 +178,7 @@ describe('conclusions store', () => {
   });
 
   it('refreshAll reports once when something changed, and not when nothing did', async () => {
-    useTempUserData();
+    allowClaudeFolder();
     const store = await load();
     const dir = tempDir();
     const a = writeJsonl(path.join(dir, 'a.jsonl'), [userEntry('conclude'), assistantEntry('**Conclusion:** A.')]);
@@ -191,7 +191,7 @@ describe('conclusions store', () => {
   });
 
   it('a list asked for during a sweep is still read, not dropped', async () => {
-    useTempUserData();
+    allowClaudeFolder();
     const store = await load();
     const dir = tempDir();
     const a = writeJsonl(path.join(dir, 'a.jsonl'), [userEntry('hi'), assistantEntry('hello')]);

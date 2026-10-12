@@ -9,19 +9,30 @@ import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
 import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from './look';
 import { handle, on } from './ipc';
-import { activeStyleName, defaultClaudeDir, listOutputStyles, setOutputStyle } from './output-styles';
+import { activeStyleName, listOutputStyles, setOutputStyle, type OutputStyles } from './output-styles';
 import { installPetalStyles, petalStyles, type PetalPaths, type PetalStyles } from './petal-styles';
 import { isSnapshotRun, stylesFixture } from './snapshot-mode';
+import { allowedClaudeHome } from './claude-folder';
 import type { StyleSwitch } from './output-styles';
 import type { CustomizeState } from '../shared/ipc';
 import type { Choice } from '../shared/types';
 
-// Snapshot runs read and write a stand-in ~/.claude when the harness sets one.
-const claudeDir = (): string => (isSnapshotRun() && stylesFixture.claudeDir) || defaultClaudeDir();
+const FOLDER_OFF = 'Petal isn’t reading your Claude folder. Allow it under Customize › Get started.';
+
+// Her ~/.claude once she allows reading it; snapshot runs read and write a stand-in when the harness sets one.
+function claudeDir(): string | null {
+  const home = allowedClaudeHome();
+  return home && ((isSnapshotRun() && stylesFixture.claudeDir) || home);
+}
+function claudeDirOrRefuse(): string {
+  const dir = claudeDir();
+  if (!dir) throw new Error(FOLDER_OFF);
+  return dir;
+}
 
 // Opens a listed style in her default editor; any other path is refused.
 async function openStyle(file: string): Promise<{ ok: true }> {
-  if (!listOutputStyles(claudeDir()).styles.some((s) => s.file === file)) throw new Error('not one of your output styles');
+  if (!listOutputStyles(claudeDirOrRefuse()).styles.some((s) => s.file === file)) throw new Error('not one of your output styles');
   if (isSnapshotRun()) {
     stylesFixture.opened.push(file);
     return { ok: true };
@@ -39,12 +50,12 @@ function refuseRealWriteInSnapshot(): void {
 // Writes outputStyle in settings.json.
 function useStyle(name: string): StyleSwitch {
   refuseRealWriteInSnapshot();
-  return setOutputStyle(name, claudeDir());
+  return setOutputStyle(name, claudeDirOrRefuse());
 }
 
 // Packaged: Contents/Resources/output-styles (electron-builder extraResources); dev: the repo's resources folder.
 export const bundleDir = (): string => (app.isPackaged ? path.join(process.resourcesPath, 'output-styles') : path.join(app.getAppPath(), 'resources', 'output-styles'));
-const petalPaths = (): PetalPaths => ({ claudeDir: claudeDir(), bundleDir: bundleDir(), recordFile: path.join(app.getPath('userData'), 'petal-styles.json') });
+const petalPaths = (): PetalPaths => ({ claudeDir: claudeDirOrRefuse(), bundleDir: bundleDir(), recordFile: path.join(app.getPath('userData'), 'petal-styles.json') });
 
 function addPetalStyles(): PetalStyles {
   refuseRealWriteInSnapshot();
@@ -57,8 +68,13 @@ const HANDOFF_SAMPLE = {
 };
 
 // Everything the Customize page shows, in one read.
+// Reading off: no styles listed and nothing to add, so nothing under ~/.claude is read.
+const NO_STYLES: OutputStyles = { dir: '', active: null, styles: [], problem: FOLDER_OFF };
+const NO_PETAL_STYLES: PetalStyles = { styles: [], installable: false };
+
 function customizeState(): CustomizeState {
-  const magazinePath = path.join(claudeDir(), 'output-styles', 'magazine.md');
+  const dir = claudeDir();
+  const magazinePath = dir && path.join(dir, 'output-styles', 'magazine.md');
   const { theme, reading, cat, scene } = settings();
   return {
     config: configStore.load(),
@@ -71,10 +87,10 @@ function customizeState(): CustomizeState {
       cats: CAT_CHOICES,
       scenes: SCENE_CHOICES,
     },
-    outputStyle: activeStyleName(claudeDir()),
-    outputStyles: listOutputStyles(claudeDir()),
-    petalStyles: petalStyles(petalPaths()),
-    magazinePath: fs.existsSync(magazinePath) ? magazinePath : null,
+    outputStyle: dir ? activeStyleName(dir) : null,
+    outputStyles: dir ? listOutputStyles(dir) : NO_STYLES,
+    petalStyles: dir ? petalStyles(petalPaths()) : NO_PETAL_STYLES,
+    magazinePath: magazinePath && fs.existsSync(magazinePath) ? magazinePath : null,
     organizer: organizer.status(),
     hookRuns: responseHook.recentRuns(),
     hookDir: responseHook.hookDir(),

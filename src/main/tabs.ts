@@ -5,7 +5,8 @@ import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
 import { sessionTitleFor } from './session-title';
-import { isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
+import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
+import { claudePath } from './claude-cli';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { handle, on, send } from './ipc';
@@ -16,6 +17,9 @@ import type { ReaderUpdate, TabId, TermSize } from '../shared/types';
 
 // A tab opened from History waits this long after its shell's first output before typing the resume command.
 const PENDING_COMMAND_DELAY_MS = 150;
+const START_CLAUDE = 'claude\r';
+// Snapshot runs type a shell no-op in its place, so no real claude ever starts there.
+const START_CLAUDE_STAND_IN = ': petal-start-claude\r';
 // The picker reads one keypress per chunk; 30ms measured fine, 120ms leaves room for a busy machine.
 const PROMPT_KEY_GAP_MS = 120;
 
@@ -65,7 +69,17 @@ function relabelTabs(): void {
   if (changed) for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'session:titles');
 }
 
-function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId } & TermSize): void {
+const claudeInstalled = async (): Promise<boolean> =>
+  (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath()));
+
+// Add Session's `claude`, typed only when Claude Code is installed, so a missing one never prints an error.
+async function typeStartClaude(session: TabSession): Promise<void> {
+  if (!(await claudeInstalled()) || !sessions.has(tabKey(session.contentsId, session.tabId))) return;
+  if (isSnapshotRun()) claudeStarts.push({ tabId: session.tabId, command: START_CLAUDE });
+  session.pty.write(isSnapshotRun() ? START_CLAUDE_STAND_IN : START_CLAUDE);
+}
+
+function startSession(sender: WebContents, { tabId, cols, rows, startClaude = false }: { tabId: TabId; startClaude?: boolean } & TermSize): void {
   const win = BrowserWindow.fromWebContents(sender);
   const contentsId = sender.id;
 
@@ -83,13 +97,14 @@ function startSession(sender: WebContents, { tabId, cols, rows }: { tabId: TabId
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
 
-  // A tab opened from History types its resume command once the shell prints its prompt.
+  // A tab opened from History types its resume command once the shell prints its prompt; Add Session's types `claude`.
   const pending = pendingCommands.get(contentsId);
   pendingCommands.delete(contentsId);
-  let typed = !pending;
+  const typeFirst = pending ? () => pty.write(pending) : startClaude ? () => void typeStartClaude(session) : null;
+  let typed = !typeFirst;
   pty.onData((data) => {
     if (!sender.isDestroyed()) send(sender, 'pty:data', { tabId, data });
-    if (!typed) { typed = true; setTimeout(() => pty.write(pending ?? ''), PENDING_COMMAND_DELAY_MS); }
+    if (!typed && typeFirst) { typed = true; setTimeout(typeFirst, PENDING_COMMAND_DELAY_MS); }
   });
   // Closing the last tab closes the window, as the shell exiting always has.
   pty.onExit(() => {
@@ -137,8 +152,8 @@ export function registerTabIpc(): void {
   setInterval(relabelTabs, RELABEL_MS);
   const tabFor = (event: { sender: { id: number } }, tabId: TabId) => sessions.get(tabKey(event.sender.id, tabId));
 
-  on('pty:start', (event, { tabId, cols, rows }) => {
-    if (!tabFor(event, tabId)) startSession(event.sender, { tabId, cols, rows });
+  on('pty:start', (event, { tabId, cols, rows, startClaude }) => {
+    if (!tabFor(event, tabId)) startSession(event.sender, { tabId, cols, rows, startClaude: startClaude === true });
   });
 
   on('pty:write', (event, { tabId, data }) => {

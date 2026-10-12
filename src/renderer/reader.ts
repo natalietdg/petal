@@ -94,9 +94,19 @@ function olderTurn(reply: Reply): HTMLElement {
 
 const column = query(byId('reader'), '.reader-column');
 
-function showMessage(html: string): void {
+// An empty reader's line, with one button under it when there's something to do.
+interface EmptyAction { label: string; event: string }
+function showMessage(html: string, action: EmptyAction | null = null): void {
   status.classList.add('empty');
   status.innerHTML = html;
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'flow-button status-action';
+    button.textContent = action.label;
+    button.addEventListener('click', () => window.dispatchEvent(new Event(action.event)));
+    status.append(document.createElement('br'), button);
+  }
   latest.replaceChildren();
   older.replaceChildren();
   latestId = null;
@@ -105,6 +115,9 @@ function showMessage(html: string): void {
 // state: 'none' (no claude in the pty), 'live', or 'ended' (claude exited, replies kept).
 let lastUpdate: ShownUpdate | null = null;
 let claudeMissing = false;
+let folderAllowed = true; // set at startup; off means no replies can arrive, whatever the state
+const GET_STARTED: EmptyAction = { label: 'Get started', event: 'petal:get-started' };
+const ALLOW_FOLDER: EmptyAction = { label: 'Allow reading your Claude folder', event: 'petal:allow-folder' };
 
 // Theme switch: rebuild so diagrams pick up the new colours.
 export function rerender(): void {
@@ -133,12 +146,14 @@ export function update(shown: ShownUpdate): void {
     return;
   }
   const [newest, ...rest] = replies;
+  if (!folderAllowed) {
+    showMessage('Petal isn’t reading your Claude folder, so replies won’t show here. The terminal below works as usual.', ALLOW_FOLDER);
+    return;
+  }
   if (!newest) {
-    showMessage(state === 'live'
-      ? 'Claude is running. Its replies will appear here.'
-      : claudeMissing
-        ? 'Claude Code isn’t installed yet. Install it, then run <code>claude</code> below.'
-        : 'No conversation yet.');
+    if (state === 'live') showMessage('Claude is running. Its replies will appear here.');
+    else if (claudeMissing) showMessage('Claude Code isn’t installed yet. Install it, then click Add Session.', GET_STARTED);
+    else showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
     return;
   }
   status.classList.remove('empty');
@@ -248,6 +263,7 @@ function showReply(replyIds: readonly (string | undefined)[]): void {
 }
 
 export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; rerender(); };
+export const setFolderAllowed = (allowed: boolean): void => { folderAllowed = allowed; rerender(); };
 
 // A standing line above the replies, for startup reads from main that failed; reply updates leave it alone.
 const notice = Object.assign(document.createElement('p'), { className: 'status reader-notice', hidden: true });

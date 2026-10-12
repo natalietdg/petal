@@ -60,7 +60,8 @@ export function init(options: { theme: Theme } & Partial<Hooks>): void {
 
 // Shown before its shell starts, so the pty is spawned at the visible grid size.
 // A background tab (a reply from History) starts unshown at the default grid; activating it refits.
-export function create({ background = false }: { background?: boolean } = {}): Tab {
+// startClaude: main types `claude` once the shell is ready, if Claude Code is installed.
+export function create({ background = false, startClaude = false }: { background?: boolean; startClaude?: boolean } = {}): Tab {
   if (!theme) throw new Error('tabs.init() must run before the first tab');
   const id = `t${nextNumber++}`;
   const host = el('div', 'term-host');
@@ -77,7 +78,7 @@ export function create({ background = false }: { background?: boolean } = {}): T
   } else {
     activate(id);
   }
-  window.pastel.startShell(id, { cols: term.cols, rows: term.rows });
+  window.pastel.startShell(id, { cols: term.cols, rows: term.rows }, startClaude);
   return tab;
 }
 

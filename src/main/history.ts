@@ -8,13 +8,13 @@ import { liveSessions } from './sessions-monitor';
 import { SESSION_ID } from './session-id';
 import type { TranscriptEntry } from './transcript-entry';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
+import { allowedClaudeHome, claudeFolderAllowed } from './claude-folder';
 
 const WINDOW_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HEAD_BYTES = 32 * 1024;
 const TAIL_BYTES = 64 * 1024;
 const FIRST_PROMPT_CHARS = 160;
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 export interface SessionRecord {
   sessionId: string;
@@ -36,14 +36,17 @@ const cache = new Map<string, { mtimeMs: number; size: number; record: SessionRe
 
 // Top-level session logs only; subagent logs live in <session>/subagents/.
 function sessionFiles(): string[] {
+  const home = allowedClaudeHome();
+  if (!home) return [];
+  const projectsDir = path.join(home, 'projects');
   let projects: string[];
   try {
-    projects = fs.readdirSync(PROJECTS_DIR);
+    projects = fs.readdirSync(projectsDir);
   } catch {
     return [];
   }
   return projects.flatMap((project) => {
-    const dir = path.join(PROJECTS_DIR, project);
+    const dir = path.join(projectsDir, project);
     try {
       return fs.readdirSync(dir)
         .filter((name) => name.endsWith('.jsonl') && SESSION_ID.test(name.slice(0, -6)))
@@ -96,7 +99,9 @@ const fixtures = (): SessionRecord[] => (isSnapshotRun() ? historyFixture.record
 const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cwd.slice(os.homedir().length)}` : cwd ?? '');
 
 // The past week, plus any older session she starred (kept) that is still on disk.
+// Empty until she allows reading her Claude folder, fixtures included, so History matches the reader.
 export function listSessions(kept: ReadonlySet<string> = new Set()): ListedSession[] {
+  if (!claudeFolderAllowed()) return [];
   const since = Date.now() - WINDOW_DAYS * DAY_MS;
   const wanted = (file: string, mtime: number) => mtime >= since || kept.has(path.basename(file, '.jsonl'));
   const live = new Set(liveSessions().map((s) => s.sessionId));
@@ -115,7 +120,7 @@ export function listSessions(kept: ReadonlySet<string> = new Set()): ListedSessi
 const fileById = new Map<string, string>();
 
 export const findRecord = (sessionId: string | null | undefined): SessionRecord | null => {
-  if (!sessionId || !SESSION_ID.test(sessionId)) return null;
+  if (!sessionId || !SESSION_ID.test(sessionId) || !claudeFolderAllowed()) return null;
   const fixture = fixtures().find((r) => r.sessionId === sessionId);
   if (fixture) return fixture;
   const known = fileById.get(sessionId);

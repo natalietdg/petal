@@ -6,6 +6,7 @@ import { AgentTimeline, agentFile, isAgentId, listAgents, type AgentsList } from
 import * as sessionsMonitor from './sessions-monitor';
 import { sessionTitleFor } from './session-title';
 import { isSnapshotRun, panelFixture } from './snapshot-mode';
+import { claudeFolderAllowed } from './claude-folder';
 import type { SessionFile } from './claude-session';
 import type { ActiveSession } from './tab-session';
 import type { FollowedSession } from './reader-feed';
@@ -19,8 +20,9 @@ export const subagentsDirOf = (session: SessionFile): string => {
 // Live sessions for the Sessions panel, her open limit and agents. A snapshot run sees only the harness's fixture sessions, never her real ones.
 export const panelSessions = (): SessionFile[] => (isSnapshotRun() ? panelFixture.sessions ?? [] : sessionsMonitor.liveSessions());
 
-// The reader's own session from its transcript path; any other from the live session files.
+// The reader's own session from its transcript path; any other from the live session files. None while reading is off.
 export function agentsDir(sessionId: string, own: FollowedSession | null | undefined): string | null {
+  if (!claudeFolderAllowed()) return null;
   if (own?.sessionId === sessionId) return path.join(path.dirname(own.transcript), sessionId, 'subagents');
   const session = panelSessions().find((s) => s.sessionId === sessionId);
   return session ? subagentsDirOf(session) : null;

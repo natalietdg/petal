@@ -46,6 +46,7 @@ import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { conclusionCheck } from './snapshot-conclusion';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
+import { getStartedCheck } from './snapshot-get-started';
 import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
 import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
@@ -410,6 +411,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '')], // appends conclude turns; after the steps that measure the reader
+    ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
   const count: StepCount = { done: 0, total: steps.length };
@@ -644,6 +646,22 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await questionPickerCheck(kit, { win, activeSession, file: fakeTranscript() ?? '' }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // Get started and the folder question on fixture state; welcome: the first-run screen alone, without reading her ~/.claude. Each needs a fresh PASTEL_SNAPSHOT_DIR.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'get-started' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await getStartedCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'welcome' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    organizerOffCheck(kit, 'start');
+    await fixtureReply({ js, log, pty });
+    await welcomeCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

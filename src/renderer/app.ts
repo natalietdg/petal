@@ -22,6 +22,9 @@ import * as tarotReading from './tarot-reading';
 import * as colourKey from './colour-key';
 import './planet-reading';
 import * as welcome from './welcome';
+import * as getStarted from './get-started';
+import * as consent from './consent';
+import * as launchScreens from './launch-screens';
 import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import * as agentsMenu from './agents-menu';
@@ -34,7 +37,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, notesPanel, agentsMenu, agentPanel, favorites };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -86,6 +89,7 @@ async function start(): Promise<void> {
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
+    else if (consent.isOpen()) void consent.decline(); // Esc there means Not now
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
     else if (colourKey.isOpen()) colourKey.close();
@@ -94,8 +98,9 @@ async function start(): Promise<void> {
   });
 
   // ⌘T and + open a tab meant for Claude, so her session limit applies.
-  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create(); };
-  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated: catchEscape, onScreen });
+  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create({ startClaude: true }); };
+  const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); };
+  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
 
   window.pastel.onTheme((next) => {
     themeKit.applyCssVars(next);
@@ -106,7 +111,14 @@ async function start(): Promise<void> {
   });
   const setReading = (id: string) => { document.documentElement.dataset.reading = id; };
   setReading(orDefault(await window.pastel.getReading(), 'newspaper', 'the reading style'));
-  reader.setClaudeMissing(!orDefault(await window.pastel.claudeInstalled(), true, 'whether Claude Code is installed'));
+  const claudeFound = orDefault(await window.pastel.claudeInstalled(), true, 'whether Claude Code is installed');
+  reader.setClaudeMissing(!claudeFound);
+  const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
+  const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
+  reader.setFolderAllowed(folderAllowed);
+  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.rerender(); });
+  window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
+  window.addEventListener('petal:get-started', () => void getStarted.open());
   window.pastel.onReading(setReading);
   cat.setCat(orDefault(await window.pastel.getCat(), 'mika', 'the pet'));
   window.pastel.onCat((id) => cat.setCat(id));
@@ -118,6 +130,7 @@ async function start(): Promise<void> {
     const active = tabs.active();
     if (active && update.tabId === active.id) showTab(active);
     history.tabUpdated(update.tabId);
+    getStarted.refresh();
   });
   window.pastel.onTabLabel(({ tabId, label }) => {
     tabs.setLabel(tabId, label);
@@ -127,6 +140,7 @@ async function start(): Promise<void> {
   window.pastel.onTabClosed(({ tabId }) => {
     tabs.remove(tabId);
     history.tabClosed(tabId);
+    getStarted.refresh();
   });
   window.pastel.onTabCommand((command) => {
     if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
@@ -162,8 +176,10 @@ async function start(): Promise<void> {
   });
   updatePill.init();
 
-  const { term, renderer } = tabs.create();
-  const firstRun = await welcome.openIfFirstRun(); // a new install sees the welcome screen over the first tab
+  // The first tab starts Claude too, once she has allowed the reader to follow it (a new install answers that first).
+  const { term, renderer } = tabs.create({ startClaude: claudeFound && folderAllowed });
+  await getStarted.load();
+  const firstRun = await launchScreens.show(); // over the first tab: the folder question, the welcome, then Get started until done
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
 }
 

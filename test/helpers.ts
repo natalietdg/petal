@@ -21,6 +21,13 @@ export function useTempUserData(): string {
   return dir;
 }
 
+// Reading ~/.claude waits for her consent (main/claude-folder.ts); suites about the readers allow it in a temp userData.
+export function allowClaudeFolder(): string {
+  const dir = useTempUserData();
+  fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ claudeFolder: { choice: 'allowed' } }));
+  return dir;
+}
+
 export function removeTempDirs(): void {
   for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 }

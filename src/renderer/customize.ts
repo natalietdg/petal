@@ -7,8 +7,9 @@ import { renderFormatting, renderLook } from './customize-look';
 import { renderFlowTitles, renderHandoff, renderOrganizer } from './customize-prompts';
 import { renderHook } from './customize-hook';
 import { renderSessions } from './customize-sessions';
+import { renderStart } from './customize-start';
 
-type SectionId = 'look' | 'formatting' | 'sessions' | 'organizer' | 'flowTitles' | 'handoff' | 'hook';
+type SectionId = 'look' | 'formatting' | 'sessions' | 'organizer' | 'flowTitles' | 'handoff' | 'hook' | 'start';
 
 const button = byId('customize-button');
 
@@ -20,6 +21,7 @@ const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'flowTitles', name: 'Flow titles', summary: 'The prompt that turns each step of a session into the state changes on the Flow view.' },
   { id: 'handoff', name: 'Handoff', summary: 'What Send to Claude writes when one session hands its history to another.' },
   { id: 'hook', name: 'Response hook', summary: 'A shell command of yours that runs each time Claude finishes a reply.' },
+  { id: 'start', name: 'Get started', summary: 'The setup checklist, and whether Petal may read your Claude folder.' },
 ];
 
 for (const s of SECTIONS) {
@@ -32,7 +34,7 @@ for (const s of SECTIONS) {
 
 let section: SectionId = 'look';
 
-const RENDER: Record<SectionId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, sessions: renderSessions, organizer: renderOrganizer, flowTitles: renderFlowTitles, handoff: renderHandoff, hook: renderHook };
+const RENDER: Record<SectionId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, sessions: renderSessions, organizer: renderOrganizer, flowTitles: renderFlowTitles, handoff: renderHandoff, hook: renderHook, start: renderStart };
 page.redraw = () => body.replaceChildren(...RENDER[section]());
 
 export async function show(id: SectionId = section): Promise<void> {

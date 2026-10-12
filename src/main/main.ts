@@ -5,7 +5,8 @@ import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
 import { registerAgentsIpc } from './agents-ipc';
-import { isSnapshotRun, userDataDir } from './snapshot-mode';
+import { claudeFixture, folderFixture, isSnapshotRun, userDataDir } from './snapshot-mode';
+import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
@@ -27,6 +28,17 @@ const WINDOW_HEIGHT = 900;
 
 // Snapshot runs keep their settings and stored flows in a scratch userData, never hers.
 if (isSnapshotRun()) app.setPath('userData', userDataDir());
+// Snapshot runs start with reading ~/.claude set by the fixture (on), so only the consent check sees the screen.
+if (isSnapshotRun()) configStore.save({ claudeFolder: { choice: folderFixture.choice } });
+
+// Every window's reader and Customize follow her folder choice.
+let folderAllowed = configStore.load().claudeFolder.choice === 'allowed';
+configStore.onChange((config) => {
+  const now = config.claudeFolder.choice === 'allowed';
+  if (now === folderAllowed) return;
+  folderAllowed = now;
+  for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'claude-folder:changed', now);
+});
 
 const focusedContents = () => BrowserWindow.getFocusedWindow()?.webContents;
 
@@ -84,6 +96,11 @@ function openWelcome(): void {
   if (contents) send(contents, 'welcome:open');
 }
 
+function openGetStarted(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'get-started:open');
+}
+
 function openColourKey(): void {
   const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
   if (contents) send(contents, 'colour-key:open');
@@ -108,6 +125,7 @@ function refreshMenu(): void {
     onToggleHistory: () => sendToFocused('history:toggle'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,
+    onOpenGetStarted: openGetStarted,
     onOpenColourKey: openColourKey,
     onOpenRepo: () => sendToFocused('repos:palette'),
   });
@@ -120,7 +138,7 @@ function registerIpc(): void {
   registerLookIpc();
   registerTabIpc();
 
-  handle('claude:installed', async (_event, request) => Boolean(await claudePath({ recheck: request?.recheck === true })));
+  handle('claude:installed', async (_event, request) => (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath({ recheck: request?.recheck === true }))));
 
   registerSessionsIpc({ activeSession });
   registerAgentsIpc({ activeSession });

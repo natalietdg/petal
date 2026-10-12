@@ -273,9 +273,9 @@ export async function roomForSession(): Promise<boolean> {
 export async function addSession(): Promise<void> {
   if (!(await roomForSession())) return;
   const open = overlays.current();
-  if (open) overlays.hide(open);
+  if (open && open !== 'welcome' && open !== 'get-started') overlays.hide(open); // the checklist stays up while she follows it
   if (isOpen()) setOpen(false);
-  tabs.create();
+  tabs.create({ startClaude: true });
   composer.focus();
 }
 

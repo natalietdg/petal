@@ -19,9 +19,14 @@ const welcomeState = `(() => {
     tagline: view.querySelector('.welcome-tagline')?.textContent ?? null,
     cats: [...view.querySelectorAll('.welcome-cat')].map((b) => ({ name: b.querySelector('.welcome-cat-name')?.textContent, picture: Boolean(b.querySelector('.cat-portrait svg rect')) })),
     scenes: view.querySelectorAll('.welcome-section .cz-chip').length,
-    claude: view.querySelector('.welcome-claude')?.classList.contains('found') ? 'found' : view.querySelector('.welcome-claude.missing') ? 'missing' : 'none',
-    command: view.querySelector('.welcome-command code')?.textContent ?? null,
-    recheck: Boolean(view.querySelector('.welcome-recheck')),
+    claude: (() => {
+      const list = view.querySelector('.gs-list');
+      const install = list?.querySelector('.gs-step[data-step="install"]');
+      if (!list) return 'none';
+      return list.classList.contains('all-set') || install?.classList.contains('done') ? 'found' : install ? 'missing' : 'none';
+    })(),
+    command: view.querySelector('.gs-command code')?.textContent ?? null,
+    recheck: Boolean(view.querySelector('.gs-recheck')),
     organizerBox: view.querySelector('.welcome-switch input')?.checked ?? null,
     organizerLabel: view.querySelector('.welcome-switch span')?.textContent ?? null,
     emDashes: (view.innerText.match(/—/g) ?? []).length,
@@ -83,7 +88,7 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   log(`${catsOk ? 'ok' : 'FAIL'} welcome cats each show their picture: ${JSON.stringify(first.cats)}`);
   log(`${first.scenes > 1 && first.emDashes === 0 ? 'ok' : 'FAIL'} welcome scenes and copy: scenes=${first.scenes} emDashes=${first.emDashes}`);
   log(`${first.organizerBox === false && /uses your Claude plan/.test(first.organizerLabel ?? '') ? 'ok' : 'FAIL'} welcome organizer switch starts off: ${JSON.stringify([first.organizerBox, first.organizerLabel])}`);
-  log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome finds claude on this Mac: ${first.claude}`);
+  log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome's Get started finds claude on this Mac: ${first.claude}`);
   const styleOffer = await js("({ installable: null, button: document.querySelector('#welcome .welcome-styles-add')?.textContent ?? null })");
   styleOffer.installable = (await js('window.pastel.config.get()')).petalStyles?.installable;
   log(`${(styleOffer.button === 'Add Petal’s reply styles') === styleOffer.installable ? 'ok' : 'FAIL'} welcome offers Petal's reply styles only while some are missing, opt-in: ${JSON.stringify(styleOffer)}`);
@@ -93,9 +98,9 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
 
   await js('PastelTerm.welcome.open({ claudeFound: false })');
   const missing = await js(welcomeState);
-  log(`${missing.claude === 'missing' && missing.command === INSTALL_COMMAND && missing.recheck ? 'ok' : 'FAIL'} PATH-missing variant shows the install command and Check again: ${JSON.stringify({ claude: missing.claude, command: missing.command, recheck: missing.recheck })}`);
+  log(`${missing.claude === 'missing' && missing.command === INSTALL_COMMAND && missing.recheck ? 'ok' : 'FAIL'} PATH-missing variant: Get started step 1 shows the install command and Check again: ${JSON.stringify({ claude: missing.claude, command: missing.command, recheck: missing.recheck })}`);
   await captureBoth(kit, 'welcome-no-claude');
-  await js("document.querySelector('.welcome-recheck').click()");
+  await js("document.querySelector('#welcome .gs-recheck').click()");
   const rechecked = await waitFor(async () => ((await js(welcomeState)).claude === 'found' ? true : null), 8000);
   log(`${rechecked ? 'ok' : 'FAIL'} Check again looks for claude afresh and finds it`);
 

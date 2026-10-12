@@ -2,13 +2,11 @@
 // Petal's only writes under ~/.claude: the `outputStyle` key of settings.json (setOutputStyle here) and
 // petal-*.md files in output-styles (petal-styles.ts, on request); nothing else there.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
 import { frontmatter } from './workflow-frontmatter';
 
 export const MAX_STYLE_BYTES = 256 * 1024;
-export const defaultClaudeDir = (): string => path.join(os.homedir(), '.claude');
 
 export interface OutputStyle {
   file: string;
@@ -43,7 +41,7 @@ function styleIn(claudeDir: string, file: string): string | null {
 }
 
 // The `outputStyle` in settings.json; null when unset or unreadable.
-export const activeStyleName = (claudeDir = defaultClaudeDir()): string | null => styleIn(claudeDir, 'settings.json');
+export const activeStyleName = (claudeDir: string): string | null => styleIn(claudeDir, 'settings.json');
 
 // At most MAX_STYLE_BYTES, so a huge file can't stall the Customize page.
 function readCapped(file: string): { text: string; truncated: boolean } {
@@ -74,7 +72,7 @@ function readStyle(file: string, active: string | null): OutputStyle {
 }
 
 // Every *.md in <claudeDir>/output-styles, by name, with the active one marked.
-export function listOutputStyles(claudeDir = defaultClaudeDir()): OutputStyles {
+export function listOutputStyles(claudeDir: string): OutputStyles {
   const dir = path.join(claudeDir, 'output-styles');
   const active = activeStyleName(claudeDir);
   let names: string[];
@@ -125,7 +123,7 @@ function writeStyleSetting(claudeDir: string, name: string): void {
 }
 
 // Makes a listed style the active one, by its frontmatter name as Claude Code's /output-style stores it.
-export function setOutputStyle(name: string, claudeDir = defaultClaudeDir()): StyleSwitch {
+export function setOutputStyle(name: string, claudeDir: string): StyleSwitch {
   const listed = typeof name === 'string' && listOutputStyles(claudeDir).styles.some((s) => !s.problem && s.name === name);
   if (!listed) throw new Error('not one of your output styles');
   writeStyleSetting(claudeDir, name);

@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readSessionFile, transcriptPath, SESSIONS_DIR, type SessionFile } from './claude-session';
+import { readSessionFile, transcriptPath, sessionsDir, type SessionFile } from './claude-session';
+import { claudeFolderAllowed } from './claude-folder';
 import { recentActivity } from './activity';
 import { readHead } from './jsonl-window';
 import { promptText, trimTo } from './prompts';
@@ -67,9 +68,11 @@ export function isAlive(pid: number): boolean {
 }
 
 export function liveSessions(): SessionFile[] {
+  const dir = sessionsDir();
+  if (!dir) return [];
   let names: string[];
   try {
-    names = fs.readdirSync(SESSIONS_DIR).filter((name) => /^\d+\.json$/.test(name));
+    names = fs.readdirSync(dir).filter((name) => /^\d+\.json$/.test(name));
   } catch {
     return [];
   }
@@ -167,6 +170,7 @@ export function snapshot(
   sessions: SessionFile[] = liveSessions(),
   subagentsDirOf: SubagentsDirOf = subagentsDir,
 ): SessionsSnapshot {
+  if (!claudeFolderAllowed()) sessions = []; // fixture sessions too: their logs are read below
   const busy = sessions.filter((s) => s.status === 'busy').length;
   if (!detailed) {
     const agents = sessions.reduce((sum, s) => sum + activeSubagentFiles(subagentsDirOf(s)).length, 0);
