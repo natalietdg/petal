@@ -1,5 +1,5 @@
 # Petal packaging. `npm run package` builds the .app only; `npm run dist` adds the dmg and zip.
-appId: local.petal
+appId: app.petal.reader
 productName: Petal
 directories:
   output: dist.noindex # .noindex keeps Spotlight from indexing build output
@@ -41,9 +41,8 @@ mac:
   x64ArchFiles: "**/node_modules/node-pty/prebuilds/darwin-*/**"
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
-# Builds write latest-mac.yml for electron-updater; only `npm run release -- --publish` uploads, as a draft.
+# Builds write latest-mac.yml for electron-updater; scripts/release.sh uploads to R2 behind the petal-downloads Worker.
 publish:
-  provider: github
-  owner: natalietdg
-  repo: petal
-  releaseType: draft
+  provider: generic
+  url: https://petal-downloads.natalieleong19.workers.dev
+  useMultipleRangeRequest: false # the Worker serves one range per request

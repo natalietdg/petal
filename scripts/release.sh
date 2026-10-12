@@ -1,9 +1,10 @@
 #!/bin/zsh
-# Signed, notarised, stapled universal Petal. Publishes a DRAFT GitHub release only with --publish.
+# Signed, notarised, stapled universal Petal. Uploads to the R2 bucket behind petal-downloads only with --publish.
 # Usage: CSC_NAME="Developer ID Application: Name (DC4T539CW7)" scripts/release.sh [--check] [--publish]
 set -euo pipefail
 cd "${0:A:h}/.."
 
+BUCKET=petal-releases # R2, served by the petal-downloads Worker
 PROFILE=petal # xcrun notarytool store-credentials petal ...
 TEAM=DC4T539CW7
 OUT=dist.noindex
@@ -37,8 +38,8 @@ if ! xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; the
 fi
 VERSION=$(node -p "require('./package.json').version")
 grep -q "^## \[$VERSION\]" CHANGELOG.md 2>/dev/null || problem "CHANGELOG.md has no \"## [$VERSION]\" entry."
-if (( PUBLISH )) && [[ -z ${GH_TOKEN:-} ]]; then
-  problem "--publish needs GH_TOKEN (a token that can create releases on natalietdg/petal)."
+if (( PUBLISH )) && ! npx -y wrangler@latest whoami >/dev/null 2>&1; then
+  problem "--publish needs wrangler logged in to the Cloudflare account that owns the $BUCKET bucket (npx wrangler login)."
 fi
 if (( ${#problems} )); then
   print -u2 "release: preflight failed, nothing was built:"
@@ -85,8 +86,9 @@ if (( ! PUBLISH )); then
   exit 0
 fi
 
-# Draft only (releaseType: draft in electron-builder.yml): no one gets the update until she publishes it on GitHub.
-files=()
-for f in "$OUT"/Petal-"$VERSION"-* "$OUT/latest-mac.yml"; do files+=(-f "$f"); done
-npx electron-builder publish "${files[@]}" --version "$VERSION" --policy always
-print "release: draft release v$VERSION uploaded. Review and publish it on GitHub by hand."
+# The app files go up first and latest-mac.yml last, so no installed Petal sees an update before its files exist.
+for f in "$OUT"/Petal-"$VERSION"-*.{dmg,zip,blockmap}(N) "$OUT/latest-mac.yml"; do
+  [[ -f $f ]] || continue
+  npx -y wrangler@latest r2 object put "$BUCKET/${f:t}" --file "$f" --remote
+done
+print "release: Petal $VERSION uploaded to $BUCKET. Live at https://petal-downloads.natalieleong19.workers.dev/download"
