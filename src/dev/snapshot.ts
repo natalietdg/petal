@@ -44,9 +44,9 @@ import { customizeStylesCheck } from './snapshot-customize-styles';
 import { shapeGuideCheck } from './snapshot-shape-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
-import * as sessionsMonitor from '../main/sessions-monitor';
+import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
-import { fixtureFile, snapshotOutDir } from '../main/snapshot-mode';
+import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
 import { onAnyDisplay } from '../main/snapshot-window';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
@@ -144,16 +144,15 @@ function newestJsonlIn(dir: string): string | undefined {
     .sort((a, b) => b.mtime - a.mtime)[0]?.f;
 }
 
-// Independent count, the same way a shell would: session files whose pid answers kill -0.
-function shellSessionCounts(): string {
-  const script = `cd ~/.claude/sessions; t=0; b=0; for f in [0-9]*.json; do p=\${f%.json};
-    grep -qE '"kind":"(interactive|bg)"' "$f" && kill -0 "$p" 2>/dev/null || continue;
-    t=$((t+1)); grep -q '"status":"busy"' "$f" && b=$((b+1)); done; echo "Sessions · $b busy · $t open"`;
-  try {
-    return execSync(script, { shell: '/bin/zsh' }).toString().trim();
-  } catch {
-    return 'Sessions · 0 busy · 0 open'; // no ~/.claude yet (fresh user)
-  }
+// The panel's fixture sessions, her own first when the run has one; never her real Claudes.
+function panelSessionsFixture(ownSessionId: string | null): SessionFile[] {
+  const minutesAgo = (m: number) => Date.now() - m * 60_000;
+  const fake = (n: number) => `e2e2e2e2-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  return [
+    ...(ownSessionId ? [{ pid: 0, sessionId: ownSessionId, cwd: '/tmp/petal-fixture/own', kind: 'interactive', status: 'busy', name: 'This tab', updatedAt: minutesAgo(0) }] : []),
+    { pid: 0, sessionId: fake(1), cwd: '/tmp/petal-fixture/reader', kind: 'interactive', status: 'busy', name: 'Reader polish', updatedAt: minutesAgo(2) },
+    { pid: 0, sessionId: fake(2), cwd: '/tmp/petal-fixture/notes', kind: 'interactive', status: 'idle', name: 'Release notes', updatedAt: minutesAgo(40) },
+  ];
 }
 
 // Waits until the page really shows the theme, panel and row state before capturing.
@@ -181,23 +180,19 @@ async function verifiedCapture({ js, capture, log, theme, panelOpen, expandedId 
 const hexToRgb = (hex: string): string => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
 
 async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownSessionId, themeIds = ['paleSky', 'nightPastel'] }: Omit<StepDeps, 'win'> & { ownSessionId: string | null; themeIds?: string[] }): Promise<void> {
+  const sessions = panelSessionsFixture(ownSessionId);
+  panelFixture.sessions = sessions;
   await js('PastelTerm.sessionsPanel.setOpen(true)');
   await wait(1500);
   const pill = (await js("document.getElementById('sessions-pill').innerText")).trim();
-  const shell = shellSessionCounts();
-  log(`sessions pill: "${pill}" | kill -0 count: "${shell}" | match=${pill.startsWith(shell)}`); // over her limit the pill adds "your limit is N"
+  const want = `Sessions · ${sessions.filter((s) => s.status === 'busy').length} busy · ${sessions.length} open`;
+  log(`${pill.startsWith(want) ? 'ok' : 'FAIL'} sessions pill counts the fixture sessions only: "${pill}", want "${want}"`);
   log(`own row marked: ${await js("document.querySelector('.session-row.own .session-own')?.innerText ?? 'none'")}`);
 
-  const rows = sessionsMonitor.snapshot({ detailed: true }).rows ?? [];
-  const expandId = (rows.find((row) => row.status === 'busy' && row.sessionId !== ownSessionId) ?? rows[0])?.sessionId;
-  log(`expanding row: ${rows.find((row) => row.sessionId === expandId)?.name}`);
+  const expandId = (sessions.find((s) => s.status === 'busy' && s.sessionId !== ownSessionId) ?? sessions[0]).sessionId;
+  log(`expanding row: ${sessions.find((s) => s.sessionId === expandId)?.name}`);
 
   const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
-  // Live sessions come and go mid-run: expand a row the panel still shows, else the first pick.
-  const shownRow = (): Promise<string | null> => js(`(() => {
-    const rows = [...document.querySelectorAll('#sessions-panel .session-row:not(.own)')];
-    return (rows.find((r) => r.querySelector('.session-status.busy')) ?? rows[0])?.dataset.sessionId ?? null;
-  })()`);
   for (const id of themeIds) {
     const theme = themes[id];
     applyTheme(id, { persist: false });
@@ -206,13 +201,13 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
     await panel('expandedIds.clear()');
     await panel('setOpen(true)');
     await verifiedCapture({ js, capture, log, theme, panelOpen: true, name: `panel-${id}` });
-    const rowId = (await shownRow()) ?? expandId;
-    await panel(`expandedIds.add(${JSON.stringify(rowId)})`);
+    await panel(`expandedIds.add(${JSON.stringify(expandId)})`);
     await panel('refresh()');
-    await verifiedCapture({ js, capture, log, theme, panelOpen: true, expandedId: rowId, name: `panel-row-${id}` });
+    await verifiedCapture({ js, capture, log, theme, panelOpen: true, expandedId: expandId, name: `panel-row-${id}` });
   }
   await panel('expandedIds.clear()');
   await panel('setOpen(false)');
+  panelFixture.sessions = null;
 }
 
 const FIXTURE_REPLY = [

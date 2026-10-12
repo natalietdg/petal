@@ -39,8 +39,6 @@ export const pasteWrites: { tabId: string; data: string }[] = [];
 // Snapshot runs record Open Repo's `cd` instead of typing it, and open no tab for it.
 export const repoWrites: { tabId: string; command: string; newTab: boolean }[] = [];
 
-// Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
-// subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
 // A stand-in ~/.claude for Workflow › Setup (read only); null reads the real one.
 export const setupFixture: { claudeDir: string | null } = { claudeDir: null };
 
@@ -52,4 +50,7 @@ export const stylesFixture: { claudeDir: string | null; opened: string[] } = { c
 // `live` marks some as running in another terminal; `resumes` records the resume a background tab echoed instead.
 export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[] } = { records: [], live: [], resumes: [] };
 
+// Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
+// sessions: null means none live, so her limit counts only these and never her real Claudes.
+// subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
 export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };
