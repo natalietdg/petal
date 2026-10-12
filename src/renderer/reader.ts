@@ -6,11 +6,13 @@ import * as notesPanel from './notes-panel';
 import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
+import { paintConclusion } from './conclusion-banner';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
+import type { Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; tabId?: string };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; tabId?: string; conclusion?: Conclusion | null };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -24,6 +26,9 @@ const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle befor
 const FLASH_MS = 1600;
 // The conversation reads top to bottom: earlier turns first, the newest reply last.
 status.before(older);
+// A concluded session's banner sits right above the newest reply, where the reader opens.
+const conclusionSlot = Object.assign(document.createElement('div'), { id: 'reader-conclusion', hidden: true });
+status.before(conclusionSlot);
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
@@ -107,7 +112,10 @@ export function rerender(): void {
 export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
   followNotesSession(shown);
-  const { state, replies, waiting = [], pending = [], busy = false, repo = null } = shown;
+  const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
+  const hadBanner = !conclusionSlot.hidden;
+  paintConclusion(conclusionSlot, notesSession, replies.length ? conclusion : null); // notesSession outlives an ended claude
+  if (!hadBanner && !conclusionSlot.hidden) latestId = null; // a banner that just arrived is where she starts reading
   paintStrip(strip, replies.map((r) => r.markdown));
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
@@ -154,7 +162,7 @@ function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]):
 
 // A new turn or reply: bring it into view once; the same one updating keeps her place.
 function bringIntoView(id: string | undefined): void {
-  if (id !== latestId) status.scrollIntoView({ block: 'start' });
+  if (id !== latestId) (conclusionSlot.hidden ? status : conclusionSlot).scrollIntoView({ block: 'start' });
   latestId = id;
 }
 

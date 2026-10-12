@@ -2,6 +2,7 @@
 // Also: the reply body shows them as one 3-row block in every look × theme, and History's preview carries the same strip.
 import fs from 'node:fs';
 import type { BrowserWindow } from 'electron';
+import { resizeOffscreen } from '../main/snapshot-window';
 import type { Kit } from './snapshot';
 import { OVERLAP } from './snapshot-header';
 import { addStatusFixture, FIXTURE_PLAIN, FIXTURE_STATUS } from './snapshot-history-fixture';
@@ -70,7 +71,7 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
   const stripShows = (root: string, texts: string[]) => waitFor(async () => { const s = await js(STRIP(root)); return s && !s.hidden && same(s.texts, texts) ? s : null; }, 6000);
 
   await js("PastelTerm.tabs.activate(PastelTerm.tabs.ids()[0]); PastelTerm.reader.setView('replies')");
-  win.setContentSize(1280, 900);
+  resizeOffscreen(win, 1280, 900);
   await waitFor(async () => (await js('window.innerWidth')) === 1280, 3000);
 
   // Live: each appended reply updates the strip; the newest reply with any line wins.
@@ -89,7 +90,7 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
     for (const width of WIDTHS) {
-      win.setContentSize(width, 900);
+      resizeOffscreen(win, width, 900);
       await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === width; }, 3000);
       await wait(300);
       await js("document.getElementById('reader').scrollTop = 0");
@@ -147,5 +148,5 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
   await capture('status-strip-none');
 
   await js("window.pastel.look.setReading('newspaper')");
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
 }

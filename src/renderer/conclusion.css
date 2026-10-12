@@ -1,0 +1,71 @@
+/* Conclusion banner: a concluded session's Conclusion / Result / Impact, full column width, above the newest reply. */
+#reader-conclusion[hidden], .history-conclusion[hidden] { display: none; }
+#reader-conclusion, .history-conclusion { margin: 0 0 1.6em; }
+
+.conclusion-banner {
+  padding: 0.85em 1.1em 0.95em;
+  border-left: 3px solid var(--done-ink);
+  border-radius: 0 10px 10px 0;
+  background: var(--done-wash);
+  color: var(--reader-fg);
+  font: 15px/1.5 var(--ui-font);
+}
+
+.conclusion-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7em;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.conclusion-head:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 3px; border-radius: 4px; }
+.conclusion-when {
+  flex-shrink: 0;
+  color: var(--done-ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.conclusion-title { min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The one-line version shows only when folded. */
+.conclusion-gist { display: none; flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conclusion-banner.folded .conclusion-gist { display: block; }
+.conclusion-banner.folded .conclusion-title { flex-shrink: 1; max-width: 40%; }
+.conclusion-chevron { flex-shrink: 0; margin-left: auto; width: 0.5em; height: 0.5em; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-0.15em) rotate(45deg); transition: transform 160ms ease; }
+.conclusion-banner.folded .conclusion-chevron { transform: rotate(-45deg); }
+.conclusion-head:hover .conclusion-chevron { border-color: var(--reader-fg); }
+@media (prefers-reduced-motion: reduce) { .conclusion-chevron { transition: none; } }
+
+.conclusion-rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.45em 1em;
+  margin-top: 0.7em;
+}
+.conclusion-banner.folded .conclusion-rows { display: none; }
+.conclusion-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.conclusion-text { margin: 0; overflow-wrap: anywhere; }
+
+/* Looks: Lifestyle rounds it; Print draws it in ink and mono like its kicker. */
+[data-reading="lifestyle"] .conclusion-banner { border-left: 0; border-radius: 16px; }
+[data-reading="editorial"] .conclusion-banner { border-radius: 0; border-left-width: 4px; }
+[data-reading="print"] .conclusion-banner {
+  border: 1px solid var(--print-ink, var(--reader-fg));
+  border-width: 1px 0;
+  border-radius: 0;
+  background: var(--print-tint, var(--done-wash));
+}
+[data-reading="print"] :is(.conclusion-when, .conclusion-label) { font-family: var(--print-mono, var(--mono-font)); font-weight: 400; color: var(--print-ink, var(--reader-fg)); }
+
+/* History's list: the mark beside the title, the conclusion's gist under it. */
+.history-concluded { flex-shrink: 0; padding: 0 8px; border-radius: 999px; background: var(--done-pill); color: var(--done-ink); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
+.history-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--reader-fg); }

@@ -3,7 +3,7 @@
 import * as overlays from './overlays';
 import { hooks, list, listTabs, search, sortToggle, state, view, type PreviewMode, type SortBy } from './history-state';
 import { renderList } from './history-list';
-import { renderPreview } from './history-preview';
+import { renderPreview, repaintConclusion } from './history-preview';
 import * as reply from './history-reply';
 import * as favorites from './favorites';
 import type { HistoryListKind } from '../shared/favorites';
@@ -84,6 +84,7 @@ void window.pastel.config.get().then((result) => {
   if (!isIpcError(result)) setListCollapsed(result.config.history.listCollapsed, false);
 });
 window.pastel.onToggleHistory(toggle);
+window.pastel.onConclusionsChanged(() => { if (isOpen()) void refresh().then(repaintConclusion); });
 
 export const rerender = (): void => { if (isOpen()) renderPreview(); };
 export function setPreviewMode(mode: PreviewMode): Promise<void> {

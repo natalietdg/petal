@@ -17,12 +17,13 @@ import type { PromptAnswerRequest } from './prompt-answer';
 import type { RepoEntry } from '../main/repo-scan';
 import type { SaveResult } from '../main/notes-store';
 import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
+import type { Conclusion } from './conclusion';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
 
 export interface HistoryList {
-  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string })[];
+  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string; conclusion: Conclusion | null })[];
   tags: TagsData['tags'];
   organizing: boolean;
 }
@@ -216,6 +217,7 @@ export interface EventChannels {
   'tabs:activate': { tabId: TabId };
   'layout:toggle': void;
   'history:toggle': void;
+  'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
   'welcome:open': void;
   'colour-key:open': void;

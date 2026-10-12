@@ -2,6 +2,7 @@
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeTo } from './snapshot-tables';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 
 const WIDTHS = [990, 1280];
@@ -84,7 +85,7 @@ export async function pastedCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   }
   check(!(await js('Boolean(window.__pastedXss)')), 'pasted markup never ran');
 
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
   applyTheme('paleSky', { persist: false });
   await js("window.pastel.look.setReading('newspaper')");
 }

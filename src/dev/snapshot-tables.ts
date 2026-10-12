@@ -5,6 +5,7 @@ import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { READING_CHOICES } from '../main/menu';
+import { resizeOffscreen } from '../main/snapshot-window';
 
 const WIDTHS = [990, 1280];
 const THEMES = ['paleSky', 'nightPastel']; // one light, one dark
@@ -104,7 +105,7 @@ export async function resizeTo(kit: Kit, win: BrowserWindow, width: number): Pro
   const { js, waitFor } = kit;
   // A resize can be dropped while the window is busy: ask again until the page really is this wide.
   for (let attempt = 0; attempt < 4; attempt++) {
-    win.setContentSize(width, 900);
+    resizeOffscreen(win, width, 900);
     const sized = await waitFor(async () => {
       win.webContents.invalidate();
       return (await js('window.innerWidth')) === width;
@@ -162,7 +163,7 @@ export async function tablesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   }
 
   fs.writeFileSync(path.join(outDir, 'tables.json'), JSON.stringify(rows, null, 2));
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
   applyTheme('paleSky', { persist: false });
   await js("window.pastel.look.setReading('newspaper')");
 }
