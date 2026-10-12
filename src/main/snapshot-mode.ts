@@ -44,7 +44,7 @@ export const repoWrites: { tabId: string; command: string; newTab: boolean }[] =
 // A stand-in ~/.claude for Workflow › Setup (read only); null reads the real one.
 export const setupFixture: { claudeDir: string | null } = { claudeDir: null };
 
-// A stand-in ~/.claude for Customize › Formatting's output styles (read only); null reads the real one.
+// A stand-in ~/.claude for Customize › Formatting's output styles; Use this style writes its settings.json. null reads the real one and refuses writes.
 // `opened` records Open in editor instead of launching an editor.
 export const stylesFixture: { claudeDir: string | null; opened: string[] } = { claudeDir: null, opened: [] };
 

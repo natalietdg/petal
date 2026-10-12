@@ -1,6 +1,7 @@
 // Customize › Formatting › Output styles (PASTEL_SNAPSHOT_MODE=customize-styles), against a stand-in ~/.claude:
 // every style listed with the right Active badge, a click shows the full prompt as plain text with its path,
-// a long prompt scrolls inside its box, nothing overflows sideways at 800px, in every theme; the folder is never written.
+// a long prompt scrolls inside its box, nothing overflows sideways at 800px, in every theme; browsing never writes.
+// Use this style moves the badge and changes only outputStyle in the stand-in settings.json; other names are refused.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,10 @@ const FILES: Record<string, string> = {
   'plain-notes.md': LONG_PROMPT,
 };
 const ACTIVE = 'Research Paper';
+// Other keys that must survive a switch untouched, in this order, at 2-space indent.
+const SETTINGS = { permissions: { allow: ['Bash(ls)'], deny: [] }, outputStyle: ACTIVE, model: 'opus', hooks: { Stop: [{ command: 'true' }] } };
+const SETTINGS_TEXT = `${JSON.stringify(SETTINGS, null, 2)}\n`;
+const HINT = (name: string) => `New Claude sessions use ${name}; running ones switch on their next message.`;
 
 // any: the page scripts below build their own shapes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,7 +41,10 @@ const LIST = `(() => [...document.querySelectorAll('#customize .cz-style')].map(
   active: Boolean(row.querySelector('.cz-style-active')),
   desc: row.querySelector('.cz-style-desc')?.textContent ?? '',
   expanded: row.querySelector('.cz-style-head').getAttribute('aria-expanded'),
+  use: Boolean(row.querySelector('.cz-style-use')),
 })))()`;
+const HINTS = "[...document.querySelectorAll('#customize .cz-style-switched')].map((p) => p.textContent)";
+const clickUse = (name: string): string => `document.querySelector('#customize .cz-style-use[aria-label=${JSON.stringify(`Use ${name}`)}]').click()`;
 
 const OPEN_PANEL = `(() => {
   const pre = document.querySelector('#customize .cz-style-text');
@@ -78,7 +86,7 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
   fs.rmSync(claudeDir, { recursive: true, force: true });
   fs.mkdirSync(stylesDir, { recursive: true });
   for (const [name, text] of Object.entries(FILES)) fs.writeFileSync(path.join(stylesDir, name), text);
-  fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({ outputStyle: ACTIVE }));
+  fs.writeFileSync(path.join(claudeDir, 'settings.json'), SETTINGS_TEXT);
   const before = hashDir(claudeDir);
   stylesFixture.claudeDir = claudeDir;
   stylesFixture.opened = [];
@@ -108,6 +116,7 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
       const listed: Page[] = await js(LIST);
       check(JSON.stringify(listed.map((r) => [r.name, r.file])) === JSON.stringify(expected.map((e) => [e.name, e.file])), `${theme}: lists every style ${JSON.stringify(listed.map((r) => r.name))}`);
       check(listed.filter((r) => r.active).map((r) => r.name).join() === ACTIVE, `${theme}: Active badge only on ${ACTIVE}: ${JSON.stringify(listed.filter((r) => r.active).map((r) => r.name))}`);
+      check(listed.every((r) => r.use === !r.active), `${theme}: Use this style on every row but the active one`);
       check(listed.find((r) => r.name === 'Magazine')?.desc === 'Headline, dek, sidebars and pull quotes for Petal.' && listed.find((r) => r.name === 'plain-notes')?.desc === '', `${theme}: descriptions from frontmatter, none without it`);
       check(listed.every((r) => r.expanded === 'false') && !(await js("Boolean(document.querySelector('#customize .cz-style-text'))")), `${theme}: collapsed shows no prompt`);
       await js("document.querySelector('#customize .cz-styles').closest('.cz-card').scrollIntoView({ block: 'start' })");
@@ -142,6 +151,36 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
 
     // Read-only: the folder is byte for byte what the harness wrote.
     check(hashDir(claudeDir) === before, 'the stand-in ~/.claude is unchanged after every click');
+
+    // Use this style: the badge moves, only outputStyle changes, the hint shows; any other name is refused.
+    const stylesHash = hashDir(stylesDir);
+    await showFormatting();
+    await js(clickUse('Magazine'));
+    const moved = await waitFor(async () => { const rows: Page[] = await js(LIST); return rows.find((r) => r.active)?.name === 'Magazine' ? rows : null; }, 5000);
+    check(moved && moved.filter((r: Page) => r.active).length === 1 && moved.every((r: Page) => r.use === !r.active), `Use this style moves the badge to Magazine: ${JSON.stringify(moved?.map((r: Page) => [r.name, r.active, r.use]))}`);
+    const written = fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8');
+    check(written === `${JSON.stringify({ ...SETTINGS, outputStyle: 'Magazine' }, null, 2)}\n`, `settings.json has outputStyle Magazine, every other key, order and indent intact: ${JSON.stringify(written)}`);
+    check(fs.readdirSync(claudeDir).sort().join() === 'output-styles,settings.json' && hashDir(stylesDir) === stylesHash, 'nothing else written: no temp file, style files unchanged');
+    const hints: string[] = await js(HINTS);
+    check(hints.join('|') === HINT('Magazine'), `the hint line shows: ${JSON.stringify(hints)}`);
+    await js("document.querySelector('#customize .cz-styles').closest('.cz-card').scrollIntoView({ block: 'start' })");
+    await capture('customize-styles-switched-paleSky');
+
+    // A different style in settings.local.json is named in one more line, and that file is never written.
+    const local = path.join(claudeDir, 'settings.local.json');
+    fs.writeFileSync(local, '{"outputStyle":"Explanatory"}');
+    await js(clickUse('Research Paper'));
+    const overrideHints = await waitFor(async () => { const h: string[] = await js(HINTS); return h.length === 2 ? h : null; }, 5000);
+    check(overrideHints?.[0] === HINT('Research Paper') && /settings\.local\.json names Explanatory, which still wins/.test(overrideHints?.[1] ?? ''), `override line shows: ${JSON.stringify(overrideHints)}`);
+    check(fs.readFileSync(local, 'utf8') === '{"outputStyle":"Explanatory"}' && fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8') === SETTINGS_TEXT, 'settings.local.json untouched; settings.json back to the original bytes');
+    fs.rmSync(local);
+
+    const unknown: Page[] = await js("Promise.all(['Explanatory', 'magazine.md', '../settings', ''].map((n) => window.pastel.config.useStyle(n)))");
+    check(unknown.every((r) => r?.error) && fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8') === SETTINGS_TEXT, `unknown names refused, settings.json unchanged: ${JSON.stringify(unknown)}`);
+    await js('PastelTerm.customize.close()');
+    await showFormatting();
+    check((await js(HINTS)).length === 0, 'reopening clears the hint');
+    await js('PastelTerm.customize.close()');
 
     // Reload on open: a file added while Customize is shut shows on the next open.
     const added = path.join(stylesDir, 'added-later.md');

@@ -1,4 +1,4 @@
-// IPC for the Customize page: everything it shows in one read, config edits, the hook test, and Look setters.
+// IPC for the Customize page: everything it shows in one read, config edits, the hook test, the output style switch, and Look setters.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app, shell } from 'electron';
@@ -9,12 +9,13 @@ import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
 import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from './look';
 import { handle, on } from './ipc';
-import { activeStyleName, defaultClaudeDir, listOutputStyles } from './output-styles';
+import { activeStyleName, defaultClaudeDir, listOutputStyles, setOutputStyle } from './output-styles';
 import { isSnapshotRun, stylesFixture } from './snapshot-mode';
+import type { StyleSwitch } from './output-styles';
 import type { CustomizeState } from '../shared/ipc';
 import type { Choice } from '../shared/types';
 
-// Snapshot runs read a stand-in ~/.claude when the harness sets one.
+// Snapshot runs read and write a stand-in ~/.claude when the harness sets one.
 const claudeDir = (): string => (isSnapshotRun() && stylesFixture.claudeDir) || defaultClaudeDir();
 
 // Opens a listed style in her default editor; any other path is refused.
@@ -27,6 +28,12 @@ async function openStyle(file: string): Promise<{ ok: true }> {
   const failure = await shell.openPath(file);
   if (failure) throw new Error(failure);
   return { ok: true };
+}
+
+// Writes outputStyle in settings.json; a snapshot run without a stand-in ~/.claude never writes.
+function useStyle(name: string): StyleSwitch {
+  if (isSnapshotRun() && !stylesFixture.claudeDir) throw new Error('snapshot runs only write a stand-in ~/.claude');
+  return setOutputStyle(name, claudeDir());
 }
 
 const HANDOFF_SAMPLE = {
@@ -70,6 +77,7 @@ export function registerCustomizeIpc(): void {
   handle('config:hook-runs', () => responseHook.recentRuns());
   handle('config:organizer', () => organizer.status());
   handle('config:open-style', (_event, file) => openStyle(file));
+  handle('config:use-style', (_event, name) => useStyle(name));
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
   on('look:reading', (_event, id) => { if (isReadingChoice(id)) applyReading(id); });
   on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });

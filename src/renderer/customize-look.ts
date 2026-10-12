@@ -98,7 +98,7 @@ organizer.prompt + JSON contract + existing tags
 export function renderFormatting(): HTMLElement[] {
   const readingName = Object.fromEntries(page.state.choices.reading)[page.state.look.reading] ?? page.state.look.reading;
   const style = el('p', 'cz-note');
-  style.append('Claude Code output style: ', el('strong', null, page.state.outputStyle ?? 'default'), ' (from ~/.claude/settings.json, read-only). ');
+  style.append('Claude Code output style: ', el('strong', null, page.state.outputStyle ?? 'default'), ' (from ~/.claude/settings.json; switch it under Output styles). ');
   if (page.state.magazinePath) style.append('Magazine guide: ', el('code', null, page.state.magazinePath), '.');
   else style.append('No magazine.md found in ~/.claude/output-styles.');
 

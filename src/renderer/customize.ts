@@ -33,6 +33,7 @@ for (const s of SECTIONS) {
 let section: SectionId = 'look';
 
 const RENDER: Record<SectionId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, sessions: renderSessions, organizer: renderOrganizer, flowTitles: renderFlowTitles, handoff: renderHandoff, hook: renderHook };
+page.redraw = () => body.replaceChildren(...RENDER[section]());
 
 export async function show(id: SectionId = section): Promise<void> {
   section = id;

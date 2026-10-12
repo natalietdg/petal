@@ -20,8 +20,8 @@ export const summary = query(view, '#customize-summary');
 export const errorLine = query(view, '#customize-error');
 export const body = query(view, '#customize-body');
 
-// The config:get payload; customize.ts reads it before any section draws.
-export const page = { state: null as unknown as CustomizeState };
+// The config:get payload; customize.ts reads it before any section draws and sets redraw to repaint the open section.
+export const page = { state: null as unknown as CustomizeState, redraw: (): void => undefined };
 
 export const actionButton = (label: string, onClick: () => unknown, className = 'flow-button'): HTMLButtonElement => {
   const b = el('button', className, label);

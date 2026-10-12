@@ -92,6 +92,10 @@
 .cz-styles { display: flex; flex-direction: column; }
 .cz-style { border-top: 1px solid var(--rule); }
 .cz-style:first-child { border-top: 0; }
+.cz-style-top { display: flex; align-items: center; gap: 12px; }
+.cz-style-top .cz-style-head { flex: 1; min-width: 0; }
+.cz-style-use { flex: none; }
+.cz-style-switched { color: var(--reader-fg); }
 .cz-style-head {
   display: flex;
   flex-direction: column;

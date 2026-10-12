@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { MAX_STYLE_BYTES, activeStyleName, listOutputStyles } from '../src/main/output-styles';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MAX_STYLE_BYTES, activeStyleName, listOutputStyles, setOutputStyle } from '../src/main/output-styles';
 import { removeTempDirs, tempDir } from './helpers';
 
 const RESEARCH = '---\nname: Research Paper\ndescription: "Abstract first, then sections"\n---\n\n# Research paper\nBody text.\n';
@@ -16,7 +16,10 @@ function claudeDir(files: Record<string, string>, settings?: unknown): string {
   return dir;
 }
 
-afterEach(() => removeTempDirs());
+afterEach(() => {
+  vi.restoreAllMocks();
+  removeTempDirs();
+});
 
 describe('listOutputStyles', () => {
   it('reads name and description from frontmatter, including folded values', () => {
@@ -100,5 +103,113 @@ describe('activeStyleName', () => {
     expect(activeStyleName(claudeDir({}, '{not json'))).toBeNull();
     expect(activeStyleName(claudeDir({}, { outputStyle: 3 }))).toBeNull();
     expect(activeStyleName(claudeDir({}, { outputStyle: 'Magazine' }))).toBe('Magazine');
+  });
+});
+
+describe('setOutputStyle', () => {
+  const files = { 'research-paper.md': RESEARCH, 'magazine.md': FOLDED };
+  const OTHER = { permissions: { allow: ['Bash(ls)'], deny: [] }, outputStyle: 'Research Paper', model: 'opus', hooks: { Stop: [{ command: 'x' }] }, zeta: 1 };
+  const settingsPath = (dir: string) => path.join(dir, 'settings.json');
+  const read = (dir: string) => fs.readFileSync(settingsPath(dir), 'utf8');
+
+  it('changes only outputStyle, keeping every other key, the key order and the 2-space indent', () => {
+    const dir = claudeDir(files);
+    fs.writeFileSync(settingsPath(dir), `${JSON.stringify(OTHER, null, 2)}\n`);
+    expect(setOutputStyle('Magazine', dir)).toEqual({ name: 'Magazine', override: null });
+    const after = JSON.parse(read(dir));
+    expect(after).toEqual({ ...OTHER, outputStyle: 'Magazine' });
+    expect(Object.keys(after)).toEqual(Object.keys(OTHER));
+    expect(read(dir)).toBe(`${JSON.stringify({ ...OTHER, outputStyle: 'Magazine' }, null, 2)}\n`);
+    expect(activeStyleName(dir)).toBe('Magazine');
+  });
+
+  it('keeps tab and 4-space indents, a compact one-liner, and a missing final newline', () => {
+    for (const indent of ['\t', '    ', '']) {
+      const dir = claudeDir(files);
+      fs.writeFileSync(settingsPath(dir), JSON.stringify(OTHER, null, indent));
+      setOutputStyle('Magazine', dir);
+      expect(read(dir)).toBe(JSON.stringify({ ...OTHER, outputStyle: 'Magazine' }, null, indent));
+    }
+  });
+
+  it('adds outputStyle last when it was not set', () => {
+    const dir = claudeDir(files, { model: 'opus', theme: 'dark' });
+    setOutputStyle('Research Paper', dir);
+    expect(read(dir)).toBe('{"model":"opus","theme":"dark","outputStyle":"Research Paper"}');
+  });
+
+  it('creates a missing settings.json with just that key', () => {
+    const dir = claudeDir(files);
+    setOutputStyle('Magazine', dir);
+    expect(read(dir)).toBe('{\n  "outputStyle": "Magazine"\n}\n');
+  });
+
+  it('refuses a settings.json that does not parse, or is not an object, and leaves it byte for byte', () => {
+    for (const broken of ['{"model": "opus",', '[1, 2]', 'null', '']) {
+      const dir = claudeDir(files, broken);
+      expect(() => setOutputStyle('Magazine', dir)).toThrow(/isn’t a valid JSON object, so Petal left it unchanged/);
+      expect(read(dir)).toBe(broken);
+      expect(fs.readdirSync(dir).sort()).toEqual(['output-styles', 'settings.json']);
+    }
+  });
+
+  it('rejects a name that is not one of the listed styles and writes nothing', () => {
+    const dir = claudeDir(files, OTHER);
+    const before = read(dir);
+    for (const name of ['Explanatory', 'magazine', 'magazine.md', '', '../settings', 3 as unknown as string]) {
+      expect(() => setOutputStyle(name, dir)).toThrow('not one of your output styles');
+    }
+    expect(read(dir)).toBe(before);
+    expect(fs.existsSync(path.join(tempDir('petal-styles-'), 'settings.json'))).toBe(false);
+  });
+
+  it('keeps the file mode', () => {
+    const dir = claudeDir(files, OTHER);
+    fs.chmodSync(settingsPath(dir), 0o600);
+    setOutputStyle('Magazine', dir);
+    expect(fs.statSync(settingsPath(dir)).mode & 0o7777).toBe(0o600);
+    fs.chmodSync(settingsPath(dir), 0o664);
+    setOutputStyle('Research Paper', dir);
+    expect(fs.statSync(settingsPath(dir)).mode & 0o7777).toBe(0o664);
+  });
+
+  it('is atomic: a failure at fsync or rename leaves the old file whole and no temp file', () => {
+    for (const step of ['fsyncSync', 'renameSync'] as const) {
+      const dir = claudeDir(files, OTHER);
+      const before = read(dir);
+      const spy = vi.spyOn(fs, step).mockImplementation(() => { throw new Error(`disk full at ${step}`); });
+      expect(() => setOutputStyle('Magazine', dir)).toThrow(`disk full at ${step}`);
+      spy.mockRestore();
+      expect(read(dir)).toBe(before);
+      expect(fs.readdirSync(dir).sort()).toEqual(['output-styles', 'settings.json']);
+    }
+  });
+
+  it('writes through a symlinked settings.json, which stays a symlink', () => {
+    const dir = claudeDir(files);
+    const real = path.join(tempDir('petal-dotfiles-'), 'settings.json');
+    fs.writeFileSync(real, JSON.stringify(OTHER));
+    fs.symlinkSync(real, settingsPath(dir));
+    setOutputStyle('Magazine', dir);
+    expect(fs.lstatSync(settingsPath(dir)).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(fs.readFileSync(real, 'utf8')).outputStyle).toBe('Magazine');
+  });
+
+  it('names a different style in settings.local.json as the override, never writing that file', () => {
+    const dir = claudeDir(files, OTHER);
+    fs.writeFileSync(path.join(dir, 'settings.local.json'), '{"outputStyle":"Explanatory"}');
+    expect(setOutputStyle('Magazine', dir)).toEqual({ name: 'Magazine', override: 'Explanatory' });
+    expect(fs.readFileSync(path.join(dir, 'settings.local.json'), 'utf8')).toBe('{"outputStyle":"Explanatory"}');
+    fs.writeFileSync(path.join(dir, 'settings.local.json'), '{"outputStyle":"Magazine"}');
+    expect(setOutputStyle('Magazine', dir).override).toBeNull();
+  });
+
+  it('never touches the style files', () => {
+    const dir = claudeDir(files, OTHER);
+    const stylesDir = path.join(dir, 'output-styles');
+    const snapshot = () => fs.readdirSync(stylesDir).sort().map((f) => [f, fs.readFileSync(path.join(stylesDir, f), 'utf8'), fs.statSync(path.join(stylesDir, f)).mtimeMs]);
+    const before = snapshot();
+    setOutputStyle('Magazine', dir);
+    expect(snapshot()).toEqual(before);
   });
 });
