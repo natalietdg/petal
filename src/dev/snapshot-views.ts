@@ -594,7 +594,7 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
 
   await click('.sessions-limit-close');
   const oldest = await waitState((s) => s.confirm.length === 1);
-  check(oldest && oldest.confirm[0] === 'Close the oldest idle Claude, “Forecast draft”? Yes · No',
+  check(oldest && oldest.confirm[0] === 'Close the oldest idle Claude, “forecast · new session”? Yes · No',
     `Close oldest idle picks the idle one updated longest ago, never a busy one: ${JSON.stringify(oldest?.confirm)}`);
   for (const id of THEMES) {
     applyTheme(id, { persist: false });

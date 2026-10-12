@@ -154,6 +154,8 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     check(tabsUp, `a tab follows each fixture session: ${JSON.stringify(tabsUp ?? await js('PastelTerm.tabs.ids()'))}`);
     await js('PastelTerm.sessionsPanel.setOpen(true)');
     await js(`PastelTerm.history.open().then(() => PastelTerm.history.select(${JSON.stringify(ORGANIZED.id)}))`);
+    // Earlier steps can leave History on Favorites or with a search typed: back to the full list.
+    await js("(() => { const s = document.getElementById('history-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('#history-tabs [data-list=\"all\"]').click(); })()");
 
     // 1 Every surface shows the same label, cut the same way, with the full title on hover.
     const expected = (f: Fixture, organizer = f.organizer) => ({ text: sessionLabelText(fullTitle(f, organizer)), tip: fullTitle(f, organizer) });
