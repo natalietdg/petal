@@ -15,6 +15,11 @@ files:
   - "!**/node_modules/node-pty/bin/**"
   - "!**/node_modules/node-pty/build/Release/{obj.target,.deps,node-addon-api}/**"
   - "!**/node_modules/node-pty/build/Release/.forge-meta"
+# Petal's reply styles, copied to ~/.claude/output-styles only when the user asks.
+extraResources:
+  - from: resources/output-styles
+    to: output-styles
+    filter: ["petal-*.md"]
 asarUnpack:
   - "**/node_modules/node-pty/**"
 mac:

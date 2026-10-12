@@ -84,6 +84,9 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   log(`${first.scenes > 1 && first.emDashes === 0 ? 'ok' : 'FAIL'} welcome scenes and copy: scenes=${first.scenes} emDashes=${first.emDashes}`);
   log(`${first.organizerBox === false && /uses your Claude plan/.test(first.organizerLabel ?? '') ? 'ok' : 'FAIL'} welcome organizer switch starts off: ${JSON.stringify([first.organizerBox, first.organizerLabel])}`);
   log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome finds claude on this Mac: ${first.claude}`);
+  const styleOffer = await js("({ installable: null, button: document.querySelector('#welcome .welcome-styles-add')?.textContent ?? null })");
+  styleOffer.installable = (await js('window.pastel.config.get()')).petalStyles?.installable;
+  log(`${(styleOffer.button === 'Add Petal’s reply styles') === styleOffer.installable ? 'ok' : 'FAIL'} welcome offers Petal's reply styles only while some are missing, opt-in: ${JSON.stringify(styleOffer)}`);
   log(`${configStore.load().welcome.seen ? 'ok' : 'FAIL'} welcome.seen saved once shown`);
   await captureBoth(kit, 'welcome');
   await footerInViewCheck(kit, win);

@@ -10,6 +10,7 @@ import { toMarkdown } from './handoff';
 import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from './look';
 import { handle, on } from './ipc';
 import { activeStyleName, defaultClaudeDir, listOutputStyles, setOutputStyle } from './output-styles';
+import { installPetalStyles, petalStyles, type PetalPaths, type PetalStyles } from './petal-styles';
 import { isSnapshotRun, stylesFixture } from './snapshot-mode';
 import type { StyleSwitch } from './output-styles';
 import type { CustomizeState } from '../shared/ipc';
@@ -30,10 +31,24 @@ async function openStyle(file: string): Promise<{ ok: true }> {
   return { ok: true };
 }
 
-// Writes outputStyle in settings.json; a snapshot run without a stand-in ~/.claude never writes.
-function useStyle(name: string): StyleSwitch {
+// A snapshot run without a stand-in ~/.claude never writes there.
+function refuseRealWriteInSnapshot(): void {
   if (isSnapshotRun() && !stylesFixture.claudeDir) throw new Error('snapshot runs only write a stand-in ~/.claude');
+}
+
+// Writes outputStyle in settings.json.
+function useStyle(name: string): StyleSwitch {
+  refuseRealWriteInSnapshot();
   return setOutputStyle(name, claudeDir());
+}
+
+// Packaged: Contents/Resources/output-styles (electron-builder extraResources); dev: the repo's resources folder.
+export const bundleDir = (): string => (app.isPackaged ? path.join(process.resourcesPath, 'output-styles') : path.join(app.getAppPath(), 'resources', 'output-styles'));
+const petalPaths = (): PetalPaths => ({ claudeDir: claudeDir(), bundleDir: bundleDir(), recordFile: path.join(app.getPath('userData'), 'petal-styles.json') });
+
+function addPetalStyles(): PetalStyles {
+  refuseRealWriteInSnapshot();
+  return installPetalStyles(petalPaths());
 }
 
 const HANDOFF_SAMPLE = {
@@ -58,6 +73,7 @@ function customizeState(): CustomizeState {
     },
     outputStyle: activeStyleName(claudeDir()),
     outputStyles: listOutputStyles(claudeDir()),
+    petalStyles: petalStyles(petalPaths()),
     magazinePath: fs.existsSync(magazinePath) ? magazinePath : null,
     organizer: organizer.status(),
     hookRuns: responseHook.recentRuns(),
@@ -78,6 +94,7 @@ export function registerCustomizeIpc(): void {
   handle('config:organizer', () => organizer.status());
   handle('config:open-style', (_event, file) => openStyle(file));
   handle('config:use-style', (_event, name) => useStyle(name));
+  handle('config:add-petal-styles', () => addPetalStyles());
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
   on('look:reading', (_event, id) => { if (isReadingChoice(id)) applyReading(id); });
   on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });

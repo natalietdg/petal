@@ -1,7 +1,9 @@
-// Customize › Formatting › Output styles: her Claude Code formatting prompts, shown read-only, with Use this style to switch the active one.
+// Customize › Formatting › Output styles: Claude Code formatting prompts, shown read-only, with Use this style to switch the active one
+// and an offer to add Petal's own reply styles.
 import { el, isIpcError } from './dom';
 import { actionButton, card, note, page } from './customize-kit';
 import type { OutputStyle, StyleSwitch } from '../main/output-styles';
+import type { PetalStyles } from '../main/petal-styles';
 import type { CustomizeState } from '../shared/ipc';
 
 // The open style survives redraws (a theme change re-renders the section).
@@ -24,6 +26,34 @@ async function useStyle(style: OutputStyle, button: HTMLButtonElement): Promise<
   switched = { lines: isIpcError(result) ? [`Couldn’t switch: ${result.error}`] : switchedLines(result), state: page.state };
   page.redraw();
   document.querySelector<HTMLElement>(`#customize .cz-style[data-file="${CSS.escape(style.file)}"] .cz-style-head`)?.focus();
+}
+
+// One line per Petal style that was left alone, so a skipped update is never silent.
+export function petalStyleNotes({ styles }: PetalStyles): string[] {
+  return styles.flatMap((s) => {
+    if (s.state === 'edited') return [`${s.file}: edited, not updated.`];
+    if (s.state === 'foreign') return [`${s.file}: a file of yours has this name, so Petal left it alone.`];
+    return [];
+  });
+}
+
+async function addPetalStyles(button: HTMLButtonElement): Promise<void> {
+  button.disabled = true;
+  const result = await window.pastel.config.addPetalStyles();
+  const fresh = await window.pastel.config.get();
+  if (!isIpcError(fresh)) page.state = fresh;
+  switched = { lines: [isIpcError(result) ? `Couldn’t add them: ${result.error}` : 'Added Petal’s reply styles. Pick one below with Use this style.'], state: page.state };
+  page.redraw();
+}
+
+function petalOffer(): Node[] {
+  const { petalStyles } = page.state;
+  const nodes: Node[] = petalStyleNotes(petalStyles).map((line) => note(line, 'cz-note cz-petal-note'));
+  if (!petalStyles.installable) return nodes;
+  const add: HTMLButtonElement = actionButton('Add Petal’s reply styles', () => addPetalStyles(add), 'flow-button cz-petal-add');
+  const row = el('div', 'cz-actions cz-petal-offer');
+  row.append(add, el('span', 'cz-status', 'Copies Petal’s four styles into ~/.claude/output-styles. Nothing else changes.'));
+  return [row, ...nodes];
 }
 
 function promptPanel(style: OutputStyle): HTMLDivElement {
@@ -81,8 +111,9 @@ export function outputStylesCard(): HTMLDivElement {
   list.append(...styles.map((s) => styleRow(s, list)));
   const children: Node[] = [];
   if (problem) children.push(el('p', 'cz-empty', problem));
+  children.push(...petalOffer());
   if (styles.length) children.push(list);
   if (switched?.state === page.state) children.push(...switched.lines.map((line) => note(line, 'cz-note cz-style-switched')));
-  children.push(note('Use this style changes only outputStyle in ~/.claude/settings.json; Petal never edits the style files. A style picked with /output-style inside a project is saved there and wins in that project.'));
+  children.push(note('Use this style changes only outputStyle in ~/.claude/settings.json. Petal only ever adds or updates its own petal-*.md styles, and never deletes. A style picked with /output-style inside a project is saved there and wins in that project.'));
   return card('Output styles', ...children);
 }

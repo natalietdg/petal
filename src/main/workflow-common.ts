@@ -1,5 +1,5 @@
 // Shared pieces of the Workflow dashboard: reading files, grouping sessions by tag or project, label text.
-// Read-only everywhere: the Workflow dashboard only reads ~/.claude (Petal's one write there is outputStyle, in output-styles.ts).
+// Read-only everywhere: the Workflow dashboard only reads ~/.claude (Petal's only writes there: outputStyle in settings.json and petal-*.md styles, see output-styles.ts).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

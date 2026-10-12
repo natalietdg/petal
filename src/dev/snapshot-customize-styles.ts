@@ -2,12 +2,14 @@
 // every style listed with the right Active badge, a click shows the full prompt as plain text with its path,
 // a long prompt scrolls inside its box, nothing overflows sideways at 800px, in every theme; browsing never writes.
 // Use this style moves the badge and changes only outputStyle in the stand-in settings.json; other names are refused.
+// Add Petal's reply styles copies the four bundled petal-*.md files in, and the button goes away.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { stylesFixture } from '../main/snapshot-mode';
+import { bundleDir as bundledStylesDir } from '../main/customize-ipc';
 import { resizeOffscreen } from '../main/snapshot-window';
 
 const WIDTH = 800;
@@ -190,6 +192,31 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
     check(afterAdd.length === expected.length + 1 && afterAdd.some((r) => r.name === 'Added Later'), `reopening reloads the list: ${JSON.stringify(afterAdd.map((r) => r.name))}`);
     await js('PastelTerm.customize.close()');
     fs.rmSync(added);
+
+    // Petal's reply styles: offered, copied from the app bundle on click, usable, then no longer offered.
+    const PETAL = ['Petal · Landing Page', 'Petal · Magazine', 'Petal · Pyramid', 'Petal · Research Paper'];
+    const bundleDir = bundledStylesDir();
+    const bundledFiles = fs.readdirSync(bundleDir).sort();
+    check(bundledFiles.join() === 'petal-landing-page.md,petal-magazine.md,petal-pyramid.md,petal-research-paper.md', `the app bundle carries the four styles: ${bundleDir} ${JSON.stringify(bundledFiles)}`);
+    const beforePetal = Object.fromEntries(fs.readdirSync(stylesDir).map((f) => [f, fs.readFileSync(path.join(stylesDir, f), 'utf8')]));
+    await showFormatting();
+    check(await js("Boolean(document.querySelector('#customize .cz-petal-add'))"), 'Add Petal’s reply styles is offered');
+    await js("document.querySelector('#customize .cz-petal-add').click()");
+    const withPetal = await waitFor(async () => { const rows: Page[] = await js(LIST); return PETAL.every((n) => rows.some((r) => r.name === n)) ? rows : null; }, 5000);
+    check(withPetal, `the four Petal styles are listed: ${JSON.stringify(withPetal?.map((r: Page) => r.name))}`);
+    const copied = bundledFiles.every((f) => fs.readFileSync(path.join(stylesDir, f), 'utf8') === fs.readFileSync(path.join(bundleDir, f), 'utf8'));
+    const untouched = Object.entries(beforePetal).every(([f, text]) => fs.readFileSync(path.join(stylesDir, f), 'utf8') === text);
+    const newFiles = fs.readdirSync(stylesDir).filter((f) => !(f in beforePetal)).sort();
+    check(copied && untouched && newFiles.join() === bundledFiles.join(), `copied byte for byte, only petal-*.md added, fixture styles untouched: ${JSON.stringify(newFiles)}`);
+    check(!(await js("Boolean(document.querySelector('#customize .cz-petal-add'))")) && /^Added Petal’s reply styles/.test((await js(HINTS)).join()), 'the button is gone and the added line shows');
+    await js(clickUse('Petal · Magazine'));
+    const petalActive = await waitFor(async () => { const rows: Page[] = await js(LIST); return rows.find((r) => r.active)?.name === 'Petal · Magazine' ? rows : null; }, 5000);
+    const petalSettings = JSON.parse(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8'));
+    check(petalActive && petalSettings.outputStyle === 'Petal · Magazine' && JSON.stringify(Object.keys(petalSettings)) === JSON.stringify(Object.keys(SETTINGS)), `Use this style works on a Petal style: ${petalSettings.outputStyle}`);
+    check(!(await js("Boolean(document.querySelector('#customize .cz-petal-add'))")), 'still no offer once they are installed');
+    await js("document.querySelector('#customize .cz-styles').closest('.cz-card').scrollIntoView({ block: 'start' })");
+    await capture('customize-styles-petal-paleSky');
+    await js('PastelTerm.customize.close()');
 
     // A missing folder: one short line, no list.
     const empty = path.join(outDir, 'styles-claude-missing');

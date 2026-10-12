@@ -1,4 +1,4 @@
-// First-run screen: what Petal is, whether Claude Code is installed, a cat and a scene, the organizer switch.
+// First-run screen: what Petal is, whether Claude Code is installed, a cat and a scene, Petal's reply styles (opt-in), the organizer switch.
 // Shown once on a new install (config welcome.seen); Help › Welcome reopens it. Esc or Start closes it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
@@ -86,6 +86,29 @@ function organizerSwitch(state: CustomizeState): HTMLElement {
   return label;
 }
 
+// Opt-in only: nothing is copied until the button is clicked, and the active style never changes here.
+function replyStylesOffer(state: CustomizeState): HTMLElement | null {
+  if (!state.petalStyles.installable) return null;
+  const box = el('div', 'welcome-styles');
+  const add = el('button', 'flow-button welcome-styles-add', 'Add Petal’s reply styles');
+  add.type = 'button';
+  const line = el('p', 'welcome-note', 'Optional. Copies four reply styles (Research Paper, Pyramid, Magazine, Landing Page) into ~/.claude/output-styles. Pick one later under Customize › Formatting.');
+  add.addEventListener('click', async () => {
+    add.disabled = true;
+    const result = await window.pastel.config.addPetalStyles();
+    if (isIpcError(result)) {
+      line.textContent = `Couldn’t add them: ${result.error}`;
+      add.disabled = false;
+      return;
+    }
+    state.petalStyles = result;
+    add.remove();
+    line.textContent = 'Added. Pick one under Customize › Formatting with Use this style.';
+  });
+  box.append(add, line);
+  return box;
+}
+
 function start(): void {
   overlays.hide('welcome');
   if (!tabs.active()) tabs.create();
@@ -108,6 +131,8 @@ function render(state: CustomizeState, claudeFound: boolean): void {
     section('Pick a cat', catPicker(state)),
     section('Pick a scene', scenePicker(state)),
   );
+  const styles = replyStylesOffer(state);
+  if (styles) pane.append(section('Reply styles', styles));
   // Pinned to the bottom so Start and the switch never need a scroll.
   const footer = el('footer', 'welcome-footer');
   const choices = el('div', 'welcome-footer-text');

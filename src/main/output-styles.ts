@@ -1,5 +1,6 @@
 // Her Claude Code output styles (~/.claude/output-styles/*.md), read-only.
-// Petal's one write under ~/.claude: the `outputStyle` key of ~/.claude/settings.json (setOutputStyle); nothing else there.
+// Petal's only writes under ~/.claude: the `outputStyle` key of settings.json (setOutputStyle here) and
+// petal-*.md files in output-styles (petal-styles.ts, on request); nothing else there.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

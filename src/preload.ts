@@ -95,6 +95,7 @@ const api = {
     organizer: () => invoke('config:organizer'),
     openStyle: (file: string) => invoke('config:open-style', file),
     useStyle: (name: string) => invoke('config:use-style', name),
+    addPetalStyles: () => invoke('config:add-petal-styles'),
   },
   workflow: {
     today: (openTabs?: NonNullable<InvokeArgs<'workflow:today'>[0]>['openTabs']) => invoke('workflow:today', { openTabs }),

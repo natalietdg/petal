@@ -96,6 +96,7 @@
 .cz-style-top .cz-style-head { flex: 1; min-width: 0; }
 .cz-style-use { flex: none; }
 .cz-style-switched { color: var(--reader-fg); }
+.cz-petal-offer { margin: 0 0 10px; flex-wrap: wrap; }
 .cz-style-head {
   display: flex;
   flex-direction: column;
