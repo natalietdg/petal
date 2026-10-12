@@ -67,6 +67,7 @@ const api = {
   openLink: (url: string) => send('link:open', url),
   reportReady: (info: SendChannels['renderer:ready'][0]) => send('renderer:ready', info),
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
+  onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
   onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),

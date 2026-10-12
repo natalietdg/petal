@@ -3,6 +3,8 @@ import { repoLabel } from './repo-label';
 import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude-session';
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail, type TranscriptView } from './transcript';
+import * as conclusions from './conclusions-store';
+import { sameConclusion, type Conclusion } from '../shared/conclusion';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
@@ -33,6 +35,7 @@ export class ReaderFeed implements ProcessListener {
   private replies: Reply[] = [];
   private waiting: WaitingPrompt[] = [];
   private promptCount = 0;
+  private conclusion: Conclusion | null = null; // kept after claude exits, like the replies
   private repo: string | null = null; // kept after claude exits, so an ended reader still names its repo
   private ticking = false;
 
@@ -86,6 +89,7 @@ export class ReaderFeed implements ProcessListener {
     this.clearTranscript();
     this.emit('live');
     this.tail = new TranscriptTail(session.transcript, (view) => this.show(view));
+    void this.refreshConclusion();
   }
 
   private show({ replies, waiting, promptCount }: TranscriptView): void {
@@ -93,12 +97,24 @@ export class ReaderFeed implements ProcessListener {
     this.waiting = waiting;
     this.promptCount = promptCount;
     this.emit('live');
+    void this.refreshConclusion();
+  }
+
+  // Async, so a first read of a long log never holds up a reply; later reads cover only what the log gained.
+  private async refreshConclusion(): Promise<void> {
+    const session = this.session;
+    if (!session) return;
+    const conclusion = await conclusions.refresh(session.sessionId, session.transcript);
+    if (this.session?.sessionId !== session.sessionId || sameConclusion(conclusion, this.conclusion)) return;
+    this.conclusion = conclusion;
+    this.emit('live');
   }
 
   private clearTranscript(): void {
     this.replies = [];
     this.waiting = [];
     this.promptCount = 0;
+    this.conclusion = null;
   }
 
   // Same session: pick up new lines, and re-emit when busy/idle flips (drives the cat).
@@ -147,6 +163,7 @@ export class ReaderFeed implements ProcessListener {
     const live = state === 'live';
     this.send('reader:replies', {
       state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, repo: state === 'none' ? null : this.repo,
+      conclusion: state === 'none' ? null : this.conclusion,
     });
   }
 

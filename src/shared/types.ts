@@ -1,4 +1,5 @@
 // Data shapes that cross the IPC boundary between main and the renderer.
+import type { Conclusion } from './conclusion';
 
 export interface LabelColors {
   pill: string;
@@ -60,6 +61,7 @@ export interface ReaderUpdate {
   sessionId: string | null;
   cwd: string | null;
   repo: string | null; // "<repo> · <branch>" for cwd, or its folder name outside git
+  conclusion: Conclusion | null; // Claude's answer to her latest "conclude"
 }
 
 export interface TabReaderUpdate extends ReaderUpdate {

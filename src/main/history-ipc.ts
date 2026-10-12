@@ -7,6 +7,7 @@ import * as organizer from './session-organizer';
 import * as links from './links-store';
 import * as tagsStore from './tags-store';
 import * as notesStore from './notes-store';
+import * as conclusions from './conclusions-store';
 import { load as loadConfig } from './config-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand, resumeArgs } from './resume-command';
@@ -25,6 +26,11 @@ interface HistoryIpcDeps {
   currentTheme: () => Theme;
 }
 
+// Every window's History re-lists, so a new conclusion shows without reopening it.
+const announceConclusions = (): void => {
+  for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'history:conclusions');
+};
+
 export function registerHistoryIpc({ sessions, activeSession, openTab, currentTheme }: HistoryIpcDeps): void {
   const own = (event: IpcMainInvokeEvent) => activeSession(event.sender.id); // the tab shown in the asking window
 
@@ -32,13 +38,16 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     const labels = organizer.load();
     const tags = tagsStore.load();
     const notes = notesStore.searchable();
+    const listed = history.listSessions(new Set(loadConfig().history.favorites));
+    void conclusions.refreshAll(listed, announceConclusions); // logs that grew are read in the background
     return {
-      sessions: history.listSessions(new Set(loadConfig().history.favorites)).map((s) => ({
+      sessions: listed.map((s) => ({
         ...s,
         hasFlow: flowStore.has(s.sessionId),
         organizer: labels[s.sessionId] ?? null,
         tags: tags.sessions[s.sessionId]?.tags ?? [],
         notes: notes[s.sessionId] ?? '',
+        conclusion: conclusions.stored(s.sessionId),
       })),
       tags: tags.tags, // { [name]: { color } }, for the filter bar and suggestions
       organizing: organizer.isRunning(),

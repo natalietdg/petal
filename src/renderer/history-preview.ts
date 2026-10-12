@@ -12,6 +12,7 @@ import * as reply from './history-reply';
 import { createStrip, paintStrip } from './status-strip';
 import { limitNote } from './sessions-panel';
 import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
+import { paintConclusion } from './conclusion-banner';
 
 export async function renderPreview(): Promise<void> {
   const session = selectedSession();
@@ -52,12 +53,21 @@ export async function renderPreview(): Promise<void> {
   const strip = createStrip();
   head.append(resume, send, note, views, strip);
 
+  const conclusion = el('div', 'history-conclusion');
+  paintConclusion(conclusion, session.sessionId, session.conclusion);
   const body = el('div', 'history-preview-body');
-  preview.replaceChildren(head, body);
+  preview.replaceChildren(head, conclusion, body);
   replyDock.replaceChildren(...(state.previewMode === 'replies' ? [replyBox(session)] : []));
   notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
   showNotes(session);
   await Promise.all([renderBody(session, body), fillStrip(session, strip)]);
+}
+
+// A re-list brought a new conclusion: swap the banner only, so her place in the preview stays.
+export function repaintConclusion(): void {
+  const session = selectedSession();
+  const slot = preview.querySelector<HTMLElement>('.history-conclusion');
+  if (session && slot) paintConclusion(slot, session.sessionId, session.conclusion);
 }
 
 // The session's newest replies: the live tab's when one follows it, else the log on disk.
