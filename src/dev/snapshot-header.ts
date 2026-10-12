@@ -42,7 +42,7 @@ export const OVERLAP = `(() => {
 // Fits the window to a width, retrying a dropped resize.
 async function sizeTo(kit: Kit, win: BrowserWindow, width: number): Promise<boolean> {
   for (let attempt = 0; attempt < 4; attempt++) {
-    win.setContentSize(width, 900);
+    resizeOffscreen(win, width, 900);
     const sized = await kit.waitFor(async () => {
       win.webContents.invalidate();
       return (await kit.js('window.innerWidth')) === width;

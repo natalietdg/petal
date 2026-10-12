@@ -5,6 +5,7 @@ import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeTo } from './snapshot-tables';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 
 const WIDTHS = [990, 1280];
@@ -101,7 +102,7 @@ export async function headlineLinksCheck(kit: Kit, win: BrowserWindow): Promise<
   }
 
   fs.writeFileSync(path.join(outDir, 'headline-links.json'), JSON.stringify(rows, null, 2));
-  win.setContentSize(startWidth, startHeight);
+  resizeOffscreen(win, startWidth, startHeight);
   applyTheme('paleSky', { persist: false });
   await js("window.pastel.look.setReading('newspaper')");
 }
