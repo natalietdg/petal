@@ -1,5 +1,6 @@
 // Pet size (PASTEL_SNAPSHOT_MODE=pet-size): she stays the size picked in Customize and in one place at every scroll position:
 // beside the text at 1280, docked in the header bar at 800 (64px for Normal, the bar grown to fit), never over text, and the reader keeps its full height.
+// Also docked with the Notes drawer open at 990 and 800, where the header row wraps and her slot gets a line of its own.
 import fs from 'node:fs';
 import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
@@ -54,13 +55,17 @@ const MEASURE = `(() => {
   const column = document.querySelector('#reader .reader-column');
   const textRight = column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight);
   const bar = document.querySelector('#reader-head .reader-head-row').getBoundingClientRect();
+  const slot = document.querySelector('#reader-head .reader-head-end').getBoundingClientRect();
+  const head = document.getElementById('reader-head').getBoundingClientRect();
+  const drawer = [...document.querySelectorAll('#notes-panel, #agent-panel')].find((p) => p.getClientRects().length > 0);
   const strip = document.querySelector('#reader-head .status-strip');
   const key = document.getElementById('colour-key-button').getBoundingClientRect();
   const toggle = document.querySelector('#reader-head .view-toggle').getBoundingClientRect();
   const below = Math.min(...['prompt-dock', 'composer'].map((id) => document.getElementById(id).getBoundingClientRect().top));
   return {
     cat: R(box), shown, scale: getComputedStyle(cat).getPropertyValue('--pet-scale').trim(), docked: area.classList.contains('cat-docked'),
-    textRight: Math.round(textRight), viewBottom: Math.round(view.bottom), bar: R(bar), key: R(key), toggle: R(toggle),
+    textRight: Math.round(textRight), viewTop: Math.round(view.top), viewBottom: Math.round(view.bottom), bar: R(bar), slot: R(slot), head: R(head), areaTop: Math.round(area.getBoundingClientRect().top),
+    drawer: drawer ? R(drawer.getBoundingClientRect()) : null, underDrawer: Boolean(drawer && meets(drawer.getBoundingClientRect(), box)), key: R(key), toggle: R(toggle),
     strip: strip && !strip.hidden ? R(strip.getBoundingClientRect()) : null,
     margin: parseFloat(getComputedStyle(reader).marginBottom) || 0, gapBelow: Math.round(below - view.bottom),
     hits: [...new Set(hits)].slice(0, 4), scrollTop: Math.round(reader.scrollTop), scrollMax: reader.scrollHeight - reader.clientHeight,
@@ -77,6 +82,9 @@ const inGutter = (m: Measure, want: number): boolean => !m.docked && Math.abs(m.
 const inBar = (m: Measure, dock: number): boolean => m.docked && Math.abs(m.cat.height - dock) <= 1 && Math.abs(m.bar.height - dock) <= 1
   && m.cat.top >= m.bar.top - 1 && m.cat.bottom <= m.bar.bottom + 1 && m.cat.right <= m.key.left && m.cat.left >= m.toggle.right
   && m.strip !== null && m.cat.bottom <= m.strip.top;
+// Notes drawer open on a narrow window: docked, never under the drawer; the row may wrap, so her slot's own line holds her, above the reader.
+const inDrawerBar = (m: Measure, dock: number): boolean => m.docked && !m.underDrawer && Math.abs(m.cat.height - dock) <= 1 && m.slot.height >= dock - 1
+  && m.cat.top >= m.slot.top - 1 && m.cat.bottom <= m.slot.bottom + 1 && m.cat.top >= m.head.top && m.cat.bottom <= m.viewTop && m.cat.right <= m.key.left;
 const DOCK_PX = { small: 48, normal: 64, large: 80 } as const; // DOCK_PX in cat.ts
 
 // Lifestyle's 960px measure leaves a 1280 gutter only Small fits; larger, she docks there too.
@@ -106,18 +114,21 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await js("PastelTerm.cat.setScene('cherry')");
 
   // Top, middle and bottom: one place at all three, the expected one, and nothing under her; no band below the reader.
-  const steady = async (tag: string, want: number, dock: number, gutter: boolean) => {
+  type Where = 'gutter' | 'bar' | 'drawer';
+  const placed = (m: Measure, where: Where, want: number, dock: number): boolean => (
+    where === 'gutter' ? inGutter(m, want) : where === 'bar' ? inBar(m, dock) : inDrawerBar(m, dock));
+  const steady = async (tag: string, want: number, dock: number, where: Where) => {
     const at: Measure[] = [];
-    for (const where of ['top', 'middle', 'bottom'] as const) {
+    for (const spot of ['top', 'middle', 'bottom'] as const) {
       await scrollTo('top');
-      if (where !== 'top') await scrollTo(where === 'bottom' ? 'bottom' : Math.round((await measure()).scrollMax / 2));
+      if (spot !== 'top') await scrollTo(spot === 'bottom' ? 'bottom' : Math.round((await measure()).scrollMax / 2));
       const m: Measure = await measure();
       at.push(m);
-      check(m.shown && (gutter ? inGutter(m, want) : inBar(m, dock)) && m.hits.length === 0,
-        `${tag} at the ${where} (${m.scrollTop}/${m.scrollMax}): ${gutter ? `gutter, want ${want}` : `bar, want ${dock}, bar ${JSON.stringify(m.bar)}, strip ${JSON.stringify(m.strip)}`}, docked ${m.docked}, cat ${JSON.stringify(m.cat)}, text right ${m.textRight}, scale ${m.scale}, hits ${JSON.stringify(m.hits)}`);
-      check(m.margin === 0 && Math.abs(m.gapBelow) <= 1, `${tag} at the ${where}: no band, reader margin ${m.margin}px, gap to the reply box ${m.gapBelow}px`);
+      check(m.shown && placed(m, where, want, dock) && m.hits.length === 0,
+        `${tag} at the ${spot} (${m.scrollTop}/${m.scrollMax}): ${where === 'gutter' ? `gutter, want ${want}` : `${where}, want ${dock}, bar ${JSON.stringify(m.bar)}, slot ${JSON.stringify(m.slot)}, reader top ${m.viewTop}, drawer ${JSON.stringify(m.drawer)}, strip ${JSON.stringify(m.strip)}`}, docked ${m.docked}, cat ${JSON.stringify(m.cat)}, text right ${m.textRight}, scale ${m.scale}, hits ${JSON.stringify(m.hits)}`);
+      check(m.margin === 0 && Math.abs(m.gapBelow) <= 1, `${tag} at the ${spot}: no band, reader margin ${m.margin}px, gap to the reply box ${m.gapBelow}px`);
     }
-    check(at.every((m) => JSON.stringify(m.cat) === JSON.stringify(at[0].cat)) && at[0].scrollMax > 0, `${tag}: same rect at top, middle and bottom ${JSON.stringify(at.map((m) => m.cat))}`);
+    check(at.every((m) => JSON.stringify(m.cat) === JSON.stringify(at[0].cat)) && at[0].scrollMax > 0, `${tag}: same rect at top, middle and bottom ${JSON.stringify(at.map((m) => [m.cat, m.areaTop]))}`);
   };
 
   // Customize › Pet size is saved in config.json; then every look at 1280 (gutter) and 800 (bar) for that size.
@@ -139,10 +150,23 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
         await wait(200);
         const gutter = width === 1280 && gutterAt1280(look, size);
         if (width === 1280 && look === 'newspaper') widths[size] = (await measure()).cat.width;
-        await steady(`${size} ${width}px ${look}`, want, DOCK_PX[size], gutter);
+        await steady(`${size} ${width}px ${look}`, want, DOCK_PX[size], gutter ? 'gutter' : 'bar');
         if (look === 'newspaper') await capture(`pet-size-${size}-${width}-${gutter ? 'gutter' : 'bar'}`);
       }
     }
+    // Notes drawer open below 1000px: the header row wraps; she once hung 4-5px over the reply text here.
+    await js('PastelTerm.notesPanel.setOpen(true)');
+    for (const width of [990, 800]) {
+      check(await sizeTo(width), `${width}px window sized, Notes open`);
+      for (const [look] of READING_CHOICES) {
+        await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
+        await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
+        await wait(200);
+        await steady(`${size} ${width}px ${look} Notes open`, want, DOCK_PX[size], 'drawer');
+        if (look === 'newspaper') await capture(`pet-size-${size}-${width}-notes-open`);
+      }
+    }
+    await js('PastelTerm.notesPanel.setOpen(false)');
   }
   await js("window.pastel.look.setReading('newspaper')");
   check(widths.large > widths.normal && widths.normal > widths.small, `size changes her rect: ${JSON.stringify(widths)}`);

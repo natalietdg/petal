@@ -15,11 +15,13 @@ export const subagentsDirOf = (session: SessionFile): string => {
   return fixtureRoot ? path.join(fixtureRoot, session.sessionId) : sessionsMonitor.subagentsDir(session);
 };
 
+// Live sessions for the Sessions panel, her open limit and agents. A snapshot run sees only the harness's fixture sessions, never her real ones.
+export const panelSessions = (): SessionFile[] => (isSnapshotRun() ? panelFixture.sessions ?? [] : sessionsMonitor.liveSessions());
+
 // The reader's own session from its transcript path; any other from the live session files.
 export function agentsDir(sessionId: string, own: FollowedSession | null | undefined): string | null {
   if (own?.sessionId === sessionId) return path.join(path.dirname(own.transcript), sessionId, 'subagents');
-  const live = (isSnapshotRun() && panelFixture.sessions) || sessionsMonitor.liveSessions();
-  const session = live.find((s) => s.sessionId === sessionId);
+  const session = panelSessions().find((s) => s.sessionId === sessionId);
   return session ? subagentsDirOf(session) : null;
 }
 

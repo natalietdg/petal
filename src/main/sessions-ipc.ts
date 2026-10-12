@@ -8,8 +8,8 @@ import * as history from './history';
 import * as organizer from './session-organizer';
 import { closeSession } from './session-close';
 import { handle } from './ipc';
-import { ownAgents, subagentsDirOf } from './agents-ipc';
-import { isSnapshotRun, panelFixture } from './snapshot-mode';
+import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
+import { isSnapshotRun } from './snapshot-mode';
 import type { ActiveSession } from './tab-session';
 
 // Organizer title, then the transcript's title, then the folder name.
@@ -21,7 +21,7 @@ const snapshotTerminate = (): never => { throw new Error('Snapshot run: no signa
 
 export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSession }): void {
   handle('sessions:snapshot', (event, { detailed, expandedIds }) => {
-    const live = (isSnapshotRun() && panelFixture.sessions) || sessionsMonitor.liveSessions();
+    const live = panelSessions();
     const own = activeSession(event.sender.id)?.feed.session;
     const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId }, live, subagentsDirOf);
     const { maxOpen } = configStore.load().sessions;

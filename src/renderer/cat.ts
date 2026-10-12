@@ -140,13 +140,20 @@ function textRight(): number {
   return Math.max(column.getBoundingClientRect().right - parseFloat(getComputedStyle(column).paddingRight), ...rails);
 }
 
+// Right edge of the room she may use: the reader's, or a narrow window's Notes/agents drawer laid over it.
+function roomRight(): number {
+  const drawers = [...area.querySelectorAll('#notes-panel, #agent-panel')]
+    .filter((panel) => panel.getClientRects().length > 0).map((panel) => panel.getBoundingClientRect().left);
+  return Math.min(reader.getBoundingClientRect().right, ...drawers);
+}
+
 function place(): void {
-  const cornerLeft = reader.getBoundingClientRect().right - CORNER_RIGHT_PX - BOX_PX * PET_SCALE[size];
+  const cornerLeft = roomRight() - CORNER_RIGHT_PX - BOX_PX * PET_SCALE[size];
   const docked = cornerLeft < textRight() + TEXT_GAP_PX;
   area.classList.toggle('cat-docked', docked);
   if (!docked) return;
   const dock = DOCK_PX[size];
-  area.style.setProperty('--cat-dock-size', `${dock}px`); // the bar's row height and her slot left of Colour key (cat.css)
+  area.style.setProperty('--cat-dock-size', `${dock}px`); // her slot left of Colour key, at least her height (cat.css)
   area.style.setProperty('--cat-dock-scale', String(dock / BOX_PX));
   const slot = headEnd.getBoundingClientRect();
   const box = area.getBoundingClientRect();
