@@ -36,6 +36,9 @@ fi
 if ! xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
   problem "No working notarytool keychain profile \"$PROFILE\". Create it: xcrun notarytool store-credentials $PROFILE --apple-id <apple-id> --team-id $TEAM"
 fi
+if [[ -n $(ls -A src/renderer/cats-local 2>/dev/null) ]]; then
+  problem "src/renderer/cats-local has private cats; release from a clean worktree, never this checkout."
+fi
 VERSION=$(node -p "require('./package.json').version")
 grep -q "^## \[$VERSION\]" CHANGELOG.md 2>/dev/null || problem "CHANGELOG.md has no \"## [$VERSION]\" entry."
 if (( PUBLISH )) && ! npx -y wrangler@latest whoami >/dev/null 2>&1; then
