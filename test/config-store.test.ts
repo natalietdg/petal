@@ -50,8 +50,7 @@ describe('config-store defaults and load', () => {
 
   it('corrupt file -> defaults', () => {
     fs.writeFileSync(configFile(), '{not json');
-    // a config file means a returning user: no first-run screens, Get started done, the reader as before
-    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, getStarted: { done: ['install', 'add-session', 'sign-in', 'ask'] }, claudeFolder: { choice: 'allowed' } });
+    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true } }); // a config file means a returning user
   });
 
   it('a partial file is filled in from defaults and invalid values fall back to defaults', () => {
@@ -349,6 +348,14 @@ describe('config-store layout splits', () => {
 describe('config-store Get started and the Claude folder choice', () => {
   it('a new install starts unasked with no steps done', () => {
     const c = config.load();
+    expect(c.claudeFolder.choice).toBe('unasked');
+    expect(c.getStarted.done).toEqual([]);
+  });
+
+  it('an existing install (1.0.0 config.json) still gets the folder question and the checklist', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ organizer: { enabled: false }, welcome: { seen: true } }));
+    const c = config.load();
+    expect(c.welcome.seen).toBe(true);
     expect(c.claudeFolder.choice).toBe('unasked');
     expect(c.getStarted.done).toEqual([]);
   });

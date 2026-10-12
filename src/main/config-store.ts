@@ -7,7 +7,7 @@ import { clampSplit } from '../shared/reader-split';
 import { isPetSize, type PetSize } from '../shared/pet-size';
 import { MAX_FAVORITES } from '../shared/favorites';
 import { SESSION_ID } from './session-id';
-import { STEP_IDS, cleanDone, type StepId } from '../shared/get-started';
+import { cleanDone, type StepId } from '../shared/get-started';
 import { isFolderChoice, type FolderChoice } from '../shared/claude-folder';
 
 // Organizer schedule bounds; Customize shows the same ranges.
@@ -160,18 +160,13 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   };
 }
 
-// Values a saved file doesn't record yet: people who used Petal before keep the organizer on, skip the first-run screens,
-// and keep the reader they already had (it read ~/.claude before this choice existed).
+// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome.
+// The folder question and Get started are new to everyone, so they start unasked and open.
 function migratedBase(): Config {
   const base = defaults();
   const organized = fs.existsSync(userDataFile('organizer.json'));
-  const existing = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name)));
   base.organizer.enabled = organized;
-  base.welcome.seen = existing;
-  if (existing) {
-    base.getStarted.done = [...STEP_IDS];
-    base.claudeFolder.choice = 'allowed';
-  }
+  base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name)));
   return base;
 }
 

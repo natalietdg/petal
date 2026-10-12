@@ -14,6 +14,7 @@ const COPIED_MS = 1400;
 const view = byId('get-started');
 let saved: string[] = [];
 let installed = false;
+let pastSessions = false; // a conversation in History: an experienced user, all set from the first check
 let loaded = false;
 let showSteps = false; // all set: the steps fold away until she asks to see them
 const lists = new Set<HTMLElement>(); // every checklist on screen: the overlay's and the welcome's
@@ -23,10 +24,11 @@ function facts(): LiveFacts {
     const update = tabs.get(id)?.update;
     return [{ state: update?.state ?? 'none', sessionId: update?.sessionId ?? null, replies: update?.replies.length ?? 0 }];
   });
-  return factsFrom(open, installed);
+  return factsFrom(open, installed, pastSessions);
 }
 
 const states = (): StepState[] => stepStates(saved, facts());
+export const currentFacts = facts; // for the snapshot run
 
 function copyButton(text: string): HTMLButtonElement {
   const button = el('button', 'flow-button gs-copy', 'Copy');
@@ -179,11 +181,18 @@ export function refresh(): void {
 
 export const isComplete = (): boolean => loaded && allDone(states());
 
-// Reads the saved progress and whether Claude Code is installed; the snapshot run calls it again after resetting both.
+// Any past conversation in History; empty while reading her Claude folder is off.
+async function hasPastSessions(): Promise<boolean> {
+  const list = await window.pastel.history.list();
+  return !isIpcError(list) && list.sessions.some((s) => s.messages > 0);
+}
+
+// Everything the steps tick from, read before anything is drawn, so a finished checklist never flashes open.
 export async function load(): Promise<void> {
   const state = await window.pastel.config.get();
   saved = isIpcError(state) ? [] : [...state.config.getStarted.done];
   installed = (await window.pastel.claudeInstalled()) === true;
+  pastSessions = await hasPastSessions();
   loaded = true;
   refresh();
 }
@@ -211,9 +220,9 @@ export async function open(): Promise<void> {
   render();
 }
 
-// On launch, after the welcome: only while a step is still open.
+// On launch, after the welcome and the folder question: only while a step is still open. Reloads, since Allow may have just made History readable.
 export async function openIfIncomplete(): Promise<boolean> {
-  if (!loaded) await load();
+  await load();
   if (isComplete()) return false;
   await open();
   return true;

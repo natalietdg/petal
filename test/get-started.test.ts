@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STEP_IDS, allDone, cleanDone, factsFrom, stepStates, toSave, toggle, type LiveFacts, type TabFacts } from '../src/shared/get-started';
 
-const NONE: LiveFacts = { claudeInstalled: false, tabCount: 1, claudeRunning: false, sessionStarted: false, replied: false };
+const NONE: LiveFacts = { claudeInstalled: false, tabCount: 1, claudeRunning: false, sessionStarted: false, replied: false, pastSessions: false };
 const plainTab: TabFacts = { state: 'none', sessionId: null, replies: 0 };
 const done = (saved: string[], facts: LiveFacts) => stepStates(saved, facts).filter((s) => s.done).map((s) => s.id);
 
@@ -45,6 +45,14 @@ describe('step states', () => {
 
   it('hand ticks count, in checklist order', () => {
     expect(done(['ask', 'sign-in'], NONE)).toEqual(['sign-in', 'ask']);
+  });
+});
+
+describe('an experienced user', () => {
+  it('past conversations in History tick every step but install, with no tab running yet', () => {
+    expect(factsFrom([plainTab], true, true).pastSessions).toBe(true);
+    expect(done([], factsFrom([plainTab], false, true))).toEqual(['add-session', 'sign-in', 'ask']);
+    expect(allDone(stepStates([], factsFrom([plainTab], true, true)))).toBe(true);
   });
 });
 

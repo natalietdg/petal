@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
-import { claudeFixture, claudeStarts, folderFixture } from '../main/snapshot-mode';
+import { claudeFixture, claudeStarts, folderFixture, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { send } from '../main/ipc';
 import { READING_CHOICES } from '../main/menu';
@@ -121,7 +121,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const first = activeSession(win.webContents.id);
   const fixture = first?.feed.fixture;
   if (!first || !fixture) throw new Error('get started: the first tab has no fixture');
-  const saved = { transcript: fixture.transcript, sessionId: fixture.sessionId };
+  const saved = { transcript: fixture.transcript, sessionId: fixture.sessionId, history: historyFixture.records.splice(0) }; // no past sessions: a fresh install
 
   // Fixture state: the stand-in folder, Claude Code missing, an empty log behind the first tab, a fresh install's config.
   const home = sentinelHome(outDir);
@@ -228,6 +228,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   await capture('get-started-claude-found');
 
   // 6. Allow from the reader: the first tab's fixture session is read, so Add Session and sign-in tick.
+  fs.rmSync(path.join(home, 'projects'), { recursive: true, force: true }); // a fresh install has no past conversations
   await js('PastelTerm.getStarted.close()');
   await js("document.querySelector('#reader-status .status-action').click()");
   const allowed = await waitFor(() => (configStore.load().claudeFolder.choice === 'allowed' ? true : null), 5000);
@@ -316,10 +317,41 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(probe.seen.length > 0, `the read probe sees reads once allowed, so its zero above means something: ${probe.seen.length} reads`);
   await js('PastelTerm.customize.close()');
 
+  // 11. An existing 1.0.0 install: a config.json, past conversations, never asked. The question comes first;
+  // after Allow, History shows she has done it all, so Get started is all set before it would draw and never opens.
+  await js('PastelTerm.overlays.hideCurrent()');
+  const pastDir = path.join(home, 'projects', '-tmp-petal-past');
+  fs.mkdirSync(pastDir, { recursive: true });
+  fs.writeFileSync(path.join(pastDir, 'dddddddd-0000-4000-8000-000000000001.jsonl'), userLine('an older question') + assistantLine('An older answer.'));
+  configStore.save({ claudeFolder: { choice: 'unasked' }, getStarted: { done: [] }, welcome: { seen: true } });
+  const waiting = await waitFor(async () => { const s = await js(STATE); return s.statusAction === 'Allow reading your Claude folder' ? s : null; }, 8000);
+  check(waiting, `existing install, not yet answered: the reader offers Allow while the terminal keeps running: ${JSON.stringify(waiting?.status)}`);
+  await js(`(() => { const view = document.getElementById('get-started'); window.__gsFlash = false;
+    new MutationObserver(() => { if (!view.hidden) window.__gsFlash = true; }).observe(view, { attributes: true }); })()`);
+  const shownOnLaunch = await js('PastelTerm.launchScreens.show()');
+  const asked = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
+  check(shownOnLaunch && asked, 'existing install: the folder question shows on launch');
+  await capture('get-started-existing-consent');
+  await js("document.querySelector('#consent .consent-allow').click()");
+  const autoDone = await waitFor(() => (configStore.load().getStarted.done.join() === 'add-session,sign-in,ask' ? true : null), 8000);
+  await wait(1000);
+  const flashed = await js('window.__gsFlash');
+  const seen = await js('PastelTerm.getStarted.currentFacts()');
+  check(seen.pastSessions === true, `existing install: History's past conversation is what Get started reads: ${JSON.stringify(seen)}`);
+  check(autoDone && configStore.load().claudeFolder.choice === 'allowed' && flashed === false && (await js('PastelTerm.overlays.current()')) === null,
+    `existing install: after Allow the checklist completes from History and never opens: ${JSON.stringify({ done: configStore.load().getStarted.done, flashed, open: await js('PastelTerm.overlays.current()') })}`);
+  check((await js('PastelTerm.launchScreens.show()')) === false, 'existing install: the next launch opens nothing');
+  await js('PastelTerm.getStarted.open()');
+  const existingSet = await until((s) => s.open === 'get-started' && s.allSet);
+  check(existingSet, 'existing install: Get started opened by hand reads "You’re all set"');
+  await capture('get-started-existing-all-set');
+  await js('PastelTerm.overlays.hideCurrent()');
+
   // Back to the fixture every later check expects.
   if (secondId) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(secondId)})`);
   fixture.transcript = saved.transcript;
   fixture.sessionId = saved.sessionId;
+  historyFixture.records.push(...saved.history);
   folderFixture.home = null;
   claudeFixture.installed = null;
   configStore.save({ claudeFolder: { choice: 'allowed' } });

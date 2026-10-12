@@ -12,6 +12,7 @@ export interface LiveFacts {
   claudeRunning: boolean; // a claude process in any tab
   sessionStarted: boolean; // a session file or transcript for it, so sign-in is behind her
   replied: boolean; // the reader has at least one reply
+  pastSessions: boolean; // History has a conversation from before, so she has done all this already
 }
 
 export interface StepState {
@@ -27,21 +28,22 @@ export interface TabFacts {
   replies: number;
 }
 
-export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean): LiveFacts {
+export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean, pastSessions = false): LiveFacts {
   return {
     claudeInstalled,
     tabCount: tabs.length,
     claudeRunning: tabs.some((t) => t.state !== 'none'),
     sessionStarted: tabs.some((t) => t.sessionId !== null || t.replies > 0),
     replied: tabs.some((t) => t.replies > 0),
+    pastSessions,
   };
 }
 
 const AUTO: Record<StepId, (facts: LiveFacts) => boolean> = {
   install: (f) => f.claudeInstalled,
-  'add-session': (f) => f.tabCount > 1 || f.claudeRunning,
-  'sign-in': (f) => f.sessionStarted,
-  ask: (f) => f.replied,
+  'add-session': (f) => f.tabCount > 1 || f.claudeRunning || f.pastSessions,
+  'sign-in': (f) => f.sessionStarted || f.pastSessions,
+  ask: (f) => f.replied || f.pastSessions,
 };
 
 // Known ids only, each once, in checklist order; anything else in the saved list is dropped.
