@@ -41,6 +41,7 @@ import { catGallery } from './snapshot-cats';
 import { historyLayoutCheck } from './snapshot-history-layout';
 import { petSizeCheck } from './snapshot-pet-size';
 import { customizeStylesCheck } from './snapshot-customize-styles';
+import { shapeGuideCheck } from './snapshot-shape-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import * as sessionsMonitor from '../main/sessions-monitor';
@@ -388,6 +389,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['favorites', () => favoritesCheck(kit, win)],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
+    ['shape guide', () => shapeGuideCheck(kit, win)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
@@ -609,6 +611,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'customize-styles' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await customizeStylesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'shape-guide' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await shapeGuideCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
