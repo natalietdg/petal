@@ -227,7 +227,10 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     // History: the row's mark and gist, the preview's banner; latest conclude wins, a sentence starting with conclude doesn't count.
     await sizeTo(1280);
     await js('PastelTerm.history.open()');
+    // Earlier steps of a full run can leave Favorites picked or a search typed; list every session.
+    await js(`(() => { document.querySelector('#history-tabs [data-list="all"]').click(); const q = document.getElementById('history-search'); q.value = ''; q.dispatchEvent(new Event('input')); })()`);
     const row = await waitFor(async () => { const r = await js(ROW(CONCLUDED)); return r?.mark ? r : null; }, 15000);
+    if (!row) log(`conclusion: rows listed ${JSON.stringify(await js("[...document.querySelectorAll('#history-list .history-row')].map((r) => r.dataset.sessionId).slice(0, 8)"))}`);
     check(row && row.mark === 'Concluded' && row.snippet === SECOND.conclusion && row.rowOverflow <= 1, `History row has the mark and the latest conclusion: ${JSON.stringify(row)}`);
     const plainRow = await js(ROW(PLAIN));
     check(plainRow && plainRow.mark === null && plainRow.snippet === null, `a session without a conclude has no mark: ${JSON.stringify(plainRow)}`);

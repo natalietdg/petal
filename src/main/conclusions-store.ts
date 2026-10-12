@@ -92,17 +92,28 @@ export function refresh(sessionId: string, file: string): Promise<Conclusion | n
   return queued;
 }
 
-let sweep: Promise<void> | null = null;
+type Sweep = { sessions: readonly { sessionId: string; file: string }[]; onChanged: () => void };
+let sweeping: Promise<void> | null = null;
+let waiting: Sweep | null = null;
 
-// Refreshes each session in turn and reports once if any conclusion changed; a sweep already running is joined.
-export function refreshAll(sessions: readonly { sessionId: string; file: string }[], onChanged: () => void): Promise<void> {
-  sweep ??= (async () => {
-    let changed = false;
-    for (const { sessionId, file } of sessions) {
-      const before = stored(sessionId);
-      changed = !sameConclusion(before, await refresh(sessionId, file)) || changed;
+async function sweepOnce({ sessions, onChanged }: Sweep): Promise<void> {
+  let changed = false;
+  for (const { sessionId, file } of sessions) {
+    const before = stored(sessionId);
+    changed = !sameConclusion(before, await refresh(sessionId, file)) || changed;
+  }
+  if (changed) onChanged();
+}
+
+// Refreshes each session in turn and reports once if any conclusion changed.
+// A call during a sweep waits for it, then sweeps its own list; calls in between collapse into the newest.
+export function refreshAll(sessions: Sweep['sessions'], onChanged: () => void): Promise<void> {
+  waiting = { sessions, onChanged };
+  sweeping ??= (async () => {
+    for (let job: Sweep | null = waiting; job; job = waiting as Sweep | null) {
+      waiting = null;
+      await sweepOnce(job);
     }
-    if (changed) onChanged();
-  })().finally(() => { sweep = null; });
-  return sweep;
+  })().finally(() => { sweeping = null; });
+  return sweeping;
 }

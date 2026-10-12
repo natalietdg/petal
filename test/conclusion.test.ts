@@ -189,4 +189,16 @@ describe('conclusions store', () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
     expect(store.stored('b')).toBeNull();
   });
+
+  it('a list asked for during a sweep is still read, not dropped', async () => {
+    useTempUserData();
+    const store = await load();
+    const dir = tempDir();
+    const a = writeJsonl(path.join(dir, 'a.jsonl'), [userEntry('hi'), assistantEntry('hello')]);
+    const b = writeJsonl(path.join(dir, 'b.jsonl'), [userEntry('conclude'), assistantEntry('**Conclusion:** B.')]);
+    const first = store.refreshAll([{ sessionId: 'a', file: a }], () => {});
+    const second = store.refreshAll([{ sessionId: 'b', file: b }], () => {});
+    await Promise.all([first, second]);
+    expect(store.stored('b')?.conclusion).toBe('B.');
+  });
 });
