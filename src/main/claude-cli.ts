@@ -3,13 +3,14 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { claudeHome } from './claude-folder';
 
 const TIMEOUT_MS = 90_000;
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 // Where Claude Code usually lands: the native installer, Homebrew, npm globals.
 const CANDIDATES = [
   path.join(os.homedir(), '.local', 'bin', 'claude'),
-  path.join(os.homedir(), '.claude', 'local', 'claude'),
+  path.join(claudeHome(), 'local', 'claude'), // an install spot: only its existence is checked, never read
   '/opt/homebrew/bin/claude',
   '/usr/local/bin/claude',
   path.join(os.homedir(), '.npm-global', 'bin', 'claude'),

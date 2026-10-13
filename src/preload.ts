@@ -39,7 +39,7 @@ const api = {
   getReading: () => invoke('reading:get'),
   claudeInstalled: (recheck = false) => invoke('claude:installed', { recheck }),
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
-  startShell: (tabId: TabId, { cols, rows }: TermSize) => send('pty:start', { tabId, cols, rows }),
+  startShell: (tabId: TabId, { cols, rows }: TermSize, startClaude = false) => send('pty:start', { tabId, cols, rows, startClaude }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
   paste: (tabId: TabId, data: string) => invoke('pty:paste', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
@@ -72,6 +72,8 @@ const api = {
   onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
+  onOpenGetStarted: (callback: () => void) => subscribe('get-started:open', callback),
+  onClaudeFolder: (callback: (allowed: boolean) => void) => subscribe('claude-folder:changed', callback),
   onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
   update: {

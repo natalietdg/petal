@@ -1,13 +1,14 @@
 // Subagent scan on a fake transcript folder, and the pill text. Nothing here reads ~/.claude.
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { activeSubagentFiles, activeSubagents, FALLBACK_TASK, snapshot, SUBAGENT_WINDOW_MS, subagentTask } from '../src/main/sessions-monitor';
 import { agentsBadgeText, sessionsPillText } from '../src/shared/ipc';
 import type { SessionFile } from '../src/main/claude-session';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
-import { removeTempDirs, tempDir, writeJsonl } from './helpers';
+import { allowClaudeFolder, removeTempDirs, tempDir, writeJsonl } from './helpers';
 
+beforeEach(allowClaudeFolder); // the panel snapshot reads session logs only once she allows it
 afterEach(removeTempDirs);
 
 // Subagent transcripts start with the delegated prompt as a sidechain user turn.

@@ -1,0 +1,43 @@
+/* Get started and the folder question: the welcome's frame (welcome.css), the reader's Steps rows (reader.css). */
+#get-started, #consent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+}
+#get-started[hidden], #consent[hidden] { display: none; }
+
+/* UI-sized steps, in every reading look: the badges keep their em maths, the text stays the welcome's size. */
+.gs-list { font-size: 15px; line-height: 1.45; font-family: var(--ui-font); }
+.gs-list.prose ol.steps { margin: 4px 0 0; }
+.gs-list .step-body > p { margin: 0 0 6px; }
+.gs-list .step-body > p:last-child { margin-bottom: 0; }
+.gs-title { font-weight: 600; }
+.gs-step.done .gs-title { font-weight: 500; }
+.gs-private { color: var(--muted); font-size: 0.93em; }
+
+/* The install command: one line that scrolls inside its box, never the page; Copy beside it. */
+.gs-command { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; min-width: 0; }
+.gs-command code {
+  flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap;
+  padding: 7px 10px; border-radius: 8px; background: var(--code-bg, var(--rule));
+  font: 13px var(--mono-font); color: var(--reader-fg);
+}
+.gs-command .gs-copy, .gs-actions .gs-recheck { flex: none; }
+.gs-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+/* All set: one line, the steps folded behind a button. */
+.gs-done-line { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.gs-done-line .gs-all-set { flex: 1 1 260px; margin: 0; font-weight: 600; }
+.gs-list.all-set ol.steps { margin-top: 12px; }
+
+/* The folder question: what's read, as a short list. */
+.consent-reads { margin: 0; padding-left: 1.2em; font-size: 14px; line-height: 1.5; }
+.consent-line { margin: 0; font-size: 14px; }
+.consent-later { flex: none; }
+
+/* The reader's empty line can carry one button. */
+.status.empty .status-action { margin-top: 14px; font-size: 14px; }

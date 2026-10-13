@@ -4,6 +4,7 @@ import * as links from './links-store';
 import { handle } from './ipc';
 import { sessionTitleFor } from './session-title';
 import { isSnapshotRun, setupFixture } from './snapshot-mode';
+import { allowedClaudeHome } from './claude-folder';
 import type { TabSessions } from './tab-session';
 
 interface WorkflowIpcDeps {
@@ -31,7 +32,12 @@ export function registerWorkflowIpc({ sessions, history, organizer }: WorkflowIp
     const data = { ...inputs(), tags: null }; // Today groups by project, like History's plain list
     return workflow.todayData({ ...data, openTabs: Array.isArray(openTabs) ? openTabs : openTabsFromMain() });
   });
-  handle('workflow:setup', () => workflow.setupData(isSnapshotRun() && setupFixture.claudeDir ? { claudeDir: setupFixture.claudeDir } : {}));
+  // Reading off: the empty Setup page, with nothing under ~/.claude touched.
+  handle('workflow:setup', () => {
+    const home = allowedClaudeHome();
+    if (!home) return workflow.emptySetup();
+    return workflow.setupData({ claudeDir: (isSnapshotRun() && setupFixture.claudeDir) || home });
+  });
   handle('workflow:time', () => workflow.timeData(inputs()));
   handle('workflow:handoffs', () => {
     const { sessions: list, labels } = inputs();

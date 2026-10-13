@@ -185,7 +185,8 @@ export type RendererInfo = Record<string, unknown>;
 
 // renderer -> main, fire and forget: ipcRenderer.send / ipcMain.on.
 export interface SendChannels {
-  'pty:start': [request: { tabId: TabId } & TermSize];
+  // startClaude: type `claude` once the shell is ready, if Claude Code is installed (Add Session, ⌘T, +).
+  'pty:start': [request: { tabId: TabId; startClaude?: boolean } & TermSize];
   'pty:write': [request: { tabId: TabId; data: string }];
   'pty:resize': [request: { tabId: TabId } & TermSize];
   'pty:close': [request: { tabId: TabId }];
@@ -222,6 +223,8 @@ export interface EventChannels {
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
   'welcome:open': void;
+  'get-started:open': void;
+  'claude-folder:changed': boolean; // reading ~/.claude allowed or not
   'colour-key:open': void;
   'repos:palette': void;
   'update:ready': void;

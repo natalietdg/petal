@@ -1,0 +1,80 @@
+// The Get started checklist's state: which steps are done, from what Petal can see plus what she ticked by hand.
+
+export const STEP_IDS = ['install', 'add-session', 'sign-in', 'ask'] as const;
+export type StepId = (typeof STEP_IDS)[number];
+
+export const isStepId = (value: unknown): value is StepId => STEP_IDS.some((id) => id === value);
+
+// What Petal can see right now, gathered from the tabs and the install check.
+export interface LiveFacts {
+  claudeInstalled: boolean;
+  tabCount: number;
+  claudeRunning: boolean; // a claude process in any tab
+  sessionStarted: boolean; // a session file or transcript for it, so sign-in is behind her
+  replied: boolean; // the reader has at least one reply
+  pastSessions: boolean; // History has a conversation from before, so she has done all this already
+}
+
+export interface StepState {
+  id: StepId;
+  done: boolean;
+  auto: boolean; // ticked from real state, so a click can't untick it
+}
+
+// One tab's reader state, as the renderer holds it.
+export interface TabFacts {
+  state: 'none' | 'live' | 'ended';
+  sessionId: string | null;
+  replies: number;
+}
+
+export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean, pastSessions = false): LiveFacts {
+  return {
+    claudeInstalled,
+    tabCount: tabs.length,
+    claudeRunning: tabs.some((t) => t.state !== 'none'),
+    sessionStarted: tabs.some((t) => t.sessionId !== null || t.replies > 0),
+    replied: tabs.some((t) => t.replies > 0),
+    pastSessions,
+  };
+}
+
+const AUTO: Record<StepId, (facts: LiveFacts) => boolean> = {
+  install: (f) => f.claudeInstalled,
+  'add-session': (f) => f.tabCount > 1 || f.claudeRunning || f.pastSessions,
+  'sign-in': (f) => f.sessionStarted || f.pastSessions,
+  ask: (f) => f.replied || f.pastSessions,
+};
+
+// Known ids only, each once, in checklist order; anything else in the saved list is dropped.
+export function cleanDone(saved: unknown): StepId[] {
+  if (!Array.isArray(saved)) return [];
+  return STEP_IDS.filter((id) => saved.includes(id));
+}
+
+export function stepStates(saved: readonly string[], facts: LiveFacts): StepState[] {
+  const ticked = new Set(cleanDone(saved));
+  return STEP_IDS.map((id) => {
+    const auto = AUTO[id](facts);
+    return { id, done: auto || ticked.has(id), auto };
+  });
+}
+
+export const allDone = (states: readonly StepState[]): boolean => states.every((s) => s.done);
+
+// What to save: every step done now, so progress Petal saw survives a relaunch.
+// Install is checked afresh each launch, so only her own tick of it is kept.
+export function toSave(states: readonly StepState[], saved: readonly string[]): StepId[] {
+  const ticked = cleanDone(saved);
+  return states.filter((s) => s.done && (s.id !== 'install' || ticked.includes('install'))).map((s) => s.id);
+}
+
+// A hand tick or untick; a step Petal saw done stays done.
+export function toggle(saved: readonly string[], id: StepId, facts: LiveFacts): StepId[] {
+  if (AUTO[id](facts)) return cleanDone(saved);
+  const ticked = new Set(cleanDone(saved));
+  if (ticked.has(id)) ticked.delete(id); else ticked.add(id);
+  return STEP_IDS.filter((step) => ticked.has(step));
+}
+
+export const sameSteps = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id, i) => id === b[i]);

@@ -6,6 +6,7 @@ import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
 import { currentConclusion, emptyScan, scanFile, type ScanState } from './conclusion-scan';
 import { sameConclusion, type Conclusion } from '../shared/conclusion';
+import { claudeFolderAllowed } from './claude-folder';
 
 const VERSION = 1;
 const HEAD_BYTES = 256; // a rewritten log (not appended to) starts differently, so it is read again from the top
@@ -83,6 +84,7 @@ async function scan(sessionId: string, file: string): Promise<Conclusion | null>
 
 // Reads whatever the log gained since the last read; one read per session at a time.
 export function refresh(sessionId: string, file: string): Promise<Conclusion | null> {
+  if (!claudeFolderAllowed()) return Promise.resolve(null); // her logs stay unread until she allows it
   const queued = (running.get(sessionId) ?? Promise.resolve(null))
     .catch(() => null)
     .then(() => scan(sessionId, file))

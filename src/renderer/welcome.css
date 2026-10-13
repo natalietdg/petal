@@ -28,13 +28,6 @@
 .welcome-tagline { margin: 0; font: 500 1.15em/1.35 var(--body-font); }
 .welcome-line { margin: 0; color: var(--muted); font-size: 14px; }
 
-.welcome-claude { padding: 10px 14px; border: 1px solid var(--rule); border-radius: 12px; font-size: 14px; }
-.welcome-claude p { margin: 0; }
-.welcome-claude.missing { border-color: var(--link); }
-.welcome-command { margin: 8px 0; padding: 8px 12px; border-radius: 10px; background: var(--code-bg, var(--rule)); overflow-x: auto; }
-.welcome-command code { font: 13px var(--mono-font); }
-.welcome-actions { display: flex; align-items: center; gap: 16px; }
-
 .welcome-section { display: flex; flex-direction: column; gap: 6px; }
 .welcome-styles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .welcome-styles-add { flex: none; }

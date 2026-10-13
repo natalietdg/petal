@@ -1,11 +1,8 @@
 // Workflow, Setup tab: how her Claude Code setup is wired (CLAUDE.md rules, routed skills, agents, output style).
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { label, LABEL_CHARS, readJson, readText } from './workflow-common';
 import { frontmatter, oneLine, parseClaudeMd, type ClaudeMdOutline } from './workflow-frontmatter';
-
-const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 
 const isFile = (file: string) => { try { return fs.statSync(file).isFile(); } catch { return false; } };
 const isDir = (dir: string) => { try { return fs.statSync(dir).isDirectory(); } catch { return false; } };
@@ -124,7 +121,14 @@ export interface SetupData extends ClaudeMdOutline {
   mermaid: string | null; // null: nothing to draw
 }
 
-export function setupData({ claudeDir = CLAUDE_DIR }: { claudeDir?: string } = {}): SetupData {
+// Nothing to show: what an empty ~/.claude reads as, without reading anything.
+export const emptySetup = (): SetupData => ({
+  hasClaudeMd: false, headings: [], sections: [], routing: [], skills: [], agents: [],
+  style: { name: 'Default', description: 'Claude Code’s built-in style.' }, routedSkills: [], mermaid: null,
+});
+
+// claudeDir: her ~/.claude (from the gate) or a test's stand-in.
+export function setupData({ claudeDir }: { claudeDir: string }): SetupData {
   const claudeMd = path.join(claudeDir, 'CLAUDE.md');
   const hasClaudeMd = isFile(claudeMd);
   const { headings, routing } = parseClaudeMd(readText(claudeMd));

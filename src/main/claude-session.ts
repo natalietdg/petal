@@ -1,12 +1,15 @@
 // Finds the Claude Code process running inside our shell and its session log.
 // ~/.claude/sessions/<pid>.json is undocumented, so every read is defensive.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { allowedClaudeHome, claudeHome } from './claude-folder';
 
-const CLAUDE_DIR = path.join(os.homedir(), '.claude');
-export const SESSIONS_DIR = path.join(CLAUDE_DIR, 'sessions');
+// ~/.claude/sessions, or null until she allows reading her Claude folder.
+export const sessionsDir = (): string | null => {
+  const home = allowedClaudeHome();
+  return home && path.join(home, 'sessions');
+};
 
 export interface ProcessRow {
   pid: number;
@@ -75,8 +78,10 @@ export const claudeRunsUnder = (rootPid: number, processes: readonly ProcessRow[
 
 // Parsed ~/.claude/sessions/<pid>.json, or null when missing or malformed.
 export function readSessionFile(pid: number): SessionFile | null {
+  const dir = sessionsDir();
+  if (!dir) return null;
   try {
-    const session = JSON.parse(fs.readFileSync(path.join(SESSIONS_DIR, `${pid}.json`), 'utf8')) as Partial<SessionFile>;
+    const session = JSON.parse(fs.readFileSync(path.join(dir, `${pid}.json`), 'utf8')) as Partial<SessionFile>;
     if (typeof session.sessionId !== 'string' || typeof session.cwd !== 'string') return null;
     return { ...session, sessionId: session.sessionId, cwd: session.cwd, pid };
   } catch {
@@ -84,10 +89,12 @@ export function readSessionFile(pid: number): SessionFile | null {
   }
 }
 
+// Where a session's log lives; a path only: each session handed out came through the gate.
 export const transcriptPath = ({ cwd, sessionId }: { cwd: string; sessionId: string }): string =>
-  path.join(CLAUDE_DIR, 'projects', projectSlug(cwd), `${sessionId}.jsonl`);
+  path.join(claudeHome(), 'projects', projectSlug(cwd), `${sessionId}.jsonl`);
 
-// { pid, session } for the claude under shellPid, from one `ps` listing. session is null until its file is readable.
+// { pid, session } for the claude under shellPid, from one `ps` listing. session is null until its file is readable (or reading is off).
+
 export function findClaudeSession(shellPid: number, processes: readonly ProcessRow[]): { pid: number | null; session: ClaudeSession | null } {
   const candidates = descendants(shellPid, processes).filter((proc) => isClaudeCli(proc.comm));
   for (const proc of candidates) {

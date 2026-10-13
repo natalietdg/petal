@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { folderName, NEW_SESSION, SESSION_LABEL_MAX, sessionLabelText, sessionTitle } from '../src/shared/session-label';
 import { snapshot } from '../src/main/sessions-monitor';
+import { allowClaudeFolder, removeTempDirs } from './helpers';
 
 describe('sessionTitle priority (History order)', () => {
   const all = { organizerTitle: 'Organizer title', title: 'Claude title', firstPrompt: 'first prompt', cwd: '/Users/n/widget-service' };
@@ -69,6 +70,8 @@ describe('folderName', () => {
 });
 
 describe('Sessions panel rows', () => {
+  beforeEach(allowClaudeFolder); // the panel snapshot reads session logs only once she allows it
+  afterEach(removeTempDirs);
   it("never use Claude Code's session-file name", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-label-'));
     const session = { pid: 1, sessionId: 'aaaaaaaa-0000-4000-8000-000000000001', cwd: '/Users/acme', kind: 'interactive', status: 'idle', name: 'acme-a7' };

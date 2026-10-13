@@ -1,0 +1,234 @@
+// Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
+// In the first-run welcome, and on launch until every step is done; Help › Get started and Customize › Get started reopen it.
+import * as overlays from './overlays';
+import * as tabs from './tabs';
+import * as reader from './reader';
+import { byId, el, isIpcError } from './dom';
+import { allDone, factsFrom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
+
+// From code.claude.com/docs/en/setup (native install, macOS and Linux).
+export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
+export const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
+const COPIED_MS = 1400;
+
+const view = byId('get-started');
+let saved: string[] = [];
+let installed = false;
+let pastSessions = false; // a conversation in History: an experienced user, all set from the first check
+let loaded = false;
+let showSteps = false; // all set: the steps fold away until she asks to see them
+const lists = new Set<HTMLElement>(); // every checklist on screen: the overlay's and the welcome's
+
+function facts(): LiveFacts {
+  const open = tabs.ids().flatMap((id) => {
+    const update = tabs.get(id)?.update;
+    return [{ state: update?.state ?? 'none', sessionId: update?.sessionId ?? null, replies: update?.replies.length ?? 0 }];
+  });
+  return factsFrom(open, installed, pastSessions);
+}
+
+const states = (): StepState[] => stepStates(saved, facts());
+export const currentFacts = facts; // for the snapshot run
+
+function copyButton(text: string): HTMLButtonElement {
+  const button = el('button', 'flow-button gs-copy', 'Copy');
+  button.type = 'button';
+  button.dataset.copy = text;
+  button.addEventListener('click', async () => {
+    const copied = await navigator.clipboard.writeText(text).then(() => true, () => false);
+    button.textContent = copied ? 'Copied' : 'Copy failed';
+    setTimeout(() => { button.textContent = 'Copy'; }, COPIED_MS);
+  });
+  return button;
+}
+
+function link(label: string, href: string): HTMLAnchorElement {
+  const a = el('a', 'wf-doc-link', label);
+  a.href = href;
+  a.addEventListener('click', (event) => { event.preventDefault(); window.pastel.openLink(href); });
+  return a;
+}
+
+const para = (text: string, className: string | null = null): HTMLParagraphElement => el('p', className, text);
+
+// The welcome's snapshot variant draws Claude Code as missing.
+export function setInstalled(found: boolean): void {
+  installed = found;
+  refresh();
+}
+
+// Recheck after installing: the reader and step 1 both follow.
+export async function recheckInstall(): Promise<boolean> {
+  installed = (await window.pastel.claudeInstalled(true)) === true;
+  reader.setClaudeMissing(!installed);
+  refresh();
+  return installed;
+}
+
+function installBody(done: boolean): Node[] {
+  if (done) return [para('Claude Code is installed on this Mac.')];
+  const command = el('div', 'gs-command');
+  command.append(el('code', null, INSTALL_COMMAND), copyButton(INSTALL_COMMAND));
+  const again = el('button', 'flow-button gs-recheck', 'Check again');
+  again.type = 'button';
+  again.addEventListener('click', () => void recheckInstall());
+  const actions = el('div', 'gs-actions');
+  actions.append(again, link('Install guide', SETUP_DOCS));
+  return [para('Paste this into the terminal below and press Enter. It needs a Claude Pro, Max, Team, Enterprise or Console account.'), command, actions];
+}
+
+interface StepCopy {
+  title: string;
+  body: (done: boolean) => Node[];
+  check: string;
+}
+
+const STEPS: Record<StepId, StepCopy> = {
+  install: { title: 'Install Claude Code', body: installBody, check: 'Petal finds claude on this Mac.' },
+  'add-session': {
+    title: 'Click Add Session',
+    body: () => [para('Claude starts in the new tab by itself.')],
+    check: 'A new tab opens and Claude Code starts in it.',
+  },
+  'sign-in': {
+    title: 'First time only: sign in',
+    body: () => [
+      para('Claude Code asks how you want to sign in. Pick one and your browser opens; sign in there with your Claude account.'),
+      para('Petal never sees your login. Claude Code and your browser handle it.', 'gs-private'),
+    ],
+    check: 'Claude Code shows its prompt in the tab.',
+  },
+  ask: {
+    title: 'Ask Claude something',
+    body: () => [para('Type a question in the tab and press Enter.')],
+    check: 'The reply shows in the reader and the cat wakes up.',
+  },
+};
+
+function onBadge(id: StepId): void {
+  const next = toggle(saved, id, facts());
+  if (sameSteps(next, saved)) return; // Petal saw it happen, so it stays ticked
+  saved = next;
+  void window.pastel.config.save({ getStarted: { done: next } });
+  repaint(states());
+}
+
+function stepRow(step: StepState, number: number): HTMLLIElement {
+  const copy = STEPS[step.id];
+  const row = el('li', `step gs-step${step.done ? ' done' : ''}`);
+  row.dataset.step = step.id;
+  const badge = el('button', 'step-badge', step.done ? '✓' : String(number));
+  badge.type = 'button';
+  badge.setAttribute('aria-pressed', String(step.done));
+  badge.setAttribute('aria-label', `Step ${number} done`);
+  if (step.auto) badge.title = 'Petal saw this happen';
+  badge.addEventListener('click', () => onBadge(step.id));
+  const body = el('div', 'step-body');
+  body.append(el('p', 'gs-title', copy.title), ...copy.body(step.done));
+  const check = el('p', 'step-check');
+  check.append(el('span', 'step-check-label', 'Check'), ` ${copy.check}`);
+  row.append(badge, body, check);
+  return row;
+}
+
+// The steps, or the all-set line with a way back to them.
+function paintList(box: HTMLElement, all: StepState[]): void {
+  const finished = allDone(all);
+  box.classList.toggle('all-set', finished);
+  const parts: HTMLElement[] = [];
+  if (finished) {
+    const line = el('div', 'gs-done-line');
+    const toggleSteps = el('button', 'flow-button gs-show-steps', showSteps ? 'Hide the steps' : 'Show the steps');
+    toggleSteps.type = 'button';
+    toggleSteps.addEventListener('click', () => { showSteps = !showSteps; repaint(states()); });
+    line.append(el('p', 'gs-all-set', 'You’re all set. Claude Code is running and its replies show in the reader.'), toggleSteps);
+    parts.push(line);
+  }
+  if (!finished || showSteps) {
+    const list = el('ol', 'steps gs-steps');
+    list.append(...all.map((step, i) => stepRow(step, i + 1)));
+    parts.push(list);
+  }
+  box.replaceChildren(...parts);
+}
+
+function repaint(all: StepState[]): void {
+  for (const box of lists) {
+    if (box.isConnected) paintList(box, all);
+    else lists.delete(box);
+  }
+}
+
+// A checklist to place anywhere (the welcome uses one); it repaints with every change.
+export function checklist(): HTMLElement {
+  const box = el('div', 'prose gs-list');
+  lists.add(box);
+  paintList(box, states());
+  return box;
+}
+
+// Live state changed (a tab, a reply, the install check): tick what Petal saw and keep it for next launch.
+export function refresh(): void {
+  if (!loaded) return;
+  const all = states();
+  const next = toSave(all, saved);
+  if (!sameSteps(next, saved)) {
+    saved = next;
+    void window.pastel.config.save({ getStarted: { done: next } });
+  }
+  repaint(all);
+}
+
+export const isComplete = (): boolean => loaded && allDone(states());
+
+// Any past conversation in History; empty while reading her Claude folder is off.
+async function hasPastSessions(): Promise<boolean> {
+  const list = await window.pastel.history.list();
+  return !isIpcError(list) && list.sessions.some((s) => s.messages > 0);
+}
+
+// Everything the steps tick from, read before anything is drawn, so a finished checklist never flashes open.
+export async function load(): Promise<void> {
+  const state = await window.pastel.config.get();
+  saved = isIpcError(state) ? [] : [...state.config.getStarted.done];
+  installed = (await window.pastel.claudeInstalled()) === true;
+  pastSessions = await hasPastSessions();
+  loaded = true;
+  refresh();
+}
+
+function render(): void {
+  const pane = el('div', 'welcome-pane gs-pane');
+  pane.append(
+    el('h1', 'welcome-title', 'Get started'),
+    para('Four steps from installing Claude Code to your first reply. Each ticks itself when Petal sees it happen, and you can tick them yourself.', 'welcome-line'),
+    checklist(),
+  );
+  const footer = el('footer', 'welcome-footer');
+  const done = el('button', 'welcome-start gs-close', 'Close');
+  done.type = 'button';
+  done.addEventListener('click', close);
+  footer.append(done, para('Help › Get started brings this back.', 'welcome-note'));
+  view.replaceChildren(pane, footer);
+  done.focus({ preventScroll: true });
+}
+
+export async function open(): Promise<void> {
+  if (!loaded) await load();
+  showSteps = false;
+  overlays.show('get-started');
+  render();
+}
+
+// On launch, after the welcome and the folder question: only while a step is still open. Reloads, since Allow may have just made History readable.
+export async function openIfIncomplete(): Promise<boolean> {
+  await load();
+  if (isComplete()) return false;
+  await open();
+  return true;
+}
+
+export const isOpen = (): boolean => overlays.isOpen('get-started');
+export function close(): void { overlays.hide('get-started'); }
+
+window.pastel.onOpenGetStarted(() => open());

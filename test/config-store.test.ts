@@ -18,13 +18,15 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has ten sections with the documented defaults', () => {
+  it('has twelve sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet', 'getStarted', 'claudeFolder']);
     expect(d.layout).toEqual({ splits: {} });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
     expect(d.welcome).toEqual({ seen: false });
+    expect(d.getStarted).toEqual({ done: [] });
+    expect(d.claudeFolder).toEqual({ choice: 'unasked' });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
     expect(d.tarot).toEqual({ birthdate: '' });
@@ -126,7 +128,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet', 'getStarted', 'claudeFolder']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -340,5 +342,32 @@ describe('config-store layout splits', () => {
     expect(config.load().layout.splits).toEqual({ 0: 0.5 });
     config.save({ layout: { splits: [0.3] } });
     expect(config.load().layout.splits).toEqual({ 0: 0.5 });
+  });
+});
+
+describe('config-store Get started and the Claude folder choice', () => {
+  it('a new install starts unasked with no steps done', () => {
+    const c = config.load();
+    expect(c.claudeFolder.choice).toBe('unasked');
+    expect(c.getStarted.done).toEqual([]);
+  });
+
+  it('an existing install (1.0.0 config.json) still gets the folder question and the checklist', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ organizer: { enabled: false }, welcome: { seen: true } }));
+    const c = config.load();
+    expect(c.welcome.seen).toBe(true);
+    expect(c.claudeFolder.choice).toBe('unasked');
+    expect(c.getStarted.done).toEqual([]);
+  });
+
+  it('keeps known step ids once, in checklist order, and drops the rest', () => {
+    expect(config.save({ getStarted: { done: ['ask', 'bogus', 'install', 'ask', 7] } }).getStarted.done).toEqual(['install', 'ask']);
+    expect(config.save({ getStarted: { done: 'all' } }).getStarted.done).toEqual(['install', 'ask']); // a non-list keeps the saved one
+  });
+
+  it('takes only a known folder choice', () => {
+    expect(config.save({ claudeFolder: { choice: 'allowed' } }).claudeFolder.choice).toBe('allowed');
+    expect(config.save({ claudeFolder: { choice: 'sure' } }).claudeFolder.choice).toBe('allowed');
+    expect(config.save({ claudeFolder: { choice: 'declined' } }).claudeFolder.choice).toBe('declined');
   });
 });

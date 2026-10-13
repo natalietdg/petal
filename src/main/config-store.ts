@@ -7,6 +7,8 @@ import { clampSplit } from '../shared/reader-split';
 import { isPetSize, type PetSize } from '../shared/pet-size';
 import { MAX_FAVORITES } from '../shared/favorites';
 import { SESSION_ID } from './session-id';
+import { cleanDone, type StepId } from '../shared/get-started';
+import { isFolderChoice, type FolderChoice } from '../shared/claude-folder';
 
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -35,6 +37,10 @@ export interface Config {
   history: { listCollapsed: boolean; favorites: string[] };
   // The reader cat's size; the reader may shrink her below it to keep text clear.
   pet: { size: PetSize };
+  // Get started steps done, by hand or seen by Petal.
+  getStarted: { done: StepId[] };
+  // Whether Petal may read ~/.claude; nothing there is read until 'allowed'.
+  claudeFolder: { choice: FolderChoice };
 }
 
 type Section = keyof Config;
@@ -66,6 +72,8 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   layout: { splits: {} },
   history: { listCollapsed: false, favorites: [] },
   pet: { size: 'normal' as const },
+  getStarted: { done: [] as StepId[] },
+  claudeFolder: { choice: 'unasked' as FolderChoice },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -122,6 +130,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const l = raw.layout ?? {};
   const hi = raw.history ?? {};
   const pe = raw.pet ?? {};
+  const gs = raw.getStarted ?? {};
+  const cf = raw.claudeFolder ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -145,10 +155,13 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     layout: { splits: splitsOr(l.splits, b.layout.splits) },
     history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed), favorites: favoritesOr(hi.favorites, b.history.favorites) },
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
+    getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
+    claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },
   };
 }
 
-// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the first-run screen.
+// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome.
+// The folder question and Get started are new to everyone, so they start unasked and open.
 function migratedBase(): Config {
   const base = defaults();
   const organized = fs.existsSync(userDataFile('organizer.json'));

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SessionFile } from './claude-session';
 import type { SessionRecord } from './history';
+import type { FolderChoice } from '../shared/claude-folder';
 
 export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
 export const snapshotOutDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
@@ -60,3 +61,13 @@ export const historyFixture: { records: SessionRecord[]; live: string[]; resumes
 // sessions: null means none live, so her limit counts only these and never her real Claudes.
 // subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
 export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };
+
+// A stand-in ~/.claude for the folder-consent check (it holds a sentinel file); null means the real one.
+// `choice` seeds a fresh snapshot userData, so every other check runs with reading on.
+export const folderFixture: { home: string | null; choice: FolderChoice } = { home: null, choice: 'allowed' };
+
+// Claude Code installed or not, for Get started and Add Session's auto-start; null asks this Mac.
+export const claudeFixture: { installed: boolean | null } = { installed: null };
+
+// What Add Session's auto-start typed; snapshot runs type a shell no-op in its place, never a real claude.
+export const claudeStarts: { tabId: string; command: string }[] = [];

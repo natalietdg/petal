@@ -4,6 +4,7 @@ import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail, type TranscriptView } from './transcript';
 import * as conclusions from './conclusions-store';
+import { claudeFolderAllowed } from './claude-folder';
 import { sameConclusion, type Conclusion } from '../shared/conclusion';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
@@ -57,9 +58,11 @@ export class ReaderFeed implements ProcessListener {
     if (this.ticking) return;
     this.ticking = true;
     try {
+      const allowed = claudeFolderAllowed();
+      if (!allowed && this.session) this.forget();
       const { pid, session: found }: { pid: number | null; session: FollowedSession | null } = this.fixture
-        ? { pid: null, session: { ...this.fixture } }
-        : findClaudeSession(this.shellPid, processes);
+        ? { pid: null, session: allowed ? { ...this.fixture } : null }
+        : findClaudeSession(this.shellPid, processes); // no session file is read while reading is off
       this.setClaudePid(pid);
       if (found && found.sessionId !== this.session?.sessionId) this.follow(found);
       else if (found) this.refresh(found);
@@ -144,6 +147,17 @@ export class ReaderFeed implements ProcessListener {
     } catch (error) {
       console.error('[petal] reply-finished handler failed:', error); // never stops the reader ticking
     }
+  }
+
+  // Reading was turned off: drop the session and its replies, as if never read.
+  private forget(): void {
+    this.finishingId = null;
+    this.tail?.stop();
+    this.tail = null;
+    this.session = null;
+    this.repo = null;
+    this.clearTranscript();
+    this.emit(this.claudePid ? 'live' : 'none');
   }
 
   // Claude exited: keep its last replies on screen, marked as ended.
