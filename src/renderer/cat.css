@@ -81,6 +81,10 @@
 #reader-area.cat-docked #cat { top: var(--cat-dock-top); right: var(--cat-dock-right); bottom: auto; transform: scale(var(--cat-dock-scale)); transform-origin: top right; }
 #reader-area.cat-docked .cat-tip { top: 100%; bottom: auto; transform: scale(calc(1 / var(--cat-dock-scale))) translateY(6px); transform-origin: top right; } /* full size, below her */
 #reader-area.cat-docked :is(.scene-tip, .scene-popover) { top: calc(var(--cat-dock-top) + var(--cat-dock-size) + 6px); right: var(--cat-dock-right); bottom: auto; }
+/* History previewing a session: she sits in its reply row, right of Send and Open in full (cat.ts); beats the overlay rule below. */
+#reader-area.cat-in-reply:has(> #history:not([hidden])) #cat { display: block; top: var(--cat-dock-top); right: var(--cat-dock-right); bottom: auto; transform: scale(var(--cat-dock-scale)); transform-origin: top right; }
+#reader-area.cat-in-reply .cat-tip { top: auto; bottom: 100%; transform: scale(calc(1 / var(--cat-dock-scale))) translateY(-6px); transform-origin: bottom right; } /* full size, above her */
+#reader-area.cat-in-reply :is(.scene-tip, .scene-popover) { display: none; }
 /* In the corner, a short reader (the divider dragged low) would push her up into the header: she steps out. */
 #reader-area { container-type: size; } /* its grid row sizes it, never its content */
 @container (max-height: 479.98px) {

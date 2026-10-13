@@ -127,7 +127,9 @@ export function replyBox(session: Session): HTMLFormElement {
   const send = el('button', 'flow-button history-reply-send', 'Send');
   send.type = 'submit';
   const row = el('div', 'history-reply-row');
-  row.append(input, send, fullButton(session));
+  const petSlot = el('span', 'history-cat-slot'); // the pet sits here while History previews (cat.ts)
+  petSlot.setAttribute('aria-hidden', 'true');
+  row.append(input, send, fullButton(session), petSlot);
   const note = el('p', 'history-note history-reply-note');
   note.setAttribute('aria-live', 'polite');
   form.append(el('div', 'history-reply-status'), row, note);

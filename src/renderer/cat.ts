@@ -147,22 +147,44 @@ function roomRight(): number {
   return Math.min(reader.getBoundingClientRect().right, ...drawers);
 }
 
-function place(): void {
-  const cornerLeft = roomRight() - CORNER_RIGHT_PX - BOX_PX * PET_SCALE[size];
-  const docked = cornerLeft < textRight() + TEXT_GAP_PX;
-  area.classList.toggle('cat-docked', docked);
-  if (!docked) return;
-  const dock = DOCK_PX[size];
-  area.style.setProperty('--cat-dock-size', `${dock}px`); // her slot left of Colour key, at least her height (cat.css)
-  area.style.setProperty('--cat-dock-scale', String(dock / BOX_PX));
-  const slot = headEnd.getBoundingClientRect();
+// History's preview reply row, when it is showing: her slot right of Send and Open in full.
+const replySlot = (): HTMLElement | null => {
+  const slot = area.querySelector<HTMLElement>('#history:not([hidden]) .history-cat-slot');
+  return slot?.getClientRects().length ? slot : null;
+};
+
+// Her docked size, its top-left at the slot's left edge, centred on the slot's height.
+function pinTo(slot: DOMRect, dock: number): void {
   const box = area.getBoundingClientRect();
   area.style.setProperty('--cat-dock-top', `${slot.top + (slot.height - dock) / 2 - box.top}px`);
   area.style.setProperty('--cat-dock-right', `${box.right - slot.left - dock}px`);
 }
+
+function place(): void {
+  const dock = DOCK_PX[size];
+  area.style.setProperty('--cat-dock-size', `${dock}px`); // her slot left of Colour key or in History's row, at least her height (cat.css)
+  area.style.setProperty('--cat-dock-scale', String(dock / BOX_PX));
+  const reply = replySlot();
+  area.classList.toggle('cat-in-reply', reply !== null);
+  if (reply) {
+    area.classList.remove('cat-docked');
+    pinTo(reply.getBoundingClientRect(), dock);
+    return;
+  }
+  const cornerLeft = roomRight() - CORNER_RIGHT_PX - BOX_PX * PET_SCALE[size];
+  const docked = cornerLeft < textRight() + TEXT_GAP_PX;
+  area.classList.toggle('cat-docked', docked);
+  if (docked) pinTo(headEnd.getBoundingClientRect(), dock);
+}
 new ResizeObserver(place).observe(reader);
 new ResizeObserver(place).observe(column); // a look's measure or a rail changes the text's edge
 new ResizeObserver(place).observe(byId('reader-head'));
+// History opening, closing or redrawing its preview moves her row; one frame later, once laid out.
+let placeFrame = 0;
+const placeSoon = (): void => { cancelAnimationFrame(placeFrame); placeFrame = requestAnimationFrame(place); };
+const history = byId('history');
+new MutationObserver(placeSoon).observe(history, { attributes: true, attributeFilter: ['hidden'], childList: true, subtree: true });
+new ResizeObserver(placeSoon).observe(history);
 
 export function setSize(next: string): void {
   size = isPetSize(next) ? next : 'normal';
