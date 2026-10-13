@@ -2,6 +2,9 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.4] · 2026-10-13
+- Your pet sits in the History preview's reply row while you browse.
+
 ## [1.0.3] · 2026-10-13
 - The "Read your Claude folder?" question stays up until you answer it.
 - History explains when it's empty because folder reading is off, with an Allow button.
