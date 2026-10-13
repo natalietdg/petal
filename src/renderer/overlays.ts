@@ -2,7 +2,7 @@
 // Opening one closes the others; Esc closes it; the reader and reply box show only when none is open.
 import { byId, focusTerminal } from './dom';
 
-export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos' | 'welcome' | 'get-started' | 'consent';
+export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos' | 'welcome' | 'get-started' | 'consent' | 'board';
 
 interface Overlay {
   view: HTMLElement;
@@ -17,6 +17,7 @@ const OVERLAYS: Record<OverlayId, Overlay> = {
   welcome: { view: byId('welcome') },
   'get-started': { view: byId('get-started') },
   consent: { view: byId('consent') },
+  board: { view: byId('board') }, // the Sessions board: opened from the Sessions panel or ⌘⇧O
 };
 const reader = byId('reader');
 const readerHead = byId('reader-head');

@@ -10,7 +10,7 @@ export const ids = (): readonly string[] => favorites;
 export const onChange = (listener: () => void): void => { listeners.add(listener); };
 
 // Outline when off, filled when starred; colours come from favorites.css.
-const STAR_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>';
+export const STAR_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6-4.5-4.2 6.1-.8z"/></svg>';
 
 function paint(star: HTMLButtonElement): void {
   const on = isFavorite(star.dataset.sessionId ?? '');

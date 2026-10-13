@@ -35,7 +35,7 @@ const REVIEW_SCREEN = [
   ' ● Which fruits do you like?', '   → Apple, Plum', ' ● Which colour do you prefer?', '   → teal', '',
   'Ready to submit your answers?', '', '❯ 1. Submit answers', '  2. Cancel',
 ];
-const PERMISSION_SCREEN = [
+export const PERMISSION_SCREEN = [
   '⏺ Listing files in /private/tmp', '  ⎿  $ ls -la /private/tmp', RULE,
   ' Bash command', ' List files in /private/tmp with details', DASHED, ' ls -la /private/tmp', DASHED,
   ' Do you want to proceed?', ' ❯ 1. Yes', '   2. Yes, allow reading from /private/tmp from this project', '   3. No', '',

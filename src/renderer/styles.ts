@@ -44,3 +44,4 @@ import './welcome.css';
 import './get-started.css';
 import './agents.css';
 import './conclusion.css';
+import './sessions-board.css';

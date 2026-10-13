@@ -123,6 +123,7 @@ function refreshMenu(): void {
     onCycleTab: (delta) => sendToFocused('tabs:cycle', delta),
     onToggleReader: () => sendToFocused('layout:toggle'),
     onToggleHistory: () => sendToFocused('history:toggle'),
+    onToggleBoard: () => sendToFocused('board:toggle'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,
     onOpenGetStarted: openGetStarted,

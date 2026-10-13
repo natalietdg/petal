@@ -44,6 +44,7 @@ import { customizeStylesCheck } from './snapshot-customize-styles';
 import { shapeGuideCheck } from './snapshot-shape-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
+import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { conclusionCheck } from './snapshot-conclusion';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
@@ -386,6 +387,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['history reply', () => historyReplyCheck(kit)],
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
+    ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['shape guide', () => shapeGuideCheck(kit, win)],
@@ -614,6 +616,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await sessionNamesCheck(kit, { win, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'sessions-board' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await sessionsBoardCheck(kit, { win, openTab, sessions }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

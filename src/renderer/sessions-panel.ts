@@ -28,11 +28,13 @@ let closingId: string | null = null;
 const notes = new Map<string, string>();
 // Set when Add Session was refused at the limit, so the panel shows why.
 let addBlocked = false;
+// Set while the Sessions board is open: it rides this tick for detailed rows with reply digests.
+let boardOpen = false;
 
 export const isOpen = (): boolean => !panel.hidden;
 
 // "updated 5m ago"; with no verb, just "5m ago".
-function sinceText(ms: number | null, verb = ''): string {
+export function sinceText(ms: number | null, verb = ''): string {
   if (!ms) return '';
   const minutes = Math.round((Date.now() - ms) / MINUTE_MS);
   const hours = Math.round(minutes / 60);
@@ -208,6 +210,7 @@ function renderPanel(view: SessionsView): void {
   list.append(...rows.map(renderRow));
   const parts: HTMLElement[] = [
     textButton('Add Session', 'flow-button sessions-add', () => addSession()),
+    textButton('Board', 'flow-button sessions-board-open', () => { setOpen(false); window.dispatchEvent(new Event('petal:open-board')); }),
     el('p', 'sessions-heading', 'Claude sessions on this Mac'),
   ];
   if ((addBlocked && limitReached(view)) || overLimit(view)) parts.push(limitBanner(view, rows));
@@ -229,7 +232,7 @@ new ResizeObserver(() => area.style.setProperty('--reader-area-height', `${area.
 // auto: a timer tick, which leaves an open confirm alone so its buttons never move under her cursor.
 export async function refresh(auto = false): Promise<void> {
   const open = isOpen();
-  const result = await window.pastel.getSessions({ detailed: open, expandedIds: [...expandedIds] });
+  const result = await window.pastel.getSessions({ detailed: open || boardOpen, expandedIds: [...expandedIds], board: boardOpen });
   if (isIpcError(result)) {
     pill.replaceChildren(el('span', 'dot'), el('span', '', 'Sessions · unavailable'));
     if (open) panel.replaceChildren(el('p', 'sessions-heading', `Couldn’t read Claude sessions: ${result.error}`));
@@ -247,7 +250,12 @@ export const onView = (listener: (view: SessionsView) => void): void => { viewLi
 
 function schedule(): void {
   clearTimeout(timer);
-  timer = setTimeout(() => refresh(true), isOpen() ? OPEN_REFRESH_MS : COLLAPSED_REFRESH_MS);
+  timer = setTimeout(() => refresh(true), isOpen() || boardOpen ? OPEN_REFRESH_MS : COLLAPSED_REFRESH_MS);
+}
+
+export function setBoardOpen(open: boolean): void {
+  boardOpen = open;
+  refresh();
 }
 
 export function setOpen(open: boolean): void {
