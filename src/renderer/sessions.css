@@ -24,7 +24,11 @@
   color: var(--reader-fg);
   font: 600 15px var(--ui-font);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+.dock-icon { width: 1em; height: 1em; flex: none; } /* line icon at the label's size, coloured by the label */
 .dock-button[aria-pressed="true"] { background: var(--code-bg); border-color: var(--reader-fg); }
 .dock-button.add-session { border-color: var(--next-ink); color: var(--next-ink); }
 .dock-button.dock-mini { padding: 5px 11px; font-size: 13px; } /* Board: a small shortcut beside History */
@@ -246,8 +250,10 @@
   .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
 }
 @media (max-width: 900px) {
-  #sessions-dock { gap: 6px; padding: 12px 12px 0; }
-  .dock-button, .sessions-pill, .update-pill { padding: 5px 10px; font-size: 12px; }
-  .sessions-pill { gap: 6px; }
-  .dock-button.dock-mini { padding: 3px 8px; font-size: 11px; }
+  #sessions-dock { gap: 4px; padding: 12px 8px 0; }
+  .dock-button, .sessions-pill, .update-pill { padding: 5px 8px; font-size: 12px; }
+  .dock-button { gap: 3px; padding-inline: 6px; }
+  .sessions-pill { gap: 4px; }
+  .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
+  .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
 }

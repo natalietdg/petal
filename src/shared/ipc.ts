@@ -224,6 +224,7 @@ export interface EventChannels {
   'layout:toggle': void;
   'history:toggle': void;
   'board:toggle': void; // ⌘⇧O: the Sessions board
+  'focus:toggle': void; // ⌘⇧F: only the reply, full window
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
   'welcome:open': void;

@@ -31,6 +31,8 @@ import * as agentsMenu from './agents-menu';
 import * as agentPanel from './agent-panel';
 import * as favorites from './favorites';
 import * as sessionsBoard from './sessions-board';
+import * as focusMode from './focus-mode';
+import * as readerBanners from './reader-banners';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -38,7 +40,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -86,7 +88,7 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel, the open overlay, a scene card or the colour key instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay, a scene card or the colour key, or leaves focus, instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
@@ -94,6 +96,7 @@ async function start(): Promise<void> {
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
     else if (colourKey.isOpen()) colourKey.close();
+    else if (focusMode.isOn()) focusMode.set(false);
     else return true;
     return false;
   });
@@ -152,6 +155,12 @@ async function start(): Promise<void> {
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);
     else if (command.kind === 'activate') tabs.activate(command.tabId);
+  });
+  // Leaving focus: the terminal pane is back at its old size.
+  focusMode.onChange((on) => {
+    if (on) return;
+    tabs.active()?.refit();
+    focusTerminal();
   });
   window.pastel.onToggleLayout(() => {
     layout.toggleReaderOnly();

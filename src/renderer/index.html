@@ -18,11 +18,11 @@
       <section id="consent" hidden tabindex="-1" aria-label="Read your Claude folder?"></section>
       <section id="board" hidden aria-label="Sessions board"></section>
       <aside id="sessions-dock">
-        <button id="customize-button" class="dock-button" type="button" aria-pressed="false">Customize</button>
-        <button id="workflow-button" class="dock-button" type="button" aria-pressed="false">Workflow</button>
-        <button id="history-button" class="dock-button" type="button" aria-pressed="false">History</button>
-        <button id="board-button" class="dock-button dock-mini" type="button" aria-pressed="false" title="Every open session at a glance (⌘⇧O)">Board</button>
-        <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)">Add Session</button>
+        <button id="customize-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Customize</button>
+        <button id="workflow-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>Workflow</button>
+        <button id="history-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>History</button>
+        <button id="board-button" class="dock-button dock-mini" type="button" aria-pressed="false" title="Every open session at a glance (⌘⇧O)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Board</button>
+        <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Session</button>
         <button id="update-pill" class="update-pill" type="button" hidden></button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
         <div id="sessions-panel" class="sessions-panel" hidden></div>
@@ -44,6 +44,7 @@
               <button id="agents-chip" class="agents-chip" type="button" hidden></button>
               <button id="reader-star" class="fav-star reader-star" type="button" hidden></button>
               <button id="notes-toggle" class="notes-toggle" type="button" aria-pressed="false" title="Your notes for this session, beside the replies">Notes</button>
+              <button id="focus-toggle" class="focus-button" type="button" aria-pressed="false" title="Only the reply, filling the window (⌘⇧F · Esc to leave)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Focus</button>
             </div>
           </div>
         </div>
@@ -69,6 +70,7 @@
         <textarea id="composer-input" rows="1" placeholder="Message Claude…" aria-label="Message Claude"></textarea>
         <button id="composer-send" type="submit" aria-label="Send">Send</button>
       </form>
+      <button id="focus-exit" class="focus-button focus-exit" type="button" hidden title="Back to the full layout (Esc · ⌘⇧F)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>Exit focus</button>
     </div>
     <div id="divider" role="separator" aria-orientation="horizontal" aria-label="Resize reader and terminal" aria-valuemin="20" aria-valuemax="85" tabindex="0" title="Drag to resize · double-click to reset"></div>
     <section id="terminal-pane">

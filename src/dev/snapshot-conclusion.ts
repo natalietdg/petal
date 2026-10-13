@@ -9,6 +9,7 @@ import { concludeCloses, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { load as loadConfig } from '../main/config-store';
 
 const CONCLUDED = 'c0c0c0c0-0000-4000-8000-0000000000c1';
 const PLAIN = 'c0c0c0c0-0000-4000-8000-0000000000c2';
@@ -309,6 +310,9 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     check(sideways.length === 0 && narrowRow?.wide.length === 0 && narrowRow?.rowOverflow <= plainNarrow?.rowOverflow && narrowPreview.overflow <= 1,
       `History at 800px, nothing sideways: ${JSON.stringify({ sideways, row: narrowRow, plainRow: plainNarrow?.rowOverflow, overflow: narrowPreview.overflow })}`);
     await capture('conclusion-history-800');
+    await js('PastelTerm.history.close()');
+    await sizeTo(1280);
+    await bannersAndFocusCheck(kit, win, fixture);
   } finally {
     await js('PastelTerm.history.close()');
     removeHistory();
@@ -316,4 +320,108 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     await setLook('newspaper');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
+}
+
+// The strip and the pinned summary fold to one bar, remembered; Focus shows only the reply and Esc puts everything back.
+const BANNERS = `(() => {
+  const shown = (e) => Boolean(e) && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none';
+  const bar = document.getElementById('reader-banners-bar');
+  const style = getComputedStyle(bar);
+  return {
+    bar: shown(bar), text: bar.textContent, expanded: bar.getAttribute('aria-expanded'), controls: bar.getAttribute('aria-controls'),
+    oneLine: bar.getBoundingClientRect().height - parseFloat(style.paddingTop) <= parseFloat(style.lineHeight) * 1.4,
+    stripRows: [...document.querySelectorAll('#reader-status-strip .status-text')].filter(shown).length, // rows are display: contents, so count their text
+    pin: shown(document.querySelector('#reader-conclusion-pin .conclusion-summary')),
+    focused: document.activeElement === bar,
+  };
+})()`;
+const FOCUS = `(() => {
+  const shown = (e) => Boolean(e) && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none';
+  const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) }; };
+  const area = document.getElementById('reader-area');
+  const divider = document.getElementById('divider');
+  return {
+    on: document.getElementById('app').classList.contains('focus-mode'), pressed: document.getElementById('focus-toggle').getAttribute('aria-pressed'),
+    hidden: Object.fromEntries(['sessions-dock', 'reader-head', 'composer', 'prompt-dock', 'cat', 'reader-status-strip', 'reader-banners-bar', 'reader-conclusion-pin', 'notes-panel'].map((id) => [id, !shown(document.getElementById(id))])),
+    exit: shown(document.getElementById('focus-exit')), terminal: box('terminal-pane').height, reader: box('reader'), win: { width: innerWidth, height: innerHeight },
+    layout: { rows: document.getElementById('app').style.gridTemplateRows, divider: box('divider').top, split: divider.getAttribute('aria-valuenow'), terminal: box('terminal-pane'), reader: box('reader'),
+      cat: ['cat-docked', 'cat-in-reply', 'notes-open', 'banners-collapsed'].filter((c) => area.classList.contains(c)) },
+  };
+})()`;
+
+async function bannersAndFocusCheck(kit: Kit, win: BrowserWindow, fixture: string): Promise<void> {
+  const { js, wait, waitFor, log, capture } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} banners and focus: ${what}`);
+  const key = (keyCode: string) => { for (const type of ['keyDown', 'keyUp'] as const) win.webContents.sendInputEvent({ type, keyCode }); };
+  const banners = () => js(BANNERS);
+  const focus = () => js(FOCUS);
+
+  await js("PastelTerm.readerBanners.setCollapsed(false)");
+  appendTurns(fixture, turn('status please', 'Banner work.\n\n**Doing:** folding the banners.\n**Recommend:** keep one bar.\n**Next:** check focus.'));
+  const open = await waitFor(async () => { const b = await banners(); return b.bar && b.stripRows === 3 && b.pin ? b : null; }, 8000);
+  check(open && open.text === 'Doing · Recommend · Next · Conclusion▾' && open.expanded === 'true' && open.controls === 'reader-status-strip reader-conclusion-pin',
+    `expanded: bar names what it folds, strip and pin shown: ${JSON.stringify(open)}`);
+
+  // Click folds both to the one-line bar, and the choice is saved.
+  await js("document.getElementById('reader-banners-bar').click()");
+  const shut = await banners();
+  check(shut.bar && shut.oneLine && shut.stripRows === 0 && !shut.pin && shut.expanded === 'false' && shut.text.endsWith('▸'),
+    `collapsed: one-line bar, strip lines and pin body hidden: ${JSON.stringify(shut)}`);
+  check(await waitFor(() => loadConfig().reader.bannersCollapsed || null, 3000), `collapsed saved to config: ${JSON.stringify(loadConfig().reader)}`);
+  await capture('banners-collapsed');
+  // A fresh page reads it back: drop the class without saving, then restore from config.
+  await js("PastelTerm.readerBanners.setCollapsed(false, false)");
+  await js('PastelTerm.readerBanners.restore()');
+  const restored = await banners();
+  check(restored.stripRows === 0 && !restored.pin && restored.expanded === 'false', `still collapsed after re-reading config: ${JSON.stringify(restored)}`);
+
+  // Keyboard: Space and Enter on the focused bar.
+  await js("document.getElementById('reader-banners-bar').focus()");
+  key('Space');
+  const spaced = await waitFor(async () => { const b = await banners(); return b.expanded === 'true' ? b : null; }, 2000);
+  check(spaced && spaced.stripRows === 3 && spaced.pin && spaced.focused, `Space expands: ${JSON.stringify(spaced)}`);
+  // Enter activates a button on its keypress, which needs the char event too.
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+  win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+  const entered = await waitFor(async () => { const b = await banners(); return b.expanded === 'false' ? b : null; }, 2000);
+  check(entered && entered.stripRows === 0, `Enter collapses: ${JSON.stringify(entered)}`);
+  await js("PastelTerm.readerBanners.setCollapsed(false)");
+  check(await waitFor(() => loadConfig().reader.bannersCollapsed === false || null, 3000), 'expanded saved to config');
+
+  // Focus: move the divider off its default first, so restoring it is a real check.
+  await js("PastelTerm.tabs.active().refit()");
+  await js("document.getElementById('divider').focus()");
+  for (let i = 0; i < 3; i++) await js("document.getElementById('divider').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))");
+  await wait(300);
+  const before = (await focus()).layout;
+  await js("document.getElementById('focus-toggle').click()");
+  await wait(300);
+  const on = await focus();
+  const fills = Math.abs(on.reader.width - on.win.width) <= 3 && Math.abs(on.reader.height - on.win.height) <= 3 && on.reader.top <= 1 && on.reader.left <= 1;
+  check(on.on && on.pressed === 'true' && Object.values(on.hidden).every(Boolean) && on.terminal <= 1 && on.exit && fills,
+    `Focus hides dock, header, strip, pin, composer, terminal and cat; reader fills the window: ${JSON.stringify({ hidden: on.hidden, terminal: on.terminal, reader: on.reader, win: on.win, exit: on.exit })}`);
+  await capture('focus-mode');
+
+  // Esc, with the terminal holding the keyboard as it usually does.
+  await js('PastelTerm.tabs.active().term.focus()');
+  key('Escape');
+  await waitFor(async () => !(await focus()).on || null, 2000);
+  await wait(300); // the cat and the terminal settle back first
+  const off = await focus();
+  check(!off.on && JSON.stringify(off.layout) === JSON.stringify(before) && off.pressed === 'false' && !off.exit,
+    `Esc leaves Focus and restores the layout, divider included: ${JSON.stringify({ before, after: off?.layout })}`);
+
+  // The menu's ⌘⇧F sends focus:toggle; Exit focus and a second toggle both leave.
+  win.webContents.send('focus:toggle');
+  check(await waitFor(async () => (await focus()).on || null, 2000), 'View > Focus on Reply (⌘⇧F) enters Focus');
+  win.webContents.send('focus:toggle');
+  check(await waitFor(async () => !(await focus()).on || null, 2000), 'the same shortcut leaves it');
+  await js("document.getElementById('focus-toggle').click()");
+  await js("document.getElementById('focus-exit').click()");
+  await wait(300);
+  const exited = await focus();
+  check(!exited.on && JSON.stringify(exited.layout) === JSON.stringify(before), `Exit focus restores the layout: ${JSON.stringify(exited.layout)}`);
+
+  for (let i = 0; i < 3; i++) await js("document.getElementById('divider').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))");
 }

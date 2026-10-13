@@ -35,6 +35,8 @@ export interface Config {
   layout: { splits: Record<string, number> };
   // History's session list folded to a slim rail; favorites are starred session ids, oldest star first.
   history: { listCollapsed: boolean; favorites: string[] };
+  // The reader's Doing / Recommend / Next strip and pinned conclusion, folded to one bar.
+  reader: { bannersCollapsed: boolean };
   // The reader cat's size; the reader may shrink her below it to keep text clear.
   pet: { size: PetSize };
   // Get started steps done, by hand or seen by Petal.
@@ -71,6 +73,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   notesPanel: { open: 'auto' as const, width: 320 },
   layout: { splits: {} },
   history: { listCollapsed: false, favorites: [] },
+  reader: { bannersCollapsed: false },
   pet: { size: 'normal' as const },
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
@@ -129,6 +132,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const n = raw.notesPanel ?? {};
   const l = raw.layout ?? {};
   const hi = raw.history ?? {};
+  const rd = raw.reader ?? {};
   const pe = raw.pet ?? {};
   const gs = raw.getStarted ?? {};
   const cf = raw.claudeFolder ?? {};
@@ -154,6 +158,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     },
     layout: { splits: splitsOr(l.splits, b.layout.splits) },
     history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed), favorites: favoritesOr(hi.favorites, b.history.favorites) },
+    reader: { bannersCollapsed: boolOr(rd.bannersCollapsed, b.reader.bannersCollapsed) },
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },

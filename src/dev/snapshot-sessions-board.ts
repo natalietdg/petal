@@ -398,6 +398,11 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const pressed = await waitFor(async () => ((await boardOpen()) ? await js("document.getElementById('board-button').getAttribute('aria-pressed')") : null), 3000);
     const beside = await js("(() => { const b = document.getElementById('board-button').getBoundingClientRect(); const h = document.getElementById('history-button').getBoundingClientRect(); return { board: Math.round((b.top + b.bottom) / 2), history: Math.round((h.top + h.bottom) / 2), after: b.left >= h.right }; })()");
     check(pressed === 'true' && Math.abs(beside.board - beside.history) < 2 && beside.after, `Board opens the board, pressed, on History's row: ${JSON.stringify({ pressed, ...beside })}`);
+    // Each dock button: one hidden line icon before its label, and the label alone is its accessible name.
+    const icons = await js("[...document.querySelectorAll('#sessions-dock .dock-button')].map((b) => ({ id: b.id, svgs: b.querySelectorAll(':scope > svg[aria-hidden=\"true\"]').length, first: b.firstElementChild?.tagName, named: !b.hasAttribute('aria-label') && !b.hasAttribute('aria-labelledby'), label: b.textContent }))");
+    const DOCK_LABELS = ['Customize', 'Workflow', 'History', 'Board', 'Add Session'];
+    check(icons.length === DOCK_LABELS.length && icons.every((b: { svgs: number; first: string; named: boolean; label: string }, i: number) => b.svgs === 1 && b.first === 'svg' && b.named && b.label === DOCK_LABELS[i]),
+      `every dock button has one icon and its label as its name: ${JSON.stringify(icons)}`);
     for (const width of WIDTHS) {
       check(await sizeTo(width), `${width}px window sized`);
       await wait(200);

@@ -16,7 +16,7 @@
 /* The look's empty tail after the full banner would push its head under the pin at the bottom of a short reader. */
 .reader-column:has(> #replies-view:not([hidden]) > #reader-conclusion:not([hidden])) { padding-bottom: 24px; }
 /* A reply scrolled to its top lands under the pin, not behind it. */
-#reader:has(#reader-conclusion-pin:not([hidden])), .history-preview:has(.history-conclusion-pin:not([hidden])) { scroll-padding-top: 64px; }
+#reader-area:not(.banners-collapsed) #reader:has(#reader-conclusion-pin:not([hidden])), .history-preview:has(.history-conclusion-pin:not([hidden])) { scroll-padding-top: 64px; }
 
 .conclusion-banner {
   padding: 0.85em 1.1em 0.95em;

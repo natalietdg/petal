@@ -8,6 +8,7 @@ import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
 import { paintConclusion } from './conclusion-banner';
+import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
@@ -23,6 +24,7 @@ const repoLine = byId('reader-repo');
 const sessionLine = byId('reader-session');
 const scroller = byId('reader');
 const strip = createStrip();
+strip.id = 'reader-status-strip';
 query(byId('reader-head'), '.reader-head-column').append(strip);
 let latestId: string | null | undefined = null;
 const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
@@ -34,6 +36,7 @@ const conclusionPin = Object.assign(document.createElement('div'), { id: 'reader
 const conclusionSlot = Object.assign(document.createElement('div'), { id: 'reader-conclusion', hidden: true });
 older.before(conclusionPin);
 latest.after(conclusionSlot);
+banners.attach(strip, conclusionPin);
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
@@ -136,6 +139,7 @@ export function update(shown: ShownUpdate): void {
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
   paintConclusion(conclusionPin, conclusionSlot, notesSession && replies.length ? conclusion : null); // notesSession outlives an ended claude
   paintStrip(strip, replies.map((r) => r.markdown));
+  banners.paint();
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
   const named = Boolean(shown.sessionId && shown.label); // the tab's own session name, the same one its tab and History show

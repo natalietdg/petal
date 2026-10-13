@@ -18,12 +18,13 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has twelve sections with the documented defaults', () => {
+  it('has thirteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet', 'getStarted', 'claudeFolder']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder']);
     expect(d.layout).toEqual({ splits: {} });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
+    expect(d.reader).toEqual({ bannersCollapsed: false });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
@@ -128,7 +129,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'pet', 'getStarted', 'claudeFolder']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -274,6 +275,29 @@ describe('config-store history list', () => {
     expect(config.load().history.listCollapsed).toBe(true);
     config.save({ history: { listCollapsed: 'no' } });
     expect(config.load().history.listCollapsed).toBe(true);
+  });
+});
+
+describe('config-store reader banners', () => {
+  it('saves the folded banners for the next launch, and only a real boolean changes it', () => {
+    config.save({ reader: { bannersCollapsed: true } });
+    expect(config.load().reader.bannersCollapsed).toBe(true);
+    config.save({ reader: { bannersCollapsed: 'yes' } });
+    expect(config.load().reader.bannersCollapsed).toBe(true);
+    config.save({ reader: { bannersCollapsed: false } });
+    expect(config.load().reader.bannersCollapsed).toBe(false);
+  });
+
+  it('a config file from before the setting opens expanded and keeps its other sections', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ history: { listCollapsed: true } }));
+    expect(config.load().reader).toEqual({ bannersCollapsed: false });
+    config.save({ reader: { bannersCollapsed: true } });
+    expect(config.load().history.listCollapsed).toBe(true);
+  });
+
+  it('resetting the section expands them again', () => {
+    config.save({ reader: { bannersCollapsed: true } });
+    expect(config.reset('reader.bannersCollapsed').reader.bannersCollapsed).toBe(false);
   });
 });
 
