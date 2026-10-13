@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { app } from 'electron';
-import { rawPromptText, commandText, isHandback } from './prompts';
+import { rawPromptText, commandText, isAgentMessage } from './prompts';
 import { stripPasted } from '../shared/pasted-content';
 import { sessionTitle } from '../shared/session-label';
 import { assistantText } from './replies';
@@ -30,7 +30,7 @@ const handoffsDir = () => path.join(app.getPath('userData'), 'handoffs');
 // Streams the jsonl line by line: transcripts can be hundreds of MB.
 export async function readTurns(file: string): Promise<Turn[]> {
   const turns: Turn[] = [];
-  let afterHandback = false; // Claude's answer to a subagent's report is its own turn, with no prompt of hers
+  let afterAgent = false; // Claude's answer to another agent's message is its own turn, with no prompt of hers
   const lines = readline.createInterface({ input: fs.createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const line of lines) {
     let entry: TranscriptEntry | null;
@@ -39,14 +39,14 @@ export async function readTurns(file: string): Promise<Turn[]> {
     const prompt = rawPromptText(entry) || commandText(entry); // History's bubbles split out pasted blocks
     if (prompt) {
       turns.push({ prompt, reply: [] });
-      afterHandback = false;
+      afterAgent = false;
       continue;
     }
-    if (isHandback(entry)) afterHandback = true;
+    if (isAgentMessage(entry)) afterAgent = true;
     const text = assistantText(entry);
     if (!text) continue;
-    if (afterHandback) turns.push({ prompt: '', reply: [] });
-    afterHandback = false;
+    if (afterAgent) turns.push({ prompt: '', reply: [] });
+    afterAgent = false;
     turns.at(-1)?.reply.push(text);
   }
   return turns;

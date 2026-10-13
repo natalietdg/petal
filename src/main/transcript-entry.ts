@@ -31,9 +31,10 @@ export interface TranscriptEntry {
   timestamp?: string;
   isMeta?: boolean;
   isSidechain?: boolean;
+  isCompactSummary?: boolean; // the summary Claude Code writes after /compact, logged as a user entry
   cwd?: unknown;
   aiTitle?: string;
-  origin?: { kind?: string; handback?: boolean }; // a subagent's hand-back arrives as a meta user entry with handback: true
+  origin?: { kind?: string; handback?: boolean }; // another agent's message arrives as a meta user entry, kind 'peer'
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
   attachment?: { type?: string; commandMode?: string; prompt?: string | ContentItem[]; origin?: { kind?: string } }; // queued_command: her message sent while Claude works
 }

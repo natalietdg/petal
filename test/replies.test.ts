@@ -30,7 +30,7 @@ describe('ReplyCollector', () => {
     expect(c.add(toolUseEntry())).toBe(false);
     expect(c.add(toolResultEntry())).toBe(false); // a tool result is not a new turn
     expect(c.add(assistantEntry('part two', 'a2'))).toBe(true);
-    expect(c.newestFirst()).toEqual([{ id: 'a1', timestamp: '2026-10-06T00:00:00.000Z', markdown: 'part one\n\npart two', prompt: 'first question' }]);
+    expect(c.newestFirst()).toEqual([{ id: 'a1', timestamp: '2026-10-06T00:00:00.000Z', markdown: 'part one\n\npart two', prompt: 'first question', breaks: [10] }]);
   });
 
   it('starts a new reply after each user prompt, newest first', () => {

@@ -8,6 +8,7 @@ import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
 import { paintConclusion } from './conclusion-banner';
+import { replyBlocks } from './reply-blocks';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import type { Conclusion } from '../shared/conclusion';
@@ -38,6 +39,10 @@ const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : ''
 const foldKey = (reply: Reply): string => reply.id ?? `text:${reply.markdown.slice(0, 120)}`;
 
 const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
+
+// Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
+const replyBody = (reply: Reply): HTMLDivElement[] =>
+  replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply) }));
 
 // Sent from the reply box, not yet in Claude's log.
 function pendingBubble(echo: PendingEcho): HTMLDivElement {
@@ -86,9 +91,8 @@ function olderTurn(reply: Reply): HTMLElement {
   turn.className = 'reply older-turn';
   turn.dataset.replyId = reply.id;
   const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) });
-  const body = markdown.render(reply.markdown, { fold: foldKey(reply) });
-  turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), body);
-  diagrams.render(body);
+  turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), ...replyBody(reply));
+  diagrams.render(turn);
   return turn;
 }
 
@@ -161,7 +165,7 @@ export function update(shown: ShownUpdate): void {
     ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
     : `Latest reply · ${timeOfReply(newest.timestamp)}`;
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), markdown.render(newest.markdown, { fold: foldKey(newest) }), ...writing);
+  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...replyBody(newest), ...writing);
   latest.dataset.replyId = newest.id;
   older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
   diagrams.render(latest);
