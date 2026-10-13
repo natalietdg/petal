@@ -371,6 +371,16 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(fixtureLoad.claudeFolder.choice === 'unasked' && fixtureLoad.welcome.seen && fixtureLoad.notesPanel.open === 'closed',
     `existing config fixture loads as unasked, welcome seen, her settings kept: ${JSON.stringify({ folder: fixtureLoad.claudeFolder, welcome: fixtureLoad.welcome })}`);
   configStore.save({}); // what a fresh launch would load; tells main's folder gate and the renderer
+  // A real launch has no tabs yet. This run's tabs showed Claude replying while reading was on, and Get started
+  // ticks from them (and writes back its in-memory ticks) until main's feed clears them; wait for that, then start clean.
+  const cleared = await waitFor(async () => { const f = await js('PastelTerm.getStarted.currentFacts()'); return !f.claudeRunning && !f.sessionStarted && !f.replied ? f : null; }, 8000);
+  check(cleared, 'existing config: with reading off, the open tabs no longer show Claude replying');
+  configStore.save({ getStarted: { done: [] } }); // the fixture has none; undo any ticks written back meanwhile
+  await js('PastelTerm.getStarted.load()'); // as a launch does (app.ts) before the launch screens
+  await js('PastelTerm.getStarted.refresh()'); // what a tab event does; it must not bring the run's earlier ticks back
+  await wait(300);
+  const restarted = configStore.load().getStarted.done; // two open tabs still tick Add Session, as they would at launch
+  check(!restarted.includes('sign-in') && !restarted.includes('ask'), `existing config: Get started starts from the fixture, not the run's earlier ticks: ${JSON.stringify(restarted)}`);
   check(await js('PastelTerm.launchScreens.show()'), 'existing config: launch reports a screen');
   const askedAgain = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
   check(askedAgain, 'existing config: the folder question shows on launch');
@@ -382,8 +392,9 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
     `existing config: History, Customize, Workflow and Help › Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
   await js("document.querySelector('#consent .consent-later').click()");
-  const declinedThenChecklist = await until((st) => st.open === 'get-started'); // Not now still leads on to Get started
-  check(declinedThenChecklist && configStore.load().claudeFolder.choice === 'declined', 'existing config: Not now saves "declined" and Get started follows');
+  const followed = await until((st) => st.open === 'get-started');
+  check(followed && configStore.load().claudeFolder.choice === 'declined',
+    `existing config: Not now saves "declined" and Get started follows: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), done: configStore.load().getStarted.done, facts: await js('PastelTerm.getStarted.currentFacts()') })}`);
   await js('PastelTerm.overlays.hideCurrent()');
   await js("document.getElementById('history-button').click()");
   const HISTORY = `(() => ({ open: PastelTerm.overlays.current(), off: document.querySelector('#history-list .history-folder-off')?.innerText ?? null,
