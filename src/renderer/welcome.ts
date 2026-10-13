@@ -122,7 +122,7 @@ export async function open({ claudeFound }: { claudeFound?: boolean } = {}): Pro
   if (isIpcError(state)) return;
   await getStarted.load();
   if (claudeFound !== undefined) getStarted.setInstalled(claudeFound);
-  overlays.show('welcome');
+  if (!overlays.show('welcome')) return;
   render(state);
   if (!state.config.welcome.seen) await window.pastel.config.save({ welcome: { seen: true } }); // shown once is enough
 }

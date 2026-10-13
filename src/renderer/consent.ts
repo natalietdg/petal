@@ -24,6 +24,7 @@ export async function setChoice(next: FolderChoice): Promise<void> {
 
 async function answer(next: FolderChoice): Promise<void> {
   await setChoice(next);
+  overlays.unlock('consent');
   overlays.hide('consent');
   const then = answered;
   answered = null;
@@ -52,13 +53,13 @@ function render(): void {
   later.addEventListener('click', () => void answer('declined'));
   footer.append(allow, later);
   view.replaceChildren(pane, footer);
-  allow.focus({ preventScroll: true });
+  view.focus({ preventScroll: true }); // not Allow: a stray Enter while the window takes focus mustn't answer for her
 }
 
-// Shows the question; then() runs once she answers.
+// Shows the question; then() runs once she answers. Nothing else replaces it until she does.
 export function open(then: (() => void) | null = null): void {
   answered = then;
-  overlays.show('consent');
+  overlays.showLocked('consent');
   render();
 }
 

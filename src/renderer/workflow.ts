@@ -360,7 +360,7 @@ async function show(id: TabId): Promise<void> {
 export async function open(openOptions: OpenOptions = {}): Promise<void> {
   options = openOptions;
   cache = {};
-  overlays.show('workflow');
+  if (!overlays.show('workflow')) return;
   await show(tab);
   tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
 }

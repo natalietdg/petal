@@ -2,7 +2,7 @@
 // and the first tab's fixture swapped for an empty log, so each step ticks when the harness makes it true.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
 import { claudeFixture, claudeStarts, folderFixture, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -15,6 +15,20 @@ const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash'; // cod
 const NARROW = 800;
 const STEP_IDS = ['install', 'add-session', 'sign-in', 'ask'];
 const SENTINEL_SESSION = 'bbbbbbbb-0000-4000-8000-000000000001';
+
+// An install from before the folder question: every section she has touched, welcome seen, no claudeFolder or getStarted.
+const EXISTING_CONFIG = {
+  organizer: { enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku' },
+  flowTitles: {},
+  responseHook: { command: '', notify: false },
+  sessions: { maxOpen: 8 },
+  tarot: { birthdate: '1990-01-01' },
+  welcome: { seen: true },
+  notesPanel: { open: 'closed', width: 520 },
+  layout: { splits: { 0: 0.85 } },
+  history: { listCollapsed: false, favorites: [] },
+  pet: { size: 'normal' },
+};
 
 const STATE = `(() => {
   const open = PastelTerm.overlays.current();
@@ -345,6 +359,40 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const existingSet = await until((s) => s.open === 'get-started' && s.allSet);
   check(existingSet, 'existing install: Get started opened by hand reads "You’re all set"');
   await capture('get-started-existing-all-set');
+  await js('PastelTerm.overlays.hideCurrent()');
+
+  // 12. An existing install like 1.0.2's first report: a config.json full of her settings, welcome seen, no claudeFolder.
+  // The question stays up whatever else she clicks first; History, while reading is off, says why and offers Allow.
+  fs.writeFileSync(path.join(app.getPath('userData'), 'config.json'), JSON.stringify(EXISTING_CONFIG, null, 2));
+  const fixtureLoad = configStore.load();
+  check(fixtureLoad.claudeFolder.choice === 'unasked' && fixtureLoad.welcome.seen && fixtureLoad.notesPanel.open === 'closed',
+    `existing config fixture loads as unasked, welcome seen, her settings kept: ${JSON.stringify({ folder: fixtureLoad.claudeFolder, welcome: fixtureLoad.welcome })}`);
+  configStore.save({}); // what a fresh launch would load; tells main's folder gate and the renderer
+  check(await js('PastelTerm.launchScreens.show()'), 'existing config: launch reports a screen');
+  const askedAgain = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
+  check(askedAgain, 'existing config: the folder question shows on launch');
+  check((await js("document.activeElement?.id")) === 'consent', `existing config: focus sits on the question, not Allow, so a stray Enter can't answer it: ${await js('document.activeElement?.className')}`);
+  for (const id of ['history-button', 'customize-button', 'workflow-button']) await js(`document.getElementById('${id}').click()`);
+  send(win.webContents, 'get-started:open');
+  await wait(600);
+  const stillAsked = await js(CONSENT);
+  check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
+    `existing config: History, Customize, Workflow and Help › Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
+  await js("document.querySelector('#consent .consent-later').click()");
+  const declinedThenChecklist = await until((st) => st.open === 'get-started'); // Not now still leads on to Get started
+  check(declinedThenChecklist && configStore.load().claudeFolder.choice === 'declined', 'existing config: Not now saves "declined" and Get started follows');
+  await js('PastelTerm.overlays.hideCurrent()');
+  await js("document.getElementById('history-button').click()");
+  const HISTORY = `(() => ({ open: PastelTerm.overlays.current(), off: document.querySelector('#history-list .history-folder-off')?.innerText ?? null,
+    allow: document.querySelector('#history-list .history-allow')?.textContent ?? null, rows: document.querySelectorAll('#history-list .history-row').length }))()`;
+  const offered = await waitFor(async () => { const h = await js(HISTORY); return h.open === 'history' && h.off ? h : null; }, 5000);
+  check(offered && /Petal isn’t reading your Claude folder/.test(offered.off) && offered.allow === 'Allow' && offered.rows === 0,
+    `reading off: History says why it's empty and offers Allow: ${JSON.stringify(offered)}`);
+  await capture('get-started-history-folder-off');
+  await js("document.querySelector('#history-list .history-allow').click()");
+  const listed = await waitFor(async () => { const h = await js(HISTORY); return h.rows > 0 && !h.off ? h : null; }, 8000);
+  check(listed && configStore.load().claudeFolder.choice === 'allowed', `History's Allow saves "allowed" and lists her sessions: ${JSON.stringify(listed ?? { ...(await js(HISTORY)), choice: configStore.load().claudeFolder.choice })}`);
+  await capture('get-started-history-allowed');
   await js('PastelTerm.overlays.hideCurrent()');
 
   // Back to the fixture every later check expects.

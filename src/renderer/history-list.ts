@@ -39,6 +39,15 @@ function row(session: Session): HTMLElement {
 
 const byTitle = (a: Session, b: Session): number => titleOf(a).localeCompare(titleOf(b), undefined, { sensitivity: 'base' });
 
+function folderOffNote(): HTMLElement {
+  const note = el('div', 'history-empty history-folder-off');
+  const allow = el('button', 'flow-button history-allow', 'Allow');
+  allow.type = 'button';
+  allow.addEventListener('click', () => window.dispatchEvent(new Event('petal:allow-folder')));
+  note.append(el('p', null, 'Petal isn’t reading your Claude folder, so History is empty.'), allow);
+  return note;
+}
+
 export function renderList(): void {
   const query = search.value.trim().toLowerCase();
   const haystack = (s: Session) => `${titleOf(s)} ${s.title} ${s.firstPrompt} ${s.organizer?.project ?? ''} ${s.notes ?? ''} ${s.conclusion ? conclusionGist(s.conclusion) : ''}`.toLowerCase();
@@ -47,6 +56,10 @@ export function renderList(): void {
   // Sessions arrive newest first.
   if (state.sort === 'title') shown.sort(byTitle);
   list.replaceChildren(...shown.map(row));
+  if (!state.folderAllowed) {
+    list.append(folderOffNote());
+    return;
+  }
   if (shown.length) return;
   const favs = state.listKind === 'favorites';
   const empty = query ? 'No sessions match.' : favs ? 'Star a session to keep it here.' : 'No sessions this past week.';

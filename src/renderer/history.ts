@@ -38,7 +38,7 @@ function setSort(sort: SortBy): void {
 }
 
 export async function open(): Promise<void> {
-  overlays.show('history');
+  if (!overlays.show('history')) return;
   await refresh();
   renderPreview();
   search.focus();
@@ -47,6 +47,12 @@ export async function open(): Promise<void> {
 export const close = (): void => overlays.hide('history');
 export const isOpen = (): boolean => overlays.isOpen('history');
 export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
+
+// Follows her folder choice; an open History relists, so Allow fills it straight away.
+export function setFolderAllowed(allowed: boolean): void {
+  state.folderAllowed = allowed;
+  if (isOpen()) void refresh().then(renderPreview);
+}
 
 // All or Favorites: same rows, sort and preview; only which sessions are listed changes.
 function setListKind(kind: HistoryListKind): void {

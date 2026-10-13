@@ -41,3 +41,4 @@
 
 /* The reader's empty line can carry one button. */
 .status.empty .status-action { margin-top: 14px; font-size: 14px; }
+#consent:focus { outline: none; } /* focused so Esc reaches it, not to be tabbed to */

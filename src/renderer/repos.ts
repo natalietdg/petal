@@ -88,7 +88,7 @@ async function choose(repo: Repo | undefined): Promise<void> {
 
 export function open(query = ''): void {
   tabId = tabs.active()?.id ?? null;
-  overlays.show('repos');
+  if (!overlays.show('repos')) return;
   search.value = query;
   selected = 0;
   status.textContent = '';

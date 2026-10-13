@@ -54,7 +54,7 @@ export async function show(id: SectionId = section): Promise<void> {
 }
 
 export async function open(id?: SectionId): Promise<void> {
-  overlays.show('customize');
+  if (!overlays.show('customize')) return;
   await show(id ?? section);
   tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
 }

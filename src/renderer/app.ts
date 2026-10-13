@@ -116,7 +116,8 @@ async function start(): Promise<void> {
   const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
   reader.setFolderAllowed(folderAllowed);
-  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.rerender(); });
+  history.setFolderAllowed(folderAllowed);
+  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); history.rerender(); });
   window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
   window.addEventListener('petal:get-started', () => void getStarted.open());
   window.pastel.onReading(setReading);

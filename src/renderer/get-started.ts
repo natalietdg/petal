@@ -216,7 +216,7 @@ function render(): void {
 export async function open(): Promise<void> {
   if (!loaded) await load();
   showSteps = false;
-  overlays.show('get-started');
+  if (!overlays.show('get-started')) return;
   render();
 }
 

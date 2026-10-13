@@ -22,6 +22,7 @@ const reader = byId('reader');
 const readerHead = byId('reader-head');
 const composer = byId('composer');
 let openId: OverlayId | null = null;
+let lockedId: OverlayId | null = null; // a question that stays up until answered; other views wait behind it
 
 function render(): void {
   for (const [id, { view, button }] of Object.entries(OVERLAYS)) {
@@ -33,14 +34,25 @@ function render(): void {
   composer.hidden = openId !== null;
 }
 
-export function show(id: OverlayId): void {
+// False while a locked question is up: History, Customize and the rest open after she answers it.
+export function show(id: OverlayId): boolean {
+  if (lockedId && lockedId !== id) return false;
   openId = id;
   render();
+  return true;
 }
+
+// Shows id and keeps it up until unlock(); only its own answer closes it.
+export function showLocked(id: OverlayId): void {
+  lockedId = null;
+  show(id);
+  lockedId = id;
+}
+export function unlock(id: OverlayId): void { if (lockedId === id) lockedId = null; }
 
 // Back to the reader; keys go to the shell, since whatever was clicked is gone.
 export function hide(id: OverlayId): void {
-  if (openId !== id) return;
+  if (openId !== id || lockedId === id) return;
   openId = null;
   render();
   focusTerminal();

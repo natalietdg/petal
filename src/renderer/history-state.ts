@@ -15,6 +15,7 @@ export const state = {
   previewMode: 'replies' as PreviewMode,
   sort: 'recent' as SortBy,
   listKind: 'all' as HistoryListKind,
+  folderAllowed: true, // off: main lists nothing, so the list says why and offers Allow
 };
 
 export const hooks = {

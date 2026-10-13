@@ -62,6 +62,7 @@
 .history-live { flex-shrink: 0; padding: 0 8px; border-radius: 999px; background: var(--done-pill); color: var(--done-ink); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
 .history-meta { font-size: 12px; color: var(--muted); }
 .history-empty { color: var(--muted); font-size: 14px; }
+.history-folder-off p { margin: 0 0 8px; }
 
 /* Preview column: the conversation scrolls; the fork banner above and the reply box below keep their own rows. */
 .history-preview-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
