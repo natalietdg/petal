@@ -15,9 +15,9 @@ export interface ProcessRow {
   pid: number;
   ppid: number;
   comm: string;
+  args?: string; // full command line, read only for node processes (see isClaudeCli)
 }
 
-// ~/.claude/sessions/<pid>.json; only sessionId and cwd are checked, the rest is read if present.
 export interface SessionFile {
   pid: number;
   sessionId: string;
@@ -35,26 +35,52 @@ export interface ClaudeSession extends SessionFile {
 // Claude Code names project folders after the cwd with every non-alphanumeric as '-'.
 const projectSlug = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, '-');
 
-export function listProcesses(): Promise<ProcessRow[]> {
-  return new Promise((resolve) => {
-    execFile('/bin/ps', ['-Ao', 'pid=,ppid=,comm='], (error, stdout) => {
-      if (error) return resolve([]);
-      resolve(stdout.split('\n').flatMap((line) => {
-        const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
-        return match ? [{ pid: Number(match[1]), ppid: Number(match[2]), comm: match[3].trim() }] : [];
-      }));
-    });
-  });
+const run = (args: string[]): Promise<string | null> =>
+  new Promise((resolve) => execFile('/bin/ps', args, (error, stdout) => resolve(error ? null : stdout)));
+
+const isNode = (comm: string): boolean => path.basename(comm) === 'node';
+
+// "pid args" lines for these pids; a node process's command line says which script it runs.
+async function commandLines(pids: number[]): Promise<Map<number, string>> {
+  const lines = new Map<number, string>();
+  if (!pids.length) return lines;
+  for (const line of (await run(['-o', 'pid=,args=', '-p', pids.join(',')]))?.split('\n') ?? []) {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (match) lines.set(Number(match[1]), match[2].trim());
+  }
+  return lines;
 }
 
-// "claude" or ".../bin/claude"; helpers show up as "claude bg-spare" / "claude bg-pty-host".
-export const isClaudeCli = (comm: string): boolean => path.basename(comm) === 'claude';
+// One `ps` for every process, plus one for the command lines of node processes only.
+export async function listProcesses(): Promise<ProcessRow[]> {
+  const rows = parseProcessRows((await run(['-Ao', 'pid=,ppid=,comm='])) ?? '');
+  const args = await commandLines(rows.filter((row) => isNode(row.comm)).map((row) => row.pid));
+  return rows.map((row) => (args.has(row.pid) ? { ...row, args: args.get(row.pid) } : row));
+}
 
-// The command name of one pid (`ps -o comm=`), or null when it has no process.
-export function processCommand(pid: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile('/bin/ps', ['-o', 'comm=', '-p', String(pid)], (error, stdout) => resolve(error ? null : stdout.trim() || null));
-  });
+export const parseProcessRows = (stdout: string): ProcessRow[] => stdout.split('\n').flatMap((line) => {
+  const match = /^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+  return match ? [{ pid: Number(match[1]), ppid: Number(match[2]), comm: match[3].trim() }] : [];
+});
+
+// The claude CLI under every documented install (code.claude.com/docs/en/setup):
+// - native installer and Homebrew cask: a binary named claude ("claude", or ".../bin/claude" when run by path);
+// - npm today: bin/claude links to the native bin/claude.exe (comm is the link, or claude.exe when run by its own path);
+// - npm before the native package: node running .../bin/claude or .../@anthropic-ai/claude-code/cli.js,
+//   which renames itself "claude" once it starts.
+// Helpers ("claude bg-spare", "claude bg-pty-host") are not the CLI.
+const NODE_CLAUDE = /^\S*node\s+(?:\S*\/)?(?:claude|@anthropic-ai\/claude-code\/cli\.js)(?:\s|$)/;
+export function isClaudeCli(comm: string, args = ''): boolean {
+  const name = path.basename(comm);
+  if (name === 'claude' || name === 'claude.exe') return true;
+  return isNode(comm) && NODE_CLAUDE.test(args);
+}
+
+// The command name and line of one pid, or null when it has no process.
+export async function processCommand(pid: number): Promise<{ comm: string; args: string } | null> {
+  const comm = (await run(['-o', 'comm=', '-p', String(pid)]))?.trim();
+  if (!comm) return null;
+  return { comm, args: (await run(['-o', 'args=', '-p', String(pid)]))?.trim() ?? '' };
 }
 
 function descendants(rootPid: number, processes: readonly ProcessRow[]): ProcessRow[] {
@@ -74,7 +100,7 @@ function descendants(rootPid: number, processes: readonly ProcessRow[]): Process
 
 // True when a claude CLI runs anywhere under rootPid; the updater asks this about Petal itself.
 export const claudeRunsUnder = (rootPid: number, processes: readonly ProcessRow[]): boolean =>
-  descendants(rootPid, processes).some((proc) => isClaudeCli(proc.comm));
+  descendants(rootPid, processes).some((proc) => isClaudeCli(proc.comm, proc.args));
 
 // Parsed ~/.claude/sessions/<pid>.json, or null when missing or malformed.
 export function readSessionFile(pid: number): SessionFile | null {
@@ -96,7 +122,7 @@ export const transcriptPath = ({ cwd, sessionId }: { cwd: string; sessionId: str
 // { pid, session } for the claude under shellPid, from one `ps` listing. session is null until its file is readable (or reading is off).
 
 export function findClaudeSession(shellPid: number, processes: readonly ProcessRow[]): { pid: number | null; session: ClaudeSession | null } {
-  const candidates = descendants(shellPid, processes).filter((proc) => isClaudeCli(proc.comm));
+  const candidates = descendants(shellPid, processes).filter((proc) => isClaudeCli(proc.comm, proc.args));
   for (const proc of candidates) {
     const session = readSessionFile(proc.pid);
     if (session) return { pid: proc.pid, session: { ...session, transcript: transcriptPath(session) } };

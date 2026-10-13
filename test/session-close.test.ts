@@ -44,7 +44,7 @@ describe('closeSession', () => {
 
   it('sends SIGTERM to a real claude-named child and detects its exit', async () => {
     const child = await spawnChild();
-    expect(path.basename((await processCommand(child.pid)) ?? '')).toBe('claude');
+    expect(path.basename((await processCommand(child.pid))?.comm ?? '')).toBe('claude');
     const exit = new Promise((resolve) => child.once('exit', (_code, signal) => resolve(signal)));
     const outcome = await closeSession(ID, { live: () => [fileFor(child.pid)], reread: () => fileFor(child.pid) });
     expect(outcome).toEqual({ closed: true, session: fileFor(child.pid) });
@@ -61,7 +61,7 @@ describe('closeSession', () => {
   it('refuses helper processes and a missing process', async () => {
     const terminate = vi.fn();
     const live = () => [fileFor(424242)];
-    await expect(closeSession(ID, { live, command: async () => 'claude bg-spare', terminate })).rejects.toThrow(/Refused/);
+    await expect(closeSession(ID, { live, command: async () => ({ comm: 'claude bg-spare', args: 'claude bg-spare' }), terminate })).rejects.toThrow(/Refused/);
     await expect(closeSession(ID, { live, command: async () => null, terminate })).rejects.toThrow(/no process/);
     expect(terminate).not.toHaveBeenCalled();
   });
@@ -69,7 +69,7 @@ describe('closeSession', () => {
   it('refuses when the pid no longer belongs to that session', async () => {
     const terminate = vi.fn();
     const live = () => [fileFor(424242)];
-    const command = async () => '/usr/local/bin/claude';
+    const command = async () => ({ comm: '/usr/local/bin/claude', args: '/usr/local/bin/claude' });
     await expect(closeSession(ID, { live, command, reread: () => fileFor(424242, OTHER_ID), terminate })).rejects.toThrow(/no longer belongs/);
     await expect(closeSession(ID, { live, command, reread: () => null, terminate })).rejects.toThrow(/no longer belongs/);
     expect(terminate).not.toHaveBeenCalled();
