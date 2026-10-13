@@ -110,6 +110,11 @@ const api = {
     time: () => invoke('workflow:time'),
     handoffs: () => invoke('workflow:handoffs'),
   },
+  factory: {
+    get: () => invoke('factory:get'),
+    save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),
+    useGlobal: (repo: string) => invoke('factory:use-global', { repo }),
+  },
   history: {
     list: () => invoke('history:list'),
     conversation: (sessionId: string, before?: number) => invoke('history:conversation', { sessionId, before }),

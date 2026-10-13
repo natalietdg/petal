@@ -1,12 +1,14 @@
-// Workflow: how her Claude Code setup works and where the day went. Replaces the reader while open; Esc goes back.
+// Workflow: how her Claude Code setup works, where the day went, and the factory Claude follows. Replaces the reader while open; Esc goes back.
 import * as diagrams from './diagrams';
 import * as overlays from './overlays';
 import { byId, el, query } from './dom';
 import { timeOf } from './format';
+import { renderFactory } from './workflow-factory';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData, TodayRow } from '../main/workflow';
+import type { FactoryState } from '../main/factory-store';
 import type { IpcError } from '../shared/types';
 
-type TabId = 'today' | 'setup' | 'time' | 'handoffs';
+type TabId = 'today' | 'setup' | 'time' | 'handoffs' | 'factory';
 interface OpenOptions {
   openTabs?: OpenTab[];
 }
@@ -15,6 +17,7 @@ interface DataByTab {
   setup: SetupData;
   time: TimeData;
   handoffs: HandoffData;
+  factory: FactoryState;
 }
 type Loaded = DataByTab[TabId] | IpcError;
 
@@ -26,7 +29,9 @@ const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<L
   { id: 'setup', name: 'How my setup works', load: () => window.pastel.workflow.setup() },
   { id: 'time', name: 'Where my time goes', load: () => window.pastel.workflow.time() },
   { id: 'handoffs', name: 'Handoffs', load: () => window.pastel.workflow.handoffs() },
+  { id: 'factory', name: 'Factory', load: () => window.pastel.factory.get() },
 ];
+const UNCACHED: TabId[] = ['factory']; // edited in place, so a return visit reads the files again
 let tab: TabId = 'today';
 let options: OpenOptions = {};
 let cache: Partial<Record<TabId, DataByTab[TabId]>> = {}; // tab id -> data, cleared on every open
@@ -330,7 +335,7 @@ function renderHandoffs(data: HandoffData, token: number): HTMLElement[] {
   return nodes;
 }
 
-const RENDER: { [K in TabId]: (data: DataByTab[K], token: number) => HTMLElement[] } = { today: renderToday, setup: renderSetup, time: renderTime, handoffs: renderHandoffs };
+const RENDER: { [K in TabId]: (data: DataByTab[K], token: number) => HTMLElement[] } = { today: renderToday, setup: renderSetup, time: renderTime, handoffs: renderHandoffs, factory: renderFactory };
 // Pairs a tab with its own data type, which a lookup on a union id can't express.
 const draw = <K extends TabId>(id: K, data: DataByTab[K], token: number): HTMLElement[] => RENDER[id](data, token);
 
@@ -352,7 +357,7 @@ async function show(id: TabId): Promise<void> {
     body.replaceChildren(el('p', 'wf-error', `Couldn’t load this section: ${data.error}`));
     return;
   }
-  cache[id] = data;
+  if (!UNCACHED.includes(id)) cache[id] = data;
   // The load for `id` returned `id`'s data; TypeScript can't tie the two through TABS.
   body.replaceChildren(...draw(id, data as DataByTab[typeof id], token));
 }

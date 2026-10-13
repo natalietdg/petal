@@ -11,6 +11,8 @@ import type { OutputStyles, StyleSwitch } from '../main/output-styles';
 import type { PetalStyles } from '../main/petal-styles';
 import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/session-organizer';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
+import type { FactoryScope, FactoryState } from '../main/factory-store';
+import type { Factory } from './factory';
 import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
@@ -151,6 +153,10 @@ export interface InvokeChannels {
   'workflow:setup': { args: []; result: Guarded<SetupData> };
   'workflow:time': { args: []; result: Guarded<TimeData> };
   'workflow:handoffs': { args: []; result: Guarded<HandoffData> };
+  // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
+  'factory:get': { args: []; result: Guarded<FactoryState> };
+  'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };
+  'factory:use-global': { args: [request: { repo: string }]; result: Guarded<FactoryState> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };

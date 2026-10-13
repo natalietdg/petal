@@ -53,6 +53,9 @@ export const setupFixture: { claudeDir: string | null } = { claudeDir: null };
 // `opened` records Open in editor instead of launching an editor.
 export const stylesFixture: { claudeDir: string | null; opened: string[] } = { claudeDir: null, opened: [] };
 
+// Workflow › Factory: a stand-in ~/.claude and project repo. A null claudeDir reads and writes nothing; a null repo means no project.
+export const factoryFixture: { claudeDir: string | null; repo: string | null } = { claudeDir: null, repo: null };
+
 // Fake History sessions the harness adds to the list; their logs live in the snapshot folder, never ~/.claude.
 // `live` marks some as running in another terminal; `resumes` records the resume a background tab echoed instead.
 export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[] } = { records: [], live: [], resumes: [] };
