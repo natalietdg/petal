@@ -5,6 +5,10 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 ## [1.0.3] · 2026-10-13
 - The "Read your Claude folder?" question stays up until you answer it.
 - History explains when it's empty because folder reading is off, with an Allow button.
+- Replies no longer hide: answers after an agent's message, later answers under a folded section, and summaries shown as your message are fixed.
+- Pasted images show as thumbnails in your message bubbles.
+- Sessions board: every open session at a glance (Sessions › Board, or ⌘⇧O).
+- Wide tables, code or long names no longer push the cat, header and Sessions list off the window.
 
 ## [1.0.2] · 2026-10-13
 - Add Session starts Claude in the new tab.
