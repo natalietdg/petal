@@ -194,9 +194,9 @@
   color: var(--print-ink);
 }
 
-/* End mark: a centred ornament between two rules, closing the newest story before its back matter. */
+/* End mark: a centred ornament between two rules, closing the newest story (its last block) before its back matter. */
 [data-reading="print"] #latest .story-section.back::before,
-[data-reading="print"] #latest > .prose:not(:has(> .story-section.back))::after {
+[data-reading="print"] #latest > .prose:not(:has(~ .prose)):not(:has(> .story-section.back))::after {
   content: "❦";
   display: block;
   margin: 2.6em 0 2.2em;

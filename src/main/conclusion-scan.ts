@@ -1,7 +1,7 @@
 // Finds a session's latest conclusion in its log: Claude's text answering her newest "conclude" prompt.
 // The state is plain data, so a scan can stop at any line and resume later from a stored byte offset.
 import fs from 'node:fs';
-import { commandText, isHandback, isUserTurn, promptText, queuedPromptText } from './prompts';
+import { commandText, isAgentMessage, isUserTurn, promptText, queuedPromptText } from './prompts';
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { splitCompleteLines } from './transcript';
@@ -35,7 +35,7 @@ export function addEntry(state: ScanState, entry: TranscriptEntry): void {
     return;
   }
   // A wrapper or hand-back before Claude has answered keeps the conclude waiting; after, it ends the answer.
-  if (isUserTurn(entry) || isHandback(entry)) {
+  if (isUserTurn(entry) || isAgentMessage(entry)) {
     if (state.pending?.text) finish(state);
     return;
   }

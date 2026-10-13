@@ -11,7 +11,7 @@ export type CloseOutcome = { closed: true; session: SessionFile } | { closed: fa
 // Seams for tests; the defaults read the real session files and processes.
 export interface CloseDeps {
   live: () => SessionFile[];
-  command: (pid: number) => Promise<string | null>;
+  command: (pid: number) => Promise<{ comm: string; args: string } | null>;
   reread: (pid: number) => SessionFile | null;
   terminate: (pid: number) => void;
   alive: (pid: number) => boolean;
@@ -43,7 +43,7 @@ export async function closeSession(sessionId: string, overrides: Partial<CloseDe
   const { pid } = session;
 
   const command = await deps.command(pid);
-  if (!command || !isClaudeCli(command)) throw new Error(`Refused: pid ${pid} is not the claude CLI (${command ?? 'no process'}).`);
+  if (!command || !isClaudeCli(command.comm, command.args)) throw new Error(`Refused: pid ${pid} is not the claude CLI (${command?.comm ?? 'no process'}).`);
   // The pid could have been reused since the list was read; its file must still name this session.
   if (deps.reread(pid)?.sessionId !== sessionId) throw new Error(`Refused: pid ${pid} no longer belongs to that session.`);
 

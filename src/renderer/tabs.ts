@@ -112,6 +112,8 @@ export function remove(id: TabId): void {
   if (!tab) return;
   const ids = [...tabs.keys()];
   const index = ids.indexOf(id);
+  clearTimeout(staleTimers.get(id));
+  staleTimers.delete(id);
   tab.term.dispose();
   tab.host.remove();
   tab.element.remove();
@@ -120,11 +122,29 @@ export function remove(id: TabId): void {
   if (id === activeId && tabs.size && neighbour) activate(neighbour);
 }
 
+// A reply-box echo a picker swallowed must still go once it is stale, though no update may come to drop it.
+const staleTimers = new Map<TabId, ReturnType<typeof setTimeout>>();
+function watchStale(tab: Tab): void {
+  clearTimeout(staleTimers.get(tab.id));
+  staleTimers.delete(tab.id);
+  const wait = pendingEcho.untilStale(tab.pending);
+  if (wait === null) return;
+  staleTimers.set(tab.id, setTimeout(() => {
+    staleTimers.delete(tab.id);
+    if (!tab.update || !tabs.has(tab.id)) return;
+    const before = tab.pending.length;
+    tab.pending = pendingEcho.reconcile(tab.pending, tab.update);
+    if (tab.pending.length !== before) window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: tab.id }));
+    watchStale(tab);
+  }, wait));
+}
+
 export function setUpdate(id: TabId, update: TabReaderUpdate): void {
   const tab = tabs.get(id);
   if (!tab) return;
   tab.update = update;
   tab.pending = pendingEcho.reconcile(tab.pending, update);
+  watchStale(tab);
   tab.element.classList.toggle('busy', Boolean(update.busy));
   showLabel(tab, update.label);
 }
@@ -163,6 +183,7 @@ export function screenLines(tab: Tab): string[] {
 export function addPending(tab: Tab, text: string): number | null {
   if (!tab.update || !pendingEcho.echoes(text)) return null;
   tab.pending = pendingEcho.add(tab.pending, text, tab.update);
+  watchStale(tab);
   return tab.pending.at(-1)?.key ?? null;
 }
 

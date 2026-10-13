@@ -1,4 +1,5 @@
-// Reply latency under load: jsonl append -> text in #latest, for long replies, a growing reply and a hand-back,
+// Reply latency under load: jsonl append -> text in #latest, for long replies, a growing reply, a hand-back, a peer message
+// and a compact summary; each must also be visible there (not folded into a section, not behind a summary bubble),
 // while a second tab follows a ~60MB session appended every second and the terminal streams output.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +22,8 @@ const user = (uuid: string, content: unknown) => stamp({ type: 'user', uuid, mes
 const assistant = (uuid: string, text: string) => stamp({ type: 'assistant', uuid, message: { role: 'assistant', content: [{ type: 'text', text }] } });
 const toolResult = (uuid: string, bytes: number) => user(uuid, [{ type: 'tool_result', tool_use_id: uuid, content: 'x'.repeat(bytes) }]);
 const handback = (uuid: string) => stamp({ type: 'user', uuid, isMeta: true, origin: { kind: 'peer', handback: true }, message: { role: 'user', content: 'agent finished' } });
+const peerMessage = (uuid: string) => stamp({ type: 'user', uuid, isMeta: true, origin: { kind: 'peer' }, message: { role: 'user', content: 'another session wrote' } });
+const compactSummary = (uuid: string) => stamp({ type: 'user', uuid, isCompactSummary: true, message: { role: 'user', content: 'This session is being continued from a previous conversation.' } });
 const queuedPrompt = (uuid: string, prompt: string) => stamp({ type: 'attachment', uuid, attachment: { type: 'queued_command', prompt, commandMode: 'prompt', origin: { kind: 'human' }, humanTurn: true } });
 
 // A long sectioned reply like hers: headline, abstract, six sections with lists, a table and code, a status block.
@@ -140,13 +143,36 @@ export async function replyLatencyCheck(kit: Kit, { win, feed, file, sessions, o
     return Math.round(performance.now() - t);
   })()`);
 
+  // 'visible' unless the marker sits in a folded section or a compact summary shows as her message.
+  const visibility = (marker: string): Promise<string> => js(`(() => {
+    const m = ${JSON.stringify(marker)};
+    if ([...document.querySelectorAll('#latest .story-section.folded')].some((s) => s.textContent.includes(m))) return 'folded into a section';
+    if ([...document.querySelectorAll('#latest .reader-you')].some((b) => b.textContent.includes('being continued'))) return 'behind a summary bubble';
+    return 'visible';
+  })()`);
+
   const scenarios: [string, (run: string) => Promise<{ sample: Sample; extra?: string }>][] = [
     ['new turn, long reply', async (run) => ({ sample: await measure(`lat-new-${run}`, user(`u-${run}`, `ask ${run}`) + assistant(`a-${run}`, longReply(99, `lat-new-${run}`))) })],
-    ['same turn, text grows', async (run) => ({ sample: await measure(`lat-more-${run}`, toolResult(`t-${run}`, 20_000) + assistant(`m-${run}`, `More text arrives: lat-more-${run}`)) })],
+    // The reply above has ## sections: the new text must not land inside the last one, which starts folded.
+    ['same turn, text grows', async (run) => {
+      const sample = await measure(`lat-more-${run}`, toolResult(`t-${run}`, 20_000) + assistant(`m-${run}`, `More text arrives: lat-more-${run}`));
+      return { sample, extra: await visibility(`lat-more-${run}`) };
+    }],
     ['after a hand-back', async (run) => {
       const sample = await measure(`lat-hand-${run}`, handback(`h-${run}`) + assistant(`hb-${run}`, longReply(98, `lat-hand-${run}`)));
       const id = await js("document.getElementById('latest').dataset.replyId");
       return { sample, extra: id === `hb-${run}` ? 'new' : `merged:${id}` };
+    }],
+    // Another session's SendMessage between turns: Claude's answer is a new reply, not appended to the sectioned one.
+    ['after a peer message', async (run) => {
+      const sample = await measure(`lat-peer-${run}`, peerMessage(`p-${run}`) + toolResult(`pt-${run}`, 2_000) + assistant(`pa-${run}`, `Peer note read: lat-peer-${run}`));
+      const id = await js("document.getElementById('latest').dataset.replyId");
+      return { sample, extra: id === `pa-${run}` ? 'new' : `merged:${id}` };
+    }],
+    // An auto-compact mid-turn: the summary is not her message, so the rest of the turn shows with no bubble over it.
+    ['after a compact summary', async (run) => {
+      const sample = await measure(`lat-compact-${run}`, compactSummary(`c-${run}`) + assistant(`ca-${run}`, `After the compact: lat-compact-${run}`));
+      return { sample, extra: await visibility(`lat-compact-${run}`) };
     }],
     // Sent from the reply box while Claude works: Claude Code logs it only as a queued_command attachment.
     ['reply-box message mid-turn', async (run) => {
@@ -172,8 +198,8 @@ export async function replyLatencyCheck(kit: Kit, { win, feed, file, sessions, o
       const s = summarize(rows);
       const render = await renderMs();
       log(`reply latency [${phase}] ${name}: ${JSON.stringify({ ...s, renderMs: render })} raw=${JSON.stringify(rows.map((r) => [r.emit, r.dom]))}`);
-      const newReply = !extras.length || extras.every((e) => e === 'new');
-      if (!newReply) check(false, `[${phase}] ${name}: the answer is its own reply, no echo left behind: ${extras.join()}`);
+      const newReply = !extras.length || extras.every((e) => e === 'new' || e === 'visible');
+      if (!newReply) check(false, `[${phase}] ${name}: the answer is its own reply and in view, no echo left behind: ${extras.join()}`);
       const ok = s.shown === `${SAMPLES}/${SAMPLES}` && s.domMax < BOUND_MS && newReply;
       check(ok, `[${phase}] ${name} shows in #latest within ${BOUND_MS}ms: max ${s.domMax}ms, ${s.shown} shown`);
       pass &&= ok;

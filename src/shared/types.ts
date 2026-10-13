@@ -40,6 +40,7 @@ export interface Reply {
   timestamp: string | undefined;
   markdown: string;
   prompt: string;
+  breaks?: number[]; // offsets in markdown where each later text of the turn starts
 }
 
 // One of her prompts from the transcript, before Claude has written any text for it.

@@ -34,4 +34,11 @@ export function reconcile(list: readonly PendingEcho[], seen: Seen, now = Date.n
   });
 }
 
+// Milliseconds until the next echo is old enough to drop once Claude is idle; null when none is still that young.
+// Nothing else re-checks an idle tab, since main sends no update while nothing changes.
+export function untilStale(list: readonly PendingEcho[], now = Date.now()): number | null {
+  const waits = list.map((echo) => echo.sentAt + STALE_MS - now).filter((ms) => ms >= 0);
+  return waits.length ? Math.min(...waits) + 1 : null;
+}
+
 export const remove = (list: readonly PendingEcho[], key: number): PendingEcho[] => list.filter((echo) => echo.key !== key);

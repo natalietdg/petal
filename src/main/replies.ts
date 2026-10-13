@@ -1,5 +1,5 @@
 // Groups Claude Code jsonl entries into replies: all assistant text between two user prompts.
-import { contentItems, isHandback, isUserTurn, queuedPromptText, rawPromptText } from './prompts';
+import { contentItems, isAgentMessage, isUserTurn, queuedPromptText, rawPromptText } from './prompts';
 import type { TranscriptEntry } from './transcript-entry';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
@@ -35,8 +35,8 @@ export class ReplyCollector {
       this.promptCount += 1;
       return true; // shown at once, before any reply
     }
-    if (isHandback(entry)) {
-      this.turnOpen = false; // Claude's answer to it is a new reply, not more of the folded one above
+    if (isAgentMessage(entry)) {
+      this.turnOpen = false; // Claude's answer to it is a new reply, not more of the one above
       return false;
     }
     const text = assistantText(entry);
@@ -44,7 +44,9 @@ export class ReplyCollector {
 
     const open = this.turnOpen ? this.replies.at(-1) : undefined;
     if (open) {
-      open.markdown += `\n\n${text}`;
+      open.markdown += '\n\n';
+      open.breaks = [...(open.breaks ?? []), open.markdown.length]; // where this text starts, so it never folds into a section above
+      open.markdown += text;
     } else {
       // What she asked, shown above the reply; two sends before Claude answers share one bubble.
       const prompt = this.waitingPrompts.map((p) => p.prompt).join('\n\n');

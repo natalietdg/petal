@@ -13,12 +13,14 @@ export function contentItems(entry: TranscriptEntry): ContentItem[] {
 
 // Any user turn boundary; matches how the reader groups replies.
 export function isUserTurn(entry: TranscriptEntry): boolean {
-  if (entry.type !== 'user' || entry.isMeta || entry.isSidechain) return false;
+  if (entry.type !== 'user' || entry.isMeta || entry.isSidechain || entry.isCompactSummary) return false; // a compact summary is Claude Code's, not hers
   return !contentItems(entry).some((item) => item.type === 'tool_result');
 }
 
-// A subagent's final report delivered back into the session: no prompt of hers, but Claude answers it in a new turn.
-export const isHandback = (entry: TranscriptEntry): boolean => entry.type === 'user' && !entry.isSidechain && entry.origin?.handback === true;
+// A message from another agent that Claude answers in a new turn of its own: a subagent's hand-back, or a peer's SendMessage.
+// Mid-turn ones arrive as queued_command attachments instead, and stay part of the turn.
+export const isAgentMessage = (entry: TranscriptEntry): boolean =>
+  entry.type === 'user' && !entry.isSidechain && (entry.origin?.handback === true || entry.origin?.kind === 'peer');
 
 const promptOf = (items: ContentItem[]): string => {
   const text = items

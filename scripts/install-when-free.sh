@@ -9,10 +9,12 @@ OLD="$APP.previous"
 [ -x "$BUILD/Contents/MacOS/Petal" ] || { echo "no build at $BUILD; run npm run package first"; exit 1; }
 
 # Same process-tree walk as descendants() in src/main/claude-session.ts, kept in shell so this runs without the app.
+# Matches command lines, so an npm install running under node counts too (isClaudeCli there); a helper counts as well, which only waits longer.
 claude_in_petal() {
   local petal=$(pgrep -f "$APP/Contents/MacOS/Petal" | head -1)
   [ -z "$petal" ] && return 1
-  ps -Ao pid=,ppid=,comm= | awk -v p=$petal '{pp[$1]=$2; c[$1]=$3} END {for (i in c) { x=i; while (x>1 && x in pp) { if (pp[x]==p) { print c[i]; break } x=pp[x] } } }' | grep -qi claude
+  ps -Ao pid=,ppid=,args= | awk -v p=$petal '{pp[$1]=$2; a=$3; for (k=4; k<=NF; k++) a=a" "$k; c[$1]=a} END {for (i in c) { x=i; while (x>1 && x in pp) { if (pp[x]==p) { print c[i]; break } x=pp[x] } } }' \
+    | grep -Eq '(^|/)claude(\.exe)?( |$)|@anthropic-ai/claude-code/cli\.js'
 }
 
 # Old app moves aside, new one moves in, old one goes only after that worked; a failure puts the old one back.
