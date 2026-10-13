@@ -44,6 +44,7 @@ const api = {
   paste: (tabId: TabId, data: string) => invoke('pty:paste', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
   savePastedImage: (bytes: Uint8Array) => invoke('paste:save-image', { bytes }),
+  promptImage: (file: string, prompt: string) => invoke('paste:image', { file, prompt }),
   // A dropped file's absolute path; '' for a file made in the page.
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   answerPrompt: (tabId: TabId, answer: PromptAnswer) => send('prompt:answer', { tabId, answer }),

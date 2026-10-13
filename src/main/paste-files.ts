@@ -5,6 +5,7 @@ import path from 'node:path';
 
 export const PASTE_DIR_NAME = 'petal-paste';
 export const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+export const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
 const PASTE_FILE = /^paste-.+\.png$/;
 
 export const pasteDir = (tempRoot: string): string => path.join(tempRoot, PASTE_DIR_NAME);

@@ -16,6 +16,7 @@ import '@fontsource/ibm-plex-mono/400.css';
 import './layout.css';
 import './tabs.css';
 import './reader.css';
+import './prompt-images.css';
 import './magazine.css';
 import './print.css';
 import './colour-key.css';

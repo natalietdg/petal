@@ -18,6 +18,7 @@ import type { RepoEntry } from '../main/repo-scan';
 import type { SaveResult } from '../main/notes-store';
 import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
+import type { PromptImage } from '../main/paste-image';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -178,6 +179,8 @@ export interface InvokeChannels {
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
   // An image pasted into the reply box, saved as a PNG; Claude reads it by the returned path.
   'paste:save-image': { args: [request: { bytes: Uint8Array }]; result: Guarded<{ file: string }> };
+  // An image path in one of her messages, as a data URL; prompt is the text that names it.
+  'paste:image': { args: [request: { file: string; prompt: string }]; result: Guarded<PromptImage> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.

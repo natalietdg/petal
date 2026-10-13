@@ -7,7 +7,7 @@ import { assertFixtureOutsideClaude } from './snapshot-views';
 export const FIXTURE_A = 'f1f1f1f1-0000-4000-8000-00000000000a';
 export const FIXTURE_B = 'f2f2f2f2-0000-4000-8000-00000000000b';
 
-function writeLog(file: string, prompt: string, reply: string): void {
+export function writeLog(file: string, prompt: string, reply: string): void {
   assertFixtureOutsideClaude(file);
   const at = new Date().toISOString();
   const lines = [
