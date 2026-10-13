@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app, type BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
+import * as organizer from '../main/session-organizer';
 import { claudeFixture, claudeStarts, folderFixture, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { send } from '../main/ipc';
@@ -18,7 +19,7 @@ const SENTINEL_SESSION = 'bbbbbbbb-0000-4000-8000-000000000001';
 
 // An install from before the folder question: every section she has touched, welcome seen, no claudeFolder or getStarted.
 const EXISTING_CONFIG = {
-  organizer: { enabled: true, intervalMinutes: 10, perPass: 12, model: 'haiku' },
+  organizer: { enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku' }, // off: a schedule here would fail the run's organizer-off check
   flowTitles: {},
   responseHook: { command: '', notify: false },
   sessions: { maxOpen: 8 },
@@ -363,7 +364,9 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
 
   // 12. An existing install like 1.0.2's first report: a config.json full of her settings, welcome seen, no claudeFolder.
   // The question stays up whatever else she clicks first; History, while reading is off, says why and offers Allow.
-  fs.writeFileSync(path.join(app.getPath('userData'), 'config.json'), JSON.stringify(EXISTING_CONFIG, null, 2));
+  const configPath = path.join(app.getPath('userData'), 'config.json');
+  const savedConfig = fs.readFileSync(configPath, 'utf8'); // put back after, so later checks see the run's own config
+  fs.writeFileSync(configPath, JSON.stringify(EXISTING_CONFIG, null, 2));
   const fixtureLoad = configStore.load();
   check(fixtureLoad.claudeFolder.choice === 'unasked' && fixtureLoad.welcome.seen && fixtureLoad.notesPanel.open === 'closed',
     `existing config fixture loads as unasked, welcome seen, her settings kept: ${JSON.stringify({ folder: fixtureLoad.claudeFolder, welcome: fixtureLoad.welcome })}`);
@@ -394,6 +397,10 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(listed && configStore.load().claudeFolder.choice === 'allowed', `History's Allow saves "allowed" and lists her sessions: ${JSON.stringify(listed ?? { ...(await js(HISTORY)), choice: configStore.load().claudeFolder.choice })}`);
   await capture('get-started-history-allowed');
   await js('PastelTerm.overlays.hideCurrent()');
+  fs.writeFileSync(configPath, savedConfig);
+  configStore.save({}); // tells the organizer schedule and the folder gate, as the fixture's save did
+  const organizerAfter = { enabled: configStore.load().organizer.enabled, schedule: organizer.status().schedule };
+  check(!organizerAfter.enabled && organizerAfter.schedule?.enabled === false, `existing config: step 12 puts the config back, organizer still off: ${JSON.stringify(organizerAfter)}`);
 
   // Back to the fixture every later check expects.
   if (secondId) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(secondId)})`);
