@@ -14,6 +14,7 @@ import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
 import { headlineLinksCheck } from './snapshot-headline-links';
 import { pastedCheck } from './snapshot-pasted';
+import { bubbleImagesCheck } from './snapshot-bubble-images';
 import { addSessionCheck } from './snapshot-add-session';
 import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
@@ -404,6 +405,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['tables', () => tablesCheck(kit, win)],
     ['headline links', () => headlineLinksCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
+    ['bubble images', () => bubbleImagesCheck(kit, win)],
     ['colour key', () => colourKeyCheck(kit, win)],
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
@@ -662,6 +664,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     organizerOffCheck(kit, 'start');
     await fixtureReply({ js, log, pty });
     await welcomeCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'bubble-images') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await bubbleImagesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

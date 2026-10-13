@@ -1,0 +1,75 @@
+/* Pictures in her message (reader and History): a rounded thumbnail, the filename muted under it. */
+:is(.reader-you, .history-you):has(.prompt-image) { max-height: 28em; }
+.prompt-image {
+  display: block;
+  max-width: 100%;
+  margin: 0.45em 0;
+  white-space: normal;
+}
+.prompt-image-open {
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: min(240px, 100%);
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--code-bg);
+  cursor: zoom-in;
+}
+.prompt-image-open:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+.prompt-image-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  height: auto;
+  object-fit: contain;
+}
+.prompt-image-caption {
+  max-width: min(240px, 100%);
+  margin-top: 0.3em;
+  font: 0.78em/1.35 var(--ui-font);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prompt-image-missing {
+  display: inline-block;
+  box-sizing: border-box; /* padding and border inside the bubble's width */
+  max-width: 100%;
+  padding: 0.15em 0.7em;
+  border: 1px dashed var(--rule);
+  border-radius: 999px;
+  font: 0.78em/1.45 var(--ui-font);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.prompt-image[data-state="missing"] { margin: 0.3em 0; }
+[data-reading="print"] .prompt-image-open { border-color: var(--print-ink); border-radius: 0; }
+
+/* Opened larger: the picture over a veil of the reader's paper; any click or Esc closes it. */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 30; /* above History and the overlays (20) */
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: color-mix(in srgb, var(--reader-bg) 88%, transparent);
+  cursor: zoom-out;
+}
+.image-lightbox:focus { outline: none; }
+.image-lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--code-bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+}
+[data-reading="print"] .image-lightbox-image { border-radius: 0; border-color: var(--print-ink); }
