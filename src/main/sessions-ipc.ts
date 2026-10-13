@@ -8,6 +8,7 @@ import { closeSession } from './session-close';
 import { handle } from './ipc';
 import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
 import { isSnapshotRun } from './snapshot-mode';
+import { boardDetails } from './sessions-board';
 import type { ActiveSession } from './tab-session';
 
 // Every row, open or recently closed, is named by the shared rule at list time, so a later title shows at once.
@@ -17,7 +18,7 @@ const nameOf = (s: { sessionId: string; cwd: string }): string => sessionTitleFo
 const snapshotTerminate = (): never => { throw new Error('Snapshot run: no signal sent.'); };
 
 export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSession }): void {
-  handle('sessions:snapshot', (event, { detailed, expandedIds }) => {
+  handle('sessions:snapshot', async (event, { detailed, expandedIds, board }) => {
     const live = panelSessions();
     const own = activeSession(event.sender.id)?.feed.session;
     const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId, nameOf }, live, subagentsDirOf);
@@ -25,8 +26,10 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
     const { running, agents } = ownAgents(own);
     const here = { running, total: agents.length };
     if (!detailed) return { ...base, maxOpen, here };
+    const details = board ? await boardDetails(live) : null;
     return {
       ...base,
+      rows: details ? base.rows?.map((row) => ({ ...row, board: details.get(row.sessionId) })) : base.rows,
       maxOpen,
       here,
       closed: closedStore.reopenable(live.map((s) => s.sessionId)).map((c) => ({ ...c, title: nameOf(c), cwd: sessionsMonitor.shortCwd(c.cwd) })),

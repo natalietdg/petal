@@ -9,6 +9,7 @@ html, body {
   display: grid;
   height: 100%;
   grid-template-rows: minmax(0, 65fr) auto minmax(0, 35fr);
+  grid-template-columns: minmax(0, 1fr); /* the window's width, never a wider terminal's or board's */
 }
 
 #reader-area {

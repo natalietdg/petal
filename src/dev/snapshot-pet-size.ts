@@ -63,7 +63,7 @@ const MEASURE = `(() => {
   const toggle = document.querySelector('#reader-head .view-toggle').getBoundingClientRect();
   const below = Math.min(...['prompt-dock', 'composer'].map((id) => document.getElementById(id).getBoundingClientRect().top));
   return {
-    cat: R(box), shown, scale: getComputedStyle(cat).getPropertyValue('--pet-scale').trim(), docked: area.classList.contains('cat-docked'),
+    cat: R(box), shown, inner: { width: window.innerWidth, height: window.innerHeight }, area: R(area.getBoundingClientRect()), scale: getComputedStyle(cat).getPropertyValue('--pet-scale').trim(), docked: area.classList.contains('cat-docked'),
     textRight: Math.round(textRight), viewTop: Math.round(view.top), viewBottom: Math.round(view.bottom), bar: R(bar), slot: R(slot), head: R(head), areaTop: Math.round(area.getBoundingClientRect().top),
     drawer: drawer ? R(drawer.getBoundingClientRect()) : null, underDrawer: Boolean(drawer && meets(drawer.getBoundingClientRect(), box)), key: R(key), toggle: R(toggle),
     strip: strip && !strip.hidden ? R(strip.getBoundingClientRect()) : null,
@@ -86,6 +86,9 @@ const inBar = (m: Measure, dock: number): boolean => m.docked && Math.abs(m.cat.
 const inDrawerBar = (m: Measure, dock: number): boolean => m.docked && !m.underDrawer && Math.abs(m.cat.height - dock) <= 1 && m.slot.height >= dock - 1
   && m.cat.top >= m.slot.top - 1 && m.cat.bottom <= m.slot.bottom + 1 && m.cat.top >= m.head.top && m.cat.bottom <= m.viewTop && m.cat.right <= m.key.left;
 const DOCK_PX = { small: 48, normal: 64, large: 80 } as const; // DOCK_PX in cat.ts
+// Her whole box inside the window: a reader area wider than the window once pushed her off the right edge.
+const inWindow = (m: Measure): boolean => !m.shown || (m.cat.left >= 0 && m.cat.top >= 0 && m.cat.right <= m.inner.width && m.cat.bottom <= m.inner.height);
+const SWEEP_WIDTHS = [1920, 1728, 1440, 1280, 990, 800]; // widest first: a window narrowing is what left her outside
 
 // Lifestyle's 960px measure leaves a 1280 gutter only Small fits; larger, she docks there too.
 const gutterAt1280 = (look: string, size: string): boolean => look !== 'lifestyle' || size === 'small';
@@ -126,6 +129,7 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       at.push(m);
       check(m.shown && placed(m, where, want, dock) && m.hits.length === 0,
         `${tag} at the ${spot} (${m.scrollTop}/${m.scrollMax}): ${where === 'gutter' ? `gutter, want ${want}` : `${where}, want ${dock}, bar ${JSON.stringify(m.bar)}, slot ${JSON.stringify(m.slot)}, reader top ${m.viewTop}, drawer ${JSON.stringify(m.drawer)}, strip ${JSON.stringify(m.strip)}`}, docked ${m.docked}, cat ${JSON.stringify(m.cat)}, text right ${m.textRight}, scale ${m.scale}, hits ${JSON.stringify(m.hits)}`);
+      check(inWindow(m), `${tag} at the ${spot}: inside the ${m.inner.width}x${m.inner.height} window, cat ${JSON.stringify(m.cat)}, reader area ${JSON.stringify(m.area)}`);
       check(m.margin === 0 && Math.abs(m.gapBelow) <= 1, `${tag} at the ${spot}: no band, reader margin ${m.margin}px, gap to the reply box ${m.gapBelow}px`);
     }
     check(at.every((m) => JSON.stringify(m.cat) === JSON.stringify(at[0].cat)) && at[0].scrollMax > 0, `${tag}: same rect at top, middle and bottom ${JSON.stringify(at.map((m) => [m.cat, m.areaTop]))}`);
@@ -168,6 +172,35 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     }
     await js('PastelTerm.notesPanel.setOpen(false)');
   }
+  // Every width she might use, narrowing from the widest, Notes closed then open, every look, with one tab and with
+  // a strip of long-named tabs (their names once widened the window's column): always fully on screen.
+  const startTabs: string[] = await js('PastelTerm.tabs.ids()');
+  const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
+  const sweep = async (tabCount: number) => {
+    for (const notesOpen of [false, true]) {
+      await js(`PastelTerm.notesPanel.setOpen(${notesOpen})`);
+      for (const width of SWEEP_WIDTHS) {
+        check(await sizeTo(width), `${width}px window sized, Notes ${notesOpen ? 'open' : 'closed'}, ${tabCount} tabs`);
+        for (const [look] of READING_CHOICES) {
+          await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
+          await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
+          await wait(200);
+          const m: Measure = await measure();
+          check(m.shown && inWindow(m), `sweep ${tabCount} tabs ${width}px ${look} Notes ${notesOpen ? 'open' : 'closed'}: cat ${JSON.stringify(m.cat)} in ${m.inner.width}x${m.inner.height}, reader area ${JSON.stringify({ left: m.area.left, right: m.area.right })}, docked ${m.docked}`);
+        }
+      }
+    }
+  };
+  await sweep(startTabs.length);
+  const LONG_TABS = 6;
+  await js(`(() => { for (let i = 1; i <= ${LONG_TABS}; i++) { const t = PastelTerm.tabs.create(); t.element.querySelector('.tab-label').textContent = 'Product name translations update to test on staging, part ' + i; } })()`);
+  if (startActive) await js(`PastelTerm.tabs.activate(${JSON.stringify(startActive)})`);
+  check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length + LONG_TABS ? true : null), 5000), `${LONG_TABS} long-named tabs added`);
+  await sweep(startTabs.length + LONG_TABS);
+  for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
+  check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), 'sweep tabs closed again');
+  if (startActive) await js(`PastelTerm.tabs.activate(${JSON.stringify(startActive)})`);
+  await js('PastelTerm.notesPanel.setOpen(false)');
   await js("window.pastel.look.setReading('newspaper')");
   check(widths.large > widths.normal && widths.normal > widths.small, `size changes her rect: ${JSON.stringify(widths)}`);
 

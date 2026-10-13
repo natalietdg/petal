@@ -45,6 +45,8 @@ import { customizeStylesCheck } from './snapshot-customize-styles';
 import { shapeGuideCheck } from './snapshot-shape-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
+import { sessionsBoardCheck } from './snapshot-sessions-board';
+import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
@@ -387,6 +389,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['history reply', () => historyReplyCheck(kit)],
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
+    ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['shape guide', () => shapeGuideCheck(kit, win)],
@@ -413,6 +416,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '')], // appends conclude turns; after the steps that measure the reader
+    ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
@@ -616,6 +620,20 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await sessionNamesCheck(kit, { win, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'sessions-board' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await sessionsBoardCheck(kit, { win, openTab, sessions }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'window-fit' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await windowFitCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

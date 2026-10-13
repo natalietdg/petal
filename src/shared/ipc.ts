@@ -223,6 +223,7 @@ export interface EventChannels {
   'tabs:activate': { tabId: TabId };
   'layout:toggle': void;
   'history:toggle': void;
+  'board:toggle': void; // ⌘⇧O: the Sessions board
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
   'welcome:open': void;

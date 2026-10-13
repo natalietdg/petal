@@ -30,6 +30,7 @@ import * as updatePill from './update-pill';
 import * as agentsMenu from './agents-menu';
 import * as agentPanel from './agent-panel';
 import * as favorites from './favorites';
+import * as sessionsBoard from './sessions-board';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -37,7 +38,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -117,7 +118,8 @@ async function start(): Promise<void> {
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
   reader.setFolderAllowed(folderAllowed);
   history.setFolderAllowed(folderAllowed);
-  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); history.rerender(); });
+  sessionsBoard.setFolderAllowed(folderAllowed);
+  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); sessionsBoard.setFolderAllowed(allowed); history.rerender(); });
   window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
   window.addEventListener('petal:get-started', () => void getStarted.open());
   window.pastel.onReading(setReading);

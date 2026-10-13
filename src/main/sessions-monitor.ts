@@ -8,6 +8,7 @@ import { recentActivity } from './activity';
 import { readHead } from './jsonl-window';
 import { promptText, trimTo } from './prompts';
 import { sessionTitle } from '../shared/session-label';
+import type { BoardDetail } from '../shared/sessions-board';
 
 const SHOWN_KINDS = new Set(['interactive', 'bg']);
 export const SUBAGENT_WINDOW_MS = 2 * 60 * 1000; // an agent with no write for longer counts as idle and is hidden
@@ -43,6 +44,7 @@ export interface SessionRow {
   activity: string | undefined;
   recent: (string | undefined)[];
   subagents: SubagentRow[];
+  board?: BoardDetail; // only while the Sessions board is open
 }
 
 export interface SessionsSnapshot {
@@ -53,6 +55,7 @@ export interface SessionsSnapshot {
 export interface SnapshotOptions {
   detailed?: boolean;
   expandedIds?: string[];
+  board?: boolean; // the Sessions board is open: each row also carries its reply digest
   ownSessionId?: string | null;
   nameOf?: (session: SessionFile) => string; // the shared session name; never Claude Code's "<folder>-<id>" session name
 }
