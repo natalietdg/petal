@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.3] · 2026-10-13
+- The "Read your Claude folder?" question stays up until you answer it.
+- History explains when it's empty because folder reading is off, with an Allow button.
+
 ## [1.0.2] · 2026-10-13
 - Add Session starts Claude in the new tab.
 - First launch asks before reading your Claude folder; change it any time in Customize.
