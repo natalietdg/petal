@@ -6,6 +6,7 @@ import { TranscriptTail, type TranscriptView } from './transcript';
 import * as conclusions from './conclusions-store';
 import { claudeFolderAllowed } from './claude-folder';
 import { sameConclusion, type Conclusion } from '../shared/conclusion';
+import { ConcludeWatch } from './conclude-close';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
@@ -21,11 +22,14 @@ export interface ReplyFinished {
 interface FeedOptions {
   fixture?: FixtureSession | null;
   onReplyFinished?: ((finished: ReplyFinished) => void) | null;
+  onConcluded?: ((sessionId: string) => void) | null; // her "conclude" was answered and the turn is over
 }
 
 export class ReaderFeed implements ProcessListener {
   private readonly shellPid: number;
   private readonly onReplyFinished: ((finished: ReplyFinished) => void) | null;
+  private readonly onConcluded: ((sessionId: string) => void) | null;
+  private readonly concludeWatch = new ConcludeWatch();
   private finishingId: string | null = null; // reply whose turn just went busy -> idle, reported on the next tick
   // Dev-only: a snapshot run replays a fixture jsonl instead of a live claude.
   readonly fixture: FixtureSession | null;
@@ -40,9 +44,10 @@ export class ReaderFeed implements ProcessListener {
   private repo: string | null = null; // kept after claude exits, so an ended reader still names its repo
   private ticking = false;
 
-  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null }: FeedOptions = {}) {
+  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null }: FeedOptions = {}) {
     this.shellPid = shellPid;
     this.onReplyFinished = onReplyFinished;
+    this.onConcluded = onConcluded;
     this.fixture = fixture;
     this.send = send;
     this.emit('none');
@@ -86,6 +91,7 @@ export class ReaderFeed implements ProcessListener {
 
   private follow(session: FollowedSession): void {
     this.finishingId = null;
+    this.concludeWatch.reset();
     this.tail?.stop();
     this.session = session;
     this.repo = repoLabel(session.cwd);
@@ -108,7 +114,9 @@ export class ReaderFeed implements ProcessListener {
     const session = this.session;
     if (!session) return;
     const conclusion = await conclusions.refresh(session.sessionId, session.transcript);
-    if (this.session?.sessionId !== session.sessionId || sameConclusion(conclusion, this.conclusion)) return;
+    if (this.session?.sessionId !== session.sessionId) return;
+    this.concludeWatch.read(session.sessionId, conclusion);
+    if (sameConclusion(conclusion, this.conclusion)) return;
     this.conclusion = conclusion;
     this.emit('live');
   }
@@ -134,6 +142,17 @@ export class ReaderFeed implements ProcessListener {
     if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
+    this.reportConcluded(found.status === 'busy');
+  }
+
+  private reportConcluded(busy: boolean): void {
+    const sessionId = this.concludeWatch.tick(busy);
+    if (!sessionId || !this.onConcluded) return;
+    try {
+      this.onConcluded(sessionId);
+    } catch (error) {
+      console.error('[petal] conclude handler failed:', error); // never stops the reader ticking
+    }
   }
 
   // One tick after the turn ends, so its last transcript lines are in; fires once per finished turn.

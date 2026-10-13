@@ -11,7 +11,7 @@ import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import type { SessionFile } from '../main/claude-session';
 
-const WIDTHS = [1920, 1728, 1440, 1280, 990, 800]; // widest first: narrowing is what strands content
+export const WIDTHS = [1920, 1728, 1440, 1280, 990, 800]; // widest first: narrowing is what strands content
 const CONTENT_WIDTHS = [1440, 990];
 const LONG_PATH = `/Users/you/Code/${'very-long-folder-name-'.repeat(13)}end/file.ts`.slice(0, 300);
 const CASES: { name: string; prompt: string; reply: string }[] = [

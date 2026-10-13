@@ -10,6 +10,7 @@ import { transcriptPath, type SessionFile } from '../main/claude-session';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { PERMISSION_SCREEN } from './snapshot-prompts';
+import { WIDTHS } from './snapshot-window-fit';
 
 interface Fixture {
   id: string;
@@ -65,6 +66,38 @@ const OVERFLOW = `(() => {
     }
   }
   return over;
+})()`;
+
+// Each card scrolled into view: inside the board's box and hit-tested as itself at its corners and centre.
+const REACH = `(async () => {
+  const board = document.getElementById('board');
+  const view = board.getBoundingClientRect();
+  const shown = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
+  const layers = [...document.querySelectorAll('#cat, .scene-tip, .scene-popover')].filter(shown);
+  const out = { cards: 0, scrolls: board.scrollHeight > board.clientHeight, clipped: [], covered: [] };
+  for (const card of board.querySelectorAll('.board-card')) {
+    out.cards++;
+    card.scrollIntoView({ block: 'nearest' });
+    await new Promise(requestAnimationFrame);
+    const r = card.getBoundingClientRect();
+    if (r.top < view.top - 1 || r.bottom > view.bottom + 1) out.clipped.push({ id: card.dataset.sessionId, top: Math.round(r.top), bottom: Math.round(r.bottom), view: [Math.round(view.top), Math.round(view.bottom)] });
+    const points = [[r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+    const missed = points.filter(([x, y]) => !card.contains(document.elementFromPoint(x, y))).length;
+    const over = layers.filter((e) => { const o = e.getBoundingClientRect(); return o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top; }).map((e) => e.id || e.className);
+    if (missed || over.length) out.covered.push({ id: card.dataset.sessionId, missed, over });
+  }
+  return out;
+})()`;
+
+// The dock's visible buttons: one row, none past the dock or the window.
+const DOCK = `(() => {
+  const dock = document.getElementById('sessions-dock');
+  const box = dock.getBoundingClientRect();
+  const buttons = [...dock.children].filter((e) => e.tagName === 'BUTTON' && e.getClientRects().length);
+  const mid = (e) => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+  const rows = buttons.every((e) => Math.abs(mid(e) - mid(buttons[0])) < 4) ? 1 : 2;
+  const out = buttons.filter((e) => { const r = e.getBoundingClientRect(); return r.left < box.left - 1 || r.right > Math.min(box.right, window.innerWidth) + 1; }).map((e) => e.id);
+  return { rows, out, inner: window.innerWidth, buttons: buttons.map((e) => e.id) };
 })()`;
 
 const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, ...fields });
@@ -335,6 +368,46 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     await js("document.querySelector('#board .board-allow')?.click()");
     const allowed = await waitFor(async () => ((await cards()).length >= ALL.length ? (await cards()).length : null), 10000);
     check(allowed, `Allow brings the cards back: ${allowed}`);
+
+    // 12 Many sessions, one resumed by two processes: one card each, and every card scrolls into view uncovered.
+    const many = Array.from({ length: 24 }, (_, i): SessionFile => ({ pid: 0, sessionId: `b0a4d000-0000-4000-8000-9${String(i).padStart(11, '0')}`, cwd: path.join(dir, 'repos', `many-${i}`), kind: 'interactive', status: 'idle', updatedAt: Date.now() - (60 + i) * 60_000 }));
+    for (const s of many) fs.mkdirSync(s.cwd, { recursive: true });
+    panelFixture.sessions = [...(panelFixture.sessions ?? []), ...many, ...many.slice(0, 1).map((s) => ({ ...s, pid: 1 }))];
+    await js("PastelTerm.cat.setScene('cherry')");
+    // Allow re-follows the tabs a beat after the cards come back ("Allow brings the cards back: 6" of 7), so wait for all of them.
+    const LIVE_TABS = "PastelTerm.tabs.ids().map((t) => PastelTerm.tabs.get(t).update).filter((u) => u?.state === 'live' && u.sessionId).map((u) => u.sessionId)";
+    const tabsLive: string[] = (await waitFor(async () => { const ids: string[] = await js(LIVE_TABS); return ids.length === liveTabs.length ? ids : null; }, 8000)) ?? await js(LIVE_TABS);
+    const manyCount = new Set([...tabsLive, ...ALL.map((f) => f.id), ...many.map((s) => s.sessionId)]).size;
+    const grown = await waitFor(async () => ((await cards()).length === manyCount ? true : null), 8000);
+    const ids = (await cards()).map((c) => c.id);
+    check(grown && new Set(ids).size === ids.length, `one card per session, a doubly resumed one included: ${ids.length} cards, ${new Set(ids).size} distinct, ${manyCount} open (${tabsLive.length} live tabs)`);
+    for (const width of [1600, 800]) {
+      check(await sizeTo(width), `${width}px window sized`);
+      await wait(300);
+      const cat = await js("getComputedStyle(document.getElementById('cat')).display");
+      const reach = await js(REACH);
+      check(cat === 'none' && reach.scrolls && reach.cards === manyCount && reach.clipped.length === 0 && reach.covered.length === 0,
+        `${width}px: every one of ${reach.cards} cards scrolls into view, nothing over it (cat ${cat}): ${JSON.stringify({ clipped: reach.clipped, covered: reach.covered })}`);
+      await capture(`sessions-board-many-${width}`);
+    }
+    await js("document.getElementById('board').scrollTop = 0");
+
+    // 13 Board in the dock, right of History: opens the board pressed, closes it again; the dock stays one row at every width.
+    await js('PastelTerm.sessionsBoard.close()');
+    await js("document.getElementById('board-button').click()");
+    const pressed = await waitFor(async () => ((await boardOpen()) ? await js("document.getElementById('board-button').getAttribute('aria-pressed')") : null), 3000);
+    const beside = await js("(() => { const b = document.getElementById('board-button').getBoundingClientRect(); const h = document.getElementById('history-button').getBoundingClientRect(); return { board: Math.round((b.top + b.bottom) / 2), history: Math.round((h.top + h.bottom) / 2), after: b.left >= h.right }; })()");
+    check(pressed === 'true' && Math.abs(beside.board - beside.history) < 2 && beside.after, `Board opens the board, pressed, on History's row: ${JSON.stringify({ pressed, ...beside })}`);
+    for (const width of WIDTHS) {
+      check(await sizeTo(width), `${width}px window sized`);
+      await wait(200);
+      const dock = await js(DOCK);
+      check(dock.rows === 1 && dock.out.length === 0 && dock.buttons.includes('board-button'), `${width}px: the dock is one row, nothing past its edge ${JSON.stringify(dock)}`);
+    }
+    check(await sizeTo(1600), 'back to 1600px');
+    await js("document.getElementById('board-button').click()");
+    const shut = await waitFor(async () => (!(await boardOpen()) && (await js("document.getElementById('board-button').getAttribute('aria-pressed')")) === 'false') || null, 3000);
+    check(shut, 'clicking Board again closes it and unpresses it');
   } finally {
     applyTheme('paleSky', { persist: false });
     await js("window.pastel.look.setReading('newspaper')");

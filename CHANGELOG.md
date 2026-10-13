@@ -2,6 +2,12 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.5] · 2026-10-13
+- The Sessions board shows every open session: your pet no longer covers the bottom cards, and a session open twice shows once.
+- A small Board button sits beside History.
+- A concluded session keeps a one-line summary pinned at the top; the full conclusion sits at the bottom.
+- Saying "conclude" closes the session once its summary is saved.
+
 ## [1.0.4] · 2026-10-13
 - Your pet sits in the History preview's reply row while you browse.
 

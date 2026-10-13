@@ -2,6 +2,7 @@
 import { BrowserWindow, webContents, type WebContents } from 'electron';
 import { spawnShell } from './pty';
 import { ReaderFeed, type ReplyFinished } from './reader-feed';
+import { closeConcluded } from './sessions-ipc';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
 import { sessionTitleFor } from './session-title';
@@ -92,7 +93,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
-  }, { fixture, onReplyFinished });
+  }, { fixture, onReplyFinished, onConcluded: (sessionId) => void closeConcluded(sessionId) });
   const session: TabSession = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);

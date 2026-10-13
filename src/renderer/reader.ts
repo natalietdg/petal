@@ -29,9 +29,11 @@ const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle befor
 const FLASH_MS = 1600;
 // The conversation reads top to bottom: earlier turns first, the newest reply last.
 status.before(older);
-// A concluded session's banner sits right above the newest reply, where the reader opens.
+// A concluded session: its one-line summary pinned at the top while she scrolls, the full conclusion after the newest reply.
+const conclusionPin = Object.assign(document.createElement('div'), { id: 'reader-conclusion-pin', hidden: true });
 const conclusionSlot = Object.assign(document.createElement('div'), { id: 'reader-conclusion', hidden: true });
-status.before(conclusionSlot);
+older.before(conclusionPin);
+latest.after(conclusionSlot);
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
@@ -132,9 +134,7 @@ export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
   followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
-  const hadBanner = !conclusionSlot.hidden;
-  paintConclusion(conclusionSlot, notesSession, replies.length ? conclusion : null); // notesSession outlives an ended claude
-  if (!hadBanner && !conclusionSlot.hidden) latestId = null; // a banner that just arrived is where she starts reading
+  paintConclusion(conclusionPin, conclusionSlot, notesSession && replies.length ? conclusion : null); // notesSession outlives an ended claude
   paintStrip(strip, replies.map((r) => r.markdown));
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
@@ -186,7 +186,7 @@ function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]):
 
 // A new turn or reply: bring it into view once; the same one updating keeps her place.
 function bringIntoView(id: string | undefined): void {
-  if (id !== latestId) (conclusionSlot.hidden ? status : conclusionSlot).scrollIntoView({ block: 'start' });
+  if (id !== latestId) status.scrollIntoView({ block: 'start' });
   latestId = id;
 }
 

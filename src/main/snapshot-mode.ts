@@ -71,3 +71,6 @@ export const claudeFixture: { installed: boolean | null } = { installed: null };
 
 // What Add Session's auto-start typed; snapshot runs type a shell no-op in its place, never a real claude.
 export const claudeStarts: { tabId: string; command: string }[] = [];
+
+// Every close a "conclude" set off, with how it ended; snapshot runs stop before the signal.
+export const concludeCloses: { sessionId: string; outcome: string }[] = [];

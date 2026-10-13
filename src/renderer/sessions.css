@@ -27,6 +27,7 @@
 }
 .dock-button[aria-pressed="true"] { background: var(--code-bg); border-color: var(--reader-fg); }
 .dock-button.add-session { border-color: var(--next-ink); color: var(--next-ink); }
+.dock-button.dock-mini { padding: 5px 11px; font-size: 13px; } /* Board: a small shortcut beside History */
 .sessions-add { margin: 0 12px 12px; }
 
 .sessions-pill {
@@ -237,3 +238,16 @@
 }
 .update-pill[hidden] { display: none; }
 .update-pill.noting { background: var(--reader-bg); cursor: default; }
+
+/* Narrow windows: the same buttons, tighter, so the dock stays one row. */
+@media (max-width: 1100px) {
+  #sessions-dock { gap: 8px; padding: 14px 16px 0; }
+  .dock-button, .sessions-pill, .update-pill { padding: 7px 12px; font-size: 13px; }
+  .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
+}
+@media (max-width: 900px) {
+  #sessions-dock { gap: 6px; padding: 12px 12px 0; }
+  .dock-button, .sessions-pill, .update-pill { padding: 5px 10px; font-size: 12px; }
+  .sessions-pill { gap: 6px; }
+  .dock-button.dock-mini { padding: 3px 8px; font-size: 11px; }
+}

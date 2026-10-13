@@ -1,11 +1,11 @@
-// Session conclusion (PASTEL_SNAPSHOT_MODE=conclusion): a "conclude" turn in the fixture log puts a Conclusion /
-// Result / Impact banner above the newest reply in every look and theme; it folds to one line, a re-conclude
-// replaces it, and History shows the same banner in its preview plus a mark and the gist on the row.
+// Session conclusion (PASTEL_SNAPSHOT_MODE=conclusion): a "conclude" turn in the fixture log pins a one-line summary
+// at the top of the reader and puts the full Conclusion / Result / Impact banner after the newest reply, in every look
+// and theme; a re-conclude replaces both, and History's preview does the same plus a mark and the gist on the row.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { historyFixture } from '../main/snapshot-mode';
+import { concludeCloses, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
@@ -28,6 +28,8 @@ const SECOND = {
 const block = (c: typeof FIRST) => [...(c.title ? [`**${c.title}**`, ''] : []), `**Conclusion:** ${c.conclusion}`, '', `**Result:** ${c.result}`, '', `**Impact:** ${c.impact}`].join('\n');
 
 let seq = 0;
+// Enough conversation that History's preview scrolls, so the pinned summary has something to stay on top of.
+const FILLER = (): string[] => Array.from({ length: 6 }, (_, i) => turn(`step ${i + 1}`, 'Moved the banner, checked the spacing in every look, and reran the reader at both widths. '.repeat(6))).flat();
 const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields });
 const turn = (prompt: string, reply: string): string[] => {
   seq += 1;
@@ -52,7 +54,7 @@ function addHistory(outDir: string): () => void {
     return { sessionId, file, cwd: path.join(dir, 'repo'), title, firstPrompt: 'build the banner', lastAt: Date.now() + 60_000 - ageMs, messages: lines.length, messagesExact: true };
   };
   historyFixture.records = [
-    record(CONCLUDED, 'Conclusion banner', [...turn('build the banner', 'Built.'), ...turn('conclude', block(FIRST)), ...turn('one more fix', 'Fixed.'), ...turn('conclude: again', block(SECOND))], 0),
+    record(CONCLUDED, 'Conclusion banner', [...turn('build the banner', 'Built.'), ...FILLER(), ...turn('conclude', block(FIRST)), ...turn('one more fix', 'Fixed.'), ...turn('conclude: again', block(SECOND))], 0),
     record(PLAIN, 'Refactor later', [...turn('conclude the refactor later', `**Conclusion:** ${FIRST.conclusion}`)], 1000),
   ];
   historyFixture.live = [];
@@ -68,7 +70,7 @@ const COLOUR_HELPERS = `
   const shown = (e) => Boolean(e) && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none';
 `;
 
-// The banner in `root`: shown, folded, rows, gist, size, place and contrast.
+// The full banner in `root`: shown, rows, size, place and contrast.
 const BANNER = (root: string, column: string, below: string) => `(() => { ${COLOUR_HELPERS}
   const all = document.querySelectorAll(${JSON.stringify(`${root} .conclusion-banner`)});
   const b = all[0];
@@ -83,16 +85,13 @@ const BANNER = (root: string, column: string, below: string) => `(() => { ${COLO
   const text = b.querySelector('.conclusion-text');
   const label = b.querySelector('.conclusion-label');
   const when = b.querySelector('.conclusion-when');
-  const gist = b.querySelector('.conclusion-gist');
   return {
-    shown: true, count: all.length, folded: b.classList.contains('folded'),
-    expanded: b.querySelector('.conclusion-head').getAttribute('aria-expanded'),
+    shown: true, count: all.length,
     when: when.textContent, title: b.querySelector('.conclusion-title')?.textContent ?? '',
     labels: [...b.querySelectorAll('.conclusion-label')].filter(shown).map((e) => e.textContent),
     texts: [...b.querySelectorAll('.conclusion-text')].filter(shown).map((e) => e.textContent),
-    gist: shown(gist) ? { text: gist.textContent, lines: gist.getClientRects().length, clipped: gist.scrollWidth > gist.clientWidth } : null,
     height: Math.round(rect.height), width: Math.round(rect.width), column: Math.round(col.clientWidth - parseFloat(getComputedStyle(col).paddingLeft) - parseFloat(getComputedStyle(col).paddingRight)),
-    above: next ? Math.round(next.getBoundingClientRect().top - rect.bottom) : null,
+    below: next ? Math.round(rect.top - next.getBoundingClientRect().bottom) : null,
     overflow: b.scrollWidth - b.clientWidth,
     contrast: {
       text: text && shown(text) ? ratio(rgba(getComputedStyle(text).color), bg) : null,
@@ -106,8 +105,34 @@ const SIDEWAYS = `(() => ['html', '#reader-area', '#reader', '#history', '#histo
   .map((s) => document.querySelector(s)).filter((e) => e && e.getClientRects().length)
   .map((e) => ({ id: e.id || e.className, over: e.scrollWidth - e.clientWidth })).filter((x) => x.over > 1))()`;
 
-const READER = () => BANNER('#reader-conclusion', '#replies-view', '#reader-status');
+const READER = () => BANNER('#reader-conclusion', '#replies-view', '#latest');
 const PREVIEW = () => BANNER('#history-preview .history-conclusion', '#history-preview .history-preview-body', '#history-preview .history-preview-body');
+
+// The pinned summary: one line, where it sits in the scroller, and whether the full banner ends the content.
+const PIN = (scroller: string, pin: string, full: string, content: string) => `(() => { ${COLOUR_HELPERS}
+  const s = document.querySelector(${JSON.stringify(scroller)});
+  const p = document.querySelector(${JSON.stringify(`${pin} .conclusion-summary`)});
+  if (!s || !shown(p)) return { shown: false };
+  const f = document.querySelector(${JSON.stringify(full)});
+  const slot = document.querySelector(${JSON.stringify(pin)}).getBoundingClientRect();
+  const parts = [...p.children].filter(shown).map((e) => e.getBoundingClientRect());
+  const span = Math.max(...parts.map((r) => r.bottom)) - Math.min(...parts.map((r) => r.top));
+  const visibleAfter = (e) => { const out = []; for (let n = e.nextElementSibling; n; n = n.nextElementSibling) if (shown(n)) out.push(n.id || n.className); return out; };
+  const sr = s.getBoundingClientRect();
+  const pr = p.getBoundingClientRect();
+  const fr = f?.getBoundingClientRect();
+  const gist = p.querySelector('.conclusion-gist');
+  return {
+    shown: true, gist: gist.textContent, when: p.querySelector('.conclusion-when').textContent, title: p.querySelector('.conclusion-title')?.textContent ?? '',
+    oneLine: span <= parseFloat(getComputedStyle(p).lineHeight) * 1.4, height: Math.round(pr.height), clipped: gist.scrollWidth > gist.clientWidth,
+    topGap: Math.round(pr.top - sr.top), pinTop: Math.round(slot.top - sr.top), atBottom: s.scrollHeight - s.scrollTop - s.clientHeight < 2, scrollTop: Math.round(s.scrollTop),
+    fullLast: Boolean(f && shown(f)) && f.parentElement === document.querySelector(${JSON.stringify(content)}) && visibleAfter(f).length === 0,
+    fullLabels: f ? [...f.querySelectorAll('.conclusion-label')].filter(shown).map((e) => e.textContent) : [],
+    fullInView: Boolean(fr) && fr.top >= slot.bottom - 1 && fr.bottom <= sr.bottom + 1, // wholly visible, none of it under the pin
+  };
+})()`;
+const READER_PIN = () => PIN('#reader', '#reader-conclusion-pin', '#reader-conclusion', '#replies-view');
+const PREVIEW_PIN = () => PIN('#history-preview', '#history-preview .history-conclusion-pin', '#history-preview .history-conclusion', '#history-preview');
 const ROW = (id: string) => `(() => {
   const row = document.querySelector('#history-list .history-row[data-session-id="${id}"]');
   if (!row) return null;
@@ -132,7 +157,9 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     return waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
   };
   const reader = () => js(READER());
+  const pinned = () => js(READER_PIN());
   const toTop = () => js("document.getElementById('reader-conclusion').scrollIntoView({ block: 'start' })");
+  const scrollReader = (to: 'top' | 'bottom') => js(`(() => { const r = document.getElementById('reader'); r.scrollTop = ${to === 'top' ? 0 : 'r.scrollHeight'}; })()`);
   const fullRows = (b: { labels?: string[] } | null) => JSON.stringify(b?.labels) === JSON.stringify(['Conclusion', 'Result', 'Impact']);
   const readable = (b: { contrast?: { text: number | null; label: number | null; when: number } } | null) =>
     Boolean(b?.contrast && (b.contrast.text ?? 0) >= 4.5 && (b.contrast.label ?? 0) >= 3 && b.contrast.when >= 3);
@@ -150,14 +177,16 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     check(!before.shown && before.count === 0, `no banner before a conclude: ${JSON.stringify(before)}`);
 
     // Her "conclude" lands in the log; the feed reads Claude's answer and the banner appears.
+    check(concludeCloses.length === 0, `a conclusion already in a log never closes its session: ${JSON.stringify(concludeCloses)}`);
     appendTurns(fixture, turn('conclude', block(FIRST)));
     const first = await waitFor(async () => { const b = await reader(); return b.shown && b.texts?.[0] === FIRST.conclusion ? b : null; }, 10000);
     check(first && fullRows(first) && first.texts.join('|') === [FIRST.conclusion, FIRST.result, FIRST.impact].join('|') && first.title === FIRST.title,
       `banner shows the three rows and the title: ${JSON.stringify(first)}`);
     check(first && /^Concluded · /.test(first.when) && first.count === 1, `head reads "Concluded · <date time>": ${first?.when}`);
-    check(first && first.above !== null && first.above >= 0 && Math.abs(first.width - first.column) <= 1, `full column width, above the newest reply: ${JSON.stringify({ width: first?.width, column: first?.column, gapToStatus: first?.above })}`);
-    const inView = await js("(() => { const b = document.getElementById('reader-conclusion').getBoundingClientRect(); const r = document.getElementById('reader').getBoundingClientRect(); return b.top >= r.top - 1 && b.top < r.bottom; })()");
-    check(inView, 'the reader opens on the banner');
+    check(first && first.below !== null && first.below >= 0 && Math.abs(first.width - first.column) <= 1, `full column width, below the newest reply: ${JSON.stringify({ width: first?.width, column: first?.column, gapFromLatest: first?.below })}`);
+    const opened = await pinned();
+    check(opened.shown && opened.oneLine && opened.gist === FIRST.conclusion && opened.title === FIRST.title && /^Concluded · /.test(opened.when) && opened.topGap >= 0 && opened.topGap < 40,
+      `the reader opens with the one-line summary at the top: ${JSON.stringify(opened)}`);
 
     // Every look and theme: shown, three rows, readable, nothing sideways.
     for (const [look] of READING_CHOICES) {
@@ -182,33 +211,42 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     }
     applyTheme('paleSky', { persist: false });
 
-    // Folds to one line and stays folded through a reader redraw; unfolds again.
+    // Pinned summary stays at the top while she scrolls; the full banner ends the reader; clicking the summary goes to it.
     for (const look of ['newspaper', 'print']) {
       await setLook(look);
-      const open = await reader();
-      await js("document.querySelector('#reader-conclusion .conclusion-head').click()");
-      const folded = await reader();
-      check(folded.folded && folded.expanded === 'false' && folded.labels.length === 0 && folded.gist?.lines === 1 && folded.height < open.height / 2,
-        `${look} folds to one line: ${JSON.stringify({ open: open.height, folded: folded.height, gist: folded.gist, labels: folded.labels })}`);
-      await toTop();
-      await wait(200);
-      await capture(`conclusion-${look}-folded`);
-      if (look === 'print') break;
-      await js("document.querySelector('#reader-conclusion .conclusion-head').click()");
-      const reopened = await reader();
-      check(!reopened.folded && fullRows(reopened), `${look} unfolds on a second click`);
+      await scrollReader('bottom');
+      await wait(150);
+      const bottom = await pinned();
+      check(bottom.shown && bottom.oneLine && bottom.atBottom && bottom.scrollTop > 0 && Math.abs(bottom.pinTop) <= 1 && bottom.fullLast && bottom.fullInView && fullRows({ labels: bottom.fullLabels }),
+        `${look}: summary one line and pinned at the top with the reader scrolled to the bottom; full banner is the last thing in the reader, wholly in view: ${JSON.stringify(bottom)}`);
+      await scrollReader('top');
+      await wait(150);
+      check(!(await pinned()).fullInView, `${look}: full banner out of view at the top of the reader`);
+      await js("document.querySelector('#reader-conclusion-pin .conclusion-summary').click()");
+      await wait(150);
+      const jumped = await pinned();
+      check(jumped.fullInView && Math.abs(jumped.pinTop) <= 1, `${look}: clicking the summary brings the full banner into view, below the pin: ${JSON.stringify(jumped)}`);
+      await capture(`conclusion-${look}-pinned`);
     }
     appendTurns(fixture, turn('one more fix', 'Fixed the spacing.'));
     await waitFor(async () => (await js("document.getElementById('latest').innerText")).includes('Fixed the spacing.'), 8000);
-    const kept = await reader();
-    check(kept.folded && kept.texts.length === 0 && kept.gist?.text === FIRST.conclusion, `fold survives a new reply, banner still the last conclusion: ${JSON.stringify({ folded: kept.folded, gist: kept.gist?.text })}`);
-    await js("document.querySelector('#reader-conclusion .conclusion-head').click()");
+    const kept = await pinned();
+    check(kept.shown && kept.gist === FIRST.conclusion && kept.fullLast, `a new reply keeps the summary pinned and the full banner last: ${JSON.stringify({ gist: kept.gist, fullLast: kept.fullLast })}`);
 
     // A second conclude replaces the banner.
+    // Once Claude's answer is in and the session idle, it closes through the Sessions panel's path, once; snapshot runs stop before the signal.
+    const closed = await waitFor(async () => (concludeCloses[0] && concludeCloses[0].outcome !== 'started' ? concludeCloses.slice() : null), 10000);
+    check(closed && closed.length === 1 && closed[0].sessionId === 'snapshot-fixture' && /not running|no signal sent/.test(closed[0].outcome),
+      `conclude closes its session once, through the panel's Close, no signal in a snapshot run: ${JSON.stringify(closed)}`);
     appendTurns(fixture, turn('conclude: again', block(SECOND)));
     const second = await waitFor(async () => { const b = await reader(); return b.shown && b.texts?.[0] === SECOND.conclusion ? b : null; }, 10000);
     check(second && second.count === 1 && second.title === '' && second.texts.join('|') === [SECOND.conclusion, SECOND.result, SECOND.impact].join('|'),
       `re-conclude replaces the banner: ${JSON.stringify(second)}`);
+    const secondPin = await pinned();
+    check(secondPin.gist === SECOND.conclusion && secondPin.title === '', `re-conclude replaces the pinned summary: ${JSON.stringify(secondPin.gist)}`);
+
+    await wait(3000); // a few idle ticks: the same session never closes twice
+    check(concludeCloses.length === 1, `a re-conclude in a session already closed once does not close again: ${JSON.stringify(concludeCloses)}`);
 
     // 800px: banner and gist fit the column.
     check(await sizeTo(800), 'window at 800px');
@@ -217,10 +255,8 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     const narrowSideways = await js(SIDEWAYS);
     check(narrow.shown && narrow.overflow <= 1 && narrowSideways.length === 0 && Math.abs(narrow.width - narrow.column) <= 1,
       `800px reader: ${JSON.stringify({ width: narrow.width, column: narrow.column, overflow: narrow.overflow, sideways: narrowSideways })}`);
-    await js("document.querySelector('#reader-conclusion .conclusion-head').click()");
-    const narrowFolded = await reader();
-    check(narrowFolded.folded && narrowFolded.gist?.lines === 1 && narrowFolded.overflow <= 1 && (await js(SIDEWAYS)).length === 0, `800px folded stays one line: ${JSON.stringify(narrowFolded.gist)}`);
-    await js("document.querySelector('#reader-conclusion .conclusion-head').click()");
+    const narrowPin = await pinned();
+    check(narrowPin.shown && narrowPin.oneLine && (await js(SIDEWAYS)).length === 0, `800px summary stays one line: ${JSON.stringify(narrowPin)}`);
     await toTop();
     await capture('conclusion-reader-800');
 
@@ -237,21 +273,23 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
 
     await js(`PastelTerm.history.select(${JSON.stringify(CONCLUDED)})`);
     const preview = await waitFor(async () => { const b = await js(PREVIEW()); return b.shown ? b : null; }, 5000);
-    check(preview && fullRows(preview) && preview.texts[0] === SECOND.conclusion && preview.count === 1 && preview.above !== null && preview.above >= 0 && readable(preview),
-      `History preview banner sits above the conversation: ${JSON.stringify(preview)}`);
-    const headAbove = await js("(() => { const h = document.querySelector('#history-preview .history-preview-head').getBoundingClientRect(); const b = document.querySelector('#history-preview .conclusion-banner').getBoundingClientRect(); return h.bottom <= b.top + 1; })()");
-    check(headAbove, 'History preview banner sits under the session header');
+    check(preview && fullRows(preview) && preview.texts[0] === SECOND.conclusion && preview.count === 1 && preview.below !== null && preview.below >= 0 && readable(preview),
+      `History preview full banner sits below the conversation: ${JSON.stringify(preview)}`);
+    const previewPin = await waitFor(async () => { const p = await js(PREVIEW_PIN()); return p.shown && p.atBottom ? p : null; }, 5000);
+    check(previewPin && previewPin.oneLine && previewPin.gist === SECOND.conclusion && Math.abs(previewPin.pinTop) <= 1 && previewPin.fullLast,
+      `History preview: summary pinned at the top when scrolled to the newest turn, full banner last: ${JSON.stringify(previewPin)}`);
+    const headAbove = await js("(() => { const p = document.getElementById('history-preview'); p.scrollTop = 0; const h = p.querySelector('.history-preview-head').getBoundingClientRect(); const b = p.querySelector('.history-conclusion-pin').getBoundingClientRect(); return h.bottom <= b.top + 1; })()");
+    check(headAbove, 'History preview summary starts under the session header');
+    await js("document.querySelector('#history-preview .conclusion-summary').click()");
+    check((await js(PREVIEW_PIN())).fullInView, 'History preview: clicking the summary brings the full banner into view');
     await js('document.getElementById("history-preview").scrollTop = 0');
     await capture('conclusion-history-1280');
 
-    await js("document.querySelector('#history-preview .conclusion-head').click()");
     await js(`PastelTerm.history.select(${JSON.stringify(PLAIN)})`);
     const none = await js(PREVIEW());
-    check(!none.shown, `no banner in the preview of a session without a conclude: ${JSON.stringify(none)}`);
+    const nonePin = await js(PREVIEW_PIN());
+    check(!none.shown && !nonePin.shown, `no banner or summary in the preview of a session without a conclude: ${JSON.stringify(none)}`);
     await js(`PastelTerm.history.select(${JSON.stringify(CONCLUDED)})`);
-    const previewFolded = await js(PREVIEW());
-    check(previewFolded.shown && previewFolded.folded && previewFolded.gist?.lines === 1, `History preview fold is kept per session: ${JSON.stringify(previewFolded.gist)}`);
-    await js("document.querySelector('#history-preview .conclusion-head').click()");
 
     // Favorites lists the same mark and gist.
     await js(`PastelTerm.favorites.isFavorite(${JSON.stringify(CONCLUDED)}) || PastelTerm.favorites.toggle(${JSON.stringify(CONCLUDED)})`);

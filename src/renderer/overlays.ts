@@ -17,7 +17,7 @@ const OVERLAYS: Record<OverlayId, Overlay> = {
   welcome: { view: byId('welcome') },
   'get-started': { view: byId('get-started') },
   consent: { view: byId('consent') },
-  board: { view: byId('board') }, // the Sessions board: opened from the Sessions panel or ⌘⇧O
+  board: { view: byId('board'), button: byId('board-button') }, // also the Sessions panel's Board and ⌘⇧O
 };
 const reader = byId('reader');
 const readerHead = byId('reader-head');

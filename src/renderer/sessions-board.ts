@@ -72,6 +72,7 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
   }
   for (const row of rows) {
     if (seen.has(row.sessionId)) continue;
+    seen.add(row.sessionId); // one card per session, even when two processes resumed it
     const digest = row.board?.digest ?? EMPTY_DIGEST;
     out.push({
       sessionId: row.sessionId,
@@ -279,3 +280,4 @@ new MutationObserver(() => {
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });
 window.addEventListener('petal:open-board', open);
 window.pastel.onToggleBoard(toggle);
+byId('board-button').addEventListener('click', toggle);

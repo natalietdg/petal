@@ -1,6 +1,22 @@
-/* Conclusion banner: a concluded session's Conclusion / Result / Impact, full column width, above the newest reply. */
-#reader-conclusion[hidden], .history-conclusion[hidden] { display: none; }
-#reader-conclusion, .history-conclusion { margin: 0 0 1.6em; }
+/* Conclusion: a one-line summary pinned at the top of the reader (and History's preview), the full banner at the bottom. */
+:is(#reader-conclusion, #reader-conclusion-pin, .history-conclusion, .history-conclusion-pin)[hidden] { display: none; }
+#reader-conclusion, .history-conclusion { margin: 1.6em 0 0; }
+
+/* Sticky inside the scroller; the page colour behind it so replies scroll out of sight under it. Below the cat (z 4). */
+#reader-conclusion-pin, .history-conclusion-pin {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 1.6em;
+  padding: 8px 0;
+  background: var(--reader-bg);
+}
+/* Sticky offsets count from inside the scroller's padding; -16px lifts it over the preview's 16px top padding (history.css). */
+.history-conclusion-pin { top: -16px; }
+/* The look's empty tail after the full banner would push its head under the pin at the bottom of a short reader. */
+.reader-column:has(> #replies-view:not([hidden]) > #reader-conclusion:not([hidden])) { padding-bottom: 24px; }
+/* A reply scrolled to its top lands under the pin, not behind it. */
+#reader:has(#reader-conclusion-pin:not([hidden])), .history-preview:has(.history-conclusion-pin:not([hidden])) { scroll-padding-top: 64px; }
 
 .conclusion-banner {
   padding: 0.85em 1.1em 0.95em;
@@ -11,21 +27,20 @@
   font: 15px/1.5 var(--ui-font);
 }
 
-.conclusion-head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7em;
+.conclusion-head, .conclusion-summary { display: flex; align-items: baseline; gap: 0.7em; min-width: 0; }
+.conclusion-summary {
+  box-sizing: border-box;
   width: 100%;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
+  padding-top: 0.55em;
+  padding-bottom: 0.55em;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
   text-align: left;
   cursor: pointer;
 }
-.conclusion-head:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 3px; border-radius: 4px; }
+.conclusion-summary:hover .conclusion-gist { color: var(--reader-fg); }
+.conclusion-summary:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 3px; }
 .conclusion-when {
   flex-shrink: 0;
   color: var(--done-ink);
@@ -35,14 +50,8 @@
   text-transform: uppercase;
 }
 .conclusion-title { min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The one-line version shows only when folded. */
-.conclusion-gist { display: none; flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conclusion-banner.folded .conclusion-gist { display: block; }
-.conclusion-banner.folded .conclusion-title { flex-shrink: 1; max-width: 40%; }
-.conclusion-chevron { flex-shrink: 0; margin-left: auto; width: 0.5em; height: 0.5em; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-0.15em) rotate(45deg); transition: transform 160ms ease; }
-.conclusion-banner.folded .conclusion-chevron { transform: rotate(-45deg); }
-.conclusion-head:hover .conclusion-chevron { border-color: var(--reader-fg); }
-@media (prefers-reduced-motion: reduce) { .conclusion-chevron { transition: none; } }
+.conclusion-summary .conclusion-title { flex-shrink: 1; max-width: 40%; }
+.conclusion-gist { flex: 1; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .conclusion-rows {
   display: grid;
@@ -51,7 +60,6 @@
   gap: 0.45em 1em;
   margin-top: 0.7em;
 }
-.conclusion-banner.folded .conclusion-rows { display: none; }
 .conclusion-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .conclusion-text { margin: 0; overflow-wrap: anywhere; }
 

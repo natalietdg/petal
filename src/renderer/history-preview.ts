@@ -63,10 +63,11 @@ export async function renderPreview(): Promise<void> {
   const strip = createStrip();
   head.append(resume, send, note, views, strip);
 
+  const pin = el('div', 'history-conclusion-pin');
   const conclusion = el('div', 'history-conclusion');
-  paintConclusion(conclusion, session.sessionId, session.conclusion);
+  paintConclusion(pin, conclusion, session.conclusion);
   const body = el('div', 'history-preview-body');
-  preview.replaceChildren(head, conclusion, body);
+  preview.replaceChildren(head, pin, body, conclusion);
   preview.dataset.sessionId = session.sessionId; // which session the heading names, for repaintTitle
   replyDock.replaceChildren(...(state.previewMode === 'replies' ? [replyBox(session)] : []));
   notes.bindToggle(notesToggle); // once in the page: the panel forgets toggles that are not
@@ -74,11 +75,12 @@ export async function renderPreview(): Promise<void> {
   await Promise.all([renderBody(session, body), fillStrip(session, strip)]);
 }
 
-// A re-list brought a new conclusion: swap the banner only, so her place in the preview stays.
+// A re-list brought a new conclusion: swap the banners only, so her place in the preview stays.
 export function repaintConclusion(): void {
   const session = selectedSession();
+  const pin = preview.querySelector<HTMLElement>('.history-conclusion-pin');
   const slot = preview.querySelector<HTMLElement>('.history-conclusion');
-  if (session && slot) paintConclusion(slot, session.sessionId, session.conclusion);
+  if (session && pin && slot) paintConclusion(pin, slot, session.conclusion);
 }
 
 // The session's newest replies: the live tab's when one follows it, else the log on disk.

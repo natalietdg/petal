@@ -7,7 +7,7 @@ import { sessionTitleFor } from './session-title';
 import { closeSession } from './session-close';
 import { handle } from './ipc';
 import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
-import { isSnapshotRun } from './snapshot-mode';
+import { concludeCloses, isSnapshotRun } from './snapshot-mode';
 import { boardDetails } from './sessions-board';
 import type { ActiveSession } from './tab-session';
 
@@ -37,15 +37,31 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
     };
   });
 
-  handle('sessions:close', async (_event, sessionId) => {
-    const outcome = await closeSession(String(sessionId), isSnapshotRun() ? { terminate: snapshotTerminate } : {});
-    if (!outcome.closed) return outcome;
-    const { session } = outcome;
-    try {
-      closedStore.add({ sessionId: session.sessionId, title: nameOf(session), cwd: session.cwd, closedAt: Date.now() });
-    } catch (error) {
-      console.error('[petal] closed list not updated:', (error as Error).message); // it did close; say so
-    }
-    return { closed: true };
-  });
+  handle('sessions:close', (_event, sessionId) => closeAndRemember(String(sessionId)));
+}
+
+// The Sessions panel's Close: stop that claude, then list it under Recently closed.
+async function closeAndRemember(sessionId: string): Promise<{ closed: true } | { closed: false; note: string }> {
+  const outcome = await closeSession(sessionId, isSnapshotRun() ? { terminate: snapshotTerminate } : {});
+  if (!outcome.closed) return outcome;
+  const { session } = outcome;
+  try {
+    closedStore.add({ sessionId: session.sessionId, title: nameOf(session), cwd: session.cwd, closedAt: Date.now() });
+  } catch (error) {
+    console.error('[petal] closed list not updated:', (error as Error).message); // it did close; say so
+  }
+  return { closed: true };
+}
+
+// Her answered "conclude" means she is done: the same Close, no confirm. The tab stays, showing the ended reader.
+export async function closeConcluded(sessionId: string): Promise<void> {
+  const record = isSnapshotRun() ? { sessionId, outcome: 'started' } : null;
+  if (record) concludeCloses.push(record);
+  try {
+    const result = await closeAndRemember(sessionId);
+    if (record) record.outcome = result.closed ? 'closed' : result.note;
+  } catch (error) {
+    if (record) record.outcome = (error as Error).message;
+    console.error('[petal] closing the concluded session failed:', (error as Error).message);
+  }
 }
