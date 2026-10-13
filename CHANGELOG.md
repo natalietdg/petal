@@ -2,6 +2,11 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.2] · 2026-10-13
+- Add Session starts Claude in the new tab.
+- First launch asks before reading your Claude folder; change it any time in Customize.
+- A Get started checklist walks new users from install to their first reply.
+
 ## [1.0.1] · 2026-10-12
 
 - Removes developer test code from the app bundle.
