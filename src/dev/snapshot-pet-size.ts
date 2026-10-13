@@ -6,7 +6,7 @@ import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { load as loadConfig } from '../main/config-store';
-import { fixtureFile } from '../main/snapshot-mode';
+import { fixtureFile, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
@@ -93,6 +93,90 @@ const SWEEP_WIDTHS = [1920, 1728, 1440, 1280, 990, 800]; // widest first: a wind
 // Lifestyle's 960px measure leaves a 1280 gutter only Small fits; larger, she docks there too.
 const gutterAt1280 = (look: string, size: string): boolean => look !== 'lifestyle' || size === 'small';
 
+// History previewing a session: she sits in its reply row, right of Send and Open in full, overlapping nothing.
+const IN_REPLY = `(() => {
+  const R = (b) => ({ left: Math.round(b.left), right: Math.round(b.right), top: Math.round(b.top), bottom: Math.round(b.bottom), width: Math.round(b.width), height: Math.round(b.height) });
+  const meets = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  const cat = document.getElementById('cat');
+  const row = document.querySelector('#history .history-reply-row');
+  if (!row) return null;
+  const box = cat.getBoundingClientRect();
+  const parts = [...row.querySelectorAll('textarea, button')].filter((e) => e.getClientRects().length);
+  const lastButton = [...row.querySelectorAll('button')].filter((e) => e.getClientRects().length).at(-1);
+  const slot = row.querySelector('.history-cat-slot').getBoundingClientRect();
+  return {
+    shown: getComputedStyle(cat).display !== 'none', inReply: document.getElementById('reader-area').classList.contains('cat-in-reply'),
+    cat: R(box), slot: R(slot), row: R(row.getBoundingClientRect()), last: lastButton ? { text: lastButton.textContent, right: Math.round(lastButton.getBoundingClientRect().right) } : null,
+    covers: parts.filter((p) => meets(p.getBoundingClientRect(), box)).map((p) => p.textContent || p.placeholder),
+    inner: { width: window.innerWidth, height: window.innerHeight },
+  };
+})()`;
+
+async function historyRowCheck(kit: Kit, win: BrowserWindow, sizeTo: (width: number) => Promise<unknown>, measure: () => Promise<Measure>): Promise<void> {
+  const { js, wait, waitFor, log, capture, themes, applyTheme } = kit;
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} pet size: ${what}`);
+  const file = fixtureFile() ?? '';
+  historyFixture.records = [{ sessionId: 'snapshot-fixture', file, cwd: '/tmp/petal-fixture', title: 'Pet in the History row', firstPrompt: 'show me a wide table', lastAt: Date.now(), messages: 12, messagesExact: true }];
+  const openPreview = async () => {
+    await js("PastelTerm.history.open().then(() => { PastelTerm.history.select('snapshot-fixture'); return PastelTerm.history.setPreviewMode('replies'); })");
+    return waitFor(() => js("Boolean(document.querySelector('#history .history-reply-row .history-cat-slot'))"), 5000);
+  };
+  try {
+    for (const size of ['small', 'normal', 'large'] as const) {
+      await js(`PastelTerm.cat.setSize(${JSON.stringify(size)})`);
+      for (const width of [1920, 1440, 1280, 990, 800]) {
+        await sizeTo(width);
+        for (const [themeId] of Object.entries(themes)) {
+          applyTheme(themeId, { persist: false });
+          for (const [look] of READING_CHOICES) {
+            await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
+            await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
+            await js('PastelTerm.overlays.hideCurrent()');
+            await wait(150);
+            const home: Measure = await measure();
+            check(await openPreview(), `${size} ${width}px ${themeId} ${look}: History preview with its reply row`);
+            await wait(250);
+            const m = await js(IN_REPLY);
+            const dock = DOCK_PX[size];
+            const ok = m && m.shown && m.inReply && Math.abs(m.cat.height - dock) <= 1 && Math.abs(m.cat.left - m.slot.left) <= 1 && Math.abs(m.cat.top - m.slot.top) <= 1
+              && m.last && m.cat.left >= m.last.right && m.covers.length === 0 && m.cat.left >= 0 && m.cat.right <= m.inner.width && m.cat.top >= 0 && m.cat.bottom <= m.inner.height
+              && m.row.height >= dock - 1;
+            check(ok, `${size} ${width}px ${themeId} ${look}: in the History reply row right of "${m?.last?.text}", ${dock}px, inside the window, covering nothing ${JSON.stringify(m)}`);
+            if (look === 'newspaper' && size === 'normal' && (width === 1440 || width === 800) && themeId !== 'blush') {
+              await capture(`pet-history-row-${themeId}-${width}`);
+              const r = m.row;
+              const crop = await win.webContents.capturePage({ x: Math.max(0, r.left - 16), y: Math.max(0, r.top - 16), width: Math.min(m.inner.width - Math.max(0, r.left - 16), r.width + 32), height: r.height + 32 });
+              fs.writeFileSync(`${kit.outDir}/snapshot-pet-history-row-crop-${themeId}-${width}.png`, crop.toPNG());
+            }
+            await js('PastelTerm.history.close()');
+            await wait(250);
+            const back: Measure = await measure();
+            check(back.shown && !(await js("document.getElementById('reader-area').classList.contains('cat-in-reply')")) && JSON.stringify(back.cat) === JSON.stringify(home.cat) && back.docked === home.docked,
+              `${size} ${width}px ${themeId} ${look}: History closed, back where she was ${JSON.stringify({ home: home.cat, back: back.cat, docked: back.docked })}`);
+          }
+        }
+      }
+    }
+    // Open in full: she leaves the row for her usual place.
+    await sizeTo(1280);
+    applyTheme('paleSky', { persist: false });
+    await js("window.pastel.look.setReading('newspaper')");
+    await js("PastelTerm.cat.setSize('normal')");
+    await openPreview();
+    await wait(250);
+    await js("document.querySelector('#history .history-reply-row .history-open-full').click()");
+    await wait(300);
+    const full: Measure = await measure();
+    check(full.shown && !(await js("PastelTerm.overlays.isOpen('history')")) && !(await js("document.getElementById('reader-area').classList.contains('cat-in-reply')")),
+      `Open in full: History closes and she is back in the reader ${JSON.stringify({ cat: full.cat, docked: full.docked })}`);
+  } finally {
+    await js('PastelTerm.history.close()');
+    historyFixture.records = [];
+    applyTheme('paleSky', { persist: false });
+    await js("window.pastel.look.setReading('newspaper')");
+  }
+}
+
 export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, log, wait, waitFor, capture } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} pet size: ${what}`);
@@ -172,6 +256,8 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     }
     await js('PastelTerm.notesPanel.setOpen(false)');
   }
+  await historyRowCheck(kit, win, sizeTo, measure);
+
   // Every width she might use, narrowing from the widest, Notes closed then open, every look, with one tab and with
   // a strip of long-named tabs (their names once widened the window's column): always fully on screen.
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');

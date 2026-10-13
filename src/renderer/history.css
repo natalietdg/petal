@@ -138,6 +138,8 @@
 .history-reply-input:focus { outline: none; border-color: var(--next-ink); }
 .history-reply-input::placeholder { color: var(--muted); }
 .history-open-full[hidden] { display: none; }
+/* The pet's place in the row: her docked size, centred; the row grows to fit her. */
+.history-cat-slot { flex: none; align-self: center; width: var(--cat-dock-size, 64px); height: var(--cat-dock-size, 64px); }
 .history-reply-note { display: block; margin: 6px 0 0; }
 .history-reply-note:empty { display: none; }
 .history-reply-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--decide-wash); color: var(--reader-fg); font: 500 13px var(--ui-font); }
