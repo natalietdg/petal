@@ -5,7 +5,7 @@ import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail, type TranscriptView } from './transcript';
 import * as conclusions from './conclusions-store';
 import { claudeFolderAllowed } from './claude-folder';
-import { sameConclusion, type Conclusion } from '../shared/conclusion';
+import { isClosingConcludePrompt, sameConclusion, type Conclusion } from '../shared/conclusion';
 import { ConcludeWatch } from './conclude-close';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
@@ -19,16 +19,22 @@ export interface ReplyFinished {
   cwd: string | null;
 }
 
+// The claude to close after her "conclude": this tab's own process, never another tab on the same session.
+export interface ConcludedSession {
+  sessionId: string;
+  pid: number | null; // null only for a snapshot fixture, which has no process
+}
+
 interface FeedOptions {
   fixture?: FixtureSession | null;
   onReplyFinished?: ((finished: ReplyFinished) => void) | null;
-  onConcluded?: ((sessionId: string) => void) | null; // her "conclude" was answered and the turn is over
+  onConcluded?: ((concluded: ConcludedSession) => void) | null; // her "conclude" was answered and the turn is over
 }
 
 export class ReaderFeed implements ProcessListener {
   private readonly shellPid: number;
   private readonly onReplyFinished: ((finished: ReplyFinished) => void) | null;
-  private readonly onConcluded: ((sessionId: string) => void) | null;
+  private readonly onConcluded: ((concluded: ConcludedSession) => void) | null;
   private readonly concludeWatch = new ConcludeWatch();
   private finishingId: string | null = null; // reply whose turn just went busy -> idle, reported on the next tick
   // Dev-only: a snapshot run replays a fixture jsonl instead of a live claude.
@@ -142,17 +148,23 @@ export class ReaderFeed implements ProcessListener {
     if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
-    this.reportConcluded(found.status === 'busy');
+    this.reportConcluded(found.status !== 'idle'); // 'waiting' (a permission prompt or question on screen) is not done
   }
 
   private reportConcluded(busy: boolean): void {
-    const sessionId = this.concludeWatch.tick(busy);
+    const sessionId = this.concludeWatch.tick({ busy, concludeIsLatest: this.concludeIsLatest() });
     if (!sessionId || !this.onConcluded) return;
     try {
-      this.onConcluded(sessionId);
+      this.onConcluded({ sessionId, pid: this.claudePid });
     } catch (error) {
       console.error('[petal] conclude handler failed:', error); // never stops the reader ticking
     }
+  }
+
+  // Her newest prompt, queued or answered, is a bare "conclude"; hand-backs (no prompt) don't count.
+  private concludeIsLatest(): boolean {
+    const latest = this.waiting.at(-1)?.prompt ?? this.replies.find((reply) => reply.prompt)?.prompt ?? '';
+    return isClosingConcludePrompt(latest);
   }
 
   // One tick after the turn ends, so its last transcript lines are in; fires once per finished turn.
