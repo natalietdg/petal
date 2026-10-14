@@ -269,3 +269,15 @@ describe('session-organizer schedule', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('session-organizer store file', () => {
+  it('a corrupt organizer.json is moved aside, not overwritten', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fs.writeFileSync(organizerFile(), '{"s1": {"title": "kept"');
+    expect(organizer.load()).toEqual({});
+    const aside = fs.readdirSync(userData).filter((f) => /^organizer\.broken-\d+\.json$/.test(f));
+    expect(aside).toHaveLength(1);
+    expect(fs.readFileSync(path.join(userData, aside[0]), 'utf8')).toBe('{"s1": {"title": "kept"');
+    warn.mockRestore();
+  });
+});

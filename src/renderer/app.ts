@@ -70,7 +70,9 @@ async function start(): Promise<void> {
   const theme = orDefault(await window.pastel.getTheme(), fallbackTheme, 'the theme');
   themeKit.applyCssVars(theme);
   // A minimised terminal is out of layout; keys go to the reply box, which sends to the active tab.
+  // Focus mode hides the terminal, so it never takes the keyboard back there.
   const focusTerminal = () => {
+    if (focusMode.isOn()) return;
     if (layout.isTerminalMinimised()) composer.focus();
     else tabs.active()?.term.focus();
   };
@@ -155,8 +157,8 @@ async function start(): Promise<void> {
     getStarted.refresh();
   });
   window.pastel.onTabCommand((command) => {
-    if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true }).id);
-    else if (command.kind === 'new') tabs.create();
+    if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true, id: command.tabId }).id);
+    else if (command.kind === 'new') tabs.create({ id: command.tabId });
     else if (command.kind === 'new-session') newSessionTab();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
     else if (command.kind === 'cycle') tabs.cycle(command.delta);

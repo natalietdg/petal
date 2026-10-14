@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { TranscriptTail, splitCompleteLines, type TranscriptView } from '../src/main/transcript';
+import { JsonlTail, TranscriptTail, splitCompleteLines, type TranscriptView } from '../src/main/transcript';
 import { assistantEntry, removeTempDirs, tempDir, userEntry } from './helpers';
 
 afterEach(removeTempDirs);
@@ -80,5 +80,48 @@ describe('TranscriptTail', () => {
     tail.poll(); // the session tick's fallback
     tail.stop();
     expect(views.at(-1)?.waiting.map((w) => w.prompt)).toEqual(['hi']);
+  });
+});
+
+describe('rewritten or truncated logs', () => {
+  const line = (entry: object): string => `${JSON.stringify(entry)}\n`;
+  it('a truncated file is re-read from the top instead of stalling', () => {
+    const file = path.join(tempDir(), 't.jsonl');
+    fs.writeFileSync(file, 'one\ntwo\nthree\n');
+    const seen: string[][] = [];
+    let restarts = 0;
+    const tail = new JsonlTail(file, (lines) => seen.push(lines), () => { restarts += 1; });
+    fs.writeFileSync(file, 'new\n'); // shorter than what was read
+    tail.poll();
+    fs.appendFileSync(file, 'more\n');
+    tail.poll();
+    tail.stop();
+    expect(seen).toEqual([['one', 'two', 'three'], ['new'], ['more']]);
+    expect(restarts).toBe(1);
+  });
+
+  it('a file replaced by another (new inode) is re-read even when it is longer', () => {
+    const dir = tempDir();
+    const file = path.join(dir, 'r.jsonl');
+    fs.writeFileSync(file, 'a\n');
+    const seen: string[][] = [];
+    const tail = new JsonlTail(file, (lines) => seen.push(lines));
+    const next = path.join(dir, 'r.next');
+    fs.writeFileSync(next, 'b1\nb2\n');
+    fs.renameSync(next, file);
+    tail.poll();
+    tail.stop();
+    expect(seen).toEqual([['a'], ['b1', 'b2']]);
+  });
+
+  it('TranscriptTail drops the old replies on a rewrite, so none is counted twice', () => {
+    const file = path.join(tempDir(), 's.jsonl');
+    fs.writeFileSync(file, line(userEntry('first prompt')) + line(assistantEntry('old reply', 'a1')) + line(assistantEntry('another', 'a2')));
+    const views: TranscriptView[] = [];
+    const tail = new TranscriptTail(file, (view) => views.push(view));
+    fs.writeFileSync(file, line(assistantEntry('only reply', 'a3')));
+    tail.poll();
+    tail.stop();
+    expect(views.at(-1)?.replies.map((r) => r.markdown)).toEqual(['only reply']);
   });
 });

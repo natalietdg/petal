@@ -55,6 +55,21 @@ describe('config-store defaults and load', () => {
     expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true } }); // a config file means a returning user
   });
 
+  it('a corrupt file is moved aside once and never overwritten by the next save', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fs.writeFileSync(configFile(), '{"claudeFolder": {"choice": "allowed"}');
+    expect(config.load().claudeFolder.choice).toBe('unasked');
+    const aside = fs.readdirSync(dir).filter((f) => /^config\.broken-\d+\.json$/.test(f));
+    expect(aside).toHaveLength(1);
+    expect(fs.readFileSync(path.join(dir, aside[0]), 'utf8')).toBe('{"claudeFolder": {"choice": "allowed"}');
+    expect(warn).toHaveBeenCalledTimes(1);
+    config.save({ pet: { size: 'small' } });
+    expect(config.load().welcome.seen).toBe(true);
+    expect(fs.readFileSync(path.join(dir, aside[0]), 'utf8')).toBe('{"claudeFolder": {"choice": "allowed"}');
+    expect(fs.readdirSync(dir).filter((f) => f.includes('.broken-'))).toHaveLength(1);
+    warn.mockRestore();
+  });
+
   it('a partial file is filled in from defaults and invalid values fall back to defaults', () => {
     fs.writeFileSync(configFile(), JSON.stringify({ organizer: { perPass: 7, model: 'gpt-9' }, responseHook: { notify: 'yes' } }));
     const c = config.load();

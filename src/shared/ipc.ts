@@ -244,7 +244,7 @@ export interface EventChannels {
   'tab:closed': { tabId: TabId };
   'tab:label': { tabId: TabId; label: string }; // its session got a (new) title after the last reader update
   'session:titles': void; // some open session's title changed; History re-lists
-  'tabs:new': { background: boolean };
+  'tabs:new': { background: boolean; tabId: TabId }; // main picks the id, so its pending command reaches this tab
   'tabs:new-session': void; // ⌘T: a tab meant for Claude, so her limit applies
   'tabs:close-active': void;
   'tabs:cycle': number;

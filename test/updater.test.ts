@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { claudeRunsUnder } from '../src/main/claude-session';
 import {
-  CHECK_EVERY_MS, CLAUDE_RUNNING_NOTE, NOT_READY_NOTE, checkForUpdatesNow, isUpdateReady, notifyBody, NOTIFY_TITLE, resetForTests, restartToUpdate, startUpdater,
+  CHECK_EVERY_MS, CLAUDE_RUNNING_NOTE, COMMAND_RUNNING_NOTE, foregroundJobRunning, NOT_READY_NOTE, parseTerminalRows, checkForUpdatesNow, isUpdateReady, notifyBody, NOTIFY_TITLE, resetForTests, restartToUpdate, startUpdater,
   updateReadyVersion, type Updater, type UpdaterEnv,
 } from '../src/main/updater';
 import { updateNoteText, updatePillText, whatsNewText } from '../src/shared/ipc';
@@ -40,6 +40,7 @@ function env(overrides: Partial<UpdaterEnv> = {}): UpdaterEnv & { scheduled: { m
     isDeveloperIdSigned: async () => true,
     loadUpdater,
     claudeRunning: async () => false,
+    commandRunning: async () => false,
     onReady: vi.fn(),
     every: (ms, run) => { scheduled.push({ ms, run }); },
     scheduled,
@@ -107,6 +108,22 @@ describe('restartToUpdate', () => {
     expect(live.onReady).toHaveBeenCalledTimes(1);
     expect(await restartToUpdate(live)).toEqual({ note: CLAUDE_RUNNING_NOTE });
     expect(fake.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('never restarts while any other command runs in front of a Petal shell', async () => {
+    const live = env({ commandRunning: async () => true });
+    await startUpdater(live);
+    fake.listeners.get('update-downloaded')?.({ version: '1.0.7' });
+    expect(await restartToUpdate(live)).toEqual({ note: COMMAND_RUNNING_NOTE });
+    expect(COMMAND_RUNNING_NOTE).toBe('A command is still running in a Petal tab. Restart once it finishes.');
+    expect(fake.autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it('the Claude note wins when both are running', async () => {
+    const live = env({ claudeRunning: async () => true, commandRunning: async () => true });
+    await startUpdater(live);
+    fake.listeners.get('update-downloaded')?.({ version: '1.0.7' });
+    expect(await restartToUpdate(live)).toEqual({ note: CLAUDE_RUNNING_NOTE });
   });
 
   it('restarts into the update once no Claude is running', async () => {
@@ -267,5 +284,21 @@ describe('claudeRunsUnder', () => {
   it('ignores a claude outside Petal and claude helpers', () => {
     expect(claudeRunsUnder(petal, rows('claude', 1))).toBe(false);
     expect(claudeRunsUnder(petal, rows('claude bg-spare'))).toBe(false);
+  });
+});
+
+describe('foreground job detection', () => {
+  it('parses ps pid/pgid/tpgid rows, including -1 for no terminal', () => {
+    expect(parseTerminalRows('  101   101   101\n  202   202   305\n 303 303 -1\nbad\n')).toEqual([
+      { pid: 101, pgid: 101, tpgid: 101 }, { pid: 202, pgid: 202, tpgid: 305 }, { pid: 303, pgid: 303, tpgid: -1 },
+    ]);
+  });
+
+  it('a shell at its prompt owns the foreground; a job in front of it does not', () => {
+    expect(foregroundJobRunning([101], [{ pid: 101, pgid: 101, tpgid: 101 }])).toBe(false);
+    expect(foregroundJobRunning([101, 202], [{ pid: 101, pgid: 101, tpgid: 101 }, { pid: 202, pgid: 202, tpgid: 305 }])).toBe(true);
+    expect(foregroundJobRunning([101], [{ pid: 202, pgid: 202, tpgid: 305 }])).toBe(false); // not a Petal shell
+    expect(foregroundJobRunning([303], [{ pid: 303, pgid: 303, tpgid: -1 }])).toBe(false);
+    expect(foregroundJobRunning([], [])).toBe(false);
   });
 });

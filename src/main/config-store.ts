@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
-import { writeJsonAtomic } from './atomic-file';
+import { readJsonOrSetAside, writeJsonAtomic } from './atomic-file';
 import { clampSplit } from '../shared/reader-split';
 import { isPetSize, type PetSize } from '../shared/pet-size';
 import { MAX_FAVORITES } from '../shared/favorites';
@@ -184,17 +184,22 @@ function migratedBase(): Config {
   const base = defaults();
   const organized = fs.existsSync(userDataFile('organizer.json'));
   base.organizer.enabled = organized;
-  base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name)));
+  base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name))) || hasSetAsideConfig();
   return base;
 }
 
-function readSaved(): ConfigPatch {
+// A config moved aside as unreadable still means a returning user.
+function hasSetAsideConfig(): boolean {
   try {
-    const data: unknown = JSON.parse(fs.readFileSync(configFile(), 'utf8'));
-    return data && typeof data === 'object' && !Array.isArray(data) ? (data as ConfigPatch) : {};
+    return fs.readdirSync(app.getPath('userData')).some((name) => name.startsWith('config.broken-'));
   } catch {
-    return {};
+    return false;
   }
+}
+
+function readSaved(): ConfigPatch {
+  const data = readJsonOrSetAside(configFile());
+  return data && typeof data === 'object' && !Array.isArray(data) ? (data as ConfigPatch) : {};
 }
 
 export function load(): Config {

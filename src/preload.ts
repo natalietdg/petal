@@ -14,7 +14,7 @@ const subscribe = <C extends EventChannel>(channel: C, callback: (payload: Event
 };
 
 export type TabCommand =
-  | { kind: 'new'; background: boolean }
+  | { kind: 'new'; background: boolean; tabId: TabId }
   | { kind: 'new-session' }
   | { kind: 'close-active' }
   | { kind: 'cycle'; delta: number }
@@ -58,7 +58,7 @@ const api = {
   onSessionTitles: (callback: () => void) => subscribe('session:titles', callback),
   onTabCommand: (callback: (command: TabCommand) => void) => {
     const offs = [
-      subscribe('tabs:new', ({ background }) => callback({ kind: 'new', background })),
+      subscribe('tabs:new', ({ background, tabId }) => callback({ kind: 'new', background, tabId })),
       subscribe('tabs:new-session', () => callback({ kind: 'new-session' })),
       subscribe('tabs:close-active', () => callback({ kind: 'close-active' })),
       subscribe('tabs:cycle', (delta) => callback({ kind: 'cycle', delta })),

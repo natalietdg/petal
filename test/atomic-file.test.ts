@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { writeFileAtomic, writeJsonAtomic } from '../src/main/atomic-file';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { brokenName, readJsonOrSetAside, writeFileAtomic, writeJsonAtomic } from '../src/main/atomic-file';
 import { removeTempDirs, tempDir, tmpLeftovers } from './helpers';
 
 afterEach(removeTempDirs);
@@ -58,5 +58,47 @@ describe('atomic-file', () => {
     expect(() => writeJsonAtomic(file, cyclic)).toThrow();
     expect(fs.readFileSync(file, 'utf8')).toBe('{"v":1}');
     expect(tmpLeftovers(dir)).toEqual([]);
+  });
+
+  it('fsyncs the temp file before the rename', () => {
+    const dir = tempDir();
+    const order: string[] = [];
+    const fsync = vi.spyOn(fs, 'fsyncSync').mockImplementation(() => { order.push('fsync'); });
+    const rename = vi.spyOn(fs, 'renameSync');
+    rename.mockImplementation((from, to) => { order.push('rename'); rename.mockRestore(); fs.renameSync(from, to); });
+    writeFileAtomic(path.join(dir, 'f.txt'), 'x');
+    fsync.mockRestore();
+    expect(order).toEqual(['fsync', 'rename']);
+  });
+});
+
+describe('readJsonOrSetAside', () => {
+  it('names the set-aside file <name>.broken-<timestamp>.json', () => {
+    expect(brokenName('/u/config.json', 123)).toBe('/u/config.broken-123.json');
+  });
+
+  it('returns parsed JSON, and undefined for a missing file without warning', () => {
+    const dir = tempDir();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    writeJsonAtomic(path.join(dir, 'ok.json'), { a: 1 });
+    expect(readJsonOrSetAside(path.join(dir, 'ok.json'))).toEqual({ a: 1 });
+    expect(readJsonOrSetAside(path.join(dir, 'missing.json'))).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('moves an unparseable file aside with its bytes intact and warns once', () => {
+    const dir = tempDir();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const file = path.join(dir, 'x.json');
+    fs.writeFileSync(file, '{oops');
+    expect(readJsonOrSetAside(file)).toBeUndefined();
+    expect(readJsonOrSetAside(file)).toBeUndefined();
+    const files = fs.readdirSync(dir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^x\.broken-\d+\.json$/);
+    expect(fs.readFileSync(path.join(dir, files[0]), 'utf8')).toBe('{oops');
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

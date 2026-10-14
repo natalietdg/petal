@@ -17,9 +17,12 @@ afterEach(removeTempDirs);
 
 describe('tags-store load', () => {
   it('missing or corrupt file -> empty store', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(store.load()).toEqual({ tags: {}, deleted: [], sessions: {} });
     fs.writeFileSync(path.join(dir, 'tags.json'), '[1,2');
     expect(store.load()).toEqual({ tags: {}, deleted: [], sessions: {} });
+    expect(fs.readdirSync(dir).filter((f) => /^tags\.broken-\d+\.json$/.test(f))).toHaveLength(1);
+    expect(fs.existsSync(path.join(dir, 'tags.json'))).toBe(false);
     fs.writeFileSync(path.join(dir, 'tags.json'), JSON.stringify({ tags: [], deleted: 'x', sessions: null }));
     expect(store.load()).toEqual({ tags: {}, deleted: [], sessions: {} });
   });

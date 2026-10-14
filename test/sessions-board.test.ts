@@ -125,3 +125,10 @@ describe('lastUpdate', () => {
     expect(lastUpdate(null, undefined)).toBeNull();
   });
 });
+
+describe('replyHeadline fences', () => {
+  it('skips a bold line inside a longer fence that a shorter one would have closed', () => {
+    expect(replyHeadline(['````', '```', '**Not this**', '````', '**This one**'].join('\n'))).toBe('This one');
+    expect(replyHeadline(['~~~', '```', '**Not this**', '~~~', '**Tilde closed**'].join('\n'))).toBe('Tilde closed');
+  });
+});

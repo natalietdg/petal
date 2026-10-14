@@ -1,5 +1,5 @@
 // The Sessions board's card model: one card per open Claude session, its status, digest, order and filter.
-import { newestStatus, type StatusLines } from './status-lines';
+import { codeFenceTracker, newestStatus, type StatusLines } from './status-lines';
 import { conclusionGist, type Conclusion } from './conclusion';
 
 export type BoardStatus = 'waiting' | 'working' | 'idle' | 'concluded';
@@ -45,18 +45,16 @@ export interface BoardCard extends Omit<BoardSource, 'busy' | 'asking' | 'conclu
 
 export const EMPTY_DIGEST: ReplyDigest = { headline: '', lines: {}, at: null };
 
-const FENCE = /^\s*(```|~~~)/;
 const WHOLE_BOLD = /^\s*(\*\*|__)(.+)\1\s*$/;
 const LABELLED = /^\s*(?:[-*+]\s+)?(\*\*|__)[^*_]+?(?::\s*\1|\1\s*:)/; // "**Done:** x" or "**Done**: x": a label, never the headline
 const plain = (text: string): string => text.replace(/\*\*|__|==|`/g, '').replace(/^#{1,6}\s+/, '').replace(/\s+/g, ' ').trim();
 
 // The first line that is bold all the way through, outside code; else the first unlabelled line of text.
 export function replyHeadline(markdown: string): string {
-  let fenced = false;
+  const inCode = codeFenceTracker();
   let firstText = '';
   for (const line of markdown.split(/\r?\n/)) {
-    if (FENCE.test(line)) { fenced = !fenced; continue; }
-    if (fenced || !line.trim()) continue;
+    if (inCode(line) || !line.trim()) continue;
     const bold = WHOLE_BOLD.exec(line);
     if (bold?.[2] && !bold[2].includes(bold[1] ?? '')) return plain(bold[2]);
     if (!LABELLED.test(line)) firstText ||= plain(line);

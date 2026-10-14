@@ -1,9 +1,8 @@
 // Finder-style session tags in <userData>/tags.json, never under ~/.claude.
 // Shape: { tags: { [name]: { color } }, deleted: [names], sessions: { [sessionId]: { tags: [names], manual } } }
-import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
-import { writeJsonAtomic } from './atomic-file';
+import { readJsonOrSetAside, writeJsonAtomic } from './atomic-file';
 
 export interface SessionTags {
   tags?: string[];
@@ -26,12 +25,7 @@ const cleanName = (name: unknown): string => String(name ?? '').replace(/\s+/g, 
 const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 export function load(): TagsData {
-  let data: Partial<TagsData> | null;
-  try {
-    data = JSON.parse(fs.readFileSync(storeFile(), 'utf8')) as Partial<TagsData> | null;
-  } catch {
-    data = null;
-  }
+  const data = readJsonOrSetAside(storeFile()) as Partial<TagsData> | null | undefined;
   const obj = <T extends object>(value: T | undefined): T => (value && typeof value === 'object' && !Array.isArray(value) ? value : ({} as T));
   return {
     tags: obj(data?.tags),

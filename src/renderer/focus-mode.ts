@@ -1,9 +1,12 @@
 // Focus: only the reply, the reader filling the window. The header button, ⌘⇧F, Esc or Exit focus bring the rest back as it was.
 import { byId } from './dom';
+import { focusReader } from './focus-reader';
 
 const app = byId('app');
 const toggleButton = byId<HTMLButtonElement>('focus-toggle');
 const exitButton = byId<HTMLButtonElement>('focus-exit');
+const reader = byId('reader');
+const terminalPane = byId('terminal-pane');
 const listeners = new Set<(on: boolean) => void>();
 
 export const isOn = (): boolean => app.classList.contains('focus-mode');
@@ -13,6 +16,7 @@ export function set(on: boolean): void {
   app.classList.toggle('focus-mode', on);
   toggleButton.setAttribute('aria-pressed', String(on));
   exitButton.hidden = !on;
+  if (on) focusReader<HTMLElement>(document.activeElement instanceof HTMLElement ? document.activeElement : null, terminalPane, reader);
   for (const listener of listeners) listener(on);
 }
 

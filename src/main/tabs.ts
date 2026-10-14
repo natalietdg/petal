@@ -26,7 +26,8 @@ const PROMPT_KEY_GAP_MS = 120;
 
 export const sessions: TabSessions = new Map();
 const activeTabs = new Map<number, TabId>(); // webContents.id -> tabId shown in that window
-const pendingCommands = new Map<number, string>(); // webContents.id -> command for the next tab that starts there
+const pendingCommands = new Map<string, string>(); // tabKey -> command typed once that tab's shell starts
+let openedTabs = 0; // main-picked tab ids are m1, m2, ...; the renderer's own are t1, t2, ...
 
 const tabKey = (contentsId: number, tabId: TabId | undefined) => `${contentsId}:${tabId}`;
 const tabsOf = (contentsId: number) => [...sessions.values()].filter((s) => s.contentsId === contentsId);
@@ -37,8 +38,9 @@ export const openSessionIds = (): string[] => [...sessions.values()].flatMap((s)
 // A background tab starts without being shown.
 export const openTab: OpenTab = (contents, { command, background = false } = {}) => {
   if (!contents || contents.isDestroyed()) return;
-  if (command) pendingCommands.set(contents.id, command);
-  send(contents, 'tabs:new', { background });
+  const tabId: TabId = `m${++openedTabs}`;
+  if (command) pendingCommands.set(tabKey(contents.id, tabId), command);
+  send(contents, 'tabs:new', { background, tabId });
 };
 
 // What each tab was last called, so a title that lands later (organizer, Claude Code's ai-title) is pushed once.
@@ -99,8 +101,8 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
 
   // A tab opened from History types its resume command once the shell prints its prompt; Add Session's types `claude`.
-  const pending = pendingCommands.get(contentsId);
-  pendingCommands.delete(contentsId);
+  const pending = pendingCommands.get(tabKey(contentsId, tabId));
+  pendingCommands.delete(tabKey(contentsId, tabId));
   const typeFirst = pending ? () => pty.write(pending) : startClaude ? () => void typeStartClaude(session) : null;
   let typed = !typeFirst;
   pty.onData((data) => {
@@ -146,7 +148,7 @@ export function closeWindowTabs(contentsId: number): void {
     sessions.delete(tabKey(contentsId, session.tabId));
   }
   activeTabs.delete(contentsId);
-  pendingCommands.delete(contentsId);
+  for (const key of pendingCommands.keys()) if (key.startsWith(`${contentsId}:`)) pendingCommands.delete(key);
 }
 
 export function registerTabIpc(): void {

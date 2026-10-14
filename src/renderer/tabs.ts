@@ -61,9 +61,9 @@ export function init(options: { theme: Theme } & Partial<Hooks>): void {
 // Shown before its shell starts, so the pty is spawned at the visible grid size.
 // A background tab (a reply from History) starts unshown at the default grid; activating it refits.
 // startClaude: main types `claude` once the shell is ready, if Claude Code is installed.
-export function create({ background = false, startClaude = false }: { background?: boolean; startClaude?: boolean } = {}): Tab {
+// id: set when main opened the tab, so main can match its pending command to it.
+export function create({ background = false, startClaude = false, id = `t${nextNumber++}` }: { background?: boolean; startClaude?: boolean; id?: TabId } = {}): Tab {
   if (!theme) throw new Error('tabs.init() must run before the first tab');
-  const id = `t${nextNumber++}`;
   const host = el('div', 'term-host');
   stage.append(host);
   const { term, renderer, refit } = terminal.create(host, theme, id);
