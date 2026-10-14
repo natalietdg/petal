@@ -63,7 +63,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await js('PastelTerm.welcome?.close?.()');
     resizeOffscreen(win, WIDTH, HEIGHT);
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
-    await js('window.__fxConfirms = 0; window.__fxConfirm = window.confirm; window.confirm = () => { window.__fxConfirms++; return true; }');
+    await js('window.__fxConfirms = 0; window.__fxConfirm = window.confirm; window.confirm = () => { window.__fxConfirms++; return true; }; true');
 
     await js('PastelTerm.workflow.open()');
     await js("document.querySelector('#workflow-tabs button[data-tab=\"factory\"]').click()");
@@ -142,7 +142,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const refused = await js(`window.pastel.factory.save({ scope: 'global', repo: null, factory: { version: 1, stations: ${JSON.stringify(DEFAULT_STATIONS)} } })`);
     check(/A factory skill you wrote already exists/.test(refused?.error ?? '') && fs.readFileSync(skill, 'utf8') === hers, `her own skill is never overwritten: ${JSON.stringify(refused)}`);
   } finally {
-    await js('if (window.__fxConfirm) window.confirm = window.__fxConfirm');
+    await js('if (window.__fxConfirm) window.confirm = window.__fxConfirm; true');
     await js('PastelTerm.workflow.close()');
     Object.assign(factoryFixture, saved);
     resizeOffscreen(win, startWidth, startHeight);
