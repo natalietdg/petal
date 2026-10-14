@@ -2,6 +2,9 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.7] · 2026-10-14
+- Factory starts with stations that fit any project, and the approval step is yours: "You approve".
+
 ## [1.0.6] · 2026-10-14
 - Icons on the top bar buttons.
 - Fold the Doing / Recommend / Next strip and the conclusion into one slim bar; Petal remembers it.
