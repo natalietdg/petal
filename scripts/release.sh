@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Signed, notarised, stapled universal Petal. Uploads to the R2 bucket behind petal-downloads only with --publish.
+# Signed, notarised, stapled Petal for Apple Silicon (arm64) and Intel (x64). Uploads to the R2 bucket behind petal-downloads only with --publish.
 # Usage: CSC_NAME="Developer ID Application: Name (DC4T539CW7)" scripts/release.sh [--check] [--publish]
 set -euo pipefail
 cd "${0:A:h}/.."
@@ -70,21 +70,29 @@ verify_app() {
   xcrun stapler validate "$app" || { print -u2 "release: $what has no stapled ticket"; exit 1; }
   print "release: verified $what"
 }
-DMG="$OUT/Petal-$VERSION-universal.dmg"
-ZIP=("$OUT"/Petal-"$VERSION"-universal*.zip)
-for f in "$DMG" "${ZIP[1]}" "$OUT/latest-mac.yml"; do
-  [[ -f $f ]] || { print -u2 "release: missing $f"; exit 1; }
-done
-verify_app "$OUT/mac-universal/Petal.app" "the built app"
-scripts/privacy-scan.sh "$OUT/mac-universal/Petal.app" "the built app"
-
+[[ -f "$OUT/latest-mac.yml" ]] || { print -u2 "release: missing $OUT/latest-mac.yml"; exit 1; }
 SCRATCH=$(mktemp -d)
-trap 'hdiutil detach -quiet "$SCRATCH/dmg" 2>/dev/null; rm -rf "$SCRATCH"' EXIT
-hdiutil attach -quiet -nobrowse -readonly -mountpoint "$SCRATCH/dmg" "$DMG"
-verify_app "$SCRATCH/dmg/Petal.app" "the app inside the dmg"
-scripts/privacy-scan.sh "$SCRATCH/dmg/Petal.app" "the app inside the dmg"
-ditto -x -k "${ZIP[1]}" "$SCRATCH/zip"
-verify_app "$SCRATCH/zip/Petal.app" "the app inside the zip"
+trap 'for m in "$SCRATCH"/dmg-*(N); do hdiutil detach -quiet "$m" 2>/dev/null; done; rm -rf "$SCRATCH"' EXIT
+typeset -A APP_DIR=(arm64 mac-arm64 x64 mac) # electron-builder's per-arch output folders
+for arch in arm64 x64; do
+  DMG="$OUT/Petal-$VERSION-$arch.dmg"
+  ZIP="$OUT/Petal-$VERSION-$arch-mac.zip"
+  for f in "$DMG" "$ZIP"; do
+    [[ -f $f ]] || { print -u2 "release: missing $f"; exit 1; }
+  done
+  grep -qF "url: ${ZIP:t}" "$OUT/latest-mac.yml" || { print -u2 "release: latest-mac.yml does not list ${ZIP:t}"; exit 1; }
+  verify_app "$OUT/${APP_DIR[$arch]}/Petal.app" "the built $arch app"
+  scripts/privacy-scan.sh "$OUT/${APP_DIR[$arch]}/Petal.app" "the built $arch app"
+
+  # lzma (ULMO, macOS 10.15+) is ~25% smaller than electron-builder's ULFO; the dmg is unsigned and not in latest-mac.yml.
+  hdiutil convert -quiet "$DMG" -format ULMO -o "$SCRATCH/$arch.dmg"
+  mv -f "$SCRATCH/$arch.dmg" "$DMG"
+  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$SCRATCH/dmg-$arch" "$DMG"
+  verify_app "$SCRATCH/dmg-$arch/Petal.app" "the $arch app inside the dmg"
+  scripts/privacy-scan.sh "$SCRATCH/dmg-$arch/Petal.app" "the $arch app inside the dmg"
+  ditto -x -k "$ZIP" "$SCRATCH/zip-$arch"
+  verify_app "$SCRATCH/zip-$arch/Petal.app" "the $arch app inside the zip"
+done
 
 if (( ! PUBLISH )); then
   print "release: built and verified in $OUT. Nothing published (add --publish for a draft release)."
@@ -92,8 +100,14 @@ if (( ! PUBLISH )); then
 fi
 
 # The app files go up first and latest-mac.yml last, so no installed Petal sees an update before its files exist.
-for f in "$OUT"/Petal-"$VERSION"-*.{dmg,zip,blockmap}(N) "$OUT/latest-mac.yml"; do
-  [[ -f $f ]] || continue
+SITE=https://petal-downloads.natalieleong19.workers.dev
+for f in "$OUT"/Petal-"$VERSION"-*.{dmg,zip,blockmap}(N); do
   npx -y wrangler@latest r2 object put "$BUCKET/${f:t}" --file "$f" --remote
 done
-print "release: Petal $VERSION uploaded to $BUCKET. Live at https://petal-downloads.natalieleong19.workers.dev/download"
+# A Worker that only knows universal names would 404 these, and every installed Petal would fail to update.
+for f in "$OUT"/Petal-"$VERSION"-*.{dmg,zip}(N); do
+  code=$(curl -s -o /dev/null -I -w '%{http_code}' "$SITE/${f:t}")
+  [[ $code == 200 ]] || { print -u2 "release: $SITE/${f:t} answered $code; deploy petal-downloads first. latest-mac.yml NOT uploaded."; exit 1; }
+done
+npx -y wrangler@latest r2 object put "$BUCKET/latest-mac.yml" --file "$OUT/latest-mac.yml" --remote
+print "release: Petal $VERSION uploaded to $BUCKET. Live at $SITE/download?arch=arm64 and ?arch=x64"
