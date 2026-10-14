@@ -22,6 +22,8 @@ files:
   - "!**/node_modules/**/*.map"
   # woff fallbacks never load: every @font-face lists the woff2 first and Chromium reads woff2.
   - "!out/renderer/assets/*.woff"
+# Petal's UI is English-only; dropping Chromium's other 219 locale folders saves ~50MB unpacked. Dates still use ICU.
+electronLanguages: [en]
 # Petal's reply styles, copied to ~/.claude/output-styles only when the user asks.
 extraResources:
   - from: resources/output-styles
