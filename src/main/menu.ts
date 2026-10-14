@@ -1,6 +1,8 @@
 import { Menu, type MenuItemConstructorOptions } from 'electron';
 import themesJson from '../themes.json';
 import { LOCAL_CATS } from '../shared/local-cats';
+import { READING_CHOICES } from '../shared/reading-choices';
+import { ACCEL, readingAccelerator, themeAccelerator } from '../shared/shortcuts';
 import type { Choice, Themes } from '../shared/types';
 
 const themes: Themes = themesJson;
@@ -16,11 +18,7 @@ export const SCENE_CHOICES: readonly Choice[] = [
   ['planetarium', 'Planetarium'], ['rug', 'Autumn Reading Nook'], ['winter', 'Snowy Hearth'], ['izakaya', 'Izakaya'], ['howl', "Wizard's Loft"],
   ['study', "Wizard's Study"], ['midcentury', 'Vinyl Lounge'], ['tarot', 'Tarot Room'],
 ];
-// Ids match the data-reading values styled in renderer/magazine.css and print.css; order sets ⌥⌘1–4.
-export const READING_CHOICES: readonly Choice[] = [
-  ['newspaper', 'Newspaper'], ['editorial', 'Magazine · Editorial'], ['lifestyle', 'Magazine · Lifestyle'], ['print', 'Magazine · Print'],
-];
-export const isReadingChoice = (id: string): boolean => READING_CHOICES.some(([choice]) => choice === id);
+export { READING_CHOICES, isReadingChoice } from '../shared/reading-choices';
 
 export interface MenuOptions {
   currentTheme: string;
@@ -44,15 +42,17 @@ export interface MenuOptions {
   onOpenWelcome: () => void;
   onOpenGetStarted: () => void;
   onOpenColourKey: () => void;
+  onToggleShortcuts: () => void;
   onOpenRepo: () => void;
 }
 
-export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onOpenRepo }: MenuOptions): void {
+// Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
     checked: id === currentTheme,
-    accelerator: `CmdOrCtrl+${index + 1}`,
+    accelerator: themeAccelerator(index),
     click: () => onThemeSelected(id),
   }));
 
@@ -74,17 +74,17 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     label,
     type: 'radio',
     checked: id === currentReading,
-    accelerator: `CmdOrCtrl+Alt+${index + 1}`, // ⇧⌘3 and ⇧⌘4 belong to macOS screenshots
+    accelerator: readingAccelerator(index),
     click: () => onReadingSelected(id),
   }));
 
-  const template: MenuItemConstructorOptions[] = [
+  return [
     {
       label: 'Petal', // macOS titles the first menu with the app name either way
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: onOpenSettings },
+        { label: 'Settings…', accelerator: ACCEL.settings, click: onOpenSettings },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -98,29 +98,29 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     {
       label: 'Shell',
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: onNewTab },
-        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: onNewWindow },
-        { label: 'Open Repo…', accelerator: 'CmdOrCtrl+O', click: onOpenRepo },
+        { label: 'New Tab', accelerator: ACCEL.newTab, click: onNewTab },
+        { label: 'New Window', accelerator: ACCEL.newWindow, click: onNewWindow },
+        { label: 'Open Repo…', accelerator: ACCEL.openRepo, click: onOpenRepo },
         { type: 'separator' },
-        { label: 'Next Tab', accelerator: 'CmdOrCtrl+Shift+]', click: () => onCycleTab(1) },
-        { label: 'Previous Tab', accelerator: 'CmdOrCtrl+Shift+[', click: () => onCycleTab(-1) },
+        { label: 'Next Tab', accelerator: ACCEL.nextTab, click: () => onCycleTab(1) },
+        { label: 'Previous Tab', accelerator: ACCEL.previousTab, click: () => onCycleTab(-1) },
         // Ctrl+Tab too, as in Safari and Terminal.
-        { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: () => onCycleTab(1), visible: false, acceleratorWorksWhenHidden: true },
-        { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => onCycleTab(-1), visible: false, acceleratorWorksWhenHidden: true },
+        { label: 'Next Tab', accelerator: ACCEL.nextTabCtrl, click: () => onCycleTab(1), visible: false, acceleratorWorksWhenHidden: true },
+        { label: 'Previous Tab', accelerator: ACCEL.previousTabCtrl, click: () => onCycleTab(-1), visible: false, acceleratorWorksWhenHidden: true },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: onCloseTab },
-        { role: 'close', label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W' },
+        { label: 'Close Tab', accelerator: ACCEL.closeTab, click: onCloseTab },
+        { role: 'close', label: 'Close Window', accelerator: ACCEL.closeWindow },
       ],
     },
     { role: 'editMenu' },
     {
       label: 'View',
       submenu: [
-        { label: 'Minimise Terminal', accelerator: 'CmdOrCtrl+R', click: onToggleReader },
-        { label: 'Minimise Headers', accelerator: 'CmdOrCtrl+Shift+H', click: onToggleHeaders },
-        { label: 'History', accelerator: 'CmdOrCtrl+Y', click: onToggleHistory },
-        { label: 'Sessions Board', accelerator: 'CmdOrCtrl+Shift+O', click: onToggleBoard },
-        { label: 'Focus on Reply', accelerator: 'CmdOrCtrl+Shift+F', click: onToggleFocus },
+        { label: 'Minimise Terminal', accelerator: ACCEL.minimiseTerminal, click: onToggleReader },
+        { label: 'Minimise Headers', accelerator: ACCEL.minimiseHeaders, click: onToggleHeaders },
+        { label: 'History', accelerator: ACCEL.history, click: onToggleHistory },
+        { label: 'Sessions Board', accelerator: ACCEL.board, click: onToggleBoard },
+        { label: 'Focus on Reply', accelerator: ACCEL.focus, click: onToggleFocus },
         { type: 'separator' },
         ...readingItems,
       ],
@@ -128,7 +128,10 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     { label: 'Theme', submenu: themeItems },
     { label: 'Pet', submenu: [...catItems, { type: 'separator' }, { label: 'Scene', submenu: sceneItems }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Welcome', click: onOpenWelcome }, { label: 'Get started', click: onOpenGetStarted }, { label: 'Colour key', click: onOpenColourKey }] },
+    { role: 'help', submenu: [{ label: 'Welcome', click: onOpenWelcome }, { label: 'Get started', click: onOpenGetStarted }, { label: 'Colour key', click: onOpenColourKey }, { type: 'separator' }, { label: 'Keyboard Shortcuts', accelerator: ACCEL.shortcuts, click: onToggleShortcuts }] },
   ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+export function buildMenu(options: MenuOptions): void {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(options)));
 }

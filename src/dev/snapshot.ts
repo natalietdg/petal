@@ -33,6 +33,7 @@ import { replyLatencyCheck } from './snapshot-reply-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
 import { colourKeyCheck } from './snapshot-colour-key';
+import { shortcutsCheck } from './snapshot-shortcuts';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
 import { planetCheck } from './snapshot-planet';
@@ -571,6 +572,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'shortcuts') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await shortcutsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

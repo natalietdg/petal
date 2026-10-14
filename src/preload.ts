@@ -79,6 +79,7 @@ const api = {
   onOpenGetStarted: (callback: () => void) => subscribe('get-started:open', callback),
   onClaudeFolder: (callback: (allowed: boolean) => void) => subscribe('claude-folder:changed', callback),
   onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),
+  onToggleShortcuts: (callback: () => void) => subscribe('shortcuts:toggle', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),
   update: {
     status: () => invoke('update:status'),

@@ -238,6 +238,7 @@ export interface EventChannels {
   'get-started:open': void;
   'claude-folder:changed': boolean; // reading ~/.claude allowed or not
   'colour-key:open': void;
+  'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
   'update:ready': void;
   'agents:timeline': TimelineUpdate & { agentId: string };

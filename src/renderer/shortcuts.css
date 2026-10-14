@@ -1,0 +1,49 @@
+/* Shortcuts guide (shortcuts.ts): the welcome's frame (welcome.css), rows of kbd chips beside plain words. */
+#shortcuts {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+}
+#shortcuts[hidden] { display: none; }
+
+.sc-group { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.sc-group-title { margin: 0; font: 700 12px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.sc-list { margin: 0; }
+.sc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 14px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.sc-trigger { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin: 0; }
+.sc-does { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sc-combo { display: inline-flex; gap: 3px; }
+.sc-key {
+  min-width: 1.6em;
+  padding: 1px 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 500 12px/1.5 var(--ui-font);
+  text-align: center;
+}
+.sc-or { color: var(--muted); font-size: 12px; }
+.sc-word {
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: var(--code-bg);
+  font: 13px var(--mono-font);
+  overflow-wrap: anywhere;
+}
+.sc-gesture { color: var(--muted); }
