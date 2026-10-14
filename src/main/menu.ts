@@ -44,10 +44,11 @@ export interface MenuOptions {
   onOpenColourKey: () => void;
   onToggleShortcuts: () => void;
   onOpenRepo: () => void;
+  onCheckForUpdates: () => void;
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -83,6 +84,7 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
       label: 'Petal', // macOS titles the first menu with the app name either way
       submenu: [
         { role: 'about' },
+        { label: 'Check for Updates…', click: onCheckForUpdates },
         { type: 'separator' },
         { label: 'Settings…', accelerator: ACCEL.settings, click: onOpenSettings },
         { type: 'separator' },

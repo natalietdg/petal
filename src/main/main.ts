@@ -19,7 +19,8 @@ import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
 import { handle, on, send } from './ipc';
-import { isUpdateReady, liveEnv, restartToUpdate, startUpdater } from './updater';
+import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
+import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
 import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions } from './tabs';
 import { applyCat, applyReading, applyScene, applyTheme, currentTheme, onLookChanged, registerLookIpc, settings, themes } from './look';
 import type { EventArgs, EventChannel } from '../shared/ipc';
@@ -138,6 +139,7 @@ function refreshMenu(): void {
     onOpenColourKey: openColourKey,
     onToggleShortcuts: toggleShortcuts,
     onOpenRepo: () => sendToFocused('repos:palette'),
+    onCheckForUpdates: () => checkForUpdatesNow(liveEnv()),
   });
 }
 onLookChanged(refreshMenu);
@@ -162,12 +164,17 @@ function registerIpc(): void {
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
   registerLayoutIpc();
-  handle('update:status', () => ({ ready: isUpdateReady() }));
+  handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));
+  handle('update:whats-new', async (event) => {
+    await showWhatsNew(BrowserWindow.fromWebContents(event.sender));
+    return { ok: true as const };
+  });
 }
 
 app.whenReady().then(() => {
   if (isSnapshotRun()) app.dock?.hide(); // no Dock icon, never the active app
+  if (!isSnapshotRun()) recordLaunch(); // before the first window asks for the "Updated to" note
   registerIpc();
   refreshMenu();
   const win = createWindow();

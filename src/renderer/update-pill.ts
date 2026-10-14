@@ -1,26 +1,43 @@
-// "Update ready · Restart" in the dock band, shown once an update has downloaded. Main refuses while Claude runs.
+// The update pill in the dock band: "Petal X ready · Restart", the one-time "Updated to X · What's new",
+// and what Petal › Check for Updates… found. Main refuses the restart while Claude runs.
 import { byId, isIpcError } from './dom';
-import { UPDATE_PILL_TEXT } from '../shared/ipc';
+import { updateNoteText, updatePillText, whatsNewText, type UpdateNote, type WhatsNew } from '../shared/ipc';
 
 const NOTE_MS = 6000;
 const pill = byId<HTMLButtonElement>('update-pill');
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
+let readyVersion: string | null = null;
+let whatsNew: WhatsNew | null = null;
 
-export function show(): void {
-  pill.textContent = UPDATE_PILL_TEXT;
-  pill.title = UPDATE_PILL_TEXT; // minimised headers show the pill as a dot
-  pill.hidden = false;
+// What the pill offers when no note is showing; null hides it.
+const offerText = (): string | null => (readyVersion ? updatePillText(readyVersion) : whatsNew ? whatsNewText(whatsNew) : null);
+
+function showOffer(): void {
+  clearTimeout(noteTimer);
+  pill.classList.remove('noting');
+  const text = offerText();
+  pill.hidden = text === null;
+  pill.textContent = text ?? '';
+  pill.title = text ?? ''; // minimised headers show the pill as a dot
 }
 
-// A refusal shows in the pill for a few seconds, then the pill goes back to offering Restart.
-function showNote(note: string): void {
-  pill.textContent = note;
-  pill.classList.add('noting');
+export function show(version: string): void {
+  readyVersion = version;
+  showOffer();
+}
+
+// "Checking…" and "Downloading…" stay until the outcome arrives; the rest fade back to the offer.
+function showNote(text: string, sticky = false): void {
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => {
-    pill.classList.remove('noting');
-    pill.textContent = UPDATE_PILL_TEXT;
-  }, NOTE_MS);
+  pill.textContent = text;
+  pill.title = text;
+  pill.classList.add('noting');
+  pill.hidden = false;
+  if (!sticky) noteTimer = setTimeout(showOffer, NOTE_MS);
+}
+
+export function note(update: UpdateNote): void {
+  showNote(updateNoteText(update), update.kind === 'checking' || update.kind === 'downloading');
 }
 
 export async function restart(): Promise<void> {
@@ -29,9 +46,25 @@ export async function restart(): Promise<void> {
   else if ('note' in result) showNote(result.note);
 }
 
+async function openWhatsNew(): Promise<void> {
+  if (whatsNew?.hasNotes) await window.pastel.update.showWhatsNew();
+  whatsNew = null;
+  showOffer();
+}
+
+function onClick(): void {
+  if (pill.classList.contains('noting') && !readyVersion) return;
+  if (readyVersion) void restart();
+  else if (whatsNew) void openWhatsNew();
+}
+
 export async function init(): Promise<void> {
-  pill.addEventListener('click', () => restart());
-  window.pastel.update.onReady(show);
+  pill.addEventListener('click', onClick);
+  window.pastel.update.onReady(({ version }) => show(version));
+  window.pastel.update.onNote(note);
   const status = await window.pastel.update.status();
-  if (!isIpcError(status) && status.ready) show();
+  if (isIpcError(status)) return;
+  whatsNew = status.whatsNew;
+  readyVersion = status.readyVersion ?? readyVersion;
+  if (offerText()) showOffer();
 }

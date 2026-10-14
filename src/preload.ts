@@ -84,7 +84,9 @@ const api = {
   update: {
     status: () => invoke('update:status'),
     restart: () => invoke('update:restart'),
-    onReady: (callback: () => void) => subscribe('update:ready', callback),
+    showWhatsNew: () => invoke('update:whats-new'),
+    onReady: (callback: (payload: EventChannels['update:ready']) => void) => subscribe('update:ready', callback),
+    onNote: (callback: (note: EventChannels['update:note']) => void) => subscribe('update:note', callback),
   },
   look: {
     setTheme: (id: string) => send('look:theme', id),

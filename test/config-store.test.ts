@@ -18,9 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has thirteen sections with the documented defaults', () => {
+  it('has fourteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -28,6 +28,7 @@ describe('config-store defaults and load', () => {
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
+    expect(d.updates).toEqual({ lastNotifiedVersion: '', lastSeenVersion: '' });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 8 });
     expect(d.tarot).toEqual({ birthdate: '' });
@@ -129,7 +130,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -429,5 +430,10 @@ describe('config-store Get started and the Claude folder choice', () => {
     expect(config.save({ claudeFolder: { choice: 'allowed' } }).claudeFolder.choice).toBe('allowed');
     expect(config.save({ claudeFolder: { choice: 'sure' } }).claudeFolder.choice).toBe('allowed');
     expect(config.save({ claudeFolder: { choice: 'declined' } }).claudeFolder.choice).toBe('declined');
+  });
+
+  it('keeps update versions only when they look like versions', () => {
+    expect(config.save({ updates: { lastSeenVersion: '1.0.7', lastNotifiedVersion: '1.0.8' } }).updates).toEqual({ lastSeenVersion: '1.0.7', lastNotifiedVersion: '1.0.8' });
+    expect(config.save({ updates: { lastSeenVersion: 'latest', lastNotifiedVersion: 7 } }).updates).toEqual({ lastSeenVersion: '1.0.7', lastNotifiedVersion: '1.0.8' });
   });
 });
