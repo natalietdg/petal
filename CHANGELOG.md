@@ -2,6 +2,14 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.6] · 2026-10-14
+- Icons on the top bar buttons.
+- Fold the Doing / Recommend / Next strip and the conclusion into one slim bar; Petal remembers it.
+- Focus (⌘⇧F) shows only the reply, full window.
+- Minimise the top bar (⌘⇧H) or the terminal (⌘R) to thin strips.
+- Workflow › Factory: set the stations Claude follows, from intake to ship.
+- A Shortcuts guide (⌘/) lists every key, word and gesture.
+
 ## [1.0.5] · 2026-10-13
 - The Sessions board shows every open session: your pet no longer covers the bottom cards, and a session open twice shows once.
 - A small Board button sits beside History.

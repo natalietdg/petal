@@ -56,17 +56,18 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const skill = path.join(claudeDir, 'skills', 'factory', 'SKILL.md');
   const projectMd = path.join(repo, '.petal', 'factory.md');
 
+  const run = (code: string) => js(`Promise.resolve(${code}).then(() => 0)`); // statements only: executeJavaScript can't return functions or elements
   const nodeCount = (n: number) => waitFor(async () => (await js(NAMES)).length === n, 5000);
   const savedLine = () => waitFor(async () => (await js(SAVED_LINE)) === 'Saved. Claude follows this from your next message.', 5000);
 
   try {
-    await js('PastelTerm.welcome?.close?.()');
+    await run('PastelTerm.welcome?.close?.()');
     resizeOffscreen(win, WIDTH, HEIGHT);
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
     await js('window.__fxConfirms = 0; window.__fxConfirm = window.confirm; window.confirm = () => { window.__fxConfirms++; return true; }; true');
 
-    await js('PastelTerm.workflow.open()');
-    await js("document.querySelector('#workflow-tabs button[data-tab=\"factory\"]').click()");
+    await run('PastelTerm.workflow.open()');
+    await run("document.querySelector('#workflow-tabs button[data-tab=\"factory\"]').click()");
     check(await nodeCount(7), 'Workflow › Factory opens with seven cards');
     check(JSON.stringify(await js(NAMES)) === JSON.stringify(DEFAULT_STATIONS.map((s) => s.name)), `default stations in order: ${JSON.stringify(await js(NAMES))}`);
     const badges: string[] = await js("[...document.querySelectorAll('#workflow .fx-runner')].map((b) => b.textContent)");
@@ -79,51 +80,51 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await capture('factory-800');
 
     // Edit one station: its new text lands in the generated skill.
-    await js(click('[data-station="intake"] .fx-card'));
+    await run(click('[data-station="intake"] .fx-card'));
     check(await waitFor(() => js("document.activeElement?.id === 'fx-name'"), 3000), 'clicking a card opens the edit panel on Name');
-    await js(type('#fx-instructions', NEW_TEXT));
-    await js(click('.fx-save'));
+    await run(type('#fx-instructions', NEW_TEXT));
+    await run(click('.fx-save'));
     check(await savedLine(), 'Save shows “Saved. Claude follows this from your next message.”');
     const afterEdit = fs.existsSync(skill) ? fs.readFileSync(skill, 'utf8') : '';
     check(afterEdit.includes(NEW_TEXT) && afterEdit.split('\n')[4] === GENERATED_MARKER && afterEdit.startsWith('---\nname: factory\n'), `SKILL.md has the edit, frontmatter and marker (${afterEdit.length} chars)`);
     check(/Claude follows the global factory/.test(await js(FOLLOWS)), `scope line after save: ${await js(FOLLOWS)}`);
 
     // Add after Build, as a Natalie gate.
-    await js(click('[data-station="build"] [data-tool="add"]'));
+    await run(click('[data-station="build"] [data-tool="add"]'));
     await waitFor(() => js("document.activeElement?.id === 'fx-name'"), 3000);
-    await js(type('#fx-name', 'Review'));
-    await js(type('#fx-runner', 'natalie', 'change'));
-    await js(type('#fx-pass', 'She has read the diff.'));
-    await js(click('.fx-save'));
+    await run(type('#fx-name', 'Review'));
+    await run(type('#fx-runner', 'natalie', 'change'));
+    await run(type('#fx-pass', 'She has read the diff.'));
+    await run(click('.fx-save'));
     check(await nodeCount(8), 'Add station puts an eighth card in');
     check(headings(skill)[3] === '## 4. Review' && fs.readFileSync(skill, 'utf8').includes('She has read the diff.'), `added station in SKILL.md: ${JSON.stringify(headings(skill))}`);
 
     // Remove it, through the inline confirm.
-    await js(click('[data-station="review"] [data-tool="remove"]'));
+    await run(click('[data-station="review"] [data-tool="remove"]'));
     check(await waitFor(() => js("Boolean(document.querySelector('#workflow .fx-remove-yes'))"), 3000), 'Remove asks inline first');
-    await js(click('.fx-remove-yes'));
+    await run(click('.fx-remove-yes'));
     check(await nodeCount(7) && !headings(skill).some((h) => h.includes('Review')), `removed from SKILL.md: ${JSON.stringify(headings(skill))}`);
     check((await js('window.__fxConfirms')) === 0, 'no browser dialog was used');
 
     // Reorder: Move left by button keeps focus on the moved card, then a drag puts Learn first.
-    await js(click('[data-station="learn"] [data-tool="left"]'));
+    await run(click('[data-station="learn"] [data-tool="left"]'));
     check(await waitFor(() => headings(skill)[5] === '## 6. Learn', 5000), `Move left reorders SKILL.md: ${JSON.stringify(headings(skill))}`);
     check(await js("document.activeElement?.closest('[data-station]')?.dataset.station === 'learn'"), 'focus stays on the moved card');
-    await js(drag('learn', 'intake'));
+    await run(drag('learn', 'intake'));
     check(await waitFor(() => headings(skill)[0] === '## 1. Learn', 5000), `drag reorders SKILL.md: ${JSON.stringify(headings(skill))}`);
     check((await js(NAMES))[0] === 'Learn', 'the chart shows the dragged order');
 
     // Project override: copied from global into the fixture repo's .petal, and the scope line switches.
-    await js(click('.fx-scope [data-scope="project"]'));
+    await run(click('.fx-scope [data-scope="project"]'));
     check(new RegExp(`This project \\(${path.basename(repo)}\\)`).test(await js("document.querySelector('#workflow .fx-scope [data-scope=\"project\"]').textContent")), 'scope switch names the fixture repo');
-    await js(click('.fx-customise'));
+    await run(click('.fx-customise'));
     check(await waitFor(() => fs.existsSync(projectMd) && fs.existsSync(path.join(repo, '.petal', 'factory.json')), 5000), 'Customise for this project writes .petal/factory.json and factory.md');
     check(await waitFor(async () => /this project’s factory/.test(await js(FOLLOWS)), 3000), `scope line follows the project: ${await js(FOLLOWS)}`);
     const globalBefore = fs.readFileSync(skill, 'utf8');
-    await js(click('[data-station="intake"] .fx-card'));
+    await run(click('[data-station="intake"] .fx-card'));
     await waitFor(() => js("Boolean(document.querySelector('#workflow #fx-instructions'))"), 3000);
-    await js(type('#fx-instructions', PROJECT_TEXT));
-    await js(click('.fx-save'));
+    await run(type('#fx-instructions', PROJECT_TEXT));
+    await run(click('.fx-save'));
     await savedLine();
     check(fs.readFileSync(projectMd, 'utf8').includes(PROJECT_TEXT) && fs.readFileSync(skill, 'utf8') === globalBefore, 'a project edit lands in factory.md and leaves SKILL.md alone');
     const projectFit = await js(FIT);
@@ -131,8 +132,8 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await capture('factory-project-800');
 
     // Use global: inline confirm, the override goes, the line switches back.
-    await js(click('.fx-use-global'));
-    await js(click('.fx-confirm-yes'));
+    await run(click('.fx-use-global'));
+    await run(click('.fx-confirm-yes'));
     check(await waitFor(() => !fs.existsSync(path.join(repo, '.petal')), 5000), 'Use global deletes the override');
     check(await waitFor(async () => /Claude follows the global factory/.test(await js(FOLLOWS)), 3000), `scope line back on global: ${await js(FOLLOWS)}`);
 
@@ -143,7 +144,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(/A factory skill you wrote already exists/.test(refused?.error ?? '') && fs.readFileSync(skill, 'utf8') === hers, `her own skill is never overwritten: ${JSON.stringify(refused)}`);
   } finally {
     await js('if (window.__fxConfirm) window.confirm = window.__fxConfirm; true');
-    await js('PastelTerm.workflow.close()');
+    await run('PastelTerm.workflow.close()');
     Object.assign(factoryFixture, saved);
     resizeOffscreen(win, startWidth, startHeight);
   }
