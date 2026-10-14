@@ -392,9 +392,12 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
     `existing config: History, Customize, Workflow and Help › Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
   await js("document.querySelector('#consent .consent-later').click()");
-  const followed = await until((st) => st.open === 'get-started');
+  // With reading off, sign-in and ask are hand-ticked only, so Get started follows only while another step is open.
+  await wait(800);
+  const reopens = await js('PastelTerm.getStarted.reopensOnLaunch()');
+  const followed = (await js('PastelTerm.overlays.current()')) === (reopens ? 'get-started' : null);
   check(followed && configStore.load().claudeFolder.choice === 'declined',
-    `existing config: Not now saves "declined" and Get started follows: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), done: configStore.load().getStarted.done, facts: await js('PastelTerm.getStarted.currentFacts()') })}`);
+    `existing config: Not now saves "declined" and Get started follows only for a step Petal can see: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), done: configStore.load().getStarted.done, facts: await js('PastelTerm.getStarted.currentFacts()') })}`);
   await js('PastelTerm.overlays.hideCurrent()');
   await js("document.getElementById('history-button').click()");
   const HISTORY = `(() => ({ open: PastelTerm.overlays.current(), off: document.querySelector('#history-list .history-folder-off')?.innerText ?? null,

@@ -30,7 +30,8 @@ const DEFAULT_CONCURRENCY = 16;
 const SHORT_SHA_LENGTH = 7;
 
 // Directly under the root: macOS-protected or never a code folder; reading them can raise privacy prompts.
-const SKIP_AT_ROOT = new Set(['Library', 'Applications', 'Pictures', 'Music', 'Movies']);
+// Desktop, Documents and Downloads each raise their own folder prompt; iCloud Drive sits under Library.
+const SKIP_AT_ROOT = new Set(['Library', 'Applications', 'Pictures', 'Music', 'Movies', 'Desktop', 'Documents', 'Downloads']);
 // At any depth; names starting with "." (.Trash, .cache, .npm, .nvm…) are skipped as well.
 const SKIP_ANYWHERE = new Set(['node_modules']);
 // Media-app libraries raise the Apple Music / media library prompt (kTCCServiceMediaLibrary) wherever they sit.

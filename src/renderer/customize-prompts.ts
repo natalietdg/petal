@@ -101,5 +101,5 @@ export function renderHandoff(): HTMLElement[] {
   ]) steps.append(el('li', null, text));
   const sample = el('pre', 'cz-pre');
   sample.append(el('code', null, page.state.handoffSample));
-  return [card('What Send to Claude does', steps), card('Sample file', sample), note('Read-only: the format lives in src/main/handoff.js.')];
+  return [card('What Send to Claude does', steps), card('Sample file', sample), note('This format is fixed and can’t be edited here.')];
 }

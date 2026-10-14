@@ -78,6 +78,13 @@ describe('scanRepos', () => {
     for (const dir of media) expect(touched.filter((t) => t.startsWith(path.join(home, dir)))).toEqual([]);
   });
 
+  it('skips the folders macOS guards with a prompt: Desktop, Documents, Downloads', async () => {
+    const home = tempDir('petal-home-');
+    for (const guarded of ['Desktop/a', 'Documents/b', 'Downloads/c', 'Library/Mobile Documents/com~apple~CloudDocs/d']) makeRepo(home, guarded);
+    makeRepo(home, 'Code/kept');
+    expect(await names(home)).toEqual(['~/Code/kept']);
+  });
+
   it('skips Library-style names only at the top of home', async () => {
     const home = tempDir('petal-home-');
     makeRepo(home, 'Code/Library');
