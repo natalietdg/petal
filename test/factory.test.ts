@@ -21,6 +21,24 @@ describe('defaults', () => {
     expect(DEFAULT_STATIONS.find((s) => s.id === 'ship')?.runner).toBe('you');
   });
 
+  it('assumes no toolchain: Claude finds the test command itself', () => {
+    const test = DEFAULT_STATIONS.find((s) => s.id === 'test-queue');
+    expect(test).toMatchObject({ name: 'Test', runner: 'claude', passCheck: 'The project\'s tests pass, or it has none and that is stated.' });
+    expect(test?.command).toBeUndefined();
+    expect(test?.instructions).toContain('README, package file or Makefile');
+  });
+
+  it('shows no house jargon in what users and Claude read', () => {
+    const jargon = /\b(npm|tickets?|gates?|queues?|push|install)\b/i;
+    const shouted = /\bFAIL\b/; // plain "failure" is fine
+    const visible = DEFAULT_STATIONS.map(({ id: _id, ...shown }) => shown); // ids are storage keys, never shown
+    const texts = [JSON.stringify(visible), ...(['global', 'project', 'project-skill'] as const).map((scope) => renderSkill(defaultFactory(), scope, 'demo'))];
+    for (const text of texts) {
+      expect(text).not.toMatch(jargon);
+      expect(text).not.toMatch(shouted);
+    }
+  });
+
   it('hands out copies, so editing one never changes the defaults', () => {
     defaultFactory().stations[0].name = 'changed';
     expect(DEFAULT_STATIONS[0].name).toBe('Intake');
@@ -90,8 +108,10 @@ describe('renderSkill', () => {
       expect(skill).toContain(`**Pass check:** ${s.passCheck}`);
     }
     expect(skill).toContain('**Who runs it:** a `Plan` subagent');
-    expect(skill).toContain('Run `npm test`');
-    expect(skill).toContain('Petal never runs it');
+    expect(skill).toContain('**Who runs it:** a `general-purpose` subagent. Brief it with the request and what earlier stations found');
+    const script = renderSkill({ version: 1, stations: [station({ runner: 'script', command: 'make check' })] }, 'project');
+    expect(script).toContain('Run `make check`');
+    expect(script).toContain('Petal never runs it');
     expect(skill).toContain('**Who runs it:** The user. Stop here, show where things stand, and wait for their go-ahead');
   });
 
@@ -102,6 +122,15 @@ describe('renderSkill', () => {
     expect(project).toContain('# Software factory for pastel-term');
     expect(project).not.toContain('.petal/factory.md');
     expect(project).not.toContain('name: factory');
+  });
+
+  it('gives the project skill frontmatter and the project\'s stations, with no pointer elsewhere', () => {
+    const projectSkill = renderSkill(defaultFactory(), 'project-skill', 'pastel-term');
+    expect(projectSkill.split('\n').slice(0, 2)).toEqual(['---', 'name: factory']);
+    expect(projectSkill.split('\n')[4]).toBe(GENERATED_MARKER);
+    expect(projectSkill).toContain('# Software factory for pastel-term');
+    expect(projectSkill).not.toContain('.petal/factory.md');
+    expect(isGenerated(projectSkill)).toBe(true);
   });
 
   it('tells Claude to add the Station line with the saved factory\'s total and names', () => {
@@ -133,7 +162,7 @@ describe('isGenerated', () => {
 
 describe('labels and ids', () => {
   it('names who runs each station for the card badge', () => {
-    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Script', 'Claude', 'You approve', 'Claude']);
+    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Claude', 'Claude', 'You approve', 'Claude']);
   });
 
   it('makes a unique slug id from the name', () => {

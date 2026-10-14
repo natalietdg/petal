@@ -43,6 +43,7 @@
 .fx-tool { display: inline-flex; padding: 4px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
 .fx-tool:hover:not(:disabled), .fx-tool:focus-visible { border-color: var(--rule); color: var(--reader-fg); }
 .fx-tool:disabled { opacity: 0.35; cursor: default; }
+.fx-tool-label { margin-left: 2px; font-size: 11px; line-height: 16px; }
 .fx-dragging { opacity: 0.5; }
 .fx-drop .fx-card { border-color: var(--next-ink); box-shadow: 0 0 0 2px var(--next-pill); }
 

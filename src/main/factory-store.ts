@@ -1,12 +1,15 @@
 // Where the factory lives and how Claude picks it up.
 //   global:   <claudeDir>/petal-factory.json  ->  <claudeDir>/skills/factory/SKILL.md (Claude Code loads it as a skill)
-//   project:  <repo>/.petal/factory.json      ->  <repo>/.petal/factory.md (the skill says to follow it when present)
+//   project:  <repo>/.petal/factory.json      ->  <repo>/.petal/factory.md (the global skill says to follow it when present)
+//             and <repo>/.claude/skills/factory/SKILL.md (a project skill, so the override works with no global skill;
+//             Claude Code prefers a personal skill of the same name, which then points at factory.md)
+// Both project folders get a .gitignore of `*`, so nothing Petal writes in a repo is ever committed.
 // claudeDir is null when she hasn't allowed the Claude folder: nothing there is read or written.
 // Every write is atomic; a file Petal didn't generate, or a JSON file that doesn't parse, is never replaced.
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
-import { defaultFactory, isGenerated, renderSkill, validateFactory, type Factory } from '../shared/factory';
+import { PROJECT_SKILL_PATH, defaultFactory, isGenerated, renderSkill, validateFactory, type Factory } from '../shared/factory';
 
 export type FactoryScope = 'global' | 'project';
 // What Claude follows right now: the project's file, the global skill, nothing yet, or a factory skill she wrote herself.
@@ -31,6 +34,8 @@ export const globalJson = (claudeDir: string): string => path.join(claudeDir, 'p
 export const skillFile = (claudeDir: string): string => path.join(claudeDir, 'skills', 'factory', 'SKILL.md');
 export const projectJson = (repo: string): string => path.join(repo, '.petal', 'factory.json');
 export const projectMd = (repo: string): string => path.join(repo, '.petal', 'factory.md');
+export const projectSkillFile = (repo: string): string => path.join(repo, ...PROJECT_SKILL_PATH.split('/'));
+const SELF_IGNORE = '*\n'; // ignores the folder it sits in, itself included
 
 function readText(file: string): string | null {
   try {
@@ -79,6 +84,7 @@ export function loadFactoryState({ claudeDir, repo }: FactoryPaths): FactoryStat
   let follows: Follows = 'none';
   if (skill.state === 'foreign') follows = 'foreign';
   else if (skill.state === 'generated') follows = repo && fs.existsSync(projectMd(repo)) ? 'project' : 'global';
+  else if (claudeDir && repo && generatedState(projectSkillFile(repo)) === 'generated') follows = 'project';
   return { folderOff: !claudeDir, global, skill, project, follows };
 }
 
@@ -114,23 +120,44 @@ function saveGlobal(claudeDir: string, factory: Factory): void {
   writeGenerated(skill, renderSkill(factory, 'global'), foreignSkill(skill));
 }
 
-// The project file does nothing without the skill that points at it, so the first override installs the skill too.
-function ensureSkill(claudeDir: string): void {
-  const skill = skillFile(claudeDir);
-  if (generatedState(skill) !== 'missing') return;
-  const { factory, problem } = readFactoryFile(globalJson(claudeDir));
-  if (problem) return;
-  writeGenerated(skill, renderSkill(factory ?? defaultFactory(), 'global'), foreignSkill(skill));
+// Keeps a folder Petal writes in a repo out of git; a .gitignore she put there stays as it is.
+function ensureSelfIgnore(dir: string): void {
+  const file = path.join(dir, '.gitignore');
+  if (!fs.existsSync(file)) writeFileDurable(file, SELF_IGNORE);
 }
 
+function removeOwnIgnore(dir: string): void {
+  const file = path.join(dir, '.gitignore');
+  if (readText(file) === SELF_IGNORE) fs.rmSync(file, { force: true });
+}
+
+// Removes each folder in turn while it is empty, stopping at the first that isn't.
+function removeEmptyDirs(dirs: string[]): void {
+  for (const dir of dirs) {
+    try {
+      fs.rmdirSync(dir);
+    } catch {
+      return;
+    }
+  }
+}
+
+// The project skill needs her consent for the Claude folder, like the global one, and never turns the factory on elsewhere.
 function saveProject(paths: FactoryPaths & { repo: string }, factory: Factory): void {
   const md = projectMd(paths.repo);
+  const projectSkill = projectSkillFile(paths.repo);
   if (generatedState(md) === 'foreign') throw new Error(foreignProjectMd(md));
+  if (paths.claudeDir && generatedState(projectSkill) === 'foreign') throw new Error(foreignSkill(projectSkill));
   refuseBrokenJson(projectJson(paths.repo));
+  const name = path.basename(paths.repo);
   fs.mkdirSync(path.dirname(md), { recursive: true });
+  ensureSelfIgnore(path.dirname(md));
   writeFileDurable(projectJson(paths.repo), `${JSON.stringify(factory, null, 2)}\n`);
-  writeGenerated(md, renderSkill(factory, 'project', path.basename(paths.repo)), foreignProjectMd(md));
-  if (paths.claudeDir) ensureSkill(paths.claudeDir);
+  writeGenerated(md, renderSkill(factory, 'project', name), foreignProjectMd(md));
+  if (!paths.claudeDir) return;
+  fs.mkdirSync(path.dirname(projectSkill), { recursive: true });
+  ensureSelfIgnore(path.dirname(projectSkill));
+  writeGenerated(projectSkill, renderSkill(factory, 'project-skill', name), foreignSkill(projectSkill));
 }
 
 export function saveFactory(paths: FactoryPaths, scope: FactoryScope, raw: unknown): FactoryState {
@@ -145,15 +172,23 @@ export function saveFactory(paths: FactoryPaths, scope: FactoryScope, raw: unkno
   return loadFactoryState(paths);
 }
 
-// "Use global": the project's files go, and .petal too once it is empty. A factory.md she wrote stops it first.
+// "Use global": the project's files go, and their folders too once empty. A factory.md she wrote stops it first;
+// a project factory skill she wrote is left alone.
 export function useGlobal(paths: FactoryPaths): FactoryState {
   if (!paths.repo) throw new Error('No project here: open a Claude session in a git repo first.');
   const md = projectMd(paths.repo);
   if (generatedState(md) === 'foreign') throw new Error(foreignProjectMd(md));
   fs.rmSync(projectJson(paths.repo), { force: true });
   fs.rmSync(md, { force: true });
-  try {
-    fs.rmdirSync(path.dirname(md)); // only when empty
-  } catch { /* other files live there; keep it */ }
+  removeOwnIgnore(path.dirname(md));
+  removeEmptyDirs([path.dirname(md)]);
+
+  const projectSkill = projectSkillFile(paths.repo);
+  if (generatedState(projectSkill) === 'generated') {
+    fs.rmSync(projectSkill, { force: true });
+    const skillDir = path.dirname(projectSkill);
+    removeOwnIgnore(skillDir);
+    removeEmptyDirs([skillDir, path.dirname(skillDir), path.dirname(path.dirname(skillDir))]); // factory, skills, .claude
+  }
   return loadFactoryState(paths);
 }
