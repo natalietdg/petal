@@ -10,8 +10,15 @@ const problemOf = (raw: unknown): string => {
 
 describe('defaults', () => {
   it('seeds the seven stations in order, and they validate', () => {
-    expect(DEFAULT_STATIONS.map((s) => s.name)).toEqual(['Intake', 'Research & plan', 'Build', 'Test queue', 'Integrate', 'Ship', 'Learn']);
+    expect(DEFAULT_STATIONS.map((s) => s.name)).toEqual(['Intake', 'Research & plan', 'Build', 'Test', 'Integrate', 'Ship', 'Learn']);
     expect(validateFactory(defaultFactory())).toEqual({ ok: true, factory: defaultFactory() });
+  });
+
+  it('names no person and stays generic', () => {
+    const text = JSON.stringify(DEFAULT_STATIONS);
+    expect(text).not.toMatch(/natalie|\bher\b|\bshe\b|audit|memory|push|install|\u2014/i);
+    expect(DEFAULT_STATIONS.map((s) => s.id)).toEqual(['intake', 'research-plan', 'build', 'test-queue', 'integrate', 'ship', 'learn']);
+    expect(DEFAULT_STATIONS.find((s) => s.id === 'ship')?.runner).toBe('you');
   });
 
   it('hands out copies, so editing one never changes the defaults', () => {
@@ -41,7 +48,7 @@ describe('validateFactory', () => {
     [{ stations: ['x'] }, 'Station 1 isn’t an object'],
     [{ stations: [station({ name: '   ' })] }, 'Station 1: name can’t be empty'],
     [{ stations: [station({ id: 'Bad Id' })] }, 'id may hold only'],
-    [{ stations: [station({ runner: 'robot' as never })] }, 'who runs it must be one of claude, subagent, script, natalie'],
+    [{ stations: [station({ runner: 'robot' as never })] }, 'who runs it must be one of claude, subagent, script, you'],
     [{ stations: [station({ runner: 'subagent' })] }, 'a subagent station needs an agent type'],
     [{ stations: [station({ runner: 'script', command: '  ' })] }, 'a script station needs a command'],
     [{ stations: [station({ runner: 'script', command: 'a\nb' })] }, 'the command must be one line'],
@@ -50,6 +57,12 @@ describe('validateFactory', () => {
     [{ stations: [{ ...station(), passCheck: 3 }] }, 'passCheck must be text'],
   ])('refuses %j with one line naming the problem', (raw, expected) => {
     expect(problemOf(raw)).toContain(expected);
+  });
+
+  it('reads a saved approval gate named natalie as you, so older files still load', () => {
+    const result = validateFactory({ version: 1, stations: [station({ runner: 'natalie' as never })] });
+    expect(result).toEqual({ ok: true, factory: { version: 1, stations: [station({ runner: 'you' })] } });
+    expect(problemOf({ stations: [station({ runner: 'constructor' as never })] })).toContain('who runs it must be one of'); // no prototype keys
   });
 
   it('names the station by place and name', () => {
@@ -77,9 +90,9 @@ describe('renderSkill', () => {
       expect(skill).toContain(`**Pass check:** ${s.passCheck}`);
     }
     expect(skill).toContain('**Who runs it:** a `Plan` subagent');
-    expect(skill).toContain('Run `npm run typecheck && npm test`');
+    expect(skill).toContain('Run `npm test`');
     expect(skill).toContain('Petal never runs it');
-    expect(skill).toContain('**Who runs it:** Natalie. Stop here');
+    expect(skill).toContain('**Who runs it:** The user. Stop here, show where things stand, and wait for their go-ahead');
   });
 
   it('points at the project override in the global skill only', () => {
@@ -110,7 +123,7 @@ describe('isGenerated', () => {
 
 describe('labels and ids', () => {
   it('names who runs each station for the card badge', () => {
-    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Script', 'Claude', 'Natalie approves', 'Claude']);
+    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Script', 'Claude', 'You approve', 'Claude']);
   });
 
   it('makes a unique slug id from the name', () => {
