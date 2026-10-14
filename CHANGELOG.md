@@ -4,6 +4,9 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 
 ## [1.0.7] · 2026-10-14
 - Factory starts with stations that fit any project, and the approval step is yours: "You approve".
+- During a factory run, a Station bar in the top strip shows which step Claude is on and whether it has passed.
+- Updates are easier to spot: the pill names the version, a Mac notification says when one is ready, Petal › Check for Updates… checks on demand, and a "What's new" note follows each update.
+- Petal's reply styles now cover Steps and Conclude.
 
 ## [1.0.6] · 2026-10-14
 - Icons on the top bar buttons.
