@@ -15,6 +15,15 @@ files:
   - "!**/node_modules/node-pty/bin/**"
   - "!**/node_modules/node-pty/build/Release/{obj.target,.deps,node-addon-api}/**"
   - "!**/node_modules/node-pty/build/Release/.forge-meta"
+  # Build-time only: C++ headers for node-pty, js-yaml's ESM/browser bundle (require() loads index.js), source maps.
+  - "!**/node_modules/node-addon-api/**"
+  - "!**/node_modules/node-pty/node-addon-api/**"
+  - "!**/node_modules/js-yaml/dist/**"
+  - "!**/node_modules/**/*.map"
+  # woff fallbacks never load: every @font-face lists the woff2 first and Chromium reads woff2.
+  - "!out/renderer/assets/*.woff"
+# Petal's UI is English-only; dropping Chromium's other 219 locale folders saves ~50MB unpacked. Dates still use ICU.
+electronLanguages: [en, en_GB] # en_GB keeps day-month order for non-US English
 # Petal's reply styles, copied to ~/.claude/output-styles only when the user asks.
 extraResources:
   - from: resources/output-styles
@@ -24,10 +33,11 @@ asarUnpack:
   - "**/node_modules/node-pty/**"
 mac:
   target:
+    # One build per architecture halves the download; electron-updater picks the zip whose name has "arm64" on Apple Silicon.
     - target: dmg
-      arch: universal
+      arch: [arm64, x64]
     - target: zip
-      arch: universal
+      arch: [arm64, x64]
   icon: build/icon.icns
   category: public.app-category.developer-tools
   # Unsigned by default; scripts/release.sh (npm run release) passes the Developer ID identity and turns notarize on.
@@ -37,10 +47,16 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
   # The zip is what electron-updater downloads on macOS; keep it.
-  # Both slices ship node-pty's prebuilt darwin-x64 and darwin-arm64 binaries unchanged.
+  # Applies to the zip (dmg sets its own); an explicit ${arch} keeps "x64" in the Intel name.
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
+  # Only used by the universal `npm run package` builds.
   x64ArchFiles: "**/node_modules/node-pty/prebuilds/darwin-*/**"
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
+  # lzfse, the smallest format this schema allows; scripts/release.sh re-packs it as lzma (ULMO, macOS 10.15+, Electron 44 needs 13).
+  format: ULFO
+  # The updater only downloads the zip, so the dmg stays out of latest-mac.yml and needs no blockmap.
+  writeUpdateInfo: false
 # Builds write latest-mac.yml for electron-updater; scripts/release.sh uploads to R2 behind the petal-downloads Worker.
 publish:
   provider: generic
