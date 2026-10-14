@@ -67,6 +67,11 @@ const HANDOFF_SAMPLE = {
   turns: [{ prompt: 'why did the reader switch sessions?', reply: ['**The reader now follows only the claude inside this window.**'] }],
 };
 
+// The bundled petal-magazine.md first, then a hand-made magazine.md.
+const MAGAZINE_FILES = ['petal-magazine.md', 'magazine.md'];
+export const findMagazineStyle = (stylesDir: string): string | null =>
+  MAGAZINE_FILES.map((file) => path.join(stylesDir, file)).find((file) => fs.existsSync(file)) ?? null;
+
 // Everything the Customize page shows, in one read.
 // Reading off: no styles listed and nothing to add, so nothing under ~/.claude is read.
 const NO_STYLES: OutputStyles = { dir: '', active: null, styles: [], problem: FOLDER_OFF };
@@ -74,7 +79,7 @@ const NO_PETAL_STYLES: PetalStyles = { styles: [], installable: false };
 
 function customizeState(): CustomizeState {
   const dir = claudeDir();
-  const magazinePath = dir && path.join(dir, 'output-styles', 'magazine.md');
+  const magazinePath = dir ? findMagazineStyle(path.join(dir, 'output-styles')) : null;
   const { theme, reading, cat, scene } = settings();
   return {
     config: configStore.load(),
@@ -90,7 +95,7 @@ function customizeState(): CustomizeState {
     outputStyle: dir ? activeStyleName(dir) : null,
     outputStyles: dir ? listOutputStyles(dir) : NO_STYLES,
     petalStyles: dir ? petalStyles(petalPaths()) : NO_PETAL_STYLES,
-    magazinePath: magazinePath && fs.existsSync(magazinePath) ? magazinePath : null,
+    magazinePath,
     organizer: organizer.status(),
     hookRuns: responseHook.recentRuns(),
     hookDir: responseHook.hookDir(),

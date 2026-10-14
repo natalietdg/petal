@@ -4,17 +4,19 @@ import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
 import { byId, el, isIpcError } from './dom';
-import { allDone, factsFrom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
+import { allDone, factsFrom, needsReopen, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
 
 // From code.claude.com/docs/en/setup (native install, macOS and Linux).
 export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
 export const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
 const COPIED_MS = 1400;
+export const UNSEEN_NOTE = 'Petal can’t see this while your Claude folder is off.';
 
 const view = byId('get-started');
 let saved: string[] = [];
 let installed = false;
 let pastSessions = false; // a conversation in History: an experienced user, all set from the first check
+let folderOff = false; // reading the Claude folder is off: sign-in and ask can only be ticked by hand
 let loaded = false;
 let showSteps = false; // all set: the steps fold away until she asks to see them
 const lists = new Set<HTMLElement>(); // every checklist on screen: the overlay's and the welcome's
@@ -24,7 +26,7 @@ function facts(): LiveFacts {
     const update = tabs.get(id)?.update;
     return [{ state: update?.state ?? 'none', sessionId: update?.sessionId ?? null, replies: update?.replies.length ?? 0 }];
   });
-  return factsFrom(open, installed, pastSessions);
+  return factsFrom(open, installed, pastSessions, folderOff);
 }
 
 const states = (): StepState[] => stepStates(saved, facts());
@@ -125,6 +127,7 @@ function stepRow(step: StepState, number: number): HTMLLIElement {
   badge.addEventListener('click', () => onBadge(step.id));
   const body = el('div', 'step-body');
   body.append(el('p', 'gs-title', copy.title), ...copy.body(step.done));
+  if (step.unseen) body.append(para(UNSEEN_NOTE, 'gs-unseen'));
   const check = el('p', 'step-check');
   check.append(el('span', 'step-check-label', 'Check'), ` ${copy.check}`);
   row.append(badge, body, check);
@@ -180,6 +183,7 @@ export function refresh(): void {
 }
 
 export const isComplete = (): boolean => loaded && allDone(states());
+export const reopensOnLaunch = (): boolean => loaded && needsReopen(states()); // for the snapshot run
 
 // Any past conversation in History; empty while reading her Claude folder is off.
 async function hasPastSessions(): Promise<boolean> {
@@ -191,6 +195,7 @@ async function hasPastSessions(): Promise<boolean> {
 export async function load(): Promise<void> {
   const state = await window.pastel.config.get();
   saved = isIpcError(state) ? [] : [...state.config.getStarted.done];
+  folderOff = isIpcError(state) || state.config.claudeFolder.choice !== 'allowed';
   installed = (await window.pastel.claudeInstalled()) === true;
   pastSessions = await hasPastSessions();
   loaded = true;
@@ -220,10 +225,11 @@ export async function open(): Promise<void> {
   render();
 }
 
-// On launch, after the welcome and the folder question: only while a step is still open. Reloads, since Allow may have just made History readable.
+// On launch, after the welcome and the folder question: only while a step Petal can tick is still open.
+// Reloads, since Allow may have just made History readable.
 export async function openIfIncomplete(): Promise<boolean> {
   await load();
-  if (isComplete()) return false;
+  if (!needsReopen(states())) return false;
   await open();
   return true;
 }

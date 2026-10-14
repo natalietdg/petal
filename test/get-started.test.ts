@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { STEP_IDS, allDone, cleanDone, factsFrom, stepStates, toSave, toggle, type LiveFacts, type TabFacts } from '../src/shared/get-started';
+import { STEP_IDS, allDone, needsReopen, cleanDone, factsFrom, stepStates, toSave, toggle, type LiveFacts, type TabFacts } from '../src/shared/get-started';
 
-const NONE: LiveFacts = { claudeInstalled: false, tabCount: 1, claudeRunning: false, sessionStarted: false, replied: false, pastSessions: false };
+const NONE: LiveFacts = { claudeInstalled: false, tabCount: 1, claudeRunning: false, sessionStarted: false, replied: false, pastSessions: false, folderOff: false };
 const plainTab: TabFacts = { state: 'none', sessionId: null, replies: 0 };
 const done = (saved: string[], facts: LiveFacts) => stepStates(saved, facts).filter((s) => s.done).map((s) => s.id);
 
@@ -29,7 +29,7 @@ describe('step states', () => {
 
   it('install ticks itself when claude is found', () => {
     const states = stepStates([], { ...NONE, claudeInstalled: true });
-    expect(states[0]).toEqual({ id: 'install', done: true, auto: true });
+    expect(states[0]).toEqual({ id: 'install', done: true, auto: true, unseen: false });
   });
 
   it('Add Session ticks from a second tab or a running claude', () => {
@@ -82,5 +82,28 @@ describe('what is saved', () => {
   it('cleanDone drops unknown ids and repeats', () => {
     expect(cleanDone(['ask', 'x', 'ask', 3, 'install'])).toEqual(['install', 'ask']);
     expect(cleanDone('install')).toEqual([]);
+  });
+});
+
+describe('with the Claude folder off', () => {
+  const OFF: LiveFacts = { ...NONE, folderOff: true };
+  const unseen = (facts: LiveFacts) => stepStates([], facts).filter((s) => s.unseen).map((s) => s.id);
+
+  it('sign-in and ask are marked unseen until ticked by hand', () => {
+    expect(factsFrom([plainTab], true, false, true).folderOff).toBe(true);
+    expect(unseen(OFF)).toEqual(['sign-in', 'ask']);
+    expect(unseen(NONE)).toEqual([]);
+    expect(toggle([], 'ask', OFF)).toEqual(['ask']);
+  });
+
+  it('launch does not reopen Get started for unseen steps alone', () => {
+    const seenDone = { ...OFF, claudeInstalled: true, tabCount: 2 };
+    expect(allDone(stepStates([], seenDone))).toBe(false);
+    expect(needsReopen(stepStates([], seenDone))).toBe(false);
+    expect(needsReopen(stepStates([], OFF))).toBe(true); // install still open
+  });
+
+  it('with reading on, an open sign-in still reopens it', () => {
+    expect(needsReopen(stepStates([], { ...NONE, claudeInstalled: true, tabCount: 2 }))).toBe(true);
   });
 });

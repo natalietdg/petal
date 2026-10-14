@@ -1,11 +1,13 @@
-// The repo index behind Open Repo: the last scan of her home folder, kept in <userData>/repos.json.
+// The repo index behind Open Repo: the last scan of the home folder, kept in <userData>/repos.json.
 // Reads answer from the cache at once and start a background rescan when it is older than 10 minutes.
+// No scan runs until the Claude folder choice is "allowed": a fresh Mac never sees folder prompts unasked.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
 import { isSnapshotRun, snapshotOutDir } from './snapshot-mode';
+import { claudeFolderAllowed } from './claude-folder';
 import { scanRepos, type RepoEntry } from './repo-scan';
 import { shellQuote } from './resume-command';
 
@@ -57,6 +59,7 @@ export function refresh(): Promise<RepoIndex> {
 export const isScanning = (): boolean => running !== null;
 
 export function refreshIfStale(now = Date.now()): void {
+  if (!claudeFolderAllowed()) return;
   const index = current();
   if (index && now - index.scannedAt < STALE_AFTER_MS) return;
   refresh().catch((error: Error) => console.error('[petal] repo scan failed:', error));

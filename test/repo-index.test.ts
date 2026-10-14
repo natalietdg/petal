@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as configStore from '../src/main/config-store';
 import * as repoIndex from '../src/main/repo-index';
 import { buildCdCommand, findIndexed, planRepoOpen, type RepoIndex } from '../src/main/repo-index';
 import { removeTempDirs, tempDir, tmpLeftovers, useTempUserData } from './helpers';
@@ -73,6 +74,7 @@ describe('repo index cache', () => {
     fs.mkdirSync(gitDir, { recursive: true });
     fs.writeFileSync(path.join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
 
+    configStore.save({ claudeFolder: { choice: 'allowed' } });
     expect(repoIndex.scanRoot()).toBe(path.join(outDir, 'fake-home'));
     const scanned = await repoIndex.refresh();
     expect(scanned.repos.map((r) => r.shortPath)).toEqual(['~/Code/demo']);
@@ -87,5 +89,16 @@ describe('repo index cache', () => {
     expect(repoIndex.isScanning()).toBe(true);
     await repoIndex.refresh(); // joins the running scan
     expect(repoIndex.isScanning()).toBe(false);
+  });
+
+  it('never scans the home folder until the Claude folder choice is allowed', () => {
+    useTempUserData();
+    process.env.PASTEL_SNAPSHOT = '1';
+    process.env.PASTEL_SNAPSHOT_DIR = tempDir('petal-snap-');
+    for (const choice of ['unasked', 'declined'] as const) {
+      configStore.save({ claudeFolder: { choice } });
+      repoIndex.refreshIfStale();
+      expect(repoIndex.isScanning()).toBe(false);
+    }
   });
 });

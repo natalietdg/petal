@@ -1,11 +1,13 @@
 // Renders a session's "flow of outcomes": step cards on a thin line, plus the Mermaid export bar.
 import * as diagrams from './diagrams';
 import { el, isIpcError } from './dom';
+import { hasDecisions, showDecisionsTab } from './flow-decisions';
 import { whoOf, type Who } from './ledger-actor';
 import type { AuditRow, FlowStep, Outcome, StateChange } from '../main/flow';
 import type { FlowView, Guarded } from '../shared/ipc';
 import type { FlowTarget } from '../shared/types';
 
+export { showDecisionsTab };
 export type FlowResult = Guarded<FlowView | null>;
 type StoredView = Extract<FlowView, { steps: FlowStep[] }>;
 
@@ -13,6 +15,7 @@ export interface FlowOptions {
   target: FlowTarget;
   onJump: (step: FlowStep) => void;
   onCreated?: () => void;
+  onNoDecisions?: () => void; // Decisions was asked for but the session logged none
 }
 
 // The export bar keeps its last chart source on the element, where the snapshot run reads it.
@@ -162,6 +165,7 @@ function staleNote(flow: StoredView, container: HTMLElement, options: FlowOption
 
 export function render(container: HTMLElement, flow: FlowResult, options: FlowOptions): void {
   const { target, onJump } = options;
+  if (target.kind === 'current') showDecisionsTab(readerTab('decisions'), flow);
   container.classList.add('prose');
   if (!flow) {
     container.replaceChildren(el('p', 'status empty', 'No session to show a flow for.'));
@@ -199,6 +203,7 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
 
 
 // Decisions tab: every DECISION ledger row in the session, tagged by who made it.
+// Sessions without ledger rows keep the tab hidden (flow-decisions.ts).
 const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
 const SUPERSEDES = /supersedes\s+#(\d+)/i;
 const RECOMMENDED = /\(Claude (?:recommended|proposed|suggested|chose|scoped)[^)]*\)/i;
@@ -230,10 +235,29 @@ function decisionCard(row: DecisionRow, onJump: FlowOptions['onJump']): HTMLElem
   return card;
 }
 
+const readerTab = (view: 'flow' | 'decisions') => document.querySelector<HTMLElement>(`#reader-head .view-toggle [data-view="${view}"]`);
+
+// The reader's Decisions tab follows the shown session; called on every reader update, so it fetches only on a session change.
+let readerSession: string | null | undefined;
+export function followReaderSession(sessionId: string | null | undefined): void {
+  if (sessionId === readerSession) return;
+  readerSession = sessionId;
+  void window.pastel.flow.get({ kind: 'current' }).then((result) => {
+    if (readerSession === sessionId) showDecisionsTab(readerTab('decisions'), result);
+  }, () => {});
+}
+
 export function renderDecisions(container: HTMLElement, flow: FlowResult, options: FlowOptions): void {
   const { onJump } = options;
   container.classList.add('prose');
   if (!flow || 'error' in flow || 'empty' in flow) return render(container, flow, options);
+  if (!hasDecisions(flow)) {
+    if (options.target.kind === 'current') showDecisionsTab(readerTab('decisions'), flow);
+    if (options.onNoDecisions) return options.onNoDecisions();
+    const flowTab = options.target.kind === 'current' ? readerTab('flow') : null;
+    if (flowTab) return flowTab.click(); // the reader's own toggle switches it to Flow
+    return render(container, flow, options);
+  }
   const rows = decisionRows(flow);
   const open = flow.steps.filter((s) => s.waitingOnYou).slice(-1).flatMap((s) => s.outcomes.filter((o) => o.label === 'decide'));
   const filters = el('div', 'view-toggle decision-filter');

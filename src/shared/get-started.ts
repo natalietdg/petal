@@ -13,12 +13,14 @@ export interface LiveFacts {
   sessionStarted: boolean; // a session file or transcript for it, so sign-in is behind her
   replied: boolean; // the reader has at least one reply
   pastSessions: boolean; // History has a conversation from before, so she has done all this already
+  folderOff: boolean; // reading the Claude folder is off, so sessions and replies stay unseen
 }
 
 export interface StepState {
   id: StepId;
   done: boolean;
   auto: boolean; // ticked from real state, so a click can't untick it
+  unseen: boolean; // only a hand tick can mark it, since the Claude folder is off
 }
 
 // One tab's reader state, as the renderer holds it.
@@ -28,7 +30,7 @@ export interface TabFacts {
   replies: number;
 }
 
-export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean, pastSessions = false): LiveFacts {
+export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean, pastSessions = false, folderOff = false): LiveFacts {
   return {
     claudeInstalled,
     tabCount: tabs.length,
@@ -36,6 +38,7 @@ export function factsFrom(tabs: readonly TabFacts[], claudeInstalled: boolean, p
     sessionStarted: tabs.some((t) => t.sessionId !== null || t.replies > 0),
     replied: tabs.some((t) => t.replies > 0),
     pastSessions,
+    folderOff,
   };
 }
 
@@ -45,6 +48,9 @@ const AUTO: Record<StepId, (facts: LiveFacts) => boolean> = {
   'sign-in': (f) => f.sessionStarted || f.pastSessions,
   ask: (f) => f.replied || f.pastSessions,
 };
+
+// Seen only through the Claude folder: with reading off they never tick themselves.
+const NEEDS_FOLDER: ReadonlySet<StepId> = new Set(['sign-in', 'ask']);
 
 // Known ids only, each once, in checklist order; anything else in the saved list is dropped.
 export function cleanDone(saved: unknown): StepId[] {
@@ -56,11 +62,14 @@ export function stepStates(saved: readonly string[], facts: LiveFacts): StepStat
   const ticked = new Set(cleanDone(saved));
   return STEP_IDS.map((id) => {
     const auto = AUTO[id](facts);
-    return { id, done: auto || ticked.has(id), auto };
+    return { id, done: auto || ticked.has(id), auto, unseen: facts.folderOff && !auto && NEEDS_FOLDER.has(id) };
   });
 }
 
 export const allDone = (states: readonly StepState[]): boolean => states.every((s) => s.done);
+
+// Launch reopens Get started only for a step Petal could tick itself; an unseen one waits for her.
+export const needsReopen = (states: readonly StepState[]): boolean => states.some((s) => !s.done && !s.unseen);
 
 // What to save: every step done now, so progress Petal saw survives a relaunch.
 // Install is checked afresh each launch, so only her own tick of it is kept.

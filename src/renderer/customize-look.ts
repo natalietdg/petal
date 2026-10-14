@@ -64,43 +64,56 @@ export function renderLook(): HTMLElement[] {
   ];
 }
 
-const PREVIEW = `**The organizer now reads its prompt from Customize.**
+// A neutral sample reply in Petal's research-paper shape: title, abstract, status lines, sections, sidebar, table, references.
+const PREVIEW = `**A search box now filters notes as you type.**
 
-Edits apply on the next pass, and the ==JSON format stays fixed in code== so a custom prompt can never break parsing.
+**Abstract.** The notes list has a search box above it. Typing narrows the list to notes whose title or body contains the text, and ==an empty box shows every note again==. Search runs on the notes already loaded, so it adds no network calls.
 
-Petal used to keep the organizer prompt inside the source, so changing its tone meant editing code and rebuilding the app. Now the instructions live in config.json and the answer format is appended after them.
+**Doing:** nothing running.
+**Recommend:** keep search local until the list grows past a few thousand notes.
+**Next:** try it on a long list and check it still feels instant.
 
-## What changed
+## 1. Where the search happens
 
-The prompt moved; the parser did not.
+The box filters the list in memory on each keystroke. Titles and bodies match without regard to letter case, so "Recipe" and "recipe" find the same note.
 
 > **At a glance**
-> - Interval 1–240 minutes
-> - Up to 50 sessions a pass
+> - Matches title and body
+> - Ignores letter case
+> - Escape clears the box
 
-> A custom prompt can't break the parser.
+> An empty box always shows every note.
 
-**Watch out:** a much longer prompt costs a little more per session.
+## 2. What it costs
 
-| Setting | Default |
+Filtering in memory is quick for everyday collections, and the list never waits on a server.
+
+**Watch out:** a very long list may need a search index later.
+
+*Table 1. Notes in the list and time to filter.*
+
+| Notes | Time to filter |
 |---|---|
-| Model | haiku |
-| Per pass | 12 |
+| 100 | under 1 ms |
+| 5,000 | a few ms |
 
 \`\`\`
-organizer.prompt + JSON contract + existing tags
+query → lowercase → match title or body → show
 \`\`\`
 
-## Sources
+## References
 
-- \`src/main/session-organizer.js\``;
+1. Notes app design notes, search section`;
+
+// Petal ships petal-magazine.md; it lands in ~/.claude/output-styles only after the add action.
+export const MISSING_MAGAZINE = 'Petal’s magazine style (petal-magazine.md) isn’t in ~/.claude/output-styles yet. Use “Add Petal’s reply styles” under Output styles to add it.';
 
 export function renderFormatting(): HTMLElement[] {
   const readingName = Object.fromEntries(page.state.choices.reading)[page.state.look.reading] ?? page.state.look.reading;
   const style = el('p', 'cz-note');
   style.append('Claude Code output style: ', el('strong', null, page.state.outputStyle ?? 'default'), ' (from ~/.claude/settings.json; switch it under Output styles). ');
-  if (page.state.magazinePath) style.append('Magazine guide: ', el('code', null, page.state.magazinePath), '.');
-  else style.append('No magazine.md found in ~/.claude/output-styles.');
+  if (page.state.magazinePath) style.append('Magazine style: ', el('code', null, page.state.magazinePath), '.');
+  else if (page.state.config.claudeFolder.choice === 'allowed') style.append(MISSING_MAGAZINE);
 
   const column = el('div', 'reader-column cz-preview');
   column.append(markdown.render(PREVIEW));

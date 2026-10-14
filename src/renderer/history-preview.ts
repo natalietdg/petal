@@ -49,6 +49,10 @@ export async function renderPreview(): Promise<void> {
     b.type = 'button';
     b.setAttribute('aria-selected', String(mode === state.previewMode));
     b.addEventListener('click', () => { state.previewMode = mode; renderPreview(); });
+    if (mode === 'decisions') {
+      b.hidden = true; // shown once the stored flow proves this session logged decisions
+      void window.pastel.flow.get({ kind: 'history', sessionId: session.sessionId }).then((result) => flow.showDecisionsTab(b, result), () => {});
+    }
     toggle.append(b);
   }
   const send = el('button', 'flow-button resume-button', 'Send to Claude');
@@ -162,6 +166,7 @@ async function renderFlowBody(session: Session, body: HTMLElement): Promise<void
     target,
     onJump: () => { state.previewMode = 'replies'; renderPreview(); },
     onCreated: () => { session.hasFlow = true; hooks.renderList(); },
+    onNoDecisions: () => { state.previewMode = 'flow'; renderPreview(); },
   });
 }
 

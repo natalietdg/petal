@@ -10,6 +10,7 @@ import * as sessionsPanel from './sessions-panel';
 import * as scenes from './scenes';
 import * as cat from './cat';
 import * as diagrams from './diagrams';
+import * as flow from './flow';
 import * as history from './history';
 import * as composer from './composer';
 import * as workflow from './workflow';
@@ -81,6 +82,7 @@ async function start(): Promise<void> {
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
+    flow.followReaderSession(update.sessionId);
     favorites.followReader(tab.id, update.sessionId);
     cat.setBusy(update.busy);
     readScreen(tab);
