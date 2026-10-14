@@ -10,7 +10,7 @@ const mainFiles = () => fs.readdirSync(MAIN).filter((f) => f.endsWith('.ts'));
 const GATE = /\b(claudeFolderAllowed|allowedClaudeHome)\(/;
 
 // The modules that read under ~/.claude; each asks the gate itself.
-const READERS = ['claude-session.ts', 'sessions-monitor.ts', 'history.ts', 'reader-feed.ts', 'conclusions-store.ts', 'agents-ipc.ts', 'workflow-ipc.ts', 'customize-ipc.ts'];
+const READERS = ['claude-session.ts', 'sessions-monitor.ts', 'history.ts', 'reader-feed.ts', 'conclusions-store.ts', 'agents-ipc.ts', 'workflow-ipc.ts', 'customize-ipc.ts', 'factory-ipc.ts'];
 // claudeHome() without the gate: a path only, never read. claude-cli checks an install spot exists; claude-session names a log's path.
 const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder.ts'];
 

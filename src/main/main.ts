@@ -10,6 +10,7 @@ import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
 import { registerWorkflowIpc } from './workflow-ipc';
+import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
@@ -137,6 +138,7 @@ onLookChanged(refreshMenu);
 function registerIpc(): void {
   registerHistoryIpc({ sessions, activeSession, openTab, currentTheme });
   registerWorkflowIpc({ sessions, history, organizer });
+  registerFactoryIpc({ activeSession });
   registerLookIpc();
   registerTabIpc();
 

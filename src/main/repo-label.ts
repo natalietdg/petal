@@ -34,3 +34,12 @@ export function repoLabel(cwd: string | null | undefined): string | null {
     if (path.dirname(dir) === dir) return path.basename(start) || start;
   }
 }
+
+// The git toplevel at or above cwd (a worktree's own folder), or null outside git.
+export function repoRoot(cwd: string | null | undefined): string | null {
+  if (!cwd) return null;
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if (gitDirAt(dir)) return dir;
+    if (path.dirname(dir) === dir) return null;
+  }
+}

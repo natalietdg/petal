@@ -39,6 +39,7 @@ import './notes.css';
 import './composer.css';
 import './prompt-dock.css';
 import './workflow.css';
+import './workflow-factory.css';
 import './customize.css';
 import './repos.css';
 import './welcome.css';

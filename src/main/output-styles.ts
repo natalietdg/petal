@@ -1,6 +1,7 @@
 // Her Claude Code output styles (~/.claude/output-styles/*.md), read-only.
 // Petal's only writes under ~/.claude: the `outputStyle` key of settings.json (setOutputStyle here) and
-// petal-*.md files in output-styles (petal-styles.ts, on request); nothing else there.
+// petal-*.md files in output-styles (petal-styles.ts, on request), and the factory's petal-factory.json and
+// skills/factory/SKILL.md (factory-store.ts, on save); nothing else there.
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
