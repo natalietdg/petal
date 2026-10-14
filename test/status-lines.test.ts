@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newestStatus, parseStatus, parseStatusLine } from '../src/shared/status-lines';
+import { codeFenceTracker, newestStatus, parseStatus, parseStatusLine } from '../src/shared/status-lines';
 
 const REPLY = [
   '**Cycles already live in Work.**',
@@ -61,5 +61,29 @@ describe('newestStatus', () => {
   it('is null when no reply has them', () => {
     expect(newestStatus(['a', 'b'])).toBeNull();
     expect(newestStatus([])).toBeNull();
+  });
+});
+
+describe('code fences and indentation', () => {
+  it('a shorter or different fence inside a block does not close it', () => {
+    const md = ['````md', '```', '**Doing:** inside', '~~~', '````', '**Next:** outside'].join('\n');
+    expect(parseStatus(md)).toEqual({ next: 'outside' });
+    expect(parseStatus(['~~~', '```', 'Doing: inside', '~~~', 'Doing: out'].join('\n'))).toEqual({ doing: 'out' });
+  });
+
+  it('a closing fence takes no info string; an opener may', () => {
+    expect(parseStatus(['```ts', 'Next: a', '```ts', 'Next: b', '```', 'Next: c'].join('\n'))).toEqual({ next: 'c' });
+  });
+
+  it('4-space indented lines are code, not status lines; up to 3 spaces still count', () => {
+    expect(parseStatus('    **Doing:** code sample')).toEqual({});
+    expect(parseStatus('\t**Doing:** code sample')).toEqual({});
+    expect(parseStatus('   **Doing:** real')).toEqual({ doing: 'real' });
+    expect(parseStatus('    ```\nDoing: x')).toEqual({ doing: 'x' }); // an indented fence opens nothing
+  });
+
+  it('tracker marks fence lines and their contents', () => {
+    const inCode = codeFenceTracker();
+    expect(['a', '```js', 'b', '``', '```', 'c', '``` x`y', 'd'].map(inCode)).toEqual([false, true, true, true, true, false, false, false]);
   });
 });

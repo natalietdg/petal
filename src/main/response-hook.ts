@@ -44,6 +44,7 @@ This is a sample reply sent by "Test hook". A real one arrives each time Claude 
 
 const seen = new Set<string>();
 const runs: HookRun[] = [];
+const live = new Set<ChildProcess>(); // running hooks, stopped when Petal quits
 
 export const hookDir = (): string => path.join(app.getPath('userData'), 'hook');
 const safeName = (id: string) => String(id).replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64) || 'reply';
@@ -82,6 +83,17 @@ function notify(title: string | null | undefined, markdown: string): void {
   new Notification({ title: title || 'Claude replied', body: firstLine(markdown) }).show();
 }
 
+// Own process group, so this also stops whatever the login shell started.
+function killGroup(child: ChildProcess): void {
+  try { process.kill(-(child.pid ?? NaN), 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+}
+
+// On quit: hooks run detached, so without this they outlive Petal.
+export function stopAllHooks(): void {
+  for (const child of live) killGroup(child);
+  live.clear();
+}
+
 // Resolves with the run record; never rejects, so callers can fire and forget.
 export async function runCommand(command: string, { replyId, markdown, sessionId, title, cwd, test = false, timeoutMs = TIMEOUT_MS }: RunOptions): Promise<HookRun> {
   const started = Date.now();
@@ -104,12 +116,12 @@ export async function runCommand(command: string, { replyId, markdown, sessionId
       if (done) return;
       done = true;
       clearTimeout(timer);
+      if (child) live.delete(child);
       resolve(record({ ...base, exitCode, timedOut, ms: Date.now() - started, stderr: `${extra}${stderr}`.trim().slice(0, STDERR_CHARS) }));
     };
-    // Own process group, so the timeout also stops whatever the login shell started.
     const timer = setTimeout(() => {
       timedOut = true;
-      try { process.kill(-(child?.pid ?? NaN), 'SIGKILL'); } catch { child?.kill('SIGKILL'); }
+      if (child) killGroup(child);
     }, timeoutMs);
     try {
       child = spawn(process.env.SHELL || '/bin/zsh', ['-lc', command], { cwd: dir, env, detached: true, stdio: ['pipe', 'ignore', 'pipe'] });
@@ -117,6 +129,7 @@ export async function runCommand(command: string, { replyId, markdown, sessionId
       finish(null, `Could not start: ${(error as Error).message}`);
       return;
     }
+    live.add(child);
     child.stderr?.on('data', (chunk) => { if (stderr.length < STDERR_CHARS * 4) stderr += chunk; });
     child.stdin?.on('error', () => {}); // a command that ignores stdin closes the pipe early
     child.stdin?.end(markdown);

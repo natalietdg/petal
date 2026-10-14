@@ -201,6 +201,23 @@ describe('response-hook timeout', () => {
     expect(leftover).toBe('');
   });
 
+  it('stopAllHooks kills running hooks and their background children', async () => {
+    const marker = `${(Math.random() * 1000 + 100).toFixed(3)}`;
+    const run = hook.runCommand(`sleep ${marker} & wait`, { replyId: 'r5', markdown: 'x', cwd: work, timeoutMs: 20_000 });
+    for (let i = 0; i < 50; i += 1) {
+      try { execSync(`pgrep -f "sleep ${marker}"`); break; } catch { await new Promise((resolve) => setTimeout(resolve, 50)); }
+    }
+    const t0 = Date.now();
+    hook.stopAllHooks();
+    const done = await run;
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(done.exitCode).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    let leftover = '';
+    try { leftover = execSync(`pgrep -f "sleep ${marker}"`).toString(); } catch { /* exit 1: nothing found */ }
+    expect(leftover).toBe('');
+  });
+
   it('a fast command is not marked timed out', async () => {
     const run = await hook.runCommand('true', { replyId: 'fast', markdown: 'x', timeoutMs: 5000 });
     expect(run).toMatchObject({ exitCode: 0, timedOut: false });

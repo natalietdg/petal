@@ -11,6 +11,7 @@ import type { RestartResult, UpdateNote } from '../shared/ipc';
 
 export const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 export const CLAUDE_RUNNING_NOTE = 'Claude is still running in Petal. Restart once it finishes.';
+export const COMMAND_RUNNING_NOTE = 'A command is still running in a Petal tab. Restart once it finishes.';
 export const NOT_READY_NOTE = 'No update is ready yet.';
 export const NOTIFY_TITLE = 'Petal update ready';
 export const notifyBody = (version: string): string => `Version ${version} downloaded. Restart Petal to get it.`;
@@ -34,6 +35,7 @@ export interface UpdaterEnv {
   isDeveloperIdSigned: () => Promise<boolean>;
   loadUpdater: () => Promise<Updater>;
   claudeRunning: () => Promise<boolean>;
+  commandRunning: () => Promise<boolean>; // a foreground job in any Petal tab, which quitting would SIGHUP
   currentVersion: string;
   onReady: (version: string) => void;
   onNote: (note: UpdateNote) => void;
@@ -111,10 +113,11 @@ export function checkForUpdatesNow(env: Pick<UpdaterEnv, 'onReady' | 'onNote'>):
   check(); // before startUpdater has loaded the updater, the launch check reports instead
 }
 
-// The pill's Restart: never while a Claude runs inside Petal, since quitting would cut it off.
-export async function restartToUpdate(env: Pick<UpdaterEnv, 'claudeRunning'>): Promise<RestartResult> {
+// The pill's Restart: never while a Claude or any other foreground command runs in Petal, since quitting would cut it off.
+export async function restartToUpdate(env: Pick<UpdaterEnv, 'claudeRunning' | 'commandRunning'>): Promise<RestartResult> {
   if (!readyVersion || !updater) return { note: NOT_READY_NOTE };
   if (await env.claudeRunning()) return { note: CLAUDE_RUNNING_NOTE };
+  if (await env.commandRunning()) return { note: COMMAND_RUNNING_NOTE };
   updater.quitAndInstall();
   return { restarting: true };
 }
@@ -153,12 +156,33 @@ function showNotification(version: string): void {
 
 const claudeInPetal = async (): Promise<boolean> => claudeRunsUnder(process.pid, await listProcesses());
 
+export interface TerminalRow { pid: number; pgid: number; tpgid: number }
+
+// A shell at its prompt owns its terminal's foreground group; anything else in front is a running command.
+export const foregroundJobRunning = (shellPids: readonly number[], rows: readonly TerminalRow[]): boolean =>
+  rows.some((row) => shellPids.includes(row.pid) && row.tpgid > 0 && row.tpgid !== row.pgid);
+
+export const parseTerminalRows = (stdout: string): TerminalRow[] => stdout.split('\n').flatMap((line) => {
+  const match = /^\s*(\d+)\s+(\d+)\s+(-?\d+)\s*$/.exec(line);
+  return match ? [{ pid: Number(match[1]), pgid: Number(match[2]), tpgid: Number(match[3]) }] : [];
+});
+
+// The shared ps listing has no terminal groups, so this asks ps for just the tab shells.
+async function commandInPetal(): Promise<boolean> {
+  const shellPids = [...(await import('./tabs')).sessions.values()].map((s) => s.pty.pid);
+  if (!shellPids.length) return false;
+  const stdout = await new Promise<string>((resolve) =>
+    execFile('/bin/ps', ['-o', 'pid=,pgid=,tpgid=', '-p', shellPids.join(',')], (error, out) => resolve(error && !out ? '' : out)));
+  return foregroundJobRunning(shellPids, parseTerminalRows(stdout));
+}
+
 export const liveEnv = (): UpdaterEnv => ({
   isPackaged: app.isPackaged,
   isSnapshot: isSnapshotRun(),
   isDeveloperIdSigned,
   loadUpdater: async () => (await import('electron-updater')).autoUpdater,
   claudeRunning: claudeInPetal,
+  commandRunning: commandInPetal,
   currentVersion: app.getVersion(),
   onReady: (version) => BrowserWindow.getAllWindows().forEach((win) => send(win.webContents, 'update:ready', { version })),
   onNote: (note) => BrowserWindow.getAllWindows().forEach((win) => send(win.webContents, 'update:note', note)),

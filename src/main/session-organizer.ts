@@ -12,7 +12,7 @@ import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import type { ListedSession } from './history';
 import type { TagsData } from './tags-store';
-import { writeJsonAtomic } from './atomic-file';
+import { readJsonOrSetAside, writeJsonAtomic } from './atomic-file';
 import { counters, isSnapshotRun } from './snapshot-mode';
 
 const FIRST_RUN_DELAY_MS = 20_000;
@@ -71,12 +71,8 @@ let lastPass: OrganizerStatus['lastPass'] = null; // shown on the Customize page
 let unsubscribe: (() => void) | null = null; // stops listening for config edits
 
 export function load(): OrganizerStore {
-  try {
-    const data: unknown = JSON.parse(fs.readFileSync(storeFile(), 'utf8'));
-    return data && typeof data === 'object' && !Array.isArray(data) ? (data as OrganizerStore) : {};
-  } catch {
-    return {};
-  }
+  const data = readJsonOrSetAside(storeFile());
+  return data && typeof data === 'object' && !Array.isArray(data) ? (data as OrganizerStore) : {};
 }
 
 // Read-only view for hot paths (every tab label, every reader tick): re-read only when the file changes.

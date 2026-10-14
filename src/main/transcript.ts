@@ -31,13 +31,17 @@ export function splitCompleteLines(carry: Buffer, chunk: Buffer): { lines: strin
 export class JsonlTail {
   private readonly file: string;
   private readonly onLines: (lines: string[]) => void;
+  private readonly onRestart: (() => void) | undefined;
   private offset = 0;
+  private inode: number | null = null;
   private partialLine: Buffer = Buffer.alloc(0);
   private watcher: fs.FSWatcher | null = null;
 
-  constructor(file: string, onLines: (lines: string[]) => void) {
+  // onRestart: the file was truncated or replaced, so everything read so far is gone and lines come again from the top.
+  constructor(file: string, onLines: (lines: string[]) => void, onRestart?: () => void) {
     this.file = file;
     this.onLines = onLines;
+    this.onRestart = onRestart;
     this.poll();
   }
 
@@ -79,7 +83,10 @@ export class JsonlTail {
   private readAppended(): void {
     let size: number;
     try {
-      size = fs.statSync(this.file).size;
+      const stat = fs.statSync(this.file);
+      size = stat.size;
+      if (size < this.offset || (this.inode !== null && stat.ino !== this.inode)) this.restart();
+      this.inode = stat.ino;
     } catch {
       return;
     }
@@ -104,6 +111,12 @@ export class JsonlTail {
     if (lines.length) this.onLines(lines);
   }
 
+  private restart(): void {
+    this.offset = 0;
+    this.partialLine = Buffer.alloc(0);
+    this.onRestart?.();
+  }
+
   stop(): void {
     this.unwatch();
   }
@@ -111,12 +124,18 @@ export class JsonlTail {
 
 export class TranscriptTail {
   private readonly onUpdate: OnTranscript;
-  private readonly collector = new ReplyCollector();
+  private collector = new ReplyCollector();
   private readonly tail: JsonlTail;
 
   constructor(file: string, onUpdate: OnTranscript) {
     this.onUpdate = onUpdate;
-    this.tail = new JsonlTail(file, (lines) => this.add(lines));
+    this.tail = new JsonlTail(file, (lines) => this.add(lines), () => this.restart());
+  }
+
+  // A rewritten log is re-read from the top; the old replies go first so none is counted twice.
+  private restart(): void {
+    this.collector = new ReplyCollector();
+    this.onUpdate(this.view());
   }
 
   // Called on every session tick as a fallback; fs.watch reads new lines as soon as they land.

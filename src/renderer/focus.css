@@ -4,6 +4,7 @@
 #app.focus-mode :is(#divider, #terminal-pane) { height: 0; overflow: hidden; }
 #app.focus-mode :is(#sessions-dock, #reader-head, #prompt-dock, #composer, #cat, .scene-tip, .scene-popover, #notes-panel, #agent-panel, #reader-conclusion-pin) { display: none !important; }
 #app.focus-mode #reader-area #reader { margin-right: 0; }
+#app.focus-mode #reader:focus { outline: none; } /* focused only so Space and arrows scroll it */
 
 .focus-button {
   display: inline-flex;
