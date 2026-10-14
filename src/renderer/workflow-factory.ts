@@ -22,7 +22,7 @@ interface View {
 }
 
 const SAVED = 'Saved. Claude follows this from your next message.';
-const RUNNER_NAMES: Record<Runner, string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', natalie: 'Natalie (approval gate)' };
+const RUNNER_NAMES: Record<Runner, string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', you: 'You (approval gate)' };
 
 const PATHS = {
   left: 'M14.5 6l-6 6 6 6',

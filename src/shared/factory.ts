@@ -1,7 +1,7 @@
 // The software factory: ordered stations every build, feature or fix goes through, and the skill text Claude reads.
 // Pure: main/factory-store.ts reads and writes the files, renderer/workflow-factory.ts edits the stations.
 
-export const RUNNERS = ['claude', 'subagent', 'script', 'natalie'] as const;
+export const RUNNERS = ['claude', 'subagent', 'script', 'you'] as const;
 export type Runner = (typeof RUNNERS)[number];
 
 export interface Station {
@@ -33,53 +33,53 @@ export const DEFAULT_STATIONS: readonly Station[] = [
   {
     id: 'intake',
     name: 'Intake',
-    instructions: 'Turn the request into a ticket file: the exact quote, your interpretation, and the acceptance checks. If anything is ambiguous, ask once, every question in one batch, then proceed.',
-    passCheck: 'The ticket file holds the exact quote, the interpretation and acceptance checks; open questions are answered.',
+    instructions: 'Restate the request in your own words and list the acceptance checks. If anything is unclear, ask all your questions at once before starting.',
+    passCheck: 'The request, its acceptance checks and any open questions are written down, and the questions are answered.',
     runner: 'claude',
   },
   {
     id: 'research-plan',
     name: 'Research & plan',
-    instructions: 'Read the code the ticket touches. List every file to change and the risks before any code is written.',
-    passCheck: 'The plan names each file touched and each risk.',
+    instructions: 'Read the code the change touches. List the files to change and the risks before writing any code.',
+    passCheck: 'The plan names each file to change and each risk.',
     runner: 'subagent',
     agentType: 'Plan',
   },
   {
     id: 'build',
     name: 'Build',
-    instructions: 'Build in a fresh git worktree per ticket, on its own branch. Stage explicit paths only.',
-    passCheck: 'The ticket branch builds and typechecks in its own worktree.',
+    instructions: 'Make the change on its own branch, following the plan. Keep it to what the request asks for.',
+    passCheck: 'The change is complete and the project builds.',
     runner: 'subagent',
     agentType: 'general-purpose',
   },
   {
     id: 'test-queue',
-    name: 'Test queue',
-    instructions: 'Queue the branch for the test gate; one gate runs at a time. A failing step reruns once on its own: passing alone means flaky, failing again means real.',
-    passCheck: '0 FAIL, or every failure marked flaky or real with its rerun as evidence.',
+    name: 'Test',
+    instructions: 'Run the tests. Fix any failure the change caused, then run them again.',
+    passCheck: 'All tests pass.',
     runner: 'script',
-    command: 'npm run typecheck && npm test',
+    command: 'npm test',
   },
   {
     id: 'integrate',
     name: 'Integrate',
-    instructions: 'Merge the passing branches, run the gate on the combined tree, and install only when it shows 0 FAIL.',
-    passCheck: 'The combined tree shows 0 FAIL and the build is installed.',
+    instructions: 'Bring the branch up to date with the main branch, resolve any conflicts, and run the tests again.',
+    passCheck: 'The branch is up to date with the main branch and the tests still pass.',
     runner: 'claude',
   },
   {
     id: 'ship',
     name: 'Ship',
-    instructions: 'Only on “push”: bump the version, write the changelog from the tickets, publish the release, then verify a fresh download.',
-    passCheck: 'A fresh download of the release opens and shows the new version.',
-    runner: 'natalie',
+    instructions: 'Summarise what changed and how it was checked, then wait for the go-ahead before merging or releasing.',
+    passCheck: 'The change is approved and merged or released.',
+    runner: 'you',
   },
   {
     id: 'learn',
     name: 'Learn',
-    instructions: 'Append the audit entries, write a short retro, and save what is worth keeping to memory.',
-    passCheck: 'Audit entries, retro and memory are updated.',
+    instructions: 'Note what went well, what did not, and anything worth doing differently next time.',
+    passCheck: 'A short retro is written.',
     runner: 'claude',
   },
 ];
@@ -92,7 +92,7 @@ export function runnerLabel(station: Pick<Station, 'runner' | 'agentType'>): str
     case 'claude': return 'Claude';
     case 'subagent': return station.agentType ? `Subagent · ${station.agentType}` : 'Subagent';
     case 'script': return 'Script';
-    case 'natalie': return 'Natalie approves';
+    case 'you': return 'You approve';
   }
 }
 
@@ -106,6 +106,9 @@ export function newStationId(name: string, taken: readonly string[]): string {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isRunner = (value: unknown): value is Runner => RUNNERS.some((r) => r === value);
+// Files saved before the rename name the approval gate 'natalie'; read it as 'you'.
+const LEGACY_RUNNERS: Record<string, Runner> = { natalie: 'you' };
+const migrateRunner = (value: unknown): unknown => (typeof value === 'string' && Object.hasOwn(LEGACY_RUNNERS, value) ? LEGACY_RUNNERS[value] : value);
 
 // One station, trimmed, unknown keys dropped; a string names what is wrong.
 function validateStation(raw: unknown, place: string): Station | string {
@@ -126,13 +129,14 @@ function validateStation(raw: unknown, place: string): Station | string {
   for (const field of [id, name, instructions, passCheck]) if (typeof field !== 'string') return field.problem;
   const named = `${place} (“${name as string}”)`;
   if (!/^[a-z0-9-]+$/.test(id as string)) return `${named}: id may hold only a–z, 0–9 and dashes.`;
-  if (!isRunner(raw.runner)) return `${named}: who runs it must be one of ${RUNNERS.join(', ')}.`;
-  const station: Station = { id: id as string, name: name as string, instructions: instructions as string, passCheck: passCheck as string, runner: raw.runner };
-  const extra = raw.runner === 'subagent' ? 'agentType' : raw.runner === 'script' ? 'command' : null;
+  const runner = migrateRunner(raw.runner);
+  if (!isRunner(runner)) return `${named}: who runs it must be one of ${RUNNERS.join(', ')}.`;
+  const station: Station = { id: id as string, name: name as string, instructions: instructions as string, passCheck: passCheck as string, runner };
+  const extra = runner === 'subagent' ? 'agentType' : runner === 'script' ? 'command' : null;
   if (extra) {
     const value = text(extra, false);
     if (typeof value !== 'string') return value.problem.replace(place, named);
-    if (!value) return `${named}: a ${raw.runner} station needs ${extra === 'agentType' ? 'an agent type' : 'a command'}.`;
+    if (!value) return `${named}: a ${runner} station needs ${extra === 'agentType' ? 'an agent type' : 'a command'}.`;
     if (/[\r\n]/.test(value)) return `${named}: ${extra === 'agentType' ? 'the agent type' : 'the command'} must be one line.`;
     station[extra] = value;
   }
@@ -161,7 +165,7 @@ function whoRuns(station: Station): string {
     case 'claude': return 'Claude, in this session.';
     case 'subagent': return `a \`${station.agentType}\` subagent. Brief it with the ticket and what earlier stations found; check its report against the pass check.`;
     case 'script': return `a script. Run \`${station.command}\` and read its output; Petal never runs it for you.`;
-    case 'natalie': return 'Natalie. Stop here, show where things stand, and wait for her go-ahead before the next station.';
+    case 'you': return 'The user. Stop here, show where things stand, and wait for their go-ahead before the next station.';
   }
 }
 

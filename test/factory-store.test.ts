@@ -70,11 +70,11 @@ describe('global save', () => {
   it('reflects add, remove and reorder in the skill', () => {
     const factory = defaultFactory();
     factory.stations.splice(1, 1); // remove Research & plan
-    factory.stations.push({ id: 'review', name: 'Review', instructions: 'Read the diff.', passCheck: 'No open comments.', runner: 'natalie' });
+    factory.stations.push({ id: 'review', name: 'Review', instructions: 'Read the diff.', passCheck: 'No open comments.', runner: 'you' });
     [factory.stations[0], factory.stations[1]] = [factory.stations[1], factory.stations[0]];
     saveFactory(paths, 'global', factory);
     const headings = read(skillFile(claudeDir)).split('\n').filter((l) => l.startsWith('## '));
-    expect(headings).toEqual(['## 1. Build', '## 2. Intake', '## 3. Test queue', '## 4. Integrate', '## 5. Ship', '## 6. Learn', '## 7. Review']);
+    expect(headings).toEqual(['## 1. Build', '## 2. Intake', '## 3. Test', '## 4. Integrate', '## 5. Ship', '## 6. Learn', '## 7. Review']);
   });
 
   it('refuses an invalid factory and writes nothing', () => {

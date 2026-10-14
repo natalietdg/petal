@@ -71,7 +71,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await nodeCount(7), 'Workflow › Factory opens with seven cards');
     check(JSON.stringify(await js(NAMES)) === JSON.stringify(DEFAULT_STATIONS.map((s) => s.name)), `default stations in order: ${JSON.stringify(await js(NAMES))}`);
     const badges: string[] = await js("[...document.querySelectorAll('#workflow .fx-runner')].map((b) => b.textContent)");
-    check(badges.length === 7 && badges[1] === 'Subagent · Plan' && badges[5] === 'Natalie approves', `who-runs badges: ${JSON.stringify(badges)}`);
+    check(badges.length === 7 && badges[1] === 'Subagent · Plan' && badges[5] === 'You approve', `who-runs badges: ${JSON.stringify(badges)}`);
     check((await js("document.querySelectorAll('#workflow .fx-arrow svg').length")) === 6, 'six arrows between seven cards');
     check(/isn’t following a factory yet/.test(await js(FOLLOWS)), `before any save: ${await js(FOLLOWS)}`);
     check(!fs.existsSync(skill), 'opening writes nothing');
@@ -89,15 +89,15 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(afterEdit.includes(NEW_TEXT) && afterEdit.split('\n')[4] === GENERATED_MARKER && afterEdit.startsWith('---\nname: factory\n'), `SKILL.md has the edit, frontmatter and marker (${afterEdit.length} chars)`);
     check(/Claude follows the global factory/.test(await js(FOLLOWS)), `scope line after save: ${await js(FOLLOWS)}`);
 
-    // Add after Build, as a Natalie gate.
+    // Add after Build, as an approval gate.
     await run(click('[data-station="build"] [data-tool="add"]'));
     await waitFor(() => js("document.activeElement?.id === 'fx-name'"), 3000);
     await run(type('#fx-name', 'Review'));
-    await run(type('#fx-runner', 'natalie', 'change'));
-    await run(type('#fx-pass', 'She has read the diff.'));
+    await run(type('#fx-runner', 'you', 'change'));
+    await run(type('#fx-pass', 'You have read the diff.'));
     await run(click('.fx-save'));
     check(await nodeCount(8), 'Add station puts an eighth card in');
-    check(headings(skill)[3] === '## 4. Review' && fs.readFileSync(skill, 'utf8').includes('She has read the diff.'), `added station in SKILL.md: ${JSON.stringify(headings(skill))}`);
+    check(headings(skill)[3] === '## 4. Review' && fs.readFileSync(skill, 'utf8').includes('You have read the diff.'), `added station in SKILL.md: ${JSON.stringify(headings(skill))}`);
 
     // Remove it, through the inline confirm.
     await run(click('[data-station="review"] [data-tool="remove"]'));
