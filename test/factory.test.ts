@@ -104,6 +104,16 @@ describe('renderSkill', () => {
     expect(project).not.toContain('name: factory');
   });
 
+  it('tells Claude to add the Station line with the saved factory\'s total and names', () => {
+    const four = { version: 1 as const, stations: ['Scope', 'Code', 'Check', 'Release'].map((name, i) => station({ id: `s${i}`, name })) };
+    const text = renderSkill(four, 'project');
+    expect(text).toContain('`**Station:** <n>/4 <station name> · <met or not yet>`');
+    expect(text).toContain('`**Station:** 1/4 Scope · not yet`');
+    expect(text).toContain('after **Next:**');
+    expect(skill).toContain('`**Station:** <n>/7 <station name>');
+    expect(text).not.toMatch(/—|Natalie/);
+  });
+
   it('carries edited text through verbatim and says when a pass check is missing', () => {
     const text = renderSkill({ version: 1, stations: [station({ name: 'Only', instructions: 'Say “hi” <b>twice</b>.' })] }, 'project');
     expect(text).toContain('## 1. Only\n\n**Who runs it:** Claude, in this session.\n\nSay “hi” <b>twice</b>.\n\n**Pass check:** none set');

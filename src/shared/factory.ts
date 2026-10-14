@@ -182,6 +182,12 @@ function renderStations(stations: readonly Station[]): string {
 
 const INTRO = 'Follow these stations in order for every build, feature or fix request. A station is done only when its pass check holds; say which station you are on as you go.';
 
+// The reply line Petal pins as a progress bar in the reader's status strip (shared/station-line.ts parses it).
+function stationLineRule(stations: readonly Station[]): string {
+  const first = stations[0]?.name ?? 'Intake';
+  return `**Station line.** While you work through these stations, every reply carries exactly one extra line right after its status lines (after **Next:**): \`**Station:** <n>/${stations.length} <station name> · <met or not yet>\`. Use the number and name of the station you are on, as written below, and say \`met\` once its pass check holds, \`not yet\` until then. For example: \`**Station:** 1/${stations.length} ${first} · not yet\`.`;
+}
+
 // global: SKILL.md with frontmatter (Claude Code reads it from line 1), the marker as the first body line.
 // project: <repo>/.petal/factory.md, the marker on line 1.
 export function renderSkill(factory: Factory, scope: 'global' | 'project', projectName?: string): string {
@@ -191,6 +197,8 @@ export function renderSkill(factory: Factory, scope: 'global' | 'project', proje
     scope === 'project' ? `# Software factory for ${projectName ?? 'this project'}` : '# Software factory',
     '',
     INTRO,
+    '',
+    stationLineRule(factory.stations),
     ...(scope === 'global' ? ['', 'If the project you are working in has `.petal/factory.md` at its root, follow that file instead of the stations below.'] : []),
     '',
     renderStations(factory.stations),

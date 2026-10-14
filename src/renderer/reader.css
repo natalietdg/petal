@@ -462,6 +462,17 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 .status-strip .status-chip { font-size: 10px; }
 .status-strip .status-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
+/* Factory Station: one segment per station; earlier ones filled, the current one filled when met and outlined when not yet. */
+.status-station { --pill: transparent; --ink: var(--reader-fg); }
+.station-progress { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--reader-fg); }
+.station-segs { display: inline-flex; gap: 2px; flex: none; }
+.station-seg { width: 10px; height: 6px; border-radius: 2px; border: 1px solid var(--rule); box-sizing: border-box; }
+.station-seg.done { background: var(--muted); border-color: var(--muted); }
+.station-seg.current { border-color: currentColor; }
+.station-seg.current.met { background: currentColor; }
+.station-seg.current.pending { border-width: 1.5px; }
+.station-caption { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
 /* Older replies: collapsed and quieter. */
 /* Earlier turns sit above the newest reply, a touch smaller, each under a hairline. */
 #older { margin-bottom: 2.4em; }
