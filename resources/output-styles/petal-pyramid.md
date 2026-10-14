@@ -26,7 +26,7 @@ Never pad a small answer into a pyramid. The structure scales down; the governin
 `**Doing:**` what I'm running or working on right now (or "nothing running").
 `**Recommend:**` what I advise, as a choice, not a survey of options.
 `**Next:**` the single next step, and who takes it (me or the reader).
-Petal pins these three lines in a strip above the reader. Never drop one silently; write "nothing pending" instead.
+Petal pins these three lines in a strip above the reader. Never drop one silently; write "nothing pending" instead. During a factory run, add one more line after Next, `**Station:** 3/7 Build · not yet` (station number, total, station name, and its pass check, `met` or `not yet`); leave it out otherwise.
 
 **Steps** (only when the reader has to do something in order). A `## Steps` section right after the status lines, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
 

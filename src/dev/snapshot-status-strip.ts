@@ -83,6 +83,17 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
   append('three', 'A reply with no status lines.');
   await waitFor(async () => (await js("document.getElementById('latest').textContent")).includes('A reply with no status lines.'), 6000);
   check(await stripShows('#reader-head', ['second pass, plain label', 'reread the trace']), 'a newer reply without lines keeps the newest that has them');
+  // Factory: a Station line after Next pins as a 7-segment bar and joins the reply's status block.
+  append('station', `${STATUS_REPLY.split('\n').slice(0, 6).join('\n')}\n**Station:** 3/7 Build · not yet`);
+  const station = await waitFor(async () => js(`(() => {
+    const bar = document.querySelector('#reader-head .status-strip .status-station [role="progressbar"]');
+    if (!bar) return null;
+    return { now: bar.getAttribute('aria-valuenow'), max: bar.getAttribute('aria-valuemax'), caption: bar.querySelector('.station-caption')?.textContent,
+      segs: bar.querySelectorAll('.station-seg').length, done: bar.querySelectorAll('.station-seg.done').length, pending: bar.querySelectorAll('.station-seg.current.pending').length,
+      inBody: !!document.querySelector('#latest .status-block .status-station'), bodyText: /Station:/.test(document.getElementById('latest').textContent) };
+  })()`), 6000);
+  check(station && station.now === '3' && station.max === '7' && station.caption === 'Build · 3/7' && station.segs === 7 && station.done === 2 && station.pending === 1 && station.inBody && !station.bodyText,
+    `a Station line pins a 7-segment bar and leaves no raw text: ${JSON.stringify(station)}`);
   append('four', STATUS_REPLY);
   check(await stripShows('#reader-head', [DOING, RECOMMEND, NEXT]), 'back to the three lines for the look pass');
 

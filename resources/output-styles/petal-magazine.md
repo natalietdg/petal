@@ -22,6 +22,8 @@ Never pad a small answer into a feature.
 
 **Dek.** The paragraph right after the headline: one or two sentences holding the whole answer, what was found or done and what it means for the reader. No "Abstract." or any label. Wrap the single most important phrase in `==double equals==`.
 
+**Station** (only during a factory run). Right after the dek, one line: `**Station:** 3/7 Build · not yet`, giving the station number, the total, the station name and its pass check, `met` or `not yet`. Petal pins it as a progress bar above the reader; leave it out otherwise.
+
 **Steps** (only when the reader has to do something in order: a setup, a fix, a launch chain). A `## Steps` section right after the dek, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
 
 **Lede.** The first body paragraph pulls the reader in: the concrete moment, the surprising detail, the thing that changed. Two to four sentences. Petal sets it with a drop cap.

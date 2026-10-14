@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
 import { linkLabel } from '../shared/link-label';
+import { parseStationLine, stationBarHtml, type StationProgress } from '../shared/station-line';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
 
@@ -23,9 +24,9 @@ const highlight: TokenizerAndRendererExtension = {
   },
 };
 
-// A run of Doing / Recommend / Next lines becomes one block of labelled rows.
-const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next)(?:\*\*|__)?\s*:/i;
-interface StatusRow { key: StatusKey; tokens: Token[] }
+// A run of Doing / Recommend / Next (and a factory Station) lines becomes one block of labelled rows.
+const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next|station)(?:\*\*|__)?\s*:/i;
+type StatusRow = { key: StatusKey; tokens: Token[] } | { key: 'station'; station: StationProgress };
 const statusBlock: TokenizerAndRendererExtension = {
   name: 'statusBlock',
   level: 'block',
@@ -39,16 +40,19 @@ const statusBlock: TokenizerAndRendererExtension = {
     const rows: StatusRow[] = [];
     for (const line of src.split('\n')) {
       const status = parseStatusLine(line);
-      if (!status) break;
+      const station = status ? null : parseStationLine(line);
+      if (status) rows.push({ key: status.key, tokens: this.lexer.inlineTokens(status.text) });
+      else if (station) rows.push({ key: 'station', station });
+      else break;
       length += line.length + 1;
-      rows.push({ key: status.key, tokens: this.lexer.inlineTokens(status.text) });
     }
     const raw = src.slice(0, length);
     return rows.length ? { type: 'statusBlock', raw, rows } : undefined;
   },
   renderer(token) {
-    const rows = (token.rows as StatusRow[]).map(({ key, tokens }) =>
-      `<div class="status-row status-${key}"><span class="status-chip">${STATUS_TITLES[key]}</span><span class="status-text">${this.parser.parseInline(tokens)}</span></div>`);
+    const rows = (token.rows as StatusRow[]).map((row) => row.key === 'station'
+      ? `<div class="status-row status-station"><span class="status-chip">Station</span>${stationBarHtml(row.station)}</div>`
+      : `<div class="status-row status-${row.key}"><span class="status-chip">${STATUS_TITLES[row.key]}</span><span class="status-text">${this.parser.parseInline(row.tokens)}</span></div>`);
     return `<div class="status-block">${rows.join('')}</div>`;
   },
 };

@@ -120,6 +120,14 @@ describe('bundled styles', () => {
     }
   });
 
+  it('each teach the factory Station line, with both pass states', () => {
+    for (const [file, text] of texts) {
+      for (const shape of ['`**Station:** 3/7 Build · not yet`', '`met`', '`not yet`', 'factory run']) {
+        expect(text.includes(shape) ? shape : `${file} missing ${shape}`).toBe(shape);
+      }
+    }
+  });
+
   // The conclusion banner and tickable steps only appear if every style asks for them.
   it('each teach the Conclude block and the Steps section', () => {
     for (const [file, text] of texts) {
