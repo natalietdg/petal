@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
-import { PROJECT_SKILL_PATH, defaultFactory, isGenerated, renderSkill, validateFactory, type Factory } from '../shared/factory';
+import { defaultFactory, isGenerated, renderSkill, validateFactory, type Factory } from '../shared/factory';
 
 export type FactoryScope = 'global' | 'project';
 // What Claude follows right now: the project's file, the global skill, nothing yet, or a factory skill she wrote herself.
@@ -34,6 +34,8 @@ export const globalJson = (claudeDir: string): string => path.join(claudeDir, 'p
 export const skillFile = (claudeDir: string): string => path.join(claudeDir, 'skills', 'factory', 'SKILL.md');
 export const projectJson = (repo: string): string => path.join(repo, '.petal', 'factory.json');
 export const projectMd = (repo: string): string => path.join(repo, '.petal', 'factory.md');
+// Repo-level project skill, not ~/.claude: Claude Code loads it from the repo; a personal skill of the same name wins.
+const PROJECT_SKILL_PATH = '.claude/skills/factory/SKILL.md';
 export const projectSkillFile = (repo: string): string => path.join(repo, ...PROJECT_SKILL_PATH.split('/'));
 const SELF_IGNORE = '*\n'; // ignores the folder it sits in, itself included
 

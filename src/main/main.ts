@@ -9,6 +9,7 @@ import { claudeFixture, folderFixture, isSnapshotRun, userDataDir } from './snap
 import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
+import * as responseHook from './response-hook';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
@@ -186,6 +187,7 @@ app.whenReady().then(() => {
   void startUpdater(liveEnv()); // off in snapshot, dev and non-Developer ID builds
 });
 
+app.on('before-quit', () => responseHook.stopAllHooks()); // hooks run detached, so they would outlive Petal
 app.on('will-quit', () => organizer.stop());
 
 app.on('window-all-closed', () => app.quit());

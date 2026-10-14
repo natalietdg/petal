@@ -1,10 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { claudeRunsUnder } from '../src/main/claude-session';
 import {
   CHECK_EVERY_MS, CLAUDE_RUNNING_NOTE, COMMAND_RUNNING_NOTE, foregroundJobRunning, NOT_READY_NOTE, parseTerminalRows, checkForUpdatesNow, isUpdateReady, notifyBody, NOTIFY_TITLE, resetForTests, restartToUpdate, startUpdater,
   updateReadyVersion, type Updater, type UpdaterEnv,
 } from '../src/main/updater';
-import { updateNoteText, updatePillText, whatsNewText } from '../src/shared/ipc';
+import { updateNoteText, updatePillForms, updatePillText, whatsNewForms, whatsNewText } from '../src/shared/ipc';
 import { changelogSection, versionToAnnounce } from '../src/main/whats-new';
 
 // electron-updater's autoUpdater, faked: records checks and installs, and lets a test fire its events.
@@ -150,6 +152,23 @@ describe('update visibility', () => {
     expect(live.onReady).toHaveBeenCalledWith('1.0.7');
     expect(updateReadyVersion()).toBe('1.0.7');
     expect(updatePillText('1.0.7')).toBe('Petal 1.0.7 ready · Restart');
+  });
+
+  it('the pill has shorter forms for a narrow dock, the full text first', () => {
+    expect(updatePillForms('1.0.7')).toEqual(['Petal 1.0.7 ready · Restart', '1.0.7 · Restart', 'Restart']);
+    expect(whatsNewForms({ version: '1.0.7', hasNotes: true })).toEqual(["Updated to 1.0.7 · What's new", "1.0.7 · What's new", "What's new"]);
+    expect(whatsNewForms({ version: '1.0.7', hasNotes: false })).toEqual(['Updated to 1.0.7', '1.0.7']);
+    for (const forms of [updatePillForms('10.10.10'), whatsNewForms({ version: '10.10.10', hasNotes: true })]) {
+      expect(forms.map((f) => f.length)).toEqual([...forms.map((f) => f.length)].sort((a, b) => b - a));
+    }
+  });
+
+  // show() takes the ready version; a bare show() from a snapshot step hid the pill (the minimise dot came back null).
+  it('every snapshot call to the pill passes a version', () => {
+    const dev = path.join(__dirname, '..', 'src', 'dev');
+    const calls = fs.readdirSync(dev).flatMap((f) => fs.readFileSync(path.join(dev, f), 'utf8').match(/updatePill\.show\([^)]*\)/g) ?? []);
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call).toMatch(/show\('[^']+'\)/);
   });
 
   it('notifies once per downloaded version', async () => {

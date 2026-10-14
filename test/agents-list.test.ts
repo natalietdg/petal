@@ -63,4 +63,17 @@ describe('agent timeline', () => {
     timeline.stop();
     expect(updates.at(-1)).toEqual({ items: [{ kind: 'report', markdown: 'Finished.', at: undefined }], finished: true });
   });
+
+  it('a rewritten log clears the rows shown so far instead of repeating them', () => {
+    const dir = tempDir();
+    const file = agent(dir, 'rewritten', [prompt('Follow me'), read('a.ts'), read('b.ts', 't2')]);
+    const updates: TimelineUpdate[] = [];
+    const timeline = new AgentTimeline(file, (u) => updates.push(u));
+    expect(timeline.start().items).toHaveLength(3);
+    writeJsonl(file, [prompt('Again')]); // shorter than what was read: a rewrite
+    timeline.poll();
+    timeline.stop();
+    expect(updates[0]).toEqual({ items: [], finished: false, reset: true });
+    expect(updates.slice(1).flatMap((u) => u.items).map((i) => i.kind)).toEqual(['prompt']);
+  });
 });

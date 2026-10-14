@@ -128,6 +128,9 @@ export interface UpdateStatus { readyVersion: string | null; whatsNew: WhatsNew 
 
 export const updatePillText = (version: string): string => `Petal ${version} ready · Restart`;
 export const whatsNewText = ({ version, hasNotes }: WhatsNew): string => (hasNotes ? `Updated to ${version} · What's new` : `Updated to ${version}`);
+// Longest first: a narrow dock takes the first form that keeps it one row; the first is always the full text.
+export const updatePillForms = (version: string): string[] => [updatePillText(version), `${version} · Restart`, 'Restart'];
+export const whatsNewForms = (whatsNew: WhatsNew): string[] => [whatsNewText(whatsNew), ...(whatsNew.hasNotes ? [`${whatsNew.version} · What's new`, "What's new"] : [whatsNew.version])];
 export function updateNoteText(note: UpdateNote): string {
   switch (note.kind) {
     case 'checking': return 'Checking…';

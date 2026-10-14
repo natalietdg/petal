@@ -1,13 +1,15 @@
 // The update pill: hidden until an update is ready, then "Petal X ready · Restart" in the dock band, pill-shaped.
 // The updater is off in snapshot runs, so a click must come back with a note and never restart.
 import { NOT_READY_NOTE } from '../main/updater';
-import { updatePillText } from '../shared/ipc';
+import { updatePillForms, updatePillText } from '../shared/ipc';
 import type { Kit } from './snapshot';
+
+const NOTE_MS_PLUS = 6500; // update-pill.ts NOTE_MS, plus a beat
 
 const STATE = `(() => {
   const pill = document.getElementById('update-pill');
   const style = getComputedStyle(pill);
-  return { hidden: pill.hidden, shown: pill.offsetWidth > 0, text: pill.textContent, radius: style.borderRadius,
+  return { hidden: pill.hidden, shown: pill.offsetWidth > 0, text: pill.textContent, label: pill.getAttribute('aria-label'), title: pill.title, radius: style.borderRadius,
     inDock: pill.parentElement?.id, beforeSessions: pill.nextElementSibling?.id };
 })()`;
 
@@ -21,8 +23,8 @@ export async function updatePillCheck(kit: Kit): Promise<void> {
   const version = '9.9.9'; // a fixture version; the updater is off here
   await js(`PastelTerm.updatePill.show('${version}')`);
   const shown = await js(STATE);
-  check(shown.shown && shown.text === updatePillText(version) && shown.radius === '999px' && shown.inDock === 'sessions-dock' && shown.beforeSessions === 'sessions-pill',
-    `shown in the dock band beside Sessions, pill-shaped: ${JSON.stringify(shown)}`);
+  check(shown.shown && updatePillForms(version).includes(shown.text) && shown.label === updatePillText(version) && shown.title === updatePillText(version) && shown.radius === '999px' && shown.inDock === 'sessions-dock' && shown.beforeSessions === 'sessions-pill',
+    `shown in the dock band beside Sessions, pill-shaped, full text as its label: ${JSON.stringify(shown)}`);
   check(!/[—–]/.test(shown.text), 'no em or en dash in the label');
   await capture('update-pill');
 
@@ -30,5 +32,8 @@ export async function updatePillCheck(kit: Kit): Promise<void> {
   const noted = await waitFor(async () => { const s = await js(STATE); return s.text === NOT_READY_NOTE ? s : null; }, 4000);
   check(noted, `restart refused with a note while the updater is off: ${JSON.stringify(noted ?? await js(STATE))}`);
 
-  await js("document.getElementById('update-pill').hidden = true");
+  // reset, not hidden: the note's timer would bring the offer back over later steps' dock.
+  await js('PastelTerm.updatePill.reset()');
+  await kit.wait(NOTE_MS_PLUS);
+  check(await js("document.getElementById('update-pill').hidden"), 'still hidden after the note would have faded back to the offer');
 }

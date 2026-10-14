@@ -2,6 +2,7 @@
 // Main does the typing; when Claude is running in the tab, main opens a new tab for it instead.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
+import * as consent from './consent';
 import { byId, el, isIpcError } from './dom';
 import { matchesAnyName, rankRepos } from '../shared/repo-match';
 import type { ReposList } from '../shared/ipc';
@@ -55,7 +56,11 @@ function render(): void {
   list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 
-function describe(result: ReposList): string {
+const FOLDER_OFF = 'Petal finds your repos once it can read your Claude folder. Allow it under Customize › Get started.';
+
+// folderAllowed: no scan runs until she allows the Claude folder, so an empty list then means "not yet", not "none".
+function describe(result: ReposList, folderAllowed: boolean): string {
+  if (!result.repos.length && !folderAllowed) return FOLDER_OFF;
   if (!result.repos.length) return result.scanning ? 'Looking for repos in your home folder…' : 'No git repos found in your home folder.';
   const count = `${result.repos.length} repo${result.repos.length === 1 ? '' : 's'}`;
   return result.scanning ? `${count} · rescanning…` : count;
@@ -64,7 +69,7 @@ function describe(result: ReposList): string {
 async function load(): Promise<void> {
   clearTimeout(pollTimer);
   if (!tabId) return;
-  const result = await window.pastel.repos.list(tabId);
+  const [result, folderChoice] = await Promise.all([window.pastel.repos.list(tabId), consent.choice()]);
   if (!isOpen()) return;
   if (isIpcError(result)) {
     status.textContent = `Couldn’t list repos: ${result.error}`;
@@ -73,7 +78,7 @@ async function load(): Promise<void> {
   repos = result.repos;
   hint.textContent = result.claudeLive ? 'Claude is running in this tab, so the repo opens in a new tab.' : 'Enter switches this tab’s shell into the repo.';
   hint.classList.toggle('new-tab', result.claudeLive);
-  status.textContent = describe(result);
+  status.textContent = describe(result, folderChoice === 'allowed');
   render();
   if (result.scanning) pollTimer = setTimeout(load, RESCAN_POLL_MS);
 }

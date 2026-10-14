@@ -133,6 +133,7 @@ export function listAgents(dir: string, now = Date.now()): AgentsList {
 export interface TimelineUpdate {
   items: TimelineItem[];
   finished: boolean;
+  reset?: boolean; // the log was rewritten: drop the rows shown so far, these items start afresh
 }
 
 export interface TimelineStart extends TimelineUpdate {
@@ -148,8 +149,16 @@ export class AgentTimeline {
   private started = false;
 
   constructor(file: string, private readonly onAppend: (update: TimelineUpdate) => void) {
-    this.tail = new JsonlTail(file, (lines) => this.add(lines));
+    this.tail = new JsonlTail(file, (lines) => this.add(lines), () => this.restart());
     this.started = true;
+  }
+
+  // A rewritten log is re-read from the top, so the rows read so far go first instead of showing twice.
+  private restart(): void {
+    this.items = [];
+    this.dropped = 0;
+    this.finished = false;
+    if (this.started) this.onAppend({ items: [], finished: false, reset: true });
   }
 
   start(): TimelineStart {

@@ -408,6 +408,12 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
       await wait(200);
       const dock = await js(DOCK);
       check(dock.rows === 1 && dock.out.length === 0 && dock.buttons.includes('board-button'), `${width}px: the dock is one row, nothing past its edge ${JSON.stringify(dock)}`);
+      // An update ready: the pill takes a shorter form rather than wrap the dock. A long version is the worst case.
+      await js("PastelTerm.updatePill.show('10.10.10')");
+      await wait(200);
+      const withPill = await js(DOCK);
+      check(withPill.rows === 1 && withPill.out.length === 0 && withPill.buttons.includes('update-pill'), `${width}px: with the update pill, the dock is one row ${JSON.stringify(withPill)}`);
+      await js('PastelTerm.updatePill.reset()');
     }
     check(await sizeTo(1600), 'back to 1600px');
     await js("document.getElementById('board-button').click()");

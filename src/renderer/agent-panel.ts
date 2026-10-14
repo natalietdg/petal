@@ -116,6 +116,7 @@ window.pastel.agents.onTimeline((update) => {
   if (update.agentId !== openId) return;
   const justFinished = update.finished && !finished;
   finished = update.finished;
+  if (update.reset && timeline) timeline.replaceChildren(); // the agent's log was rewritten
   append(update.items);
   if (justFinished) void refreshHead(); // the header says done now, not on the next tick
 });

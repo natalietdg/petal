@@ -45,6 +45,22 @@ describe('privacy-scan.sh', () => {
     expect(result.stderr).toContain('app/out/renderer/index.js');
   });
 
+  it('passes the 1.0.6 legacy runner key in its compiled forms', () => {
+    const app = fakeApp({
+      'out/main/index.js': 'const LEGACY_RUNNERS = { natalie: "you" };',
+      'out/renderer/assets/index.js': 'k={natalie:"you"},x=e=>e',
+    });
+    const result = scan(app);
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
+  it.each(['label: "Natalie (approval gate)"', 'note: "Natalie approves"', 'k={natalie:"me"}'])('still fails on other uses of the word: %s', (text) => {
+    const result = scan(fakeApp({ 'out/main/index.js': `const LEGACY_RUNNERS = { natalie: "you" }; ${text}` }));
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('contains "natalie"');
+  });
+
   it('does not flag natalie inside a longer word', () => {
     expect(scan(fakeApp({ 'out/main/index.js': 'const nataliex = 1;' })).status).toBe(0);
   });

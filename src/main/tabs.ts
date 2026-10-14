@@ -95,7 +95,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
-  }, { fixture, onReplyFinished, onConcluded: (sessionId) => void closeConcluded(sessionId) });
+  }, { fixture, onReplyFinished, onConcluded: (target) => void closeConcluded(target) });
   const session: TabSession = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);

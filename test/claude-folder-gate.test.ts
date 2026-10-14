@@ -14,10 +14,29 @@ const READERS = ['claude-session.ts', 'sessions-monitor.ts', 'history.ts', 'read
 // claudeHome() without the gate: a path only, never read. claude-cli checks an install spot exists; claude-session names a log's path.
 const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder.ts'];
 
+// The one allowed exception: the repo-level project skill (<repo>/.claude/skills/...), not ~/.claude.
+// Only this exact string, only in factory-store.ts; any other mention of .claude there still counts.
+const REPO_SKILL_EXCEPTION = { file: 'factory-store.ts', text: "'.claude/skills/factory/SKILL.md'" };
+const NAMES_CLAUDE_FOLDER = /['"`]\.claude['"`/]/;
+
+function namesClaudeFolder(file: string, text: string): boolean {
+  const code = text.replace(/^\s*\/\/.*$/gm, '');
+  const allowed = file === REPO_SKILL_EXCEPTION.file ? code.split(REPO_SKILL_EXCEPTION.text).join('') : code;
+  return NAMES_CLAUDE_FOLDER.test(allowed);
+}
+
 describe('the ~/.claude gate, by source', () => {
   it('only claude-folder.ts names the folder', () => {
-    const naming = mainFiles().filter((f) => /['"`]\.claude['"`/]/.test(source(f).replace(/^\s*\/\/.*$/gm, '')));
+    const naming = mainFiles().filter((f) => namesClaudeFolder(f, source(f)));
     expect(naming).toEqual(['claude-folder.ts']);
+  });
+
+  it('the repo-skill exception is that exact path in factory-store.ts only', () => {
+    expect(source(REPO_SKILL_EXCEPTION.file)).toContain(REPO_SKILL_EXCEPTION.text);
+    expect(namesClaudeFolder('factory-store.ts', `const p = ${REPO_SKILL_EXCEPTION.text};`)).toBe(false);
+    expect(namesClaudeFolder('factory-store.ts', "path.join(os.homedir(), '.claude')")).toBe(true);
+    expect(namesClaudeFolder('factory-store.ts', "'.claude/settings.json'")).toBe(true);
+    expect(namesClaudeFolder('history.ts', `const p = ${REPO_SKILL_EXCEPTION.text};`)).toBe(true);
   });
 
   it('nothing outside main builds a path to it', () => {

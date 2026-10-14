@@ -32,7 +32,7 @@ async function headersCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, log, wait, waitFor, capture } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} minimise headers: ${what}`);
   const updateWasHidden = await js("document.getElementById('update-pill').hidden");
-  await js('PastelTerm.updatePill.show()'); // the dot must survive the fold
+  await js("PastelTerm.updatePill.show('1.0.7')"); // the dot must survive the fold; show takes the ready version
   await wait(200);
   const before: Measure = await js(MEASURE);
   await js("document.getElementById('headers-min-toggle').click()");
@@ -57,7 +57,7 @@ async function headersCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   check(back.head && back.dockButtons.length === before.dockButtons.length && Math.abs(back.dock - before.dock) <= PX && Math.abs(back.reader - before.reader) <= PX && back.headersButton.expanded === 'true',
     `⌘⇧H restores exactly: dock ${back.dock}/${before.dock}px, reader ${back.reader}/${before.reader}px`);
   check(await waitFor(() => configStore.load().reader.headersMinimised === false || null, 3000), 'restore saved to config');
-  if (updateWasHidden) await js("document.getElementById('update-pill').hidden = true");
+  if (updateWasHidden) await js('PastelTerm.updatePill.reset()');
 }
 
 async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: TabsDeps): Promise<void> {

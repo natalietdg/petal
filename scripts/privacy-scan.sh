@@ -13,8 +13,10 @@ ASAR="$RESOURCES/app.asar"
 # Case-insensitive. Keep in step with the scrub in src/dev and test fixtures.
 BANNED=(paywatch businesslogic natalieleong /Users/ natalie.leong @paywatchglobal cats-local)
 BANNED_WORDS=(kero sakura natalie) # whole words only: "markerOffset" and "makeRow" contain "kero"
-# Allowed on purpose: the update feed host (app-update.yml, electron-builder.yml). Removed from the copies before matching.
-ALLOWED=(natalieleong19.workers.dev)
+# Allowed on purpose, removed from the copies before matching:
+# - the update feed host (app-update.yml, electron-builder.yml)
+# - the 1.0.6 runner key in src/shared/factory.ts LEGACY_RUNNERS, in its compiled forms (main unminified, renderer minified)
+ALLOWED=(natalieleong19.workers.dev 'natalie: "you"' 'natalie:"you"' "natalie: 'you'")
 
 EXTRACTED=$(mktemp -d)
 trap 'rm -rf "$EXTRACTED"' EXIT
