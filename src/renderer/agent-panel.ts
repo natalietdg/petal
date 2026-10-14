@@ -33,7 +33,9 @@ notesPanel.dragToResize(grip, aside);
 
 // Same top as the Notes panel: the fixed header's, just under the dock.
 const readerHead = byId('reader-head');
-new ResizeObserver(() => { aside.style.top = `${readerHead.offsetTop}px`; }).observe(byId('reader'));
+const readerEl = byId('reader');
+// Minimised headers take the header out of layout: the panel starts at the reader instead.
+new ResizeObserver(() => { aside.style.top = `${(readerHead.offsetParent ? readerHead : readerEl).offsetTop}px`; }).observe(readerEl);
 
 let sessionId: string | null = null; // null: the reader's own session
 let openId: string | null = null;

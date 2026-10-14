@@ -33,6 +33,7 @@ import * as favorites from './favorites';
 import * as sessionsBoard from './sessions-board';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
+import * as headersMin from './headers-min';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -40,7 +41,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -67,7 +68,11 @@ async function start(): Promise<void> {
   const fallbackTheme: Theme = themes.paleSky;
   const theme = orDefault(await window.pastel.getTheme(), fallbackTheme, 'the theme');
   themeKit.applyCssVars(theme);
-  const focusTerminal = () => tabs.active()?.term.focus();
+  // A minimised terminal is out of layout; keys go to the reply box, which sends to the active tab.
+  const focusTerminal = () => {
+    if (layout.isTerminalMinimised()) composer.focus();
+    else tabs.active()?.term.focus();
+  };
 
   // The reader and the pet always follow the active tab, from its last update.
   promptDock.hooks.askingChanged = reader.setAsking;
@@ -162,11 +167,12 @@ async function start(): Promise<void> {
     tabs.active()?.refit();
     focusTerminal();
   });
-  window.pastel.onToggleLayout(() => {
-    layout.toggleReaderOnly();
+  layout.onTerminalMinimised(() => {
     tabs.active()?.refit();
     focusTerminal();
   });
+  window.pastel.onToggleLayout(layout.toggleTerminalMinimised);
+  window.pastel.onToggleHeaders(headersMin.toggle);
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
   byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();

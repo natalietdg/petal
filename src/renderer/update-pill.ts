@@ -8,6 +8,7 @@ let noteTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function show(): void {
   pill.textContent = UPDATE_PILL_TEXT;
+  pill.title = UPDATE_PILL_TEXT; // minimised headers show the pill as a dot
   pill.hidden = false;
 }
 

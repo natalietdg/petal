@@ -1,4 +1,4 @@
-import { byId } from './dom';
+import { byId, el, isIpcError } from './dom';
 import { READER_SPLIT, clampSplit } from '../shared/reader-split';
 
 const app = byId('app');
@@ -6,6 +6,7 @@ const divider = byId('divider');
 const KEY_STEP = 0.02;
 const PAGE_STEP = 0.1;
 const SAVE_DELAY_MS = 300; // held arrow keys save once
+const SNAP_MINIMISED = 0.95; // a drag released this low folds the terminal away
 let readerFraction: number = READER_SPLIT.initial;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -40,22 +41,56 @@ function saveSplit(): void {
   saveTimer = setTimeout(() => void window.pastel.layout.saveSplit(readerFraction), SAVE_DELAY_MS);
 }
 
-export function toggleReaderOnly(): void {
-  app.classList.toggle('reader-only');
+// Minimised: the terminal folds to its tab strip (reader-only rows, layout.css); the split stays put for restore.
+const minimiseButton = el('button', 'term-min-button');
+minimiseButton.type = 'button';
+minimiseButton.id = 'term-min-toggle';
+minimiseButton.setAttribute('aria-controls', 'terminal');
+byId('tab-strip').append(minimiseButton); // last in the strip; tabs.ts inserts tabs before its +
+const minimiseListeners = new Set<(minimised: boolean) => void>();
+
+const ICON = (path: string): string =>
+  `<svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+const MINIMISE_ICON = ICON('M6 9l6 6 6-6');
+const RESTORE_ICON = ICON('M6 15l6-6 6 6');
+
+export const isTerminalMinimised = (): boolean => app.classList.contains('reader-only');
+export const onTerminalMinimised = (listener: (minimised: boolean) => void): void => { minimiseListeners.add(listener); };
+
+export function setTerminalMinimised(minimised: boolean, persist = true): void {
+  const changed = minimised !== isTerminalMinimised();
+  app.classList.toggle('reader-only', minimised);
+  minimiseButton.setAttribute('aria-expanded', String(!minimised));
+  minimiseButton.title = minimised ? 'Show the terminal again (⌘R)' : 'Minimise the terminal to its tabs (⌘R)';
+  minimiseButton.innerHTML = `${minimised ? RESTORE_ICON : MINIMISE_ICON}<span>${minimised ? 'Terminal' : 'Minimise'}</span>`;
+  applySplit();
+  if (persist) void window.pastel.config.save({ layout: { terminalMinimised: minimised } });
+  if (changed) for (const listener of minimiseListeners) listener(minimised);
 }
+
+export const toggleTerminalMinimised = (): void => setTerminalMinimised(!isTerminalMinimised());
+minimiseButton.addEventListener('click', toggleTerminalMinimised);
 
 divider.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
   event.preventDefault(); // no text selection while dragging
   divider.setPointerCapture(event.pointerId);
+  const before = readerFraction;
   let moved = false;
+  let snapped = false;
   const onMove = (move: PointerEvent) => {
     const box = app.getBoundingClientRect();
-    setSplit((move.clientY - box.top) / box.height);
+    const fraction = (move.clientY - box.top) / box.height;
+    snapped = fraction >= SNAP_MINIMISED;
+    setSplit(fraction);
     moved = true;
   };
   const end = () => {
-    if (moved) saveSplit();
+    // Dragged to the bottom: minimise, and keep the split from before the drag for restore.
+    if (snapped) {
+      setSplit(before);
+      setTerminalMinimised(true);
+    } else if (moved) saveSplit();
     divider.removeEventListener('pointermove', onMove);
     divider.removeEventListener('pointerup', end);
     divider.removeEventListener('pointercancel', end);
@@ -92,7 +127,14 @@ const observer = new ResizeObserver(applySplit);
 for (const el of [app, ...CHROME]) observer.observe(el);
 applySplit();
 
-// This window's saved split; a failed read keeps the default.
+// This window's saved split and whether the terminal was minimised; a failed read keeps the defaults.
 void window.pastel.layout.getSplit().then((saved) => {
   if (typeof saved === 'number') setSplit(saved);
 });
+// Reads the saved choice again; runs at startup.
+export async function restoreTerminalMinimised(): Promise<void> {
+  const result = await window.pastel.config.get();
+  if (!isIpcError(result)) setTerminalMinimised(result.config.layout.terminalMinimised, false);
+}
+setTerminalMinimised(false, false);
+void restoreTerminalMinimised();

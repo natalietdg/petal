@@ -2,7 +2,7 @@
 import * as terminal from './terminal';
 import { toXterm } from './theme';
 import * as pendingEcho from './pending-echo';
-import { byId, el, query } from './dom';
+import { byId, el, focusTerminal, query } from './dom';
 import { setSessionName } from './session-name';
 import { NO_SESSION_LABEL } from '../shared/session-label';
 import type { Terminal } from '@xterm/xterm';
@@ -94,7 +94,7 @@ export function activate(id: TabId): void {
   tab.element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   window.pastel.activateTab(id);
   hooks.onActivate(tab);
-  tab.term.focus();
+  focusTerminal(); // app.ts: this xterm, or the reply box while the terminal is minimised
 }
 
 export function cycle(delta: number): void {

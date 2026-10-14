@@ -49,6 +49,7 @@ import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
+import { minimiseCheck } from './snapshot-minimise';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
 import type { SessionFile } from '../main/claude-session';
@@ -418,6 +419,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '')], // appends conclude turns; after the steps that measure the reader
+    ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay

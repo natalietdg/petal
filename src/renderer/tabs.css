@@ -76,3 +76,24 @@
 }
 
 .tab-new:hover { color: var(--reader-fg); background: var(--code-bg); }
+
+/* Minimise / restore the terminal (layout.ts): pinned to the strip's right end however many tabs scroll. */
+.term-min-button {
+  position: sticky;
+  right: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--term-bg);
+  color: var(--muted);
+  font: 600 12px var(--ui-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.term-min-button:hover { color: var(--reader-fg); background: var(--code-bg); }
+.term-min-button:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }

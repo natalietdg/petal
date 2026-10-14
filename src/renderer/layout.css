@@ -79,13 +79,16 @@ html, body {
   background-color: var(--term-bg) !important;
 }
 
-/* Reader-only collapses the terminal but keeps it focusable, so typing still reaches claude. */
+/* Terminal minimised (⌘R, layout.ts): only its tab strip shows, the reader takes the rest. The xterm is out of
+   layout, so focus can't land in it; the split stays inline underneath for an exact restore. */
 #app.reader-only {
-  grid-template-rows: minmax(0, 1fr) 0 0 !important;
+  grid-template-rows: minmax(0, 1fr) 0 auto !important;
 }
 
-#app.reader-only #divider,
-#app.reader-only #terminal-pane {
+#app.reader-only #divider {
   height: 0;
   overflow: hidden;
 }
+
+#app.reader-only #terminal { display: none; }
+#app.reader-only #tab-strip { padding-bottom: 8px; }

@@ -21,10 +21,10 @@ describe('config-store defaults and load', () => {
   it('has thirteen sections with the documented defaults', () => {
     const d = config.defaults();
     expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder']);
-    expect(d.layout).toEqual({ splits: {} });
+    expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
-    expect(d.reader).toEqual({ bannersCollapsed: false });
+    expect(d.reader).toEqual({ bannersCollapsed: false, headersMinimised: false });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
@@ -290,7 +290,7 @@ describe('config-store reader banners', () => {
 
   it('a config file from before the setting opens expanded and keeps its other sections', () => {
     fs.writeFileSync(configFile(), JSON.stringify({ history: { listCollapsed: true } }));
-    expect(config.load().reader).toEqual({ bannersCollapsed: false });
+    expect(config.load().reader).toEqual({ bannersCollapsed: false, headersMinimised: false });
     config.save({ reader: { bannersCollapsed: true } });
     expect(config.load().history.listCollapsed).toBe(true);
   });
@@ -352,6 +352,42 @@ describe('config-store pet size', () => {
     expect(config.save({ pet: { size: 'huge' } }).pet.size).toBe('large');
     expect(config.save({ pet: { size: 2 } }).pet.size).toBe('large');
     expect(config.reset('pet.size').pet.size).toBe('normal');
+  });
+});
+
+describe('config-store minimised headers and terminal', () => {
+  it('saves both for the next launch, and only a real boolean changes them', () => {
+    config.save({ reader: { headersMinimised: true }, layout: { terminalMinimised: true } });
+    expect(config.load().reader.headersMinimised).toBe(true);
+    expect(config.load().layout.terminalMinimised).toBe(true);
+    config.save({ reader: { headersMinimised: 'no' }, layout: { terminalMinimised: 1 } });
+    expect(config.load().reader.headersMinimised).toBe(true);
+    expect(config.load().layout.terminalMinimised).toBe(true);
+    config.save({ reader: { headersMinimised: false }, layout: { terminalMinimised: false } });
+    expect(config.load().reader.headersMinimised).toBe(false);
+    expect(config.load().layout.terminalMinimised).toBe(false);
+  });
+
+  it('each lives beside its section neighbour without touching it', () => {
+    config.save({ reader: { bannersCollapsed: true }, layout: { splits: { 0: 0.4 } } });
+    config.save({ reader: { headersMinimised: true }, layout: { terminalMinimised: true } });
+    expect(config.load().reader).toEqual({ bannersCollapsed: true, headersMinimised: true });
+    expect(config.load().layout).toEqual({ splits: { 0: 0.4 }, terminalMinimised: true });
+    // A split saved while minimised keeps the flag; restore uses the split as it was.
+    config.save({ layout: { splits: { 0: 0.6 } } });
+    expect(config.load().layout).toEqual({ splits: { 0: 0.6 }, terminalMinimised: true });
+  });
+
+  it('a config file from before the setting opens with both shown', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ layout: { splits: { 0: 0.5 } }, reader: { bannersCollapsed: true } }));
+    expect(config.load().layout).toEqual({ splits: { 0: 0.5 }, terminalMinimised: false });
+    expect(config.load().reader).toEqual({ bannersCollapsed: true, headersMinimised: false });
+  });
+
+  it('resetting brings them back', () => {
+    config.save({ reader: { headersMinimised: true }, layout: { terminalMinimised: true } });
+    expect(config.reset('reader.headersMinimised').reader.headersMinimised).toBe(false);
+    expect(config.reset('layout.terminalMinimised').layout.terminalMinimised).toBe(false);
   });
 });
 

@@ -31,12 +31,12 @@ export interface Config {
   // The first-run screen; true once it has been shown.
   welcome: { seen: boolean };
   notesPanel: { open: (typeof NOTES_OPEN)[number]; width: number };
-  // Reader share of each window, keyed by window slot (main/layout-ipc.ts).
-  layout: { splits: Record<string, number> };
+  // Reader share of each window, keyed by window slot (main/layout-ipc.ts); the terminal folded to its tab strip, split kept.
+  layout: { splits: Record<string, number>; terminalMinimised: boolean };
   // History's session list folded to a slim rail; favorites are starred session ids, oldest star first.
   history: { listCollapsed: boolean; favorites: string[] };
-  // The reader's Doing / Recommend / Next strip and pinned conclusion, folded to one bar.
-  reader: { bannersCollapsed: boolean };
+  // The reader's Doing / Recommend / Next strip and pinned conclusion, folded to one bar; the dock and reader header folded to a thin strip.
+  reader: { bannersCollapsed: boolean; headersMinimised: boolean };
   // The reader cat's size; the reader may shrink her below it to keep text clear.
   pet: { size: PetSize };
   // Get started steps done, by hand or seen by Petal.
@@ -71,9 +71,9 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   tarot: { birthdate: '' },
   welcome: { seen: false },
   notesPanel: { open: 'auto' as const, width: 320 },
-  layout: { splits: {} },
+  layout: { splits: {}, terminalMinimised: false },
   history: { listCollapsed: false, favorites: [] },
-  reader: { bannersCollapsed: false },
+  reader: { bannersCollapsed: false, headersMinimised: false },
   pet: { size: 'normal' as const },
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
@@ -156,9 +156,12 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       open: NOTES_OPEN.find((v) => v === n.open) ?? b.notesPanel.open,
       width: intIn(n.width, NOTES_WIDTH.min, NOTES_WIDTH.max, b.notesPanel.width),
     },
-    layout: { splits: splitsOr(l.splits, b.layout.splits) },
+    layout: { splits: splitsOr(l.splits, b.layout.splits), terminalMinimised: boolOr(l.terminalMinimised, b.layout.terminalMinimised) },
     history: { listCollapsed: boolOr(hi.listCollapsed, b.history.listCollapsed), favorites: favoritesOr(hi.favorites, b.history.favorites) },
-    reader: { bannersCollapsed: boolOr(rd.bannersCollapsed, b.reader.bannersCollapsed) },
+    reader: {
+      bannersCollapsed: boolOr(rd.bannersCollapsed, b.reader.bannersCollapsed),
+      headersMinimised: boolOr(rd.headersMinimised, b.reader.headersMinimised),
+    },
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },

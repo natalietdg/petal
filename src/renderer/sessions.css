@@ -257,3 +257,21 @@
   .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
   .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
 }
+
+/* Minimise headers (headers-min.ts): a small arrow at the dock's end. */
+.headers-min-button { display: inline-flex; align-items: center; padding: 5px 6px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
+.headers-min-button:hover { color: var(--reader-fg); background: var(--code-bg); }
+.headers-min-button:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+@media (max-width: 900px) { .headers-min-button { padding: 3px 4px; font-size: 13px; } }
+
+/* Minimised: the dock is a thin strip of sessions count, update dot and restore; the reader header goes. */
+#app.headers-min #sessions-dock { padding-block: 4px; gap: 6px; }
+#app.headers-min #sessions-dock > .dock-button:not([aria-pressed="true"]) { display: none; } /* an open overlay keeps its way back */
+#app.headers-min #reader-head { display: none; }
+#app.headers-min .sessions-pill { padding: 2px 10px; font-size: 12px; box-shadow: none; }
+#app.headers-min .headers-min-button { padding: 2px 4px; font-size: 13px; }
+#app.headers-min .sessions-pill .pill-limit { padding: 0 6px; font-size: 11px; }
+/* The update pill as a dot; its text stays its name, and its title says it. */
+#app.headers-min .update-pill:not([hidden], .noting) { width: 12px; height: 12px; padding: 0; overflow: hidden; font-size: 0; border-radius: 50%; background: var(--done-ink); }
+/* The cat docks in the header row; with the row gone she waits for it (her corner place is unaffected). */
+#app.headers-min #reader-area.cat-docked :is(#cat, .scene-tip, .scene-popover) { display: none; }

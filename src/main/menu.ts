@@ -39,6 +39,7 @@ export interface MenuOptions {
   onToggleHistory: () => void;
   onToggleBoard: () => void;
   onToggleFocus: () => void;
+  onToggleHeaders: () => void;
   onOpenSettings: () => void;
   onOpenWelcome: () => void;
   onOpenGetStarted: () => void;
@@ -46,7 +47,7 @@ export interface MenuOptions {
   onOpenRepo: () => void;
 }
 
-export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onOpenRepo }: MenuOptions): void {
+export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onOpenRepo }: MenuOptions): void {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -115,7 +116,8 @@ export function buildMenu({ currentTheme, onThemeSelected, currentCat, onCatSele
     {
       label: 'View',
       submenu: [
-        { label: 'Reader Only / Split', accelerator: 'CmdOrCtrl+R', click: onToggleReader },
+        { label: 'Minimise Terminal', accelerator: 'CmdOrCtrl+R', click: onToggleReader },
+        { label: 'Minimise Headers', accelerator: 'CmdOrCtrl+Shift+H', click: onToggleHeaders },
         { label: 'History', accelerator: 'CmdOrCtrl+Y', click: onToggleHistory },
         { label: 'Sessions Board', accelerator: 'CmdOrCtrl+Shift+O', click: onToggleBoard },
         { label: 'Focus on Reply', accelerator: 'CmdOrCtrl+Shift+F', click: onToggleFocus },

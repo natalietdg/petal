@@ -116,7 +116,9 @@ export function dragToResize(grip: HTMLElement, aside: HTMLElement): void {
 const readerHead = byId('reader-head');
 export const reader = createPanel(byId('notes-panel'), byId('reader-area'), true);
 reader.bindToggle(byId<HTMLButtonElement>('notes-toggle'));
-new ResizeObserver(() => { reader.aside.style.top = `${readerHead.offsetTop}px`; }).observe(byId('reader'));
+const readerEl = byId('reader');
+// Minimised headers take the header out of layout: the panel starts at the reader instead.
+new ResizeObserver(() => { reader.aside.style.top = `${(readerHead.offsetParent ? readerHead : readerEl).offsetTop}px`; }).observe(readerEl);
 
 // Reads the saved open state and width; runs once at startup.
 export async function loadPrefs(): Promise<void> {
