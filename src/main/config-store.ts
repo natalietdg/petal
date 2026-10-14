@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, update versions seen. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -43,6 +43,8 @@ export interface Config {
   getStarted: { done: StepId[] };
   // Whether Petal may read ~/.claude; nothing there is read until 'allowed'.
   claudeFolder: { choice: FolderChoice };
+  // Versions already announced: the update notification, and the "Updated to" note after a restart. '' before the first.
+  updates: { lastNotifiedVersion: string; lastSeenVersion: string };
 }
 
 type Section = keyof Config;
@@ -77,6 +79,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   pet: { size: 'normal' as const },
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
+  updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -109,6 +112,8 @@ const favoritesOr = (value: unknown, fallback: string[]): string[] => {
   const ids = value.filter((id): id is string => typeof id === 'string' && SESSION_ID.test(id));
   return [...new Set(ids)].slice(-MAX_FAVORITES);
 };
+// A version like 1.0.7 (or a prerelease of one), or '' for none; anything else keeps the saved one.
+const versionOr = (value: unknown, fallback: string): string => (typeof value === 'string' && /^(\d+\.\d+\.\d+[\w.+-]*)?$/.test(value) ? value : fallback);
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 // '' clears it; anything but a real calendar date keeps the saved one.
 const birthdateOr = (value: unknown, fallback: string): string => {
@@ -136,6 +141,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const pe = raw.pet ?? {};
   const gs = raw.getStarted ?? {};
   const cf = raw.claudeFolder ?? {};
+  const up = raw.updates ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -165,6 +171,10 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },
+    updates: {
+      lastNotifiedVersion: versionOr(up.lastNotifiedVersion, b.updates.lastNotifiedVersion),
+      lastSeenVersion: versionOr(up.lastSeenVersion, b.updates.lastSeenVersion),
+    },
   };
 }
 

@@ -115,7 +115,28 @@ export interface ReposList {
 
 // The update pill's Restart: either it is restarting, or a note says why not.
 export type RestartResult = { restarting: true } | { note: string };
-export const UPDATE_PILL_TEXT = 'Update ready · Restart';
+// What a manual Check for Updates reports in the pill; a downloaded update shows as the Restart pill instead.
+export type UpdateNote =
+  | { kind: 'checking' }
+  | { kind: 'up-to-date'; version: string }
+  | { kind: 'downloading'; version: string }
+  | { kind: 'off' }
+  | { kind: 'failed' };
+// After a restart into a new version; hasNotes when the bundled CHANGELOG.md has its section.
+export type WhatsNew = { version: string; hasNotes: boolean };
+export interface UpdateStatus { readyVersion: string | null; whatsNew: WhatsNew | null }
+
+export const updatePillText = (version: string): string => `Petal ${version} ready · Restart`;
+export const whatsNewText = ({ version, hasNotes }: WhatsNew): string => (hasNotes ? `Updated to ${version} · What's new` : `Updated to ${version}`);
+export function updateNoteText(note: UpdateNote): string {
+  switch (note.kind) {
+    case 'checking': return 'Checking…';
+    case 'up-to-date': return `Petal is up to date (${note.version})`;
+    case 'downloading': return `Downloading Petal ${note.version}…`;
+    case 'off': return 'Updates are off in this build';
+    case 'failed': return 'Couldn’t check for updates. Try again later.';
+  }
+}
 
 export type RepoOpenResult = { note: string } | { ok: true; newTab: boolean; command: string };
 
@@ -126,8 +147,9 @@ export interface InvokeChannels {
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: [request?: { recheck?: boolean }]; result: Guarded<boolean> };
-  'update:status': { args: []; result: Guarded<{ ready: boolean }> };
+  'update:status': { args: []; result: Guarded<UpdateStatus> };
   'update:restart': { args: []; result: Guarded<RestartResult> };
+  'update:whats-new': { args: []; result: Guarded<Ok> };
   'sessions:snapshot': { args: [options: SnapshotOptions]; result: Guarded<SessionsView> };
   'sessions:close': { args: [sessionId: string]; result: Guarded<CloseResult> };
   // sessionId null: the reader's own session.
@@ -240,7 +262,8 @@ export interface EventChannels {
   'colour-key:open': void;
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
-  'update:ready': void;
+  'update:ready': { version: string };
+  'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };
 }
 

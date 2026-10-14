@@ -1,7 +1,7 @@
-// The update pill: hidden until an update is ready, then "Update ready · Restart" in the dock band, pill-shaped.
+// The update pill: hidden until an update is ready, then "Petal X ready · Restart" in the dock band, pill-shaped.
 // The updater is off in snapshot runs, so a click must come back with a note and never restart.
 import { NOT_READY_NOTE } from '../main/updater';
-import { UPDATE_PILL_TEXT } from '../shared/ipc';
+import { updatePillText } from '../shared/ipc';
 import type { Kit } from './snapshot';
 
 const STATE = `(() => {
@@ -18,9 +18,10 @@ export async function updatePillCheck(kit: Kit): Promise<void> {
   const start = await js(STATE);
   check(start.hidden && !start.shown, `hidden while no update is ready: ${JSON.stringify(start)}`);
 
-  await js('PastelTerm.updatePill.show()');
+  const version = '9.9.9'; // a fixture version; the updater is off here
+  await js(`PastelTerm.updatePill.show('${version}')`);
   const shown = await js(STATE);
-  check(shown.shown && shown.text === UPDATE_PILL_TEXT && shown.radius === '999px' && shown.inDock === 'sessions-dock' && shown.beforeSessions === 'sessions-pill',
+  check(shown.shown && shown.text === updatePillText(version) && shown.radius === '999px' && shown.inDock === 'sessions-dock' && shown.beforeSessions === 'sessions-pill',
     `shown in the dock band beside Sessions, pill-shaped: ${JSON.stringify(shown)}`);
   check(!/[—–]/.test(shown.text), 'no em or en dash in the label');
   await capture('update-pill');

@@ -29,6 +29,7 @@ extraResources:
   - from: resources/output-styles
     to: output-styles
     filter: ["petal-*.md"]
+  - CHANGELOG.md # the "What's new" note after an update reads its version's section
 asarUnpack:
   - "**/node_modules/node-pty/**"
 mac:
