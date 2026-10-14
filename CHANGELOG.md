@@ -3,6 +3,7 @@
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
 ## [1.0.7] · 2026-10-14
+- Up to 20 open sessions by default (was 8); change it under Customize › Sessions.
 - Factory starts with stations that fit any project, and the approval step is yours: "You approve".
 - During a factory run, a Station bar in the top strip shows which step Claude is on and whether it has passed.
 - Updates are easier to spot: the pill names the version, a Mac notification says when one is ready, Petal › Check for Updates… checks on demand, and a "What's new" note follows each update.

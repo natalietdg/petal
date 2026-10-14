@@ -69,7 +69,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   organizer: { enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: ORGANIZER_PROMPT },
   flowTitles: { prompt: FLOW_TITLES_PROMPT },
   responseHook: { command: '', notify: false },
-  sessions: { maxOpen: 8 },
+  sessions: { maxOpen: 20 },
   tarot: { birthdate: '' },
   welcome: { seen: false },
   notesPanel: { open: 'auto' as const, width: 320 },

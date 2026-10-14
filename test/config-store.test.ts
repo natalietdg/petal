@@ -30,7 +30,7 @@ describe('config-store defaults and load', () => {
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
     expect(d.updates).toEqual({ lastNotifiedVersion: '', lastSeenVersion: '' });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
-    expect(d.sessions).toEqual({ maxOpen: 8 });
+    expect(d.sessions).toEqual({ maxOpen: 20 });
     expect(d.tarot).toEqual({ birthdate: '' });
     expect({ ...d.organizer, prompt: undefined }).toEqual({ enabled: false, intervalMinutes: 10, perPass: 12, model: 'haiku', prompt: undefined });
     expect(d.organizer.prompt).toMatch(/^You label a Claude Code work session/);
@@ -225,9 +225,9 @@ describe('config-store sessions.maxOpen', () => {
 
   it('an older config.json without the section gets the default, and reset restores it', () => {
     fs.writeFileSync(configFile(), JSON.stringify({ organizer: { perPass: 5 } }));
-    expect(config.load().sessions.maxOpen).toBe(8);
-    config.save({ sessions: { maxOpen: 20 } });
-    expect(config.reset('sessions.maxOpen').sessions.maxOpen).toBe(8);
+    expect(config.load().sessions.maxOpen).toBe(20);
+    config.save({ sessions: { maxOpen: 30 } });
+    expect(config.reset('sessions.maxOpen').sessions.maxOpen).toBe(20);
   });
 });
 
