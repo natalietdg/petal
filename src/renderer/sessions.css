@@ -245,15 +245,17 @@
 
 /* Narrow windows: the same buttons, tighter, so the dock stays one row. */
 @media (max-width: 1100px) {
-  #sessions-dock { gap: 8px; padding: 14px 16px 0; }
+  #sessions-dock { gap: 6px; padding: 14px 12px 0; }
   .dock-button, .sessions-pill, .update-pill { padding: 7px 12px; font-size: 13px; }
   .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
+  #sessions-dock .headers-min-button { padding: 3px; font-size: 13px; }
 }
 @media (max-width: 900px) {
-  #sessions-dock { gap: 4px; padding: 12px 8px 0; }
-  .dock-button, .sessions-pill, .update-pill { padding: 5px 8px; font-size: 12px; }
-  .dock-button { gap: 3px; padding-inline: 6px; }
-  .sessions-pill { gap: 4px; }
+  #sessions-dock { gap: 3px; padding: 12px 6px 0; }
+  .dock-button, .sessions-pill, .update-pill { padding: 5px 7px; font-size: 12px; }
+  .dock-button { gap: 3px; padding-inline: 5px; }
+  .sessions-pill { gap: 3px; }
+  #sessions-dock .headers-min-button { padding: 2px; font-size: 12px; }
   .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
   .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
 }
@@ -262,7 +264,6 @@
 .headers-min-button { display: inline-flex; align-items: center; padding: 5px 6px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
 .headers-min-button:hover { color: var(--reader-fg); background: var(--code-bg); }
 .headers-min-button:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
-@media (max-width: 900px) { .headers-min-button { padding: 3px 4px; font-size: 13px; } }
 
 /* Minimised: the dock is a thin strip of sessions count, update dot and restore; the reader header goes. */
 #app.headers-min #sessions-dock { padding-block: 4px; gap: 6px; }
