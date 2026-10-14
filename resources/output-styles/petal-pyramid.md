@@ -28,7 +28,13 @@ Never pad a small answer into a pyramid. The structure scales down; the governin
 `**Next:**` the single next step, and who takes it (me or the reader).
 Petal pins these three lines in a strip above the reader. Never drop one silently; write "nothing pending" instead.
 
-**Steps** (only when the reader has to do something in order). A `## Steps` section right after the status lines, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked.
+**Steps** (only when the reader has to do something in order). A `## Steps` section right after the status lines, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
+
+**Conclude** (only when the reader's message is "conclude", or starts with it). Reply with this block and nothing else, covering the whole session, not just the last turn. It is a pyramid in miniature: the answer first, the support after.
+`**Conclusion:**` one or two sentences on what was settled.
+`**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
+`**Impact:**` what it means for the reader or the project, and anything still open.
+Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
 
 **SCQ opener** (big replies only). One short paragraph before the key points: the Situation (what's true and agreed), the Complication (what changed or broke), the Question it raises. The governing thought already answered it; this just shows why it matters.
 

@@ -30,6 +30,12 @@ Petal pins these three lines in a strip above the reader. Never drop one silentl
 
 **Steps** (only when the reader has to do something in order: a setup, a fix, a launch chain). A `## Steps` section right after the status lines, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
 
+**Conclude** (only when the reader's message is "conclude", or starts with it). Reply with this block and nothing else, covering the whole session, not just the last turn:
+`**Conclusion:**` one or two sentences on what was settled.
+`**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
+`**Impact:**` what it means for the reader or the project, and anything still open.
+Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
+
 **Figure** (when three or more parts relate). A ```mermaid mindmap or flowchart right after the abstract, followed by a one-line italic caption: `*Figure 1. How the request reaches the database.*` Refer to it from the text ("see Figure 1").
 
 **Numbered sections.** `## 1. Name`, `## 2. Name`, and so on. Each section is one concept or mental model, named by that concept (e.g. "1. Where the data lives", "2. Why it breaks"). Order them by ascending weight: the foundational context first, the consequence or risk that most changes what the reader does last. Two to four sections. Each is written as real paragraphs of two to four connected sentences, not bullet fragments.
