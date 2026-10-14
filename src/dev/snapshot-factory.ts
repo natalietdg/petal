@@ -1,7 +1,8 @@
 // Workflow › Factory (PASTEL_SNAPSHOT_MODE=factory), against a stand-in ~/.claude and a fixture repo in the snapshot folder:
 // the seven default stations in order; an edit, an add, a remove, a button move and a drag each land in SKILL.md;
 // removing asks inline, never with a browser dialog; the project override goes to the fixture repo's .petal and the
-// scope line switches; Use global takes it away again; nothing spills sideways at 800px.
+// scope line switches; Use global takes it away again; nothing spills sideways at 800px. The Test badge reads Claude,
+// the Add button shows its word, and every folder Petal writes in the repo carries a self-ignoring .gitignore.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -55,6 +56,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   Object.assign(factoryFixture, { claudeDir, repo });
   const skill = path.join(claudeDir, 'skills', 'factory', 'SKILL.md');
   const projectMd = path.join(repo, '.petal', 'factory.md');
+  const projectSkill = path.join(repo, '.claude', 'skills', 'factory', 'SKILL.md');
 
   const run = (code: string) => js(`Promise.resolve(${code}).then(() => 0)`); // statements only: executeJavaScript can't return functions or elements
   const nodeCount = (n: number) => waitFor(async () => (await js(NAMES)).length === n, 5000);
@@ -71,10 +73,12 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await nodeCount(7), 'Workflow › Factory opens with seven cards');
     check(JSON.stringify(await js(NAMES)) === JSON.stringify(DEFAULT_STATIONS.map((s) => s.name)), `default stations in order: ${JSON.stringify(await js(NAMES))}`);
     const badges: string[] = await js("[...document.querySelectorAll('#workflow .fx-runner')].map((b) => b.textContent)");
-    check(badges.length === 7 && badges[1] === 'Subagent · Plan' && badges[5] === 'You approve', `who-runs badges: ${JSON.stringify(badges)}`);
+    check(badges.length === 7 && badges[1] === 'Subagent · Plan' && badges[3] === 'Claude' && badges[5] === 'You approve', `who-runs badges: ${JSON.stringify(badges)}`);
     check((await js("document.querySelectorAll('#workflow .fx-arrow svg').length")) === 6, 'six arrows between seven cards');
     check(/isn’t following a factory yet/.test(await js(FOLLOWS)), `before any save: ${await js(FOLLOWS)}`);
     check(!fs.existsSync(skill), 'opening writes nothing');
+    const addText = await js("document.querySelector('#workflow [data-station=\"build\"] [data-tool=\"add\"]')?.textContent ?? ''");
+    check(addText === 'Add', `the add button shows “Add”: ${JSON.stringify(addText)}`);
     const fit = await js(FIT);
     check(fit.doc <= fit.inner && fit.pane[0] <= fit.pane[1] && !fit.outside.length, `fits ${WIDTH}px with no sideways scroll: ${JSON.stringify(fit)}`);
     await capture('factory-800');
@@ -89,7 +93,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(afterEdit.includes(NEW_TEXT) && afterEdit.split('\n')[4] === GENERATED_MARKER && afterEdit.startsWith('---\nname: factory\n'), `SKILL.md has the edit, frontmatter and marker (${afterEdit.length} chars)`);
     check(/Claude follows the global factory/.test(await js(FOLLOWS)), `scope line after save: ${await js(FOLLOWS)}`);
 
-    // Add after Build, as an approval gate.
+    // Add after Build, as a step you approve.
     await run(click('[data-station="build"] [data-tool="add"]'));
     await waitFor(() => js("document.activeElement?.id === 'fx-name'"), 3000);
     await run(type('#fx-name', 'Review'));
@@ -119,6 +123,8 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(new RegExp(`This project \\(${path.basename(repo)}\\)`).test(await js("document.querySelector('#workflow .fx-scope [data-scope=\"project\"]').textContent")), 'scope switch names the fixture repo');
     await run(click('.fx-customise'));
     check(await waitFor(() => fs.existsSync(projectMd) && fs.existsSync(path.join(repo, '.petal', 'factory.json')), 5000), 'Customise for this project writes .petal/factory.json and factory.md');
+    const ignores = [path.join(repo, '.petal', '.gitignore'), path.join(path.dirname(projectSkill), '.gitignore')].map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null));
+    check(fs.existsSync(projectSkill) && ignores.every((t) => t === '*\n'), `project skill written, both folders self-ignored: ${JSON.stringify(ignores)}`);
     check(await waitFor(async () => /this project’s factory/.test(await js(FOLLOWS)), 3000), `scope line follows the project: ${await js(FOLLOWS)}`);
     const globalBefore = fs.readFileSync(skill, 'utf8');
     await run(click('[data-station="intake"] .fx-card'));
@@ -134,7 +140,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     // Use global: inline confirm, the override goes, the line switches back.
     await run(click('.fx-use-global'));
     await run(click('.fx-confirm-yes'));
-    check(await waitFor(() => !fs.existsSync(path.join(repo, '.petal')), 5000), 'Use global deletes the override');
+    check(await waitFor(() => !fs.existsSync(path.join(repo, '.petal')) && !fs.existsSync(path.join(repo, '.claude')), 5000), 'Use global deletes the override and the project skill');
     check(await waitFor(async () => /Claude follows the global factory/.test(await js(FOLLOWS)), 3000), `scope line back on global: ${await js(FOLLOWS)}`);
 
     // A factory skill she wrote herself stops the save with one line and stays byte for byte.

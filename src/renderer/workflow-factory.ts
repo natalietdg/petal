@@ -22,7 +22,7 @@ interface View {
 }
 
 const SAVED = 'Saved. Claude follows this from your next message.';
-const RUNNER_NAMES: Record<Runner, string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', you: 'You (approval gate)' };
+const RUNNER_NAMES: Record<Runner, string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', you: 'You (approve before it continues)' };
 
 const PATHS = {
   left: 'M14.5 6l-6 6 6 6',
@@ -40,9 +40,11 @@ function button(className: string, text: string, onClick: () => void): HTMLButto
   return b;
 }
 
-function iconButton(tool: keyof typeof PATHS, label: string, onClick: () => void, disabled = false): HTMLButtonElement {
+// `text` shows beside the icon; the aria-label still names the station.
+function iconButton(tool: keyof typeof PATHS, label: string, onClick: () => void, disabled = false, text = ''): HTMLButtonElement {
   const b = button('fx-tool', '', onClick);
   b.innerHTML = icon(tool);
+  if (text) b.append(el('span', 'fx-tool-label', text));
   b.dataset.tool = tool;
   b.setAttribute('aria-label', label);
   b.title = label;
@@ -214,7 +216,7 @@ function node(root: HTMLElement, view: View, stations: Station[], i: number, edi
       const draft: Station = { id: '', name: '', instructions: '', passCheck: '', runner: 'claude' };
       Object.assign(view, { editing: { index: i + 1, draft, isNew: true, problem: null }, confirmRemove: null, note: null, focus: '#fx-name' });
       draw(root, view);
-    }),
+    }, false, 'Add'),
     iconButton('remove', `Remove ${station.name}`, () => { view.confirmRemove = station.id; view.focus = '.fx-remove-yes'; draw(root, view); }, stations.length === 1),
   );
   item.append(tools);

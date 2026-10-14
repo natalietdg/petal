@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FOLDER_OFF, globalJson, loadFactoryState, projectJson, projectMd, saveFactory, skillFile, useGlobal, type FactoryPaths } from '../src/main/factory-store';
+import { FOLDER_OFF, globalJson, loadFactoryState, projectJson, projectMd, projectSkillFile, saveFactory, skillFile, useGlobal, type FactoryPaths } from '../src/main/factory-store';
 import { GENERATED_MARKER, defaultFactory, renderSkill, type Factory } from '../src/shared/factory';
 import { repoRoot } from '../src/main/repo-label';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
@@ -119,16 +119,43 @@ describe('global save', () => {
 });
 
 describe('project override', () => {
-  it('writes .petal/factory.json and factory.md, installs the skill once, and Claude follows the project', () => {
+  it('writes .petal/factory.json, factory.md and a project skill; Claude follows the project and nothing turns on globally', () => {
     const state = saveFactory(paths, 'project', edited('Project intake'));
     expect(JSON.parse(read(projectJson(repo)))).toEqual(edited('Project intake'));
     const md = read(projectMd(repo));
     expect(md.split('\n')[0]).toBe(GENERATED_MARKER);
     expect(md).toContain(`# Software factory for ${path.basename(repo)}`);
     expect(md).toContain('## 1. Project intake');
-    expect(read(skillFile(claudeDir))).toBe(renderSkill(defaultFactory(), 'global')); // the global stations, pointing at the project file
-    expect(fs.existsSync(globalJson(claudeDir))).toBe(false); // the global factory itself stays unsaved
-    expect(state).toMatchObject({ follows: 'project', project: { factory: edited('Project intake') } });
+    expect(read(projectSkillFile(repo))).toBe(renderSkill(edited('Project intake'), 'project-skill', path.basename(repo)));
+    expect(listAll(claudeDir)).toEqual([]); // no global skill, no global JSON: other repos stay untouched
+    expect(state).toMatchObject({ follows: 'project', skill: { state: 'missing' }, project: { factory: edited('Project intake') } });
+    expect(loadFactoryState({ claudeDir, repo: tempDir('petal-factory-other-') }).follows).toBe('none');
+  });
+
+  it('keeps every file it writes in the repo out of git, without touching her own .gitignore', () => {
+    fs.writeFileSync(path.join(repo, '.gitignore'), 'node_modules\n');
+    saveFactory(paths, 'project', edited('P'));
+    expect(read(path.join(repo, '.petal', '.gitignore'))).toBe('*\n');
+    expect(read(path.join(path.dirname(projectSkillFile(repo)), '.gitignore'))).toBe('*\n');
+    expect(read(path.join(repo, '.gitignore'))).toBe('node_modules\n');
+  });
+
+  it('leaves a .gitignore she put in .petal as it is, on save and on Use global', () => {
+    fs.mkdirSync(path.join(repo, '.petal'));
+    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), 'factory.json\n');
+    saveFactory(paths, 'project', edited('P'));
+    expect(read(path.join(repo, '.petal', '.gitignore'))).toBe('factory.json\n');
+    useGlobal(paths);
+    expect(fs.readdirSync(path.join(repo, '.petal'))).toEqual(['.gitignore']);
+  });
+
+  it('never overwrites a project factory skill she wrote, and writes nothing else either', () => {
+    fs.mkdirSync(path.dirname(projectSkillFile(repo)), { recursive: true });
+    fs.writeFileSync(projectSkillFile(repo), '---\nname: factory\n---\nTeam steps.\n');
+    expect(() => saveFactory(paths, 'project', edited('P'))).toThrow(/A factory skill you wrote already exists/);
+    expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
+    useGlobal(paths);
+    expect(read(projectSkillFile(repo))).toBe('---\nname: factory\n---\nTeam steps.\n');
   });
 
   it('resolves global vs project: the global save leaves the override in charge for its repo', () => {
@@ -140,10 +167,18 @@ describe('project override', () => {
     expect(loadFactoryState({ claudeDir, repo: other }).follows).toBe('global');
   });
 
-  it('Use global deletes the override, and .petal when nothing else is in it', () => {
+  it('Use global deletes the override, its .gitignore files, and the folders when nothing else is in them', () => {
+    saveFactory(paths, 'global', edited('G'));
     saveFactory(paths, 'project', edited('P'));
     expect(useGlobal(paths)).toMatchObject({ follows: 'global', project: { factory: null } });
     expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
+    expect(fs.existsSync(path.join(repo, '.claude'))).toBe(false);
+
+    fs.mkdirSync(path.join(repo, '.claude'));
+    fs.writeFileSync(path.join(repo, '.claude', 'settings.json'), '{}');
+    saveFactory(paths, 'project', edited('P'));
+    useGlobal(paths);
+    expect(listAll(path.join(repo, '.claude'))).toEqual(['settings.json']);
 
     saveFactory(paths, 'project', edited('P'));
     fs.writeFileSync(path.join(repo, '.petal', 'notes.txt'), 'mine');
@@ -160,10 +195,11 @@ describe('project override', () => {
     expect(fs.existsSync(projectJson(repo))).toBe(false);
   });
 
-  it('works without the Claude folder but installs no skill there', () => {
+  it('works without the Claude folder but installs no skill anywhere', () => {
     const state = saveFactory({ claudeDir: null, repo }, 'project', edited('P'));
     expect(fs.existsSync(projectMd(repo))).toBe(true);
     expect(listAll(claudeDir)).toEqual([]);
+    expect(fs.existsSync(path.join(repo, '.claude'))).toBe(false);
     expect(state.follows).toBe('none');
   });
 
