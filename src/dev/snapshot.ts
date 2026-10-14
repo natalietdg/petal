@@ -419,7 +419,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
-    ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '')], // appends conclude turns; after the steps that measure the reader
+    ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
@@ -616,7 +616,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'conclusion' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
-    await conclusionCheck(kit, win, fakeTranscript() ?? '').catch((error: Error) => log(`FAIL ${error.stack}`));
+    await conclusionCheck(kit, win, fakeTranscript() ?? '', feed).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

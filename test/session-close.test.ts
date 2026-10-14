@@ -84,4 +84,15 @@ describe('closeSession', () => {
     expect(signals).toEqual(['SIGTERM']);
     expect(child.exitCode).toBeNull();
   });
+
+  it('bug 4: with a pid, only that process is closed, never another tab\'s claude on the same session', async () => {
+    const mine = await spawnChild();
+    const theirs = await spawnChild();
+    const live = () => [fileFor(theirs.pid), fileFor(mine.pid)]; // the other tab's process is listed first
+    const outcome = await closeSession(ID, { live, reread: (pid) => fileFor(pid), waitMs: 2000 }, mine.pid);
+    expect(outcome.closed).toBe(true);
+    expect(mine.signalCode ?? (await new Promise((r) => mine.once('exit', (_c, sig) => r(sig))))).toBe('SIGTERM');
+    expect(theirs.exitCode === null && theirs.signalCode === null).toBe(true);
+    await expect(closeSession(ID, { live: () => [fileFor(theirs.pid)], terminate: () => { throw new Error('signalled'); } }, mine.pid)).rejects.toThrow(/not running/);
+  });
 });

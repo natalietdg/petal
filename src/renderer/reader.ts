@@ -12,7 +12,7 @@ import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
-import type { Conclusion } from '../shared/conclusion';
+import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null };
@@ -137,7 +137,8 @@ export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
   followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
-  paintConclusion(conclusionPin, conclusionSlot, notesSession && replies.length ? conclusion : null); // notesSession outlives an ended claude
+  const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
+  paintConclusion(conclusionPin, conclusionSlot, notesSession && replies.length && stillLatest ? conclusion : null); // notesSession outlives an ended claude
   paintStrip(strip, replies.map((r) => r.markdown));
   banners.paint();
   repoLine.textContent = repo ?? '';

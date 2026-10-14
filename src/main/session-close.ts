@@ -36,17 +36,18 @@ async function exited(pid: number, alive: CloseDeps['alive'], waitMs: number): P
   return !alive(pid);
 }
 
-export async function closeSession(sessionId: string, overrides: Partial<CloseDeps> = {}): Promise<CloseOutcome> {
+// With `pid`, only that process is closed: two tabs can run claude on one session, and each closes its own.
+export async function closeSession(sessionId: string, overrides: Partial<CloseDeps> = {}, pid: number | null = null): Promise<CloseOutcome> {
   const deps = { ...DEFAULT_DEPS, ...overrides };
-  const session = deps.live().find((s) => s.sessionId === sessionId);
+  const session = deps.live().find((s) => s.sessionId === sessionId && (pid === null || s.pid === pid));
   if (!session) throw new Error('That Claude session is not running.');
-  const { pid } = session;
+  const target = session.pid;
 
-  const command = await deps.command(pid);
-  if (!command || !isClaudeCli(command.comm, command.args)) throw new Error(`Refused: pid ${pid} is not the claude CLI (${command?.comm ?? 'no process'}).`);
+  const command = await deps.command(target);
+  if (!command || !isClaudeCli(command.comm, command.args)) throw new Error(`Refused: pid ${target} is not the claude CLI (${command?.comm ?? 'no process'}).`);
   // The pid could have been reused since the list was read; its file must still name this session.
-  if (deps.reread(pid)?.sessionId !== sessionId) throw new Error(`Refused: pid ${pid} no longer belongs to that session.`);
+  if (deps.reread(target)?.sessionId !== sessionId) throw new Error(`Refused: pid ${target} no longer belongs to that session.`);
 
-  deps.terminate(pid);
-  return (await exited(pid, deps.alive, deps.waitMs)) ? { closed: true, session } : { closed: false, note: 'Still running' };
+  deps.terminate(target);
+  return (await exited(target, deps.alive, deps.waitMs)) ? { closed: true, session } : { closed: false, note: 'Still running' };
 }

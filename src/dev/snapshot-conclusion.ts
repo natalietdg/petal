@@ -4,7 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import type { Kit } from './snapshot';
+import { setFixtureStatus, type Kit } from './snapshot';
+import type { ReaderFeed } from '../main/reader-feed';
 import { concludeCloses, historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
@@ -142,7 +143,7 @@ const ROW = (id: string) => `(() => {
   return { mark: row.querySelector('.history-concluded')?.textContent ?? null, snippet: snippet?.textContent ?? null, clipped: snippet ? snippet.scrollWidth > snippet.clientWidth : null, rowOverflow: row.scrollWidth - row.clientWidth, wide };
 })()`;
 
-export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: string): Promise<void> {
+export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: string, feed: ReaderFeed): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, themes, outDir } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} conclusion: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
@@ -179,8 +180,11 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
 
     // Her "conclude" lands in the log; the feed reads Claude's answer and the banner appears.
     check(concludeCloses.length === 0, `a conclusion already in a log never closes its session: ${JSON.stringify(concludeCloses)}`);
+    setFixtureStatus(feed, 'busy'); // this tab's claude works on the answer, so the close is its own
     appendTurns(fixture, turn('conclude', block(FIRST)));
     const first = await waitFor(async () => { const b = await reader(); return b.shown && b.texts?.[0] === FIRST.conclusion ? b : null; }, 10000);
+    await wait(1500); // a busy tick with the conclude as her newest prompt
+    setFixtureStatus(feed, 'idle');
     check(first && fullRows(first) && first.texts.join('|') === [FIRST.conclusion, FIRST.result, FIRST.impact].join('|') && first.title === FIRST.title,
       `banner shows the three rows and the title: ${JSON.stringify(first)}`);
     check(first && /^Concluded · /.test(first.when) && first.count === 1, `head reads "Concluded · <date time>": ${first?.when}`);
@@ -231,8 +235,8 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     }
     appendTurns(fixture, turn('one more fix', 'Fixed the spacing.'));
     await waitFor(async () => (await js("document.getElementById('latest').innerText")).includes('Fixed the spacing.'), 8000);
-    const kept = await pinned();
-    check(kept.shown && kept.gist === FIRST.conclusion && kept.fullLast, `a new reply keeps the summary pinned and the full banner last: ${JSON.stringify({ gist: kept.gist, fullLast: kept.fullLast })}`);
+    const moved = await waitFor(async () => { const p = await pinned(); return p.shown ? null : p; }, 4000);
+    check(moved, `a reply after the conclusion takes the banner down: ${JSON.stringify(moved ?? await pinned())}`);
 
     // A second conclude replaces the banner.
     // Once Claude's answer is in and the session idle, it closes through the Sessions panel's path, once; snapshot runs stop before the signal.

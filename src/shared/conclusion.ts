@@ -22,6 +22,22 @@ export function isConcludePrompt(prompt: string): boolean {
   return text.length <= MAX_PROMPT_CHARS && CONCLUDE.test(text);
 }
 
+// Only a bare "conclude" (or "Conclude." / "conclude!") ends the session. A note such as
+// "conclude, but keep it open" or a paste alongside it still pins the banner, and the session stays.
+const CONCLUDE_ALONE = /^conclude\s*[.!]*$/i;
+export const isClosingConcludePrompt = (rawPrompt: string): boolean => CONCLUDE_ALONE.test(rawPrompt.trim());
+
+const timeOf = (iso: string | null | undefined): number | null => {
+  const ms = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(ms) ? null : ms;
+};
+
+// Still the session's last word: nothing newer came after it. An unknown time never hides it (as on the board).
+export function conclusionIsLatest(conclusion: Conclusion, laterTimes: readonly (string | null | undefined)[]): boolean {
+  const at = timeOf(conclusion.at);
+  return at === null || laterTimes.every((time) => (timeOf(time) ?? at) <= at);
+}
+
 // **Conclusion:** · **Conclusion.** · **Conclusion**: · Conclusion: · ## Conclusion; optionally as a list item.
 const LABEL = /^\s*(?:[-*+]\s+)?(?:(?:\*\*|__)\s*(conclusion|result|impact)\s*[:.]?\s*(?:\*\*|__)\s*:?|(conclusion|result|impact)\s*:|#{1,6}\s+(conclusion|result|impact)\s*[:.]?\s*$)\s*(.*)$/i;
 const HEADING = /^\s*#{1,6}\s/;

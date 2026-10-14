@@ -10,6 +10,7 @@ import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
 import { concludeCloses, isSnapshotRun } from './snapshot-mode';
 import { boardDetails } from './sessions-board';
 import type { ActiveSession } from './tab-session';
+import type { ConcludedSession } from './reader-feed';
 
 // Every row, open or recently closed, is named by the shared rule at list time, so a later title shows at once.
 const nameOf = (s: { sessionId: string; cwd: string }): string => sessionTitleFor(s.sessionId, { cwd: s.cwd });
@@ -41,8 +42,8 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
 }
 
 // The Sessions panel's Close: stop that claude, then list it under Recently closed.
-async function closeAndRemember(sessionId: string): Promise<{ closed: true } | { closed: false; note: string }> {
-  const outcome = await closeSession(sessionId, isSnapshotRun() ? { terminate: snapshotTerminate } : {});
+async function closeAndRemember(sessionId: string, pid: number | null = null): Promise<{ closed: true } | { closed: false; note: string }> {
+  const outcome = await closeSession(sessionId, isSnapshotRun() ? { terminate: snapshotTerminate } : {}, pid);
   if (!outcome.closed) return outcome;
   const { session } = outcome;
   try {
@@ -53,12 +54,14 @@ async function closeAndRemember(sessionId: string): Promise<{ closed: true } | {
   return { closed: true };
 }
 
-// Her answered "conclude" means she is done: the same Close, no confirm. The tab stays, showing the ended reader.
-export async function closeConcluded(sessionId: string): Promise<void> {
+// Her answered "conclude" means she is done: the same Close, no confirm, for that tab's own claude only.
+// The tab stays, showing the ended reader.
+export async function closeConcluded({ sessionId, pid }: ConcludedSession): Promise<void> {
+  if (pid === null && !isSnapshotRun()) return; // no process of this tab's to close
   const record = isSnapshotRun() ? { sessionId, outcome: 'started' } : null;
   if (record) concludeCloses.push(record);
   try {
-    const result = await closeAndRemember(sessionId);
+    const result = await closeAndRemember(sessionId, pid);
     if (record) record.outcome = result.closed ? 'closed' : result.note;
   } catch (error) {
     if (record) record.outcome = (error as Error).message;

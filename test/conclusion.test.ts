@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isConcludePrompt, parseConclusion } from '../src/shared/conclusion';
+import { conclusionIsLatest, isClosingConcludePrompt, isConcludePrompt, parseConclusion } from '../src/shared/conclusion';
 import { addEntry, currentConclusion, emptyScan, scanFile } from '../src/main/conclusion-scan';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 import { assistantEntry, removeTempDirs, tempDir, toolResultEntry, toolUseEntry, allowClaudeFolder, userEntry, writeJsonl } from './helpers';
@@ -200,5 +200,30 @@ describe('conclusions store', () => {
     const second = store.refreshAll([{ sessionId: 'b', file: b }], () => {});
     await Promise.all([first, second]);
     expect(store.stored('b')?.conclusion).toBe('B.');
+  });
+});
+
+describe('isClosingConcludePrompt (bug 2)', () => {
+  it.each(['conclude', 'Conclude.', 'CONCLUDE!', '  conclude  ', 'conclude .', 'conclude!!'])(
+    'closes on %j', (prompt) => expect(isClosingConcludePrompt(prompt)).toBe(true));
+
+  it.each(['conclude, but keep the session open', 'conclude - wait, run the tests first', 'Conclude: not yet, just summarise', 'conclude: shipped', 'conclude\n\nrun the tests', '<pasted_content id="1">long log</pasted_content id="1">conclude', 'conclude<pasted_content id="1">log</pasted_content id="1">'])(
+    'keeps the session open for %j', (prompt) => expect(isClosingConcludePrompt(prompt)).toBe(false));
+});
+
+describe('conclusionIsLatest (bug 5)', () => {
+  const at = '2026-10-13T10:00:00.000Z';
+  const c = { title: '', conclusion: 'Done.', result: '', impact: '', at };
+  it('stays while nothing came after it', () => {
+    expect(conclusionIsLatest(c, [at, undefined])).toBe(true);
+    expect(conclusionIsLatest(c, ['2026-10-13T09:00:00.000Z'])).toBe(true);
+  });
+  it('goes once a resumed session moved on: a later reply or prompt', () => {
+    expect(conclusionIsLatest(c, ['2026-10-14T08:00:00.000Z', undefined])).toBe(false);
+    expect(conclusionIsLatest(c, [at, '2026-10-14T08:00:00.000Z'])).toBe(false);
+  });
+  it('an unknown time never hides it, as on the board', () => {
+    expect(conclusionIsLatest({ ...c, at: null }, ['2026-10-14T08:00:00.000Z'])).toBe(true);
+    expect(conclusionIsLatest(c, ['not a date'])).toBe(true);
   });
 });
