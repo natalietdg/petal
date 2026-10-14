@@ -20,6 +20,7 @@ import './prompt-images.css';
 import './magazine.css';
 import './print.css';
 import './colour-key.css';
+import './shortcuts.css';
 import './sessions.css';
 import './cat.css';
 import './scenes/winter.css';

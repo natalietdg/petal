@@ -107,6 +107,11 @@ function openColourKey(): void {
   if (contents) send(contents, 'colour-key:open');
 }
 
+function toggleShortcuts(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'shortcuts:toggle');
+}
+
 function refreshMenu(): void {
   const { theme, cat, scene, reading } = settings();
   buildMenu({
@@ -131,6 +136,7 @@ function refreshMenu(): void {
     onOpenWelcome: openWelcome,
     onOpenGetStarted: openGetStarted,
     onOpenColourKey: openColourKey,
+    onToggleShortcuts: toggleShortcuts,
     onOpenRepo: () => sendToFocused('repos:palette'),
   });
 }
