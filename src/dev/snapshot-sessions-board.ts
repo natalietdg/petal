@@ -81,7 +81,10 @@ const REACH = `(async () => {
     await new Promise(requestAnimationFrame);
     const r = card.getBoundingClientRect();
     if (r.top < view.top - 1 || r.bottom > view.bottom + 1) out.clipped.push({ id: card.dataset.sessionId, top: Math.round(r.top), bottom: Math.round(r.bottom), view: [Math.round(view.top), Math.round(view.bottom)] });
-    const points = [[r.left + 6, r.top + 6], [r.right - 6, r.top + 6], [r.left + 6, r.bottom - 6], [r.right - 6, r.bottom - 6], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+    // Sample the part inside the board: at 1x, scrollTop snaps to whole pixels and leaves a card up to 1px past the edge, under the divider's 5px reach.
+    const top = Math.max(r.top, view.top);
+    const bottom = Math.min(r.bottom, view.bottom);
+    const points = [[r.left + 6, top + 6], [r.right - 6, top + 6], [r.left + 6, bottom - 6], [r.right - 6, bottom - 6], [(r.left + r.right) / 2, (top + bottom) / 2]];
     const missed = points.filter(([x, y]) => !card.contains(document.elementFromPoint(x, y))).length;
     const over = layers.filter((e) => { const o = e.getBoundingClientRect(); return o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top; }).map((e) => e.id || e.className);
     if (missed || over.length) out.covered.push({ id: card.dataset.sessionId, missed, over });

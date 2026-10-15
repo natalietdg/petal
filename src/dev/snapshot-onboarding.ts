@@ -5,6 +5,7 @@ import type { BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
 import * as organizer from '../main/session-organizer';
 import { counters, setupFixture } from '../main/snapshot-mode';
+import { resizeOffscreen } from '../main/snapshot-window';
 import { send } from '../main/ipc';
 import type { Kit } from './snapshot';
 
@@ -65,16 +66,16 @@ const footerRects = `(() => {
 })()`;
 
 async function footerInViewCheck({ js, log, wait, capture }: Kit, win: BrowserWindow): Promise<void> {
-  const [width, height] = win.getSize();
+  const [width, height] = win.getContentSize();
   for (const [w, h] of FOOTER_SIZES) {
-    win.setSize(w, h);
+    resizeOffscreen(win, w, h);
     await wait(700);
     const r = await js(footerRects);
     const ok = r.startVisible && r.switchVisible && !r.startUnderCat && r.scrolled === 0;
     log(`${ok ? 'ok' : 'FAIL'} welcome Start and organizer switch in view without scrolling at ${w}x${h}: ${JSON.stringify(r)}`);
     await capture(`welcome-${w}x${h}`);
   }
-  win.setSize(width, height);
+  resizeOffscreen(win, width, height);
   await wait(500);
 }
 
