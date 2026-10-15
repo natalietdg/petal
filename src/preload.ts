@@ -78,6 +78,7 @@ const api = {
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
   onOpenGetStarted: (callback: () => void) => subscribe('get-started:open', callback),
   onClaudeFolder: (callback: (allowed: boolean) => void) => subscribe('claude-folder:changed', callback),
+  onHighTech: (callback: (state: EventChannels['high-tech:changed']) => void) => subscribe('high-tech:changed', callback),
   onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),
   onToggleShortcuts: (callback: () => void) => subscribe('shortcuts:toggle', callback),
   onOpenRepoPalette: (callback: () => void) => subscribe('repos:palette', callback),

@@ -1,0 +1,197 @@
+/* High tech mode (high-tech.ts): data-hightech="cyan|amber" on <html>. Colours come from src/high-tech-themes.json
+   through the usual theme variables; this file adds the HUD frame: monospace labels, square corners, corner brackets,
+   grid lines. Reply prose keeps its reading font and size. Loaded last so it beats every other sheet. */
+
+[data-hightech] {
+  --hud-font: "SF Mono", ui-monospace, Menlo, monospace;
+  --hud-radius: 2px;
+  --hud-bracket: 12px;
+}
+[data-hightech="cyan"] {
+  --hud-line: #3FE0FF;
+  --hud-line-dim: rgba(63, 224, 255, 0.28);
+  --hud-grid: rgba(63, 224, 255, 0.05);
+  --hud-glow: 0 0 10px rgba(63, 224, 255, 0.35);
+  --hud-stripe: rgba(255, 163, 195, 0.55);
+}
+[data-hightech="amber"] {
+  --hud-line: #FFA62B;
+  --hud-line-dim: rgba(255, 166, 43, 0.3);
+  --hud-grid: rgba(255, 166, 43, 0.06);
+  --hud-glow: 0 0 8px rgba(255, 166, 43, 0.3);
+  --hud-stripe: rgba(255, 166, 43, 0.6);
+}
+
+/* Four L-shaped brackets drawn as background layers, over the element's own colour. */
+[data-hightech] :is(.board-card, .cz-card) {
+  --hud-c: linear-gradient(var(--hud-line), var(--hud-line));
+  background:
+    var(--hud-c) top left / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) top left / 1.5px var(--hud-bracket) no-repeat,
+    var(--hud-c) top right / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) top right / 1.5px var(--hud-bracket) no-repeat,
+    var(--hud-c) bottom left / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) bottom left / 1.5px var(--hud-bracket) no-repeat,
+    var(--hud-c) bottom right / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) bottom right / 1.5px var(--hud-bracket) no-repeat,
+    var(--hud-fill, var(--reader-bg));
+  border-color: var(--hud-line-dim);
+  border-radius: var(--hud-radius);
+}
+
+/* ---------- Chrome: dock, tabs, reader header, buttons ---------- */
+[data-hightech] :is(.dock-button, .sessions-pill, .tab, .view-toggle, .view-toggle button, .focus-button, .notes-toggle, .colour-key-button, .agents-chip, .update-pill, .board-filter, .cz-chip, .flow-button, #composer-send) {
+  border-radius: var(--hud-radius);
+  font-family: var(--hud-font);
+  letter-spacing: 0.04em;
+}
+[data-hightech] :is(.dock-button, .tab, .board-filter, .cz-chip, .view-toggle button, .notes-toggle) { text-transform: uppercase; font-size: 12px; }
+[data-hightech] .dock-button { border-color: var(--hud-line-dim); }
+[data-hightech] .sessions-pill { font-size: 13px; }
+[data-hightech] .dock-button:hover { border-color: var(--hud-line); box-shadow: var(--hud-glow); }
+[data-hightech] :is(.dock-button[aria-pressed="true"], .tab[aria-selected="true"], .board-filter[aria-pressed="true"]) {
+  border-color: var(--hud-line);
+  color: var(--hud-line);
+  box-shadow: var(--hud-glow);
+}
+[data-hightech] #sessions-dock { border-bottom: 1px solid var(--hud-line-dim); padding-bottom: 12px; }
+[data-hightech] #reader-head { border-bottom: 1px solid var(--hud-line-dim); }
+[data-hightech] :is(.reader-session, .reader-repo) { font-family: var(--hud-font); letter-spacing: 0.04em; }
+[data-hightech] #tab-strip { border-top: 1px solid var(--hud-line-dim); }
+[data-hightech] #divider { background: var(--hud-line-dim); }
+[data-hightech] #composer-input { border-radius: var(--hud-radius); border-color: var(--hud-line-dim); }
+[data-hightech] #composer-input:focus { border-color: var(--hud-line); box-shadow: var(--hud-glow); }
+
+/* ---------- Reader: frame and headings go HUD, the prose stays in its reading font ---------- */
+[data-hightech] .reader-column { --display-font: var(--hud-font); }
+[data-hightech] .prose :is(h2, h3, h4) { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.95em; font-weight: 600; color: var(--hud-line); }
+[data-hightech] .prose h2 { border-top-color: var(--hud-line-dim); }
+[data-hightech] .prose h2::before { content: "// "; opacity: 0.6; }
+/* Monospace runs wide, so the headline steps down from the reading styles' display sizes. */
+[data-hightech] :is(#latest, .prose) .headline { font-size: 1.65em; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; }
+[data-hightech] .prose .story-head { border-left: 2px solid var(--hud-line); border-radius: 0; }
+[data-hightech] .status { font-family: var(--hud-font); text-transform: uppercase; letter-spacing: 0.1em; }
+[data-hightech] .prose :is(th, .status-chip, figcaption) { font-family: var(--hud-font); text-transform: uppercase; letter-spacing: 0.06em; }
+[data-hightech] .prose table { border-radius: 0; border-top-color: var(--hud-line); border-bottom-color: var(--hud-line); }
+[data-hightech] .prose :is(th, td) { border-color: var(--hud-line-dim); }
+[data-hightech] .prose th { color: var(--hud-line); }
+[data-hightech] .prose :is(pre, code, blockquote.sidebar, .status-block) { border-radius: var(--hud-radius); }
+[data-hightech] .prose blockquote.sidebar { border: 1px solid var(--hud-line-dim); }
+[data-hightech] .prose blockquote { border-left-color: var(--hud-line-dim); }
+
+/* ---------- Sessions board ---------- */
+[data-hightech] #board {
+  background:
+    linear-gradient(var(--hud-grid) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, var(--hud-grid) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--reader-bg);
+}
+[data-hightech] .board-head { padding-bottom: 12px; border-bottom: 1px solid var(--hud-line-dim); }
+[data-hightech] .board-title { font-family: var(--hud-font); font-size: 1.1em; text-transform: uppercase; letter-spacing: 0.2em; color: var(--hud-line); }
+[data-hightech] .board-title::before { content: "▸ "; }
+[data-hightech] :is(.board-summary, .board-place, .board-card-top, .board-label, .board-status) { font-family: var(--hud-font); letter-spacing: 0.04em; }
+[data-hightech] .board-status-word { text-transform: uppercase; }
+[data-hightech] .board-label { color: var(--hud-line); }
+[data-hightech] .board-card:hover { --hud-fill: var(--code-bg); }
+[data-hightech] .board-card.working { border-color: var(--hud-line); }
+[data-hightech] .board-status.working .board-dot { background: var(--hud-line); box-shadow: var(--hud-glow); }
+[data-hightech] :is(.board-status.waiting, .board-agents) { border-radius: var(--hud-radius); }
+/* The one card that asks for her: warning stripes along its top edge. */
+[data-hightech] .board-card.waiting { --hud-fill: var(--decide-wash); position: relative; border-color: var(--decide-ink); box-shadow: none; }
+[data-hightech] .board-card.waiting::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: repeating-linear-gradient(-45deg, var(--hud-stripe) 0 6px, transparent 6px 12px);
+}
+
+/* ---------- Customize ---------- */
+[data-hightech] :is(.customize-title, .cz-card-title) { font-family: var(--hud-font); text-transform: uppercase; letter-spacing: 0.12em; }
+[data-hightech] .cz-card-title { color: var(--hud-line); font-size: 13px; }
+[data-hightech] .cz-chip[aria-checked="true"] { box-shadow: var(--hud-glow); }
+[data-hightech] .cz-chips + .cz-chips { margin-top: 10px; }
+
+/* ---------- High focus: the reply as one framed panel with a readout ---------- */
+.hud-frame { display: none; }
+[data-hightech] #app.focus-mode .hud-frame {
+  display: block;
+  position: absolute;
+  inset: 10px;
+  z-index: 4;
+  border: 1px solid var(--hud-line-dim);
+  pointer-events: none;
+}
+.hud-corner { position: absolute; width: 22px; height: 22px; border: 0 solid var(--hud-line); }
+.hud-tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+.hud-tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+.hud-bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+.hud-br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+.hud-readout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 34px;
+  padding: 0 150px 0 18px; /* room for Exit focus on the right */
+  border-bottom: 1px solid var(--hud-line-dim);
+  background: var(--reader-bg);
+  color: var(--muted);
+  font: 500 12px/1 var(--hud-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hud-tag { color: var(--hud-line); }
+.hud-tag::before { content: "◆ "; }
+.hud-session { overflow: hidden; color: var(--reader-fg); text-overflow: ellipsis; }
+.hud-status::before { content: "● "; }
+.hud-status[data-status="busy"] { color: var(--hud-line); }
+[data-hightech] #app.focus-mode #reader { margin: 46px 12px 12px; }
+[data-hightech] #app.focus-mode .focus-exit { top: 14px; right: 18px; z-index: 5; color: var(--hud-line); background: var(--reader-bg); }
+
+/* ---------- Motion: a boot sweep when the mode turns on, a slow pulse on busy sessions ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .hud-boot body::after {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 1000;
+    height: 3px;
+    background: var(--hud-line);
+    box-shadow: 0 0 18px 4px var(--hud-line-dim);
+    pointer-events: none;
+    animation: hud-sweep 0.9s ease-in forwards;
+  }
+  .hud-boot #app { animation: hud-fade-in 0.9s ease-out; }
+  [data-hightech] .board-card.working { animation: hud-pulse 3.2s ease-in-out infinite; }
+  [data-hightech] #app.focus-mode .hud-status[data-status="busy"] { animation: hud-blink 3.2s ease-in-out infinite; }
+}
+@keyframes hud-sweep {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100vh); opacity: 0.2; }
+}
+@keyframes hud-fade-in {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+@keyframes hud-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: var(--hud-glow); }
+}
+@keyframes hud-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* ---------- Palette accents: rings for the hologram, hazard stripes for tactical ---------- */
+[data-hightech="cyan"] .board-title::before { content: "◎ "; }
+[data-hightech="cyan"] .hud-tag::before { content: "◎ "; }
+[data-hightech="amber"] .hud-tag::before {
+  content: "";
+  display: inline-block;
+  width: 28px;
+  height: 10px;
+  margin-right: 10px;
+  vertical-align: -1px;
+  background: repeating-linear-gradient(-45deg, var(--hud-stripe) 0 4px, transparent 4px 8px);
+}

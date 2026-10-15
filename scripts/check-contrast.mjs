@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 const TEXT_MIN = 4.5;
 const NON_TEXT_MIN = 3;
 const BODY_TARGET = 7;
-const themes = JSON.parse(readFileSync(new URL('../src/themes.json', import.meta.url)));
+const readThemes = (file) => JSON.parse(readFileSync(new URL(`../src/${file}`, import.meta.url)));
+// High tech mode's palettes replace the theme while it is on, so they meet the same bar.
+const themes = { ...readThemes('themes.json'), ...readThemes('high-tech-themes.json') };
 
 const channel = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const luminance = (hex) => {

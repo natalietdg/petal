@@ -2,6 +2,7 @@
 // main/ipc.ts and preload.ts only accept channels listed here, so a renamed channel fails typecheck.
 import type { Choice, FlowTarget, IpcError, TabId, TabReaderUpdate, Theme, TermSize } from './types';
 import type { Config, ConfigPatch } from '../main/config-store';
+import type { HighTech } from './high-tech';
 import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
 import type { ListedSession } from '../main/history';
 import type { StoredFlow } from '../main/flow-store';
@@ -262,6 +263,7 @@ export interface EventChannels {
   'welcome:open': void;
   'get-started:open': void;
   'claude-folder:changed': boolean; // reading ~/.claude allowed or not
+  'high-tech:changed': HighTech; // saved from Customize or the View menu; every window follows
   'colour-key:open': void;
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
