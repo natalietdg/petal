@@ -51,6 +51,7 @@ import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
+import { highTechCheck } from './snapshot-high-tech';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
 import type { SessionFile } from '../main/claude-session';
@@ -421,6 +422,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
     ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
+    ['high tech', () => highTechCheck(kit)], // switches the mode on, checks both palettes and focus, then off
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
@@ -705,6 +707,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'bubble-images') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await bubbleImagesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'high-tech') {
+    await wait(2500); // login shell rc files
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await highTechCheck(kit).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

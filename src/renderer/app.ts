@@ -36,14 +36,16 @@ import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
 import * as headersMin from './headers-min';
 import * as shortcuts from './shortcuts';
+import * as highTech from './high-tech';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
+import { HIGH_TECH_OFF } from '../shared/high-tech';
 import type { Tab } from './tabs';
 import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, highTech };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -69,7 +71,21 @@ async function start(): Promise<void> {
 
   const fallbackTheme: Theme = themes.paleSky;
   const theme = orDefault(await window.pastel.getTheme(), fallbackTheme, 'the theme');
-  themeKit.applyCssVars(theme);
+  const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
+  // High tech mode swaps in its own palette; every later theme change goes through it.
+  highTech.init({
+    base: theme,
+    state: startup?.config.highTech ?? HIGH_TECH_OFF,
+    paint: (next) => {
+      themeKit.applyCssVars(next);
+      tabs.applyTheme(next);
+      reader.rerender();
+      history.rerender();
+      if (reader.currentView() === 'flow') reader.refreshFlow();
+    },
+  });
+  const shownTheme = highTech.themeFor(theme);
+  themeKit.applyCssVars(shownTheme);
   // A minimised terminal is out of layout; keys go to the reply box, which sends to the active tab.
   // Focus mode hides the terminal, so it never takes the keyboard back there.
   const focusTerminal = () => {
@@ -88,6 +104,7 @@ async function start(): Promise<void> {
     favorites.followReader(tab.id, update.sessionId);
     cat.setBusy(update.busy);
     readScreen(tab);
+    highTech.refreshReadout();
   };
   // Pickers come and go with pty output; read the active screen once a burst settles.
   let screenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -114,20 +131,13 @@ async function start(): Promise<void> {
   // ⌘T and + open a tab meant for Claude, so her session limit applies.
   const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create({ startClaude: true }); };
   const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); };
-  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
+  tabs.init({ theme: shownTheme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
 
-  window.pastel.onTheme((next) => {
-    themeKit.applyCssVars(next);
-    tabs.applyTheme(next);
-    reader.rerender();
-    history.rerender();
-    if (reader.currentView() === 'flow') reader.refreshFlow();
-  });
+  window.pastel.onTheme(highTech.setBase);
   const setReading = (id: string) => { document.documentElement.dataset.reading = id; };
   setReading(orDefault(await window.pastel.getReading(), 'newspaper', 'the reading style'));
   const claudeFound = orDefault(await window.pastel.claudeInstalled(), true, 'whether Claude Code is installed');
   reader.setClaudeMissing(!claudeFound);
-  const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
   reader.setFolderAllowed(folderAllowed);
   history.setFolderAllowed(folderAllowed);
@@ -203,6 +213,7 @@ async function start(): Promise<void> {
   const { term, renderer } = tabs.create({ startClaude: claudeFound && folderAllowed });
   await getStarted.load();
   const firstRun = await launchScreens.show(); // over the first tab: the folder question, the welcome, then Get started until done
+  highTech.openStartScreen();
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
 }
 

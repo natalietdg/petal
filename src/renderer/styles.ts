@@ -49,3 +49,4 @@ import './agents.css';
 import './conclusion.css';
 import './sessions-board.css';
 import './focus.css';
+import './high-tech.css';

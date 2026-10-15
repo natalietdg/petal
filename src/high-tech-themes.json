@@ -1,0 +1,92 @@
+{
+  "cyan": {
+    "label": "High Tech · Cyan",
+    "dark": true,
+    "terminal": {
+      "background": "#050B18",
+      "foreground": "#C8F1FF",
+      "cursor": "#3FE0FF",
+      "selectionBackground": "#123650",
+      "ansi": [
+        "#0B1A2E",
+        "#FF6F86",
+        "#4CF2B0",
+        "#FFD866",
+        "#5DB9FF",
+        "#D69CFF",
+        "#3FE0FF",
+        "#CFE8F5",
+        "#7C98B4",
+        "#FF93A6",
+        "#7FFAC9",
+        "#FFE599",
+        "#8DD0FF",
+        "#E5BDFF",
+        "#8AF0FF",
+        "#F0FBFF"
+      ]
+    },
+    "reader": {
+      "background": "#06101F",
+      "foreground": "#D6F2FF",
+      "muted": "#86AECB",
+      "link": "#4FE3FF",
+      "codeBackground": "#0C1E33",
+      "highlight": "#0F4A5E",
+      "highlightInk": "#D4F9FF",
+      "rule": "#1D4A66",
+      "labels": {
+        "done": { "pill": "#0D3B33", "ink": "#6FF5C6", "wash": "#0A2228" },
+        "why": { "pill": "#1F2A55", "ink": "#B2BFFF", "wash": "#0F1A35" },
+        "watch": { "pill": "#3A2E0E", "ink": "#FFD36B", "wash": "#1A1A16" },
+        "decide": { "pill": "#4A1630", "ink": "#FFA3C3", "wash": "#280F22" },
+        "next": { "pill": "#0B3550", "ink": "#7FE6FF", "wash": "#08203A" }
+      }
+    }
+  },
+  "amber": {
+    "label": "High Tech · Amber",
+    "dark": true,
+    "terminal": {
+      "background": "#0A0805",
+      "foreground": "#FFC870",
+      "cursor": "#FF9F1C",
+      "selectionBackground": "#3A2A0F",
+      "ansi": [
+        "#1A140C",
+        "#FF6D50",
+        "#B5E36A",
+        "#FFC94D",
+        "#82B4FF",
+        "#E59AD8",
+        "#6FDCD0",
+        "#E8D8BC",
+        "#9A845F",
+        "#FF8F76",
+        "#CDF08F",
+        "#FFDA80",
+        "#A8CAFF",
+        "#F2BDE8",
+        "#9AEDE3",
+        "#FFF3DE"
+      ]
+    },
+    "reader": {
+      "background": "#0C0A07",
+      "foreground": "#F3E4C8",
+      "muted": "#B89F78",
+      "link": "#FFB13B",
+      "codeBackground": "#1A150D",
+      "highlight": "#4A3410",
+      "highlightInk": "#FFE2A8",
+      "rule": "#45351B",
+      "labels": {
+        "done": { "pill": "#1F3312", "ink": "#BDE87A", "wash": "#141A0C" },
+        "why": { "pill": "#2B2340", "ink": "#CDBDFF", "wash": "#17131F" },
+        "watch": { "pill": "#3F2A08", "ink": "#FFC24D", "wash": "#1E160A" },
+        "decide": { "pill": "#4A1A0E", "ink": "#FF9F80", "wash": "#24110B" },
+        "next": { "pill": "#3A2608", "ink": "#FFB347", "wash": "#1D1409" }
+      }
+    }
+  }
+}

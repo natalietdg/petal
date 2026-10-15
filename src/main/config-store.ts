@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, update versions seen. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, update versions seen, high tech mode. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -9,6 +9,7 @@ import { MAX_FAVORITES } from '../shared/favorites';
 import { SESSION_ID } from './session-id';
 import { cleanDone, type StepId } from '../shared/get-started';
 import { isFolderChoice, type FolderChoice } from '../shared/claude-folder';
+import { HIGH_TECH_OFF, isHighTechPalette, type HighTech } from '../shared/high-tech';
 
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -45,6 +46,8 @@ export interface Config {
   claudeFolder: { choice: FolderChoice };
   // Versions already announced: the update notification, and the "Updated to" note after a restart. '' before the first.
   updates: { lastNotifiedVersion: string; lastSeenVersion: string };
+  // The HUD look; while on, Petal opens on the Sessions board.
+  highTech: HighTech;
 }
 
 type Section = keyof Config;
@@ -80,6 +83,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
+  highTech: { ...HIGH_TECH_OFF },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -142,6 +146,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const gs = raw.getStarted ?? {};
   const cf = raw.claudeFolder ?? {};
   const up = raw.updates ?? {};
+  const ht = raw.highTech ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -175,6 +180,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       lastNotifiedVersion: versionOr(up.lastNotifiedVersion, b.updates.lastNotifiedVersion),
       lastSeenVersion: versionOr(up.lastSeenVersion, b.updates.lastSeenVersion),
     },
+    highTech: { on: boolOr(ht.on, b.highTech.on), palette: isHighTechPalette(ht.palette) ? ht.palette : b.highTech.palette },
   };
 }
 
