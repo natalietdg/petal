@@ -167,14 +167,15 @@ export const parseTerminalRows = (stdout: string): TerminalRow[] => stdout.split
   return match ? [{ pid: Number(match[1]), pgid: Number(match[2]), tpgid: Number(match[3]) }] : [];
 });
 
-// The shared ps listing has no terminal groups, so this asks ps for just the tab shells.
-async function commandInPetal(): Promise<boolean> {
-  const shellPids = [...(await import('./tabs')).sessions.values()].map((s) => s.pty.pid);
+// The shared ps listing has no terminal groups, so this asks ps for just the given tab shells.
+export async function foregroundJobIn(shellPids: readonly number[]): Promise<boolean> {
   if (!shellPids.length) return false;
   const stdout = await new Promise<string>((resolve) =>
     execFile('/bin/ps', ['-o', 'pid=,pgid=,tpgid=', '-p', shellPids.join(',')], (error, out) => resolve(error && !out ? '' : out)));
   return foregroundJobRunning(shellPids, parseTerminalRows(stdout));
 }
+
+const commandInPetal = async (): Promise<boolean> => foregroundJobIn([...(await import('./tabs')).sessions.values()].map((s) => s.pty.pid));
 
 export const liveEnv = (): UpdaterEnv => ({
   isPackaged: app.isPackaged,

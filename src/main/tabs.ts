@@ -3,6 +3,8 @@ import { BrowserWindow, webContents, type WebContents } from 'electron';
 import { spawnShell } from './pty';
 import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import { closeConcluded } from './sessions-ipc';
+import { shouldCloseConcludedTab } from './conclude-tab';
+import { foregroundJobIn } from './updater';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
 import { sessionTitleFor } from './session-title';
@@ -14,6 +16,7 @@ import { handle, on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { PromptAnswer } from '../shared/prompt-answer';
 import { NO_SESSION_LABEL } from '../shared/session-label';
+import type { ConcludedSession } from './reader-feed';
 import type { ReaderUpdate, TabId, TermSize } from '../shared/types';
 
 // A tab opened from History waits this long after its shell's first output before typing the resume command.
@@ -23,6 +26,8 @@ const START_CLAUDE = 'claude\r';
 const START_CLAUDE_STAND_IN = ': petal-start-claude\r';
 // The picker reads one keypress per chunk; 30ms measured fine, 120ms leaves room for a busy machine.
 const PROMPT_KEY_GAP_MS = 120;
+// Time for the shell to reap claude and take its terminal back before the foreground check.
+const SHELL_SETTLE_MS = 500;
 
 export const sessions: TabSessions = new Map();
 const activeTabs = new Map<number, TabId>(); // webContents.id -> tabId shown in that window
@@ -95,7 +100,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
-  }, { fixture, onReplyFinished, onConcluded: (target) => void closeConcluded(target) });
+  }, { fixture, onReplyFinished, onConcluded: (target) => void concludeTab(session, target) });
   const session: TabSession = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
@@ -139,6 +144,15 @@ function answerPrompt(session: TabSession, answer: PromptAnswer): void {
 function closeSession({ pty, feed }: TabSession): void {
   feed.stop();
   try { pty.kill(); } catch { /* already exited */ }
+}
+
+// Her "conclude" closes that tab's claude, then the tab itself once its shell is idle; pty exit removes it as usual.
+async function concludeTab(session: TabSession, target: ConcludedSession): Promise<void> {
+  if (!(await closeConcluded(target))) return;
+  await new Promise((resolve) => setTimeout(resolve, SHELL_SETTLE_MS));
+  if (!sessions.has(tabKey(session.contentsId, session.tabId))) return;
+  const foregroundJob = await foregroundJobIn([session.pty.pid]);
+  if (shouldCloseConcludedTab({ claudeClosed: true, tabsInWindow: tabsOf(session.contentsId).length, foregroundJob })) closeSession(session);
 }
 
 // A window closed: stop every tab it had.

@@ -55,16 +55,18 @@ async function closeAndRemember(sessionId: string, pid: number | null = null): P
 }
 
 // Her answered "conclude" means she is done: the same Close, no confirm, for that tab's own claude only.
-// The tab stays, showing the ended reader.
-export async function closeConcluded({ sessionId, pid }: ConcludedSession): Promise<void> {
-  if (pid === null && !isSnapshotRun()) return; // no process of this tab's to close
+// Resolves true once that claude has exited; the caller then decides whether the tab goes too.
+export async function closeConcluded({ sessionId, pid }: ConcludedSession): Promise<boolean> {
+  if (pid === null && !isSnapshotRun()) return false; // no process of this tab's to close
   const record = isSnapshotRun() ? { sessionId, outcome: 'started' } : null;
   if (record) concludeCloses.push(record);
   try {
     const result = await closeAndRemember(sessionId, pid);
     if (record) record.outcome = result.closed ? 'closed' : result.note;
+    return result.closed;
   } catch (error) {
     if (record) record.outcome = (error as Error).message;
     console.error('[petal] closing the concluded session failed:', (error as Error).message);
+    return false;
   }
 }
