@@ -261,3 +261,12 @@
   letter-spacing: 0.12em;
 }
 [data-reading="print"] .status-block { border-top-color: var(--print-ink); border-bottom-color: var(--print-ink); }
+
+/* ---- Open threads: ink-ruled slips with mono labels; Checked in the mono label voice; Assumed tinted, ink-framed. ---- */
+[data-reading="print"] .thread-card { border: 1px solid var(--print-ink); border-radius: 0; background: none; padding: 0.85em 1.1em 0.7em; }
+[data-reading="print"] .thread-card:hover { background: var(--print-tint); }
+[data-reading="print"] .thread-question { font-weight: 600; }
+[data-reading="print"] :is(.thread-check-label, .thread-ask) { font-family: var(--print-mono); font-weight: 400; letter-spacing: 0.12em; color: var(--print-ink); }
+[data-reading="print"] .prose .checked-line { font: 300 12.5px/1.6 var(--print-mono); letter-spacing: 0.04em; color: var(--print-ink); }
+[data-reading="print"] .checked-label { font-weight: 400; letter-spacing: 0.12em; }
+[data-reading="print"] .prose blockquote.sidebar.assumed { border: 1px solid var(--print-ink); border-left: 5px solid var(--watch-ink); background: var(--watch-wash); }

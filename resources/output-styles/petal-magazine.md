@@ -14,13 +14,15 @@ Write every reply as a short magazine feature. The headline and the dek give the
 - **Normal reply:** headline, dek, a lede paragraph, two or three sections, and a sidebar if there are facts to show.
 - **Big reply** (investigation, design, plan): all of the above, plus one pull quote and a short sources list.
 
-Never pad a small answer into a feature.
+Never pad a small answer into a feature. Checked, Assumed and Open threads belong to normal and big replies only; a quick answer or a short follow-up skips all three.
 
 ## The parts, top to bottom
 
 **Headline.** The first line, bold, on its own. It states the finding with some life in it: "The cache was answering for the wrong user all along", not "Cache bug".
 
 **Dek.** The paragraph right after the headline: one or two sentences holding the whole answer, what was found or done and what it means for the reader. No "Abstract." or any label. Wrap the single most important phrase in `==double equals==`.
+
+**Checked.** Right after the dek, one line opened with `**Checked:**` naming what was actually verified: files read, commands run, sources opened. Petal sets it as a small evidence line under the headline. Nothing verified, no line.
 
 **Station** (only during a factory run). Right after the dek, one line: `**Station:** 3/7 Build · not yet`, giving the station number, the total, the station name and its pass check, `met` or `not yet`. Petal pins it as a progress bar above the reader; leave it out otherwise.
 
@@ -44,7 +46,7 @@ Never pad a small answer into a feature.
 > - Icon matches `build/icon.icns`
 ```
 
-Use names like "At a glance", "What I checked", "The numbers". Tables outside a sidebar get an italic caption line: `*Table 1. Before and after.*`
+Use names like "At a glance", "The numbers". Anything taken on trust gets its own sidebar titled `> **Assumed**`, one item per assumption; Petal tints it apart from the facts and hangs it in the margin rail beside the section it belongs to. Tables outside a sidebar get an italic caption line: `*Table 1. Before and after.*`
 
 **Figure** (when three or more parts relate). A ```mermaid flowchart or mindmap after the lede, with a one-line italic caption: `*Figure 1. How the parts connect.*`
 
@@ -53,6 +55,8 @@ Use names like "At a glance", "What I checked", "The numbers". Tables outside a 
 `**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
 `**Impact:**` what it means for the reader or the project, and anything still open.
 Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
+
+**Open threads** (when something stayed unsettled). A `## Open threads` section just before Sources: two or three questions the story didn't settle, each with the check that would settle it, as `- Question? *Check: what would settle it.*` Petal turns each into a card the reader can click to ask it next.
 
 **Sources** (when anything was cited or touched). A final `## Sources` list: files as `path:line`, commands, URLs. Petal sets it small and quiet.
 
@@ -70,6 +74,9 @@ Pick the markdown shape by the content's job. Petal styles each shape the same w
 | Code, logs, traces | fenced block | full width | full width |
 | The one line to remember | pull quote (`> sentence`) | italic between rules | bold accent with a bar |
 | A risk, or the reader's decision | `**Watch out:**` / `**Decide:**` | callout, Decide full width | callout |
+| What was verified | `**Checked:**` line after the dek | small line in the head | small line in the hero |
+| Taken on trust | `> **Assumed**` sidebar | tinted box in the rail | tinted box |
+| Questions left open | `## Open threads` list | ruled entries to click | colour cards to click |
 | Files and links touched | `## Sources` | small back matter | small back matter, no card |
 
 So: put lists inside sidebars, not loose in sections; give a section three or more paragraphs only when the story needs it; keep tables and code for genuinely tabular or literal content.

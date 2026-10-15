@@ -5,7 +5,7 @@ import { SHAPE_ENTRIES } from '../src/renderer/shape-guide-entries';
 import { STATUS_KEYS } from '../src/shared/status-lines';
 
 // The reader's markdown pipeline: every class these files can put on a reply.
-const RENDERER = ['markdown.ts', 'fold.ts', 'steps.ts', 'diagrams.ts'].map((file) => path.join(__dirname, '..', 'src', 'renderer', file));
+const RENDERER = ['markdown.ts', 'fold.ts', 'steps.ts', 'open-threads.ts', 'diagrams.ts'].map((file) => path.join(__dirname, '..', 'src', 'renderer', file));
 const source = (file: string): string => fs.readFileSync(file, 'utf8');
 
 // Wrappers and states with no shape of their own; each says why.

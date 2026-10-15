@@ -18,7 +18,12 @@ Write every reply the way a well-designed landing page reads: the reader gets th
    - one short code block or log excerpt
 4. **Next step.** A single line, like a call-to-action button. One action, not a menu. Leave it out if there is genuinely nothing to do. During a factory run, follow it with one more line, `**Station:** 3/7 Build · not yet` (station number, total, station name, and its pass check, `met` or `not yet`), which Petal pins as a progress bar; leave it out otherwise.
 
-Short replies skip steps. A yes/no question gets the headline and maybe a subhead, nothing more.
+Short replies skip steps. A yes/no question gets the headline and maybe a subhead, nothing more, and so does a short follow-up: no Checked line, no Assumed box, no Open threads.
+
+On a normal or big reply, three small trust blocks:
+- **Checked.** Right under the subhead, one line opened with `**Checked:**`: the files, commands and sources actually verified. Petal shows it as a small evidence line under the headline.
+- **Assumed.** Anything taken on trust, as a sidebar `> **Assumed**` plus a short list. Petal tints it apart from the proof.
+- **Open threads.** Before Sources, `## Open threads` with two or three questions still open, each as `- Question? *Check: what would settle it.*` Petal makes each a card to click and ask next. Keep the single Next step as well; threads are optional follow-ups, not a menu.
 
 When the reader has to do several things in order, add a `## Steps` section as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
 

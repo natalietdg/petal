@@ -97,22 +97,28 @@ export function paintStatus(box: HTMLElement, session: Session): void {
   }
 }
 
-async function submit(session: Session, input: HTMLTextAreaElement, note: HTMLElement, confirmFork: boolean): Promise<void> {
-  if (!input.value.trim()) return;
+// sent: clears whatever the message came from, once it is on its way.
+async function submit(session: Session, text: string, note: HTMLElement, confirmFork: boolean, sent: () => void): Promise<void> {
+  if (!text.trim()) return;
   note.textContent = 'Sending…';
-  const outcome = await reply.sendReply(session.sessionId, input.value, confirmFork);
+  const outcome = await reply.sendReply(session.sessionId, text, confirmFork);
   if ('sent' in outcome) {
-    input.value = '';
-    drafts.delete(session.sessionId);
+    sent();
     note.textContent = '';
   } else if ('confirm' in outcome) {
     const again = el('button', 'flow-button', 'Open anyway');
     again.type = 'button';
-    again.addEventListener('click', () => submit(session, input, note, true));
+    again.addEventListener('click', () => submit(session, text, note, true, sent));
     note.replaceChildren(document.createTextNode(`${outcome.confirm} `), again);
   } else {
     note.textContent = outcome.note;
   }
+}
+
+// An Open threads card in the preview: sent like the reply box's message, her draft left alone.
+export function askThread(session: Session, text: string, box: HTMLElement | null): void {
+  const note = box?.querySelector<HTMLElement>('.history-reply-note');
+  if (note) void submit(session, text, note, false, () => {});
 }
 
 // The reply box under the preview; Enter sends, Shift+Enter adds a line.
@@ -143,7 +149,10 @@ export function replyBox(session: Session): HTMLFormElement {
   });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    void submit(session, input, note, false);
+    void submit(session, input.value, note, false, () => {
+      input.value = '';
+      drafts.delete(session.sessionId);
+    });
   });
   paintStatus(form, session);
   return form;
