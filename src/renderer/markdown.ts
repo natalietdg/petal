@@ -4,6 +4,7 @@ import { linkLabel } from '../shared/link-label';
 import { parseStationLine, stationBarHtml, type StationProgress } from '../shared/station-line';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
+import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
 
@@ -117,21 +118,42 @@ function tagHeadline(root: HTMLElement): void {
   else if (length > HEADLINE_LONG_CHARS) first.classList.add('headline-long');
 }
 
+// Open threads is back matter too, so the end mark and each look's section numbering stop before it.
 const BACK_MATTER = /^(references|limitations|sources)$/i;
 function tagBackMatter(root: HTMLElement): void {
-  for (const h of root.querySelectorAll('h2')) if (BACK_MATTER.test(textOf(h))) h.classList.add('back-matter');
+  for (const h of root.querySelectorAll('h2')) {
+    const threads = isOpenThreadsHeading(textOf(h));
+    if (threads || BACK_MATTER.test(textOf(h))) h.classList.add('back-matter');
+    if (threads) h.classList.add('threads-heading');
+  }
+}
+
+// "**Checked:** files, commands" is the evidence line; its label becomes a quiet tag.
+function tagChecked(root: HTMLElement): void {
+  for (const line of root.querySelectorAll(':scope > p')) {
+    const first = line.firstChild;
+    if (first?.nodeName !== 'STRONG' || !isCheckedLabel(textOf(first))) continue;
+    const label = document.createElement('span');
+    label.className = 'checked-label';
+    label.textContent = 'Checked';
+    first.replaceWith(label);
+    const after = label.nextSibling;
+    if (after?.nodeType === Node.TEXT_NODE) after.textContent = (after.textContent ?? '').replace(/^:?\s*/, ' ');
+    line.classList.add('checked-line');
+  }
 }
 
 // Magazine parts: a blockquote opening with a bold title is a sidebar box, any other is a pull quote.
 function tagQuotes(root: HTMLElement): void {
   for (const quote of root.querySelectorAll('blockquote')) {
     const first = quote.firstElementChild;
-    const titled = isElement(first, 'P') && first.firstChild?.nodeName === 'STRONG';
-    quote.classList.add(titled ? 'sidebar' : 'pull-quote');
+    const title = isElement(first, 'P') && first.firstChild?.nodeName === 'STRONG' ? first.firstChild : null;
+    quote.classList.add(title ? 'sidebar' : 'pull-quote');
+    if (title && isAssumedTitle(textOf(title))) quote.classList.add('assumed'); // taken on trust, tinted apart
   }
 }
 
-const isPlainParagraph = (node: Element): boolean => node.nodeName === 'P' && !node.classList.contains('callout')
+const isPlainParagraph = (node: Element): boolean => node.nodeName === 'P' && !node.classList.contains('callout') && !node.classList.contains('checked-line')
   && !(node.childElementCount === 1 && node.firstElementChild?.nodeName === 'EM' && textOf(node) === textOf(node.firstElementChild));
 
 // Lede: the first plain paragraph after the dek, which gets the drop cap.
@@ -139,7 +161,7 @@ function tagLede(root: HTMLElement): void {
   const dek = root.querySelector(':scope > .headline')?.nextElementSibling;
   if (dek?.nodeName !== 'P') return;
   for (let node = dek.nextElementSibling; node; node = node.nextElementSibling) {
-    if (node.nodeName === 'H2' || node.nodeName === 'H3' || node.classList.contains('status-block')) continue;
+    if (node.nodeName === 'H2' || node.nodeName === 'H3' || node.classList.contains('status-block') || node.classList.contains('checked-line')) continue;
     // A drop cap needs room: on a one- or two-line opener it hangs below the text.
     if (isPlainParagraph(node) && textOf(node).length >= LEDE_MIN_CHARS) node.classList.add('lede');
     return;
@@ -159,9 +181,11 @@ function wrapStory(root: HTMLElement): void {
   if (headline) {
     const head = document.createElement('header');
     head.className = 'story-head';
-    const dek = headline.nextElementSibling?.nodeName === 'P' ? headline.nextElementSibling : null;
+    const next = headline.nextElementSibling;
+    const dek = next?.nodeName === 'P' && !next.classList.contains('checked-line') ? next : null;
+    const checked = root.querySelector(':scope > p.checked-line'); // evidence sits under the dek, wherever it was written
     headline.before(head);
-    head.append(headline, ...(dek ? [dek] : []));
+    head.append(headline, ...(dek ? [dek] : []), ...(checked ? [checked] : []));
   }
   for (const h2 of [...root.querySelectorAll(':scope > h2')]) {
     // "1. Title": keep the number but wrap it, so a look can swap it for its own numbering.
@@ -200,6 +224,7 @@ export function render(markdownText: string, options: { fold?: string } = {}): H
   shortenBareLinks(root); // first, so headline length counts the label, not the URL
   tagCallouts(root);
   tagHeadline(root); // after callouts, so a leading label is never the headline
+  tagChecked(root);
   tagBackMatter(root);
   tagQuotes(root);
   const folds = options.fold !== undefined && liftSummary(root); // before lede and end, which read the final order

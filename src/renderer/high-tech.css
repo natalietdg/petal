@@ -79,6 +79,25 @@
 [data-hightech] .prose blockquote.sidebar { border: 1px solid var(--hud-line-dim); }
 [data-hightech] .prose blockquote { border-left-color: var(--hud-line-dim); }
 
+/* Open threads as bracketed HUD panels; Checked as a readout line; Assumed framed in the watch colour. */
+[data-hightech] .thread-card {
+  --hud-c: linear-gradient(var(--hud-line), var(--hud-line));
+  background:
+    var(--hud-c) top left / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) top left / 1.5px var(--hud-bracket) no-repeat,
+    var(--hud-c) bottom right / var(--hud-bracket) 1.5px no-repeat,
+    var(--hud-c) bottom right / 1.5px var(--hud-bracket) no-repeat,
+    var(--code-bg);
+  border-color: var(--hud-line-dim);
+  border-radius: var(--hud-radius);
+}
+[data-hightech] .thread-card:hover { border-color: var(--hud-line); box-shadow: var(--hud-glow); }
+[data-hightech] :is(.thread-check-label, .thread-ask, .checked-label) { font-family: var(--hud-font); color: var(--hud-line); }
+[data-hightech] .thread-ask::after { content: " ▸"; }
+[data-hightech] .prose .checked-line { font-family: var(--hud-font); letter-spacing: 0.03em; }
+[data-hightech] .checked-label::before { content: "> "; }
+[data-hightech] .prose blockquote.sidebar.assumed { border: 1px solid var(--watch-ink); background: var(--watch-wash); }
+
 /* ---------- Sessions board ---------- */
 [data-hightech] #board {
   background:

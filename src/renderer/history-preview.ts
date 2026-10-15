@@ -12,7 +12,8 @@ import * as overlays from './overlays';
 import * as reply from './history-reply';
 import { createStrip, paintStrip } from './status-strip';
 import { limitNote } from './sessions-panel';
-import { liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
+import { askThread, liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
+import { OPEN_THREAD_EVENT } from './open-threads';
 import { paintConclusion } from './conclusion-banner';
 
 // A title that landed while the preview is up: rename it in place instead of reloading the replies.
@@ -23,6 +24,12 @@ export function repaintTitle(): void {
   setSessionName(railTitle, titleOf(session));
   if (heading && preview.dataset.sessionId === session.sessionId) setSessionName(heading, titleOf(session));
 }
+
+// A card in the shown session's replies asks its question through the reply box; once, since the body redraws.
+preview.addEventListener(OPEN_THREAD_EVENT, (event) => {
+  const session = selectedSession();
+  if (session) askThread(session, String((event as CustomEvent<string>).detail ?? ''), replyDock.querySelector('.history-reply-box'));
+});
 
 export async function renderPreview(): Promise<void> {
   const session = selectedSession();

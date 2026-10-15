@@ -559,3 +559,60 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 @keyframes writing-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .reader-writing { animation: none; } }
 .reader-asking { animation: none; font-style: normal; font-weight: 600; color: var(--decide-ink); }
+
+/* Checked: the evidence line under the dek, small and quiet. */
+.prose .checked-line {
+  margin: 0.7em 0 0;
+  font: 500 0.74em/1.5 var(--ui-font);
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.checked-label { margin-right: 0.15em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--reader-fg); }
+
+/* Assumed: a sidebar of things taken on trust, tinted with the theme's watch colour. */
+.prose blockquote.sidebar.assumed {
+  padding: 0.8em 1em 0.4em;
+  border-top-color: var(--watch-ink);
+  border-bottom: 0;
+  background: var(--watch-wash);
+}
+.prose blockquote.sidebar.assumed > p:first-child > strong:first-child { color: var(--watch-ink); }
+
+/* Open threads: one card per question; a click asks it next. */
+.prose .story-section ul.threads {
+  display: grid;
+  gap: 0.6em;
+  margin: 0.4em 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.92em;
+  color: var(--reader-fg);
+}
+.prose ul.threads > li.thread { margin: 0; }
+.thread-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3em 1em;
+  width: 100%;
+  padding: 0.75em 1em 0.7em;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: inherit;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.thread-card:hover { border-color: var(--reader-fg); }
+.thread-card:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+.thread-question { font-weight: 560; }
+.prose .thread-card .thread-question > p { margin: 0; }
+.thread-check { color: var(--muted); font-size: 0.88em; }
+.thread-check-label, .thread-ask { font: 600 0.74em/1.4 var(--ui-font); letter-spacing: 0.08em; text-transform: uppercase; }
+.thread-question, .thread-check { grid-column: 1; }
+/* Ask sits at the right of the last row, so a card stays two lines tall. */
+.thread-ask { grid-column: 2; grid-row: 1 / span 2; align-self: end; white-space: nowrap; color: var(--link); }
+.thread-ask::after { content: " →"; }

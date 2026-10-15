@@ -6,6 +6,7 @@ import { parseRepoCommand } from '../shared/repo-match';
 import { byId, el, focusTerminal, isIpcError } from './dom';
 import { acceptFileDrags, droppedPaths } from './terminal';
 import { quotePaths } from '../shared/quote-path';
+import { OPEN_THREAD_EVENT } from './open-threads';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -97,25 +98,37 @@ export async function pasteToClaude(tab: tabs.Tab, text: string): Promise<boolea
   return sent;
 }
 
-async function send(): Promise<void> {
-  // Claude turns an image path in a pasted message into [Image #n].
-  const text = [stripControls(input.value).trim(), quotePaths(attachments.map((a) => a.file))].filter(Boolean).join(' ');
+// The one send path: live Claude gets it pasted, a repo command opens Open Repo, else Claude starts with it.
+// taken: runs as the message leaves, so the box clears exactly when it always has.
+async function deliver(text: string, taken: () => void): Promise<void> {
   const tab = tabs.active();
   if (!text || !tab) return;
   if (tab.update?.state === 'live') {
-    clear();
+    taken();
     await pasteToClaude(tab, text);
     return;
   }
   const repoQuery = parseRepoCommand(text);
   if (repoQuery && await repos.offers(tab.id, repoQuery)) {
-    clear();
+    taken();
     repos.open(repoQuery);
     return;
   }
   window.pastel.startClaude(tab.id, text);
-  clear();
+  taken();
 }
+
+async function send(): Promise<void> {
+  // Claude turns an image path in a pasted message into [Image #n].
+  const text = [stripControls(input.value).trim(), quotePaths(attachments.map((a) => a.file))].filter(Boolean).join(' ');
+  await deliver(text, clear);
+}
+
+// An Open threads card in the reader asks its question as if typed here; her draft in the box stays.
+byId('reader').addEventListener(OPEN_THREAD_EVENT, (event) => {
+  const text = stripControls(String((event as CustomEvent<string>).detail ?? '')).trim();
+  void deliver(text, () => {});
+});
 
 form.addEventListener('submit', (event) => { event.preventDefault(); void send(); });
 input.addEventListener('input', fit);
