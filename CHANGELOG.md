@@ -2,6 +2,13 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.0] · 2026-10-16
+- Distillation in the test loop: each round Claude questions its own work from the evidence, picks a course (add scenarios, retest, fix the bug, or hand to you) and acts on it.
+- Questions Claude can't settle become Open threads, revisited every round, and anything only you can answer shows as a "Claude needs you" card.
+- Suite health in Testing: flaky tests, tests that never fail, the slowest ones, and a fast Core stage to run first.
+- Lessons from sessions: your corrections become short rules you can add to CLAUDE.md after a preview. Turn it on in Customize › Organizer.
+- Background work like the Library and lessons can run on a cheaper model, with a count of calls made today.
+
 ## [1.0.9] · 2026-10-16
 - Text size: make the terminal and the reader bigger or smaller with ⌘= and ⌘-, ⌘0 to reset, or set each one in Customize.
 - Works with older Claude Code versions, and the reader suggests updating when yours is out of date.
