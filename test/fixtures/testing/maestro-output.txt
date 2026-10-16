@@ -1,8 +1,8 @@
 
 Waiting for flows to complete...
-[Passed] login (12s)
-[Failed] checkout (22s) (Element not found: "Place order")
-[Passed] onboarding (11s)
+[Passed] android-advanced-flow (40s)
+[Passed] android-flow (994ms)
+[Failed] android-flow-broken (19s) (Assertion is false: "This text is not on screen" is visible)
 
 1/3 Flow Failed
 

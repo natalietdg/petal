@@ -1,0 +1,152 @@
+^D[2J
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    🔲   Launch app "org.wikipedia"
+ ║
+[1;1H                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+                                          
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    ⏳   Launch app "org.wikipedia"
+ ║
+[1;1H                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    ⏳   Launch app "org.wikipedia"
+ ║
+[1;1H                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+                                         
+[1;1H
+[1;1HRunning on Medium_Phone_API_35
+
+ ║
+ ║  > Flow: android-flow
+ ║
+[39m ║    ✅   Launch app "org.wikipedia"
+ ║

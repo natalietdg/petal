@@ -251,18 +251,44 @@ function playwrightText(out: string): Parsed | null {
   return { runner: 'playwright', tests: failingRows(names, out), counts, durationMs: seconds(/^\s+\d+ passed \((.+)\)/m.exec(out)?.[1]) };
 }
 
-// Maestro prints "[Passed] login (3s)" per flow for a folder, and a final "N/M Flows Passed".
-function maestroText(out: string): Parsed | null {
-  const flows = [...out.matchAll(/^\s*\[(Passed|Failed|Skipped)\]\s+(.+?)\s+\((\d+(?:\.\d+)?m?s)\)(?:\s+\((.+)\))?\s*$/gm)];
-  if (!flows.length && !/Flows? (Passed|Failed)/.test(out)) return null;
+// Maestro durations: "966ms", "19s", "1m 13s".
+const MAESTRO_DURATION = String.raw`(?:\d+(?:\.\d+)?(?:ms|h|m|s)\s*)+`;
+const UNIT_MS: Record<string, number> = { ms: 1, s: 1000, m: 60000, h: 3600000 };
+const maestroMs = (text: string): number =>
+  [...text.matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g)].reduce((sum, [, n, unit]) => sum + Number(n) * UNIT_MS[unit], 0);
+
+// A folder run: "[Passed] login (3s)" per flow, then "2/2 Flows Passed in 59s" or "1/3 Flow Failed".
+function maestroFolder(out: string): Parsed | null {
+  const flows = [...out.matchAll(new RegExp(String.raw`^\s*\[(Passed|Failed|Skipped)\]\s+(.+?)\s+\((${MAESTRO_DURATION})\)(?:\s+\((.+)\))?\s*$`, 'gm'))];
+  const summary = new RegExp(String.raw`(\d+)\/(\d+) Flows? (Passed|Failed)(?: in (${MAESTRO_DURATION}))?`).exec(out);
+  if (!flows.length && !summary) return null;
   const tests: TestCase[] = flows.map((m) => ({
-    name: m[2], file: 'Maestro flows', status: m[1] === 'Passed' ? 'passed' : m[1] === 'Failed' ? 'failed' : 'skipped', durationMs: seconds(m[3]),
-    ...(m[1] === 'Failed' ? { failure: failure(m[4] ?? failureFor(m[2], out) ?? '') } : {}),
+    name: m[2], file: 'Maestro flows', status: m[1] === 'Passed' ? 'passed' : m[1] === 'Failed' ? 'failed' : 'skipped', durationMs: maestroMs(m[3]),
+    ...(m[1] === 'Failed' ? { failure: failure(m[4] ?? '') } : {}),
   }));
-  const summary = /(\d+)\/(\d+) Flows? Passed/.exec(out);
-  const counts = tests.length ? countTests(tests) : { passed: Number(summary?.[1] ?? 0), failed: Number(summary?.[2] ?? 0) - Number(summary?.[1] ?? 0), skipped: 0 };
-  return { runner: 'maestro', tests, counts, durationMs: null };
+  const [shown, total] = [Number(summary?.[1] ?? 0), Number(summary?.[2] ?? 0)];
+  const failed = summary?.[3] === 'Failed' ? shown : total - shown;
+  const counts = tests.length ? countTests(tests) : { passed: total - failed, failed, skipped: 0 };
+  return { runner: 'maestro', tests, counts, durationMs: summary?.[4] ? maestroMs(summary[4]) : null };
 }
+
+// A single flow: " > Flow login" (" > Flow: login" on a terminal), its steps, then the error if one failed.
+// Piped steps end "... COMPLETED" or "... FAILED"; a terminal redraws frames with ✅ ❌ ⏳ marks.
+function maestroSingle(out: string): Parsed | null {
+  const header = lastMatch(/^[\s║]*> Flow:? (.+?)\s*$/m, out);
+  if (!header) return null;
+  const rest = out.slice((header.index ?? 0) + header[0].length);
+  const failed = /\.\.\. FAILED\s*$|❌/m.test(rest);
+  const unfinished = /\.\.\.\s*$|⏳|🔲/m.test(rest);
+  if (!failed && unfinished) return null;
+  const lines = rest.split('\n');
+  const lastStep = lines.findLastIndex((l) => /^\s*║|\.\.\. [A-Z]+\s*$/.test(l));
+  const message = lines.slice(lastStep + 1).join('\n').split('==== Debug output')[0];
+  const test: TestCase = { name: header[1], file: 'Maestro flows', status: failed ? 'failed' : 'passed', durationMs: null, ...(failed ? { failure: failure(message) } : {}) };
+  return { runner: 'maestro', tests: [test], counts: countTests([test]), durationMs: null };
+}
+
+const maestroText = (out: string): Parsed | null => maestroFolder(out) ?? maestroSingle(out);
 
 const TEXT_PARSERS: [string, (out: string) => Parsed | null][] = [
   ['vitest', vitestText], ['jest', jestText], ['playwright', playwrightText], ['pytest', pytestText],

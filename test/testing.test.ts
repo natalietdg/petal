@@ -198,19 +198,54 @@ describe('parsers on real runner output', () => {
     expect(text.counts.passed).toBe(report.counts.passed);
   });
 
-  it('cargo, mocha and maestro text, and Maestro JUnit', () => {
+  it('cargo and mocha text', () => {
     const cargo = parseText(fixture('cargo-output.txt'));
     expect(cargo).toMatchObject({ runner: 'cargo', counts: { passed: 4, failed: 1, skipped: 1 } }); // two test binaries, 2 passing each
     expect(failingNames(cargo.tests)).toEqual(['auth::tokens::rejects_an_expired_token']);
     const mocha = parseText(fixture('mocha-output.txt'), 'mocha');
     expect(mocha).toMatchObject({ runner: 'mocha', counts: { passed: 4, failed: 1, skipped: 1 } });
     expect(failingNames(mocha.tests)).toEqual(['auth > tokens > rejects an expired token']);
-    const maestro = parseText(fixture('maestro-output.txt'), 'maestro');
-    expect(maestro).toMatchObject({ runner: 'maestro', counts: { passed: 2, failed: 1, skipped: 0 } });
-    expect(maestro.tests.find((t) => t.status === 'failed')).toMatchObject({ name: 'checkout', failure: 'Element not found: "Place order"' });
-    const junit = parseJUnit(fixture('maestro-junit.xml'), 'maestro');
-    expect(junit.counts).toEqual({ passed: 2, failed: 1, skipped: 0 });
-    expect(junit.tests.find((t) => t.status === 'failed')?.failure).toMatch(/Element not found: "Place order"/);
+  });
+
+  // Fixtures captured from Maestro 2.11.0 on an Android emulator running its Wikipedia sample flows.
+  describe('Maestro', () => {
+    const assertion = 'Assertion is false: "This text is not on screen" is visible';
+
+    it('a folder run, piped and under script(1), with minute-long flows', () => {
+      const piped = parseText(fixture('maestro-output.txt'), 'maestro');
+      expect(piped).toMatchObject({ runner: 'maestro', counts: { passed: 2, failed: 1, skipped: 0 } });
+      expect(piped.tests.find((t) => t.status === 'failed')).toMatchObject({ name: 'android-flow-broken', durationMs: 19000, failure: assertion });
+      const tty = parseText(fixture('maestro-tty-output.txt'));
+      expect(tty).toMatchObject({ runner: 'maestro', counts: { passed: 2, failed: 1, skipped: 0 } });
+      expect(tty.tests.map((t) => [t.name, t.durationMs])).toEqual([['android-advanced-flow', 73000], ['android-flow', 966], ['android-flow-broken', 19000]]);
+      expect(tty.tests.find((t) => t.status === 'failed')?.failure).toBe(assertion);
+      expect(parseText(fixture('maestro-pass-output.txt'))).toMatchObject({ runner: 'maestro', counts: { passed: 2, failed: 0, skipped: 0 }, durationMs: 59000 });
+    });
+
+    it('the summary line alone, passing or failing', () => {
+      expect(parseText('1/3 Flow Failed\n', 'maestro').counts).toEqual({ passed: 2, failed: 1, skipped: 0 });
+      expect(parseText('3/3 Flows Failed\n', 'maestro').counts).toEqual({ passed: 0, failed: 3, skipped: 0 });
+      expect(parseText('2/2 Flows Passed in 1m 8s\n', 'maestro')).toMatchObject({ counts: { passed: 2, failed: 0, skipped: 0 }, durationMs: 68000 });
+    });
+
+    it('a single flow, which prints steps instead of a summary', () => {
+      for (const name of ['maestro-single-output.txt', 'maestro-single-tty-output.txt']) {
+        const single = parseText(fixture(name));
+        expect(single, name).toMatchObject({ runner: 'maestro', counts: { passed: 0, failed: 1, skipped: 0 } });
+        expect(single.tests[0], name).toMatchObject({ name: 'android-flow-broken', status: 'failed' });
+        expect(single.tests[0].failure?.startsWith(`${assertion}\n`), name).toBe(true);
+        expect(single.tests[0].failure, name).not.toMatch(/Debug output|\/Users\/demo/);
+      }
+      expect(parseText(fixture('maestro-single-tty-pass-output.txt'))).toMatchObject({ runner: 'maestro', counts: { passed: 1, failed: 0, skipped: 0 }, tests: [{ name: 'android-flow', status: 'passed' }] });
+      expect(parseText('Running on Pixel\n > Flow android-flow\nLaunch app "org.wikipedia"... COMPLETED\n')).toMatchObject({ counts: { passed: 1, failed: 0, skipped: 0 } });
+      expect(parseText('Running on Pixel\n > Flow android-flow\nLaunch app "org.wikipedia"...\n').counts).toEqual({ passed: 0, failed: 0, skipped: 0 }); // cut off mid-step
+    });
+
+    it('the JUnit report from --format junit', () => {
+      const junit = parseJUnit(fixture('maestro-junit.xml'), 'maestro');
+      expect(junit).toMatchObject({ counts: { passed: 2, failed: 1, skipped: 0 }, durationMs: 59803 });
+      expect(junit.tests.find((t) => t.status === 'failed')).toMatchObject({ name: 'android-flow-broken', file: '.maestro/android-flow-broken.yaml', durationMs: 18635, failure: assertion });
+    });
   });
 
   it('strips what script(1) leaves in a log', () => {

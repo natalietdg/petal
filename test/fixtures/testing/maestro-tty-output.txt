@@ -1,0 +1,8 @@
+^D[36m
+Waiting for flows to complete...[m
+[36m[39m[92m[Passed][39m android-advanced-flow (1m 13s)
+[36m[39m[92m[Passed][39m android-flow (966ms)
+[36m[39m[91m[Failed][39m android-flow-broken (19s)[31m (Assertion is false: "This text is not on screen" is visible)[39m
+
+[31;1m1/3 Flow Failed[22;39m
+
