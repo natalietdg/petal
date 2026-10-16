@@ -49,6 +49,9 @@ export interface PipelineRun {
   stages: StageResult[];
   totals: Counts;
   sessionId?: string; // a Claude run's session
+  prompt?: string; // a Claude run: her prompt that turn answered; '' when the log had none
+  cwd?: string; // a Claude run: the folder its command ran in, which files it under a project
+  sessionName?: string; // a Claude run: its session's name, added when read, never stored
 }
 
 // <userData>/testing/<project-hash>.json
@@ -70,9 +73,15 @@ export interface StackItem {
   insert?: string; // a skill, agent or command: what lands in the reply box
 }
 
+export interface ProjectRef { root: string; name: string }
+
+// Why the tab's folder is not a project, and the projects she can look at instead.
+export interface Elsewhere { reason: 'home' | 'no-repo'; folder: string; projects: ProjectRef[] }
+
 export interface TestingState {
   allowed: boolean; // the folder gate; false reads nothing
-  project: { root: string; name: string } | null;
+  project: ProjectRef | null;
+  elsewhere: Elsewhere | null; // set when project is null because the tab is in ~ or outside a repo
   stack: StackItem[];
   proposed: StageConfig[]; // stages detection suggests
   pipeline: PipelineConfig; // saved, else the proposal
@@ -88,7 +97,7 @@ export type ClaudePipelineState =
   | { proposal: boolean; offer: boolean; stages: number; problem?: undefined }
   | { problem: string };
 
-export type RunRequest = { tabId: string; stageId?: string | null; confirmed?: boolean };
+export type RunRequest = { tabId: string; root?: string | null; stageId?: string | null; confirmed?: boolean };
 export type RunReply =
   | { started: string; typed: string }
   | { confirm: { commands: { name: string; command: string; isNew: boolean }[] } }
@@ -131,8 +140,11 @@ const RUNNER_PATTERNS: [string, RegExp][] = [
 // Programs that start a test, typecheck or lint step; "cat vitest.config.ts" or "grep jest" never count.
 const LAUNCHERS = /^(npx|pnpm|yarn|bunx|bun|npm|node|python3?|py\.test|pytest|go|cargo|swift|xcodebuild|\.\/gradlew|gradlew|gradle|maestro|k6|vitest|jest|mocha|playwright|cypress|detox|tox|tsc|eslint|uv|poetry)$/;
 
+// A heredoc's body is data, not commands: "cat >> notes.md <<'EOF' ... npm test ... EOF" runs only cat.
+const stripHeredocs = (command: string): string => command.replace(/<<-?\s*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?(?:\n\s*\2\s*(?=\n|$)|$)/g, '$3');
+
 // Each step of a shell line ("cd app && npm test | tee out"), env assignments dropped.
-const steps = (command: string): string[] => command.split(/&&|\|\||;|\|/).map((part) => part.trim().split(/\s+/).filter((w) => !/^\w+=/.test(w)).join(' ')).filter(Boolean);
+const steps = (command: string): string[] => stripHeredocs(command).split(/&&|\|\||;|\||\n/).map((part) => part.trim().split(/\s+/).filter((w) => !/^\w+=/.test(w)).join(' ')).filter(Boolean);
 
 export function runnerOf(command: string): string | null {
   for (const step of steps(command)) {
@@ -242,3 +254,26 @@ export const slugId = (name: string, taken: string[]): string => {
 export const unconfirmed = (pipeline: PipelineConfig, stages: StageConfig[]): StageConfig[] =>
   stages.filter((s) => !pipeline.confirmed.some((c) => squash(c) === squash(s.command)));
 export const normalizeCommand = squash;
+
+// The step of a shell line that runs the check, "cd", env and redirections dropped:
+// "cd app && CI=1 npx jest --ci 2>&1 | tail -20" -> "npx jest --ci".
+export function checkStep(command: string): string {
+  const parts = steps(command).map((step) => step.replace(/\s*\d?>>?\s*&?\S+/g, '').replace(/\s*<\s*\S+/g, '').trim()).filter(Boolean);
+  const launches = (step: string) => LAUNCHERS.test(step.split(' ')[0]);
+  const tests = (step: string) => launches(step) && isTestCommand(step); // a test step wins over a typecheck in "tsc; jest"
+  const checks = (step: string) => launches(step) && (RUNNER_PATTERNS.some(([, p]) => p.test(step)) || SCRIPT_RUN.test(step));
+  return parts.find(tests) ?? parts.find(checks) ?? parts.find((step) => !/^(cd|export|set|source|\.)\b/.test(step)) ?? squash(command);
+}
+
+// A typecheck or lint step: a clean pass prints nothing to parse and still says something.
+export const isCheckOnly = (step: string): boolean => {
+  const runner = runnerOf(step);
+  return runner === 'tsc' || runner === 'eslint' || /\b(npm|pnpm|yarn|bun)\s+(?:run\s+)?(typecheck|type-check|lint)\b/.test(step);
+};
+
+// The folder a shell line moves into first ("cd ~/app && ..."), unresolved; null when it starts elsewhere.
+export function cdTarget(command: string): string | null {
+  const first = command.split(/&&|;|\n/)[0].trim();
+  const match = /^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*$/.exec(first);
+  return match ? match[1] ?? match[2] ?? match[3] : null;
+}

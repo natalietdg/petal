@@ -5,9 +5,10 @@ import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as composer from './composer';
 import { byId, el, isIpcError } from './dom';
-import { pipelineStrip, runList, stackList, stageResults, trend } from './testing-view';
+import { historyList, pipelineStrip, stackList, stageResults, trend } from './testing-view';
+import { historyDays, stagesFromRuns } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
-import { buildFixPrompt, slugId, type PipelineConfig, type PipelineRun, type StackItem, type StageConfig, type StageResult, type TestCase, type TestingState } from '../shared/testing';
+import { buildFixPrompt, slugId, type PipelineConfig, type PipelineRun, type StackItem, type StageConfig, type StageResult, type TestCase, type TestingState, type Elsewhere } from '../shared/testing';
 import { latestLoop } from '../shared/loop-line';
 import { buildLoopBrief, isActive, loopStatus, loopTarget, stopLoop, type Criteria } from '../shared/test-loop';
 
@@ -58,6 +59,8 @@ let confirming: { stageId: string | null; commands: { name: string; command: str
 let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
+const pickedFor = new Map<string, string>(); // tab id -> the project she picked there, when the tab is in ~ or outside a repo
+const expanded = new Set<string>(); // history rows opened to their repeats or other commands
 let criteria: Criteria | null = null;
 let loopNote = '';
 // A loop Petal started or stopped this run, per project root; Claude's Loop lines carry the rest.
@@ -67,6 +70,7 @@ let loopTick: ReturnType<typeof setInterval> | null = null;
 
 export const isOpen = (): boolean => overlays.isOpen('testing');
 const pipeline = (): PipelineConfig | null => data?.pipeline ?? null;
+const picked = (): string | null => (sourceTab ? pickedFor.get(sourceTab) ?? null : null);
 const runById = (id: string | null): PipelineRun | null => data?.runs.find((r) => r.id === id) ?? null;
 
 // The newest result for a stage, from the chosen run or across all runs (Claude's land on their matching stage).
@@ -91,7 +95,13 @@ function shownStage(): { stage: StageResult; run: PipelineRun } | null {
 // ---- Drawing.
 function drawHead(): void {
   const p = pipeline();
-  summary.textContent = data?.project ? `${data.project.name} · ${p?.stages.length ?? 0} stage${p?.stages.length === 1 ? '' : 's'}${p?.keepGoing ? ' · keeps going after a failure' : ''}${p?.autoRun ? ' · runs after Claude’s edits' : ''}` : '';
+  summary.replaceChildren(data?.project ? `${data.project.name} · ${p?.stages.length ?? 0} stage${p?.stages.length === 1 ? '' : 's'}${p?.keepGoing ? ' · keeps going after a failure' : ''}${p?.autoRun ? ' · runs after Claude’s edits' : ''}` : '');
+  if (data?.project && picked()) {
+    const change = el('button', 'tst-link tst-change-project', 'Change project');
+    change.type = 'button';
+    change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); selectedRun = null; selectedStage = null; void load(); });
+    summary.append(' · ', change);
+  }
   const busy = Boolean(data?.running);
   runButton.disabled = !p?.stages.length || busy || draft !== null;
   runButton.textContent = busy ? 'Running…' : 'Run pipeline';
@@ -171,7 +181,20 @@ function drawStrip(): void {
   const p = pipeline();
   if (!data?.project || !p) return;
   if (!p.stages.length) {
-    strip.append(el('p', 'tst-empty', 'No stages yet. Edit the pipeline to add the commands this project runs.'));
+    const fromClaude = stagesFromRuns(data.runs);
+    strip.append(el('p', 'tst-empty', fromClaude.length ? `No stages yet. Claude ran ${fromClaude.length} check${fromClaude.length === 1 ? '' : 's'} here you can start from.` : 'No stages yet. Edit the pipeline to add the commands this project runs.'));
+    if (fromClaude.length && !draft) {
+      const make = el('button', 'tst-button tst-make-pipeline', 'Make a pipeline from these commands');
+      make.type = 'button';
+      make.title = fromClaude.map((s) => `${s.name}: ${s.command}`).join('\n');
+      make.addEventListener('click', () => {
+        draft = { ...p, stages: fromClaude.map((s) => ({ ...s })) };
+        message = 'Check the commands, then save. Each one still asks before its first run.';
+        drawAll();
+        editor.querySelector<HTMLInputElement>('.tst-edit-name')?.focus();
+      });
+      strip.append(make);
+    }
     return;
   }
   const current = shownStage();
@@ -261,7 +284,7 @@ function drawResults(): void {
   results.replaceChildren();
   if (!folderAllowed || !data) return;
   if (!data.project) {
-    results.append(el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
+    results.append(data.elsewhere ? projectPicker(data.elsewhere) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
   const shown = shownStage();
@@ -277,17 +300,54 @@ function drawResults(): void {
   results.append(top, stageResults(shown?.stage ?? null, shown?.run ?? null, fixHandlers));
 }
 
+// The tab is in ~ or outside a repo: no pipeline for it, just the projects she can look at instead.
+function projectPicker(elsewhere: Elsewhere): HTMLElement {
+  const box = el('div', 'tst-picker');
+  const why = elsewhere.reason === 'home' ? 'This tab is in your home folder, not a project.' : `This tab is in ${elsewhere.folder}, which isn’t inside a git repo.`;
+  box.append(el('p', 'tst-picker-title', `${why} Pick a project:`));
+  if (!elsewhere.projects.length) {
+    box.append(el('p', 'tst-muted', 'No recent projects yet. Open a tab in a repo, or cd into one here.'));
+    return box;
+  }
+  const list = el('ul', 'tst-picker-list');
+  for (const project of elsewhere.projects) {
+    const item = el('li');
+    const button = el('button', 'tst-pick');
+    button.type = 'button';
+    button.dataset.root = project.root;
+    button.title = project.root;
+    button.append(el('span', 'tst-pick-name', project.name), el('span', 'tst-pick-path', project.root.replace(/^\/Users\/[^/]+/, '~')));
+    button.addEventListener('click', () => {
+      if (sourceTab) pickedFor.set(sourceTab, project.root);
+      selectedRun = null;
+      selectedStage = null;
+      void load().then(refresh);
+    });
+    item.append(button);
+    list.append(item);
+  }
+  box.append(list);
+  return box;
+}
+
 function drawSide(): void {
   historyBox.replaceChildren();
   stackBox.replaceChildren();
   if (!data?.project) return;
   historyBox.append(el('h3', 'tst-section-title', 'History'));
   if (data.runs.length) {
-    historyBox.append(trend(data.runs, data.pipeline.stages.map((s) => s.id), data.pipeline.stages.map((s) => s.name)), runList(data.runs, selectedRun, (id) => {
-      selectedRun = selectedRun === id ? null : id;
-      selectedStage = runById(id)?.stages.find((s) => s.status === 'failed')?.stageId ?? runById(id)?.stages[0]?.stageId ?? null;
-      drawAll();
-      historyBox.querySelector<HTMLElement>(`[data-run="${id}"]`)?.focus();
+    historyBox.append(trend(data.runs, data.pipeline.stages.map((s) => s.id), data.pipeline.stages.map((s) => s.name)), historyList(historyDays(data.runs), selectedRun, expanded, {
+      choose: (id) => {
+        selectedRun = selectedRun === id ? null : id;
+        selectedStage = runById(id)?.stages.find((s) => s.status === 'failed')?.stageId ?? runById(id)?.stages[0]?.stageId ?? null;
+        drawAll();
+        historyBox.querySelector<HTMLElement>(`[data-run="${id}"]`)?.focus();
+      },
+      toggle: (key) => {
+        if (!expanded.delete(key)) expanded.add(key);
+        drawSide();
+        historyBox.querySelector<HTMLElement>(`[data-toggle="${CSS.escape(key)}"]`)?.focus();
+      },
     }));
   } else {
     historyBox.append(el('p', 'tst-muted', 'No runs yet. Your runs and the tests Claude runs in this project show here.'));
@@ -356,7 +416,7 @@ async function startLoop(focus: string, rounds: number): Promise<void> {
   const root = data.project.root;
   const brief = buildLoopBrief({ focus, rounds, stages: p.stages, stack: data.stack });
   const target = loopTarget(data.sessionTab, isLive);
-  const reply = await window.pastel.testing.loopStart({ tabId: id, brief, newTab: target.kind === 'new-tab' });
+  const reply = await window.pastel.testing.loopStart({ tabId: id, root: picked(), brief, newTab: target.kind === 'new-tab' });
   if (isIpcError(reply) || 'note' in reply) { loopNote = isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note; drawLoop(); return; }
   if (target.kind === 'paste') {
     const tab = tabs.get(target.tabId);
@@ -428,7 +488,7 @@ function insertSkill(item: StackItem): void {
 async function run(stageId: string | null, confirmed: boolean): Promise<void> {
   const id = tabId();
   if (!id) return;
-  const reply = await window.pastel.testing.run({ tabId: id, stageId, confirmed });
+  const reply = await window.pastel.testing.run({ tabId: id, root: picked(), stageId, confirmed });
   if (isIpcError(reply)) { message = `Couldn’t start the run: ${reply.error}`; drawAll(); return; }
   if ('confirm' in reply) { confirming = { stageId, commands: reply.confirm.commands }; message = ''; drawAll(); return; }
   if ('note' in reply) { message = reply.note; drawAll(); return; }
@@ -441,7 +501,7 @@ async function savePipeline(): Promise<void> {
   const id = tabId();
   if (!id || !draft) return;
   const clean: PipelineConfig = { ...draft, stages: draft.stages.map((s: StageConfig) => ({ ...s, name: s.name.trim(), command: s.command.trim() })) };
-  const reply = await window.pastel.testing.savePipeline({ tabId: id, pipeline: clean });
+  const reply = await window.pastel.testing.savePipeline({ tabId: id, root: picked(), pipeline: clean });
   if (isIpcError(reply) || 'note' in reply) { message = isIpcError(reply) ? reply.error : reply.note; drawNote(); return; }
   draft = null;
   message = 'Pipeline saved.';
@@ -452,7 +512,7 @@ async function savePipeline(): Promise<void> {
 async function useClaudePipeline(): Promise<void> {
   const id = tabId();
   if (!id) return;
-  const reply = await window.pastel.testing.useClaudePipeline(id);
+  const reply = await window.pastel.testing.useClaudePipeline(id, picked());
   if (isIpcError(reply) || 'note' in reply) { message = isIpcError(reply) ? reply.error : reply.note; drawNote(); return; }
   message = 'Now using Claude’s pipeline.';
   selectedStage = null;
@@ -463,7 +523,7 @@ async function useClaudePipeline(): Promise<void> {
 async function load(): Promise<void> {
   const id = tabId();
   if (!id) return;
-  const result = await window.pastel.testing.detect(id);
+  const result = await window.pastel.testing.detect(id, picked());
   if (isIpcError(result)) { message = `Couldn’t read this project: ${result.error}`; drawAll(); return; }
   data = result;
   folderAllowed = result.allowed;
@@ -474,7 +534,7 @@ async function load(): Promise<void> {
 async function refresh(): Promise<void> {
   const id = tabId();
   if (!id || !data) return load();
-  const result = await window.pastel.testing.history(id);
+  const result = await window.pastel.testing.history(id, picked());
   if (isIpcError(result) || !data) return;
   data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, claudePipeline: result.claudePipeline };
   criteria = result.criteria;
@@ -534,4 +594,4 @@ window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === l
 byId('testing-button').addEventListener('click', toggle);
 
 // For the snapshot harness.
-export const state = () => ({ sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

@@ -15,6 +15,10 @@ import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
 import { claudeRun, scanLog, type ClaudeCall } from './testing-claude';
+import { projectRootOf, ranIn, repoRoot, runProject } from './testing-project';
+import * as history from './history';
+import { sessionTitleFor } from './session-title';
+import { NEW_SESSION } from '../shared/session-label';
 import { adoptClaudePipeline, offersClaudePipeline, readClaudePipeline, type ClaudePipeline } from './testing-claude-pipeline';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
@@ -23,7 +27,7 @@ import { buildStartCommand, shellQuote } from './resume-command';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type ClaudePipelineState, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type StageResult, type TestingState,
+  type ClaudePipelineState, type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type StageResult, type TestingState,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 
@@ -46,13 +50,7 @@ const shellCwd = (pid: number): Promise<string | null> => new Promise((resolve) 
   });
 });
 
-export function repoRoot(cwd: string): string {
-  const stop = os.homedir();
-  for (let dir = cwd; ; dir = path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    if (dir === stop || path.dirname(dir) === dir) return cwd;
-  }
-}
+export { repoRoot } from './testing-project';
 
 async function cwdOf(session: TabSession): Promise<string | null> {
   if (isSnapshotRun() && testingFixture.project) return testingFixture.project;
@@ -61,10 +59,14 @@ async function cwdOf(session: TabSession): Promise<string | null> {
   return session.feed.session?.cwd ?? (await shellCwd(session.pty.pid));
 }
 
-const projectOf = async (session: TabSession | undefined): Promise<string | null> => {
-  const cwd = session ? await cwdOf(session) : null;
-  return cwd && path.isAbsolute(cwd) ? repoRoot(cwd) : null;
-};
+// The tab's project: the git repo its folder is in; null for the home folder or a folder outside a repo.
+const projectOf = async (session: TabSession | undefined): Promise<string | null> => projectRootOf(session ? await cwdOf(session) : null);
+
+// A project she picked in Testing (the tab is in ~); taken only when it is itself a repo root, else the tab's.
+async function rootFor(session: TabSession | undefined, picked: unknown): Promise<string | null> {
+  if (typeof picked === 'string' && projectRootOf(picked) === picked) return picked;
+  return projectOf(session);
+}
 
 // ---- Reading the project: stack, skills, proposal.
 function skillsFor(root: string) {
@@ -91,22 +93,93 @@ function claudePipelineState(root: string, saved: PipelineConfig | null): Claude
   return { proposal: !saved, offer: offersClaudePipeline(saved, claude), stages: claude.stages.length };
 }
 
-// Claude's runs in every open session on this project, added to its history once each.
+// Claude's calls in every open session, each with the project it ran in (its "cd", else Claude's folder then).
+async function openCalls(sessions: TabSessions): Promise<{ call: ClaudeCall; project: string | null }[]> {
+  const found: { call: ClaudeCall; project: string | null }[] = [];
+  for (const { feed } of sessions.values()) {
+    const s = feed.session;
+    if (!s?.transcript) continue;
+    const fallback = (isSnapshotRun() && testingFixture.project) || s.cwd || null;
+    for (const call of (await scanLog(s.transcript, s.sessionId)).calls) found.push({ call, project: projectRootOf(ranIn(call.command, call.cwd ?? fallback)) });
+  }
+  return found;
+}
+
+// Runs filed under the home folder before ~ stopped being a project; read only, each copied to the repo it ran in.
+const homeRuns = (): PipelineRun[] => store.load(os.homedir()).runs.filter((r) => r.by === 'claude');
+
+// A run from before prompts and durations were read: filled in once from its session's log, if it is still on disk.
+const backfillTried = new Set<string>(); // sessionIds whose log was read for this
+async function backfill(runs: PipelineRun[], sessions: TabSessions): Promise<PipelineRun[] | null> {
+  const stale = runs.filter((r) => r.by === 'claude' && r.prompt === undefined && r.sessionId && !backfillTried.has(r.sessionId));
+  if (!stale.length) return null;
+  const open = new Map([...sessions.values()].flatMap(({ feed }) => (feed.session?.transcript ? [[feed.session.sessionId, feed.session.transcript] as const] : [])));
+  const byId = new Map<string, ClaudeCall>();
+  for (const sessionId of new Set(stale.map((r) => r.sessionId as string))) {
+    backfillTried.add(sessionId);
+    const file = open.get(sessionId) ?? history.findRecord(sessionId)?.file;
+    if (file) for (const call of (await scanLog(file, sessionId)).calls) byId.set(`claude-${call.id}`, call);
+  }
+  return runs.map((run) => {
+    if (!stale.includes(run)) return run;
+    const call = byId.get(run.id);
+    if (!call) return { ...run, prompt: '' };
+    const wall = call.endAt > call.at ? call.endAt - call.at : null;
+    return {
+      ...run, startedAt: call.at, finishedAt: call.endAt, prompt: call.prompt, ...(call.cwd ? { cwd: call.cwd } : {}),
+      stages: run.stages.map((stage) => ({ ...stage, durationMs: wall ?? stage.durationMs })),
+    };
+  });
+}
+
+// Claude's runs that ran in this project, from every open session and the old home-folder history, added once each.
 // The store is loaded after the logs are read, so a run saved meanwhile is never lost.
 async function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): Promise<void> {
   if (!claudeFolderAllowed()) return;
-  const calls: ClaudeCall[] = [];
-  for (const { feed } of sessions.values()) {
-    const s = feed.session;
-    const cwd = (isSnapshotRun() && testingFixture.project) || s?.cwd;
-    if (!s?.transcript || !cwd || repoRoot(cwd) !== root) continue;
-    calls.push(...(await scanLog(s.transcript, s.sessionId)).calls);
-  }
+  const calls = (await openCalls(sessions)).filter((c) => c.project === root).map((c) => c.call);
+  const moved = root === os.homedir() ? [] : homeRuns().filter((run) => runProject(run) === root);
   const data = store.load(root);
   const known = new Set(data.runs.map((r) => r.id));
   const scripts = scriptsOf(root);
   const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => claudeRun(call, stages, scripts, root));
-  if (fresh.length) store.save({ ...data, runs: [...fresh, ...data.runs] });
+  fresh.forEach((run) => known.add(run.id));
+  const copied: PipelineRun[] = [];
+  for (const run of moved) if (!known.has(run.id)) { known.add(run.id); copied.push(run); } // the old file has a few ids twice
+  const merged = [...fresh, ...copied, ...data.runs];
+  const filled = await backfill(merged, sessions);
+  if (fresh.length || copied.length || filled) store.save({ ...data, runs: filled ?? merged });
+}
+
+// Each Claude run's session name, read fresh so a renamed session shows its new name.
+const named = (runs: PipelineRun[]): PipelineRun[] => {
+  const names = new Map<string, string>();
+  return runs.map((run) => {
+    if (run.by !== 'claude' || !run.sessionId) return run;
+    if (!names.has(run.sessionId)) names.set(run.sessionId, sessionTitleFor(run.sessionId));
+    const name = names.get(run.sessionId) ?? '';
+    const placeholder = name.toLowerCase() === NEW_SESSION || name.endsWith(` · ${NEW_SESSION}`);
+    return placeholder ? run : { ...run, sessionName: name };
+  });
+};
+
+const PICK_MAX = 8;
+
+// Projects to offer when the tab is in ~ or outside a repo: open tabs', where Claude ran checks, recent sessions'.
+async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
+  const seen = new Map<string, number>(); // root -> most recent use
+  const note = (root: string | null, at: number) => { if (root) seen.set(root, Math.max(seen.get(root) ?? 0, at)); };
+  for (const s of sessions.values()) note(await projectOf(s), Date.now());
+  for (const { call, project } of await openCalls(sessions)) note(project, call.at);
+  for (const run of homeRuns()) note(runProject(run), run.startedAt);
+  for (const record of history.listSessions().slice(0, 40)) note(projectRootOf(record.cwd), record.lastAt);
+  return [...seen].sort((a, b) => b[1] - a[1]).slice(0, PICK_MAX).map(([root]) => ({ root, name: path.basename(root) }));
+}
+
+async function elsewhereFor(session: TabSession | undefined, sessions: TabSessions): Promise<Elsewhere | null> {
+  const cwd = session ? await cwdOf(session) : null;
+  if (!cwd) return null;
+  const folder = path.resolve(cwd);
+  return { reason: folder === os.homedir() ? 'home' : 'no-repo', folder: path.basename(folder), projects: await recentProjects(sessions) };
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.
@@ -125,7 +198,7 @@ async function stateFor(root: string, sessions: TabSessions, sessionTab: string 
   await mergeClaudeRuns(root, sessions, pipeline.stages);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
-  return { allowed: true, project: { root, name: path.basename(root) }, stack, proposed, pipeline, saved: Boolean(saved), runs: data.runs, running, sessionTab, claudePipeline: claudePipelineState(root, saved) };
+  return { allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running, sessionTab, claudePipeline: claudePipelineState(root, saved) };
 }
 
 // ---- Watching a run: each stage's exit file, then its report or log.
@@ -258,31 +331,31 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
-  const blank = (allowed: boolean): TestingState => ({ allowed, project: null, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null });
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null });
 
-  handle('testing:detect', async (event, { tabId }) => {
+  handle('testing:detect', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return blank(false);
     const asking = sessionFor(sessions, event.sender.id, tabId);
-    const root = await projectOf(asking);
-    return root ? stateFor(root, sessions, await sessionTabFor(root, sessions, asking)) : blank(true);
+    const root = await rootFor(asking, picked);
+    return root ? stateFor(root, sessions, await sessionTabFor(root, sessions, asking)) : blank(true, await elsewhereFor(asking, sessions));
   });
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
-  handle('testing:history', async (event, { tabId }) => {
+  handle('testing:history', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
     const asking = sessionFor(sessions, event.sender.id, tabId);
-    const root = await projectOf(asking);
+    const root = await rootFor(asking, picked);
     if (!root) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
     // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
     await mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
     const data = store.load(root);
-    return { runs: data.runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline) };
+    return { runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline) };
   });
 
   // Prepares .petal/, then either leaves the paste to the reply box's path or starts claude with the brief in a new tab.
-  handle('testing:loop-start', async (event, { tabId, brief, newTab }) => {
+  handle('testing:loop-start', async (event, { tabId, root: picked, brief, newTab }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab. Open one first.' };
     if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'The loop brief is empty or too long.' };
     prepareLoop(root);
@@ -294,9 +367,9 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     return { tabId: opened ?? null };
   });
 
-  handle('testing:save-pipeline', async (event, { tabId, pipeline }) => {
+  handle('testing:save-pipeline', async (event, { tabId, root: picked, pipeline }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab.' };
     const clean = cleanPipeline(pipeline, store.load(root).pipeline);
     if (!clean) return { note: 'Each stage needs a name and a one-line command.' };
@@ -305,9 +378,9 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 
   // Use it: re-reads and re-checks the file here, never the renderer's copy. New commands still ask before their first run.
-  handle('testing:use-claude-pipeline', async (event, { tabId }) => {
+  handle('testing:use-claude-pipeline', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab.' };
     const claude = validClaudePipeline(root);
     if (!claude) return { note: 'Claude’s .petal/pipeline.json is gone or no longer valid.' };
@@ -315,9 +388,9 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     return { ok: true };
   });
 
-  handle('testing:run', async (event, { tabId, stageId = null, confirmed = false }): Promise<RunReply> => {
+  handle('testing:run', async (event, { tabId, root: picked, stageId = null, confirmed = false }): Promise<RunReply> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab. Open one first.' };
     if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
     const data = store.load(root);

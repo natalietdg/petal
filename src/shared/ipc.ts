@@ -206,12 +206,12 @@ export interface InvokeChannels {
   'library:duplicates': { args: []; result: Guarded<DuplicatePair[]> };
   'library:keep-both': { args: [request: { a: string; b: string }]; result: Guarded<{ ok: true } | { error: string }> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
-  'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
-  'testing:loop-start': { args: [request: { tabId: TabId; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
-  'testing:save-pipeline': { args: [request: { tabId: TabId; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:use-claude-pipeline': { args: [request: { tabId: TabId }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:run': { args: [request: { tabId: TabId; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
+  'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
+  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  'testing:save-pipeline': { args: [request: { tabId: TabId; root?: string | null; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:use-claude-pipeline': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:run': { args: [request: { tabId: TabId; root?: string | null; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };
