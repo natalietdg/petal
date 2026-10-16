@@ -8,6 +8,7 @@ import { app, BrowserWindow, screen } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
+import { builtinMenusCheck } from './snapshot-builtin-menus';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
@@ -380,6 +381,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['composer', () => views.composerCheck(kit, { win, ...tabs })],
     ['paste', () => pasteCheck(kit, { win, ...tabs })],
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
+    ['builtin menus', () => builtinMenusCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
     ['sessions agents', () => views.sessionsAgentsCheck(kit)],
     ['agents dropdown', () => agentsCheck(kit, win)],
@@ -692,6 +694,15 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'term-contrast') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await termContrastCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // Claude Code's own menus in the dock, and the fallback when no card reads the screen.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'builtin-menus' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await js('PastelTerm.welcome.close()');
+    await builtinMenusCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

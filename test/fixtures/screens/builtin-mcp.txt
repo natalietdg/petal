@@ -1,0 +1,40 @@
+
+❯ /agents                                                                                           
+  ⎿  The /agents wizard has been removed.
+     
+     Ask Claude to create or update subagents for you (e.g. "create a code-reviewer subagent that
+     ..."),
+     or edit the files directly:
+       • .claude/agents/       (this project)
+       • ~/.claude/agents/     (all projects)
+    
+     Docs: https://code.claude.com/docs/en/sub-agents
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Manage MCP servers
+   30 servers
+
+     User MCPs (/Users/demo/.claude.json)
+   ❯ ✘ notes-server
+
+     claude.ai
+     ✔ claude.ai [Production] Signoz   43 tools
+     ✔ claude.ai [Staging] Signoz      43 tools
+     ✔ claude.ai Atlassian Rovo        41 tools
+     ✔ claude.ai Claude Docs           8 tools
+     ✔ claude.ai Figma                 42 tools
+     ⚠ claude.ai Gmail                 needs authentication
+     ⚠ claude.ai Google Calendar       needs authentication
+     ✔ claude.ai Google Drive          11 tools
+     ⚠ claude.ai Microsoft 365         needs authentication
+     ⚠ claude.ai Microsoft Docs MCP    needs authentication
+     ✔ claude.ai Accounting            19 tools
+     ⚠ claude.ai Notes app             needs authentication
+     ✔ claude.ai Analytics             1 tool
+     → Show unused connectors          15 hidden
+     
+     Built-in MCPs (always available)       
+     ✔ claude-in-chrome                22 tools
+      
+   ※ Run claude --debug to see error logs
+   https://code.claude.com/docs/en/mcp for help
+   ↑/↓ to navigate · Enter to confirm · Esc to cancel

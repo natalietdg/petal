@@ -7,7 +7,7 @@ import * as favorites from './favorites';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
-import { parsePermissionPrompt, parseQuestionPicker } from '../shared/prompt-answer';
+import { screenIsAsking } from '../shared/prompt-answer';
 import { STATUS_KEYS, STATUS_TITLES } from '../shared/status-lines';
 import { agentsBadgeText, type SessionsView } from '../shared/ipc';
 import {
@@ -38,11 +38,8 @@ const confirms = new Map<string, string>(); // per session: "still running elsew
 
 export const isOpen = (): boolean => overlays.isOpen('board');
 
-// A question or permission picker on the tab's screen, read the same way the prompt dock reads it.
-const isAsking = (tab: tabs.Tab): boolean => {
-  const lines = tabs.screenLines(tab);
-  return Boolean(parseQuestionPicker(lines) ?? parsePermissionPrompt(lines));
-};
+// A question, permission prompt or Claude Code menu on the tab's screen, read the same way the prompt dock reads it.
+const isAsking = (tab: tabs.Tab): boolean => screenIsAsking(tabs.screenLines(tab));
 
 // This window's tabs with a live Claude first, then every other live session the panel lists.
 export function sources(rows: SessionsView['rows'] = []): BoardSource[] {

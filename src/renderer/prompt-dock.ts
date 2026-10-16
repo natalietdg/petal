@@ -1,18 +1,29 @@
-// Clickable answers for Claude Code's pickers, above the reply box. Both are read off the terminal screen:
-// the question card mirrors the AskUserQuestion picker tab by tab, the permission bar the tool prompt.
-// Main turns each click into the keystrokes that picker expects.
+// Clickable answers for Claude Code's pickers, above the reply box. All are read off the terminal screen:
+// the question card mirrors the AskUserQuestion picker tab by tab, the permission bar the tool prompt,
+// the menu card Claude Code's own menus (/model, /memory, /mcp). Main turns each click into keystrokes.
+// Any other screen offering Esc gets a line pointing at the terminal while it is minimised.
 import { byId, el } from './dom';
-import { parsePermissionPrompt, parseQuestionPicker, type PermissionPrompt, type PickerStep, type QuestionPage, type QuestionPicker, type ReviewPage } from '../shared/prompt-answer';
+import * as layout from './layout';
+import {
+  parseBuiltinMenu, parsePermissionPrompt, parseQuestionPicker, screenOffersEsc,
+  type BuiltinMenu, type MenuOption, type MenuStep, type PermissionPrompt, type PickerStep, type QuestionPage, type QuestionPicker, type ReviewPage,
+} from '../shared/prompt-answer';
 import type { TabId } from '../shared/types';
 
 const dock = byId('prompt-dock');
 const card = el('section', 'question-card');
 const bar = el('section', 'permission-bar');
+const menuCard = el('section', 'menu-card');
+const elsewhere = el('section', 'terminal-ask');
 card.hidden = true;
 bar.hidden = true;
+menuCard.hidden = true;
+elsewhere.hidden = true;
 card.setAttribute('aria-label', 'Claude is asking');
 bar.setAttribute('aria-label', 'Claude needs permission');
-dock.append(card, bar);
+menuCard.setAttribute('aria-label', 'Claude Code menu');
+elsewhere.setAttribute('aria-label', 'Claude is asking in the terminal');
+dock.append(card, bar, menuCard, elsewhere);
 
 const UNLOCK_MS = 1500; // a step the picker ignored (← on the first tab) must not leave the card stuck
 const FREE_TEXT_PLACEHOLDER = /^Type something\.?$/;
@@ -26,9 +37,20 @@ const drafts = new Map<string, string>(); // unsent typed text per question, kep
 let permission: PermissionPrompt | null = null;
 let permissionKey = '';
 let permissionSent = false;
+let menu: BuiltinMenu | null = null;
+let menuKey = '';
+let menuSent = false;
+let menuUnlock: ReturnType<typeof setTimeout> | undefined;
+// An unnumbered pick: arrows one at a time, each after the screen redraws, until the cursor sits on the label.
+let steer: { label: string; dir: 1 | -1; left: number } | null = null;
+let menuNote = '';
+let unparsedMenu = false;
+
+const MAX_DIGIT = 9; // menus take one keypress per digit
+const MAX_STEER = 40;
 
 // What the reader says while the open turn waits on her: set by app.ts.
-export type Asking = 'question' | 'permission' | null;
+export type Asking = 'question' | 'permission' | 'menu' | 'terminal' | null;
 export const hooks = { askingChanged: (_asking: Asking): void => {} };
 let asking: Asking = null;
 
@@ -179,6 +201,104 @@ function renderBar(): void {
   bar.append(head, ...details, options);
 }
 
+function sendMenu(step: MenuStep): void {
+  if (!tabId) return;
+  menuSent = true;
+  window.pastel.answerPrompt(tabId, { kind: 'menu', step });
+  const sentKey = menuKey;
+  clearTimeout(menuUnlock);
+  // The menu ignored the keys (a section label the cursor skips): give the buttons back.
+  menuUnlock = setTimeout(() => {
+    if (menuKey !== sentKey || !menuSent) return;
+    if (steer) menuNote = 'That row can only be picked in the terminal';
+    steer = null;
+    menuSent = false;
+    renderMenu();
+  }, UNLOCK_MS);
+  renderMenu();
+}
+
+// Numbered rows: a digit when the whole list is 1-9 (measured on /model), else arrows by the number gap.
+function pickMenu(option: MenuOption): void {
+  if (!menu || menuSent) return;
+  menuNote = '';
+  const focused = menu.options.find((o) => o.focused);
+  if (option.number !== null && focused?.number != null) {
+    const digits = !menu.scrolled && (menu.options.at(-1)?.number ?? 0) <= MAX_DIGIT;
+    sendMenu(digits ? { digit: option.number } : { arrows: option.number - focused.number, enter: true });
+    return;
+  }
+  steer = { label: option.label, dir: 1, left: MAX_STEER };
+  steerStep(true);
+}
+
+function steerStep(first = false): void {
+  if (!steer || !menu) { steer = null; return; }
+  const labels = menu.options.map((o) => o.label);
+  const at = menu.options.findIndex((o) => o.focused);
+  const target = labels.indexOf(steer.label);
+  if (at === target) { steer = null; sendMenu({ arrows: 0, enter: true }); return; }
+  const dir = target > at ? 1 : -1;
+  // Off screen, out of steps, or the cursor jumped past it: stop rather than wander.
+  if (target < 0 || steer.left <= 0 || (!first && dir !== steer.dir)) {
+    steer = null;
+    menuNote = 'That row can only be picked in the terminal';
+    menuSent = false;
+    renderMenu();
+    return;
+  }
+  steer = { ...steer, dir, left: steer.left - 1 };
+  sendMenu({ arrows: dir, enter: false });
+}
+
+function renderMenu(): void {
+  menuCard.replaceChildren();
+  menuCard.hidden = !menu;
+  if (!menu) return;
+  const legend = el('div', 'qc-legend');
+  legend.append(el('span', 'qc-chip', 'Claude Code'), el('span', 'qc-text', menu.title || 'Menu'));
+  menuCard.append(legend);
+  if (menu.subtitle) menuCard.append(el('p', 'mc-subtitle', menu.subtitle));
+  const options = el('div', 'qc-options');
+  for (const option of menu.options) {
+    const b = el('button', 'qc-option mc-option');
+    b.type = 'button';
+    b.disabled = menuSent;
+    const head = el('span', 'qc-option-head');
+    if (option.number !== null) head.append(el('span', 'qc-num', `${option.number}.`));
+    head.append(el('span', 'qc-label', option.label));
+    if (option.current) head.append(el('span', 'mc-current', 'Current'));
+    b.append(head, ...(option.description ? [el('span', 'qc-desc', option.description)] : []));
+    if (option.focused) b.dataset.focused = 'true';
+    if (option.current) b.setAttribute('aria-current', 'true');
+    b.addEventListener('click', () => pickMenu(option));
+    options.append(b);
+  }
+  menuCard.append(options);
+  if (menu.scrolled) menuCard.append(el('p', 'qc-hint', 'More rows in the terminal: scroll there with ↑/↓.'));
+  const footer = el('div', 'qc-footer');
+  const status = el('p', 'qc-status', menuSent ? 'Sent · waiting for Claude' : menuNote);
+  status.setAttribute('role', 'status');
+  const esc = el('button', 'qc-nav mc-cancel', 'Esc · Cancel');
+  esc.type = 'button';
+  esc.disabled = menuSent && !steer;
+  esc.addEventListener('click', () => { steer = null; menuNote = ''; sendMenu({ cancel: true }); });
+  footer.append(status, esc);
+  menuCard.append(footer);
+}
+
+// Something waits on her that no card can show: point at the terminal while it is folded away.
+function renderElsewhere(): void {
+  const show = unparsedMenu && layout.isTerminalMinimised();
+  elsewhere.hidden = !show;
+  if (!show || elsewhere.childElementCount) return;
+  const go = el('button', 'qc-nav ta-show', 'Show terminal');
+  go.type = 'button';
+  go.addEventListener('click', () => layout.setTerminalMinimised(false));
+  elsewhere.append(el('p', 'ta-text', 'Claude is asking in the terminal'), go);
+}
+layout.onTerminalMinimised(renderElsewhere);
+
 // Called after the active tab's terminal changes, or another tab becomes active: its visible screen, top to bottom.
 export function readScreen(screenTab: TabId, lines: readonly string[]): void {
   if (screenTab !== tabId) {
@@ -187,6 +307,9 @@ export function readScreen(screenTab: TabId, lines: readonly string[]): void {
     pickerKey = '';
     permission = null;
     permissionKey = '';
+    menu = null;
+    menuKey = '';
+    steer = null;
     drafts.clear();
   }
 
@@ -209,11 +332,26 @@ export function readScreen(screenTab: TabId, lines: readonly string[]): void {
     renderBar();
   }
 
-  const nextAsking: Asking = picker ? 'question' : permission ? 'permission' : null;
+  // The two older kinds win: their footers never match a menu's, but a menu must not shadow them.
+  const nextMenu = picker || permission ? null : parseBuiltinMenu(lines);
+  const nextMenuKey = nextMenu ? JSON.stringify(nextMenu) : '';
+  if (nextMenuKey !== menuKey || (!nextMenu && !menuCard.hidden)) {
+    menu = nextMenu;
+    menuKey = nextMenuKey;
+    menuSent = false;
+    if (!menu) { steer = null; menuNote = ''; }
+    if (steer) steerStep();
+    else renderMenu();
+  }
+
+  unparsedMenu = !picker && !permission && !menu && screenOffersEsc(lines);
+  renderElsewhere();
+
+  const nextAsking: Asking = picker ? 'question' : permission ? 'permission' : menu ? 'menu' : unparsedMenu ? 'terminal' : null;
   if (nextAsking !== asking) {
     asking = nextAsking;
     hooks.askingChanged(asking);
   }
 }
 
-export const state = () => ({ tabId, picker, pickerSent, permission });
+export const state = () => ({ tabId, picker, pickerSent, permission, menu, menuSent, unparsedMenu });
