@@ -1,0 +1,21 @@
+=== RUN   TestTokens
+=== RUN   TestTokens/issues_a_token_for_a_valid_user
+=== RUN   TestTokens/refreshes_a_token_before_expiry
+=== RUN   TestTokens/rejects_an_expired_token
+    auth_test.go:22: IsExpired(1700000000) = false, want true
+=== RUN   TestTokens/rotates_signing_keys
+    auth_test.go:26: key rotation not implemented
+--- FAIL: TestTokens (0.00s)
+    --- PASS: TestTokens/issues_a_token_for_a_valid_user (0.00s)
+    --- PASS: TestTokens/refreshes_a_token_before_expiry (0.00s)
+    --- FAIL: TestTokens/rejects_an_expired_token (0.00s)
+    --- SKIP: TestTokens/rotates_signing_keys (0.00s)
+FAIL
+FAIL	example.com/acme/auth	0.234s
+=== RUN   TestAddsTwoNumbers
+--- PASS: TestAddsTwoNumbers (0.00s)
+=== RUN   TestMultipliesTwoNumbers
+--- PASS: TestMultipliesTwoNumbers (0.00s)
+PASS
+ok  	example.com/acme/mathx	0.123s
+FAIL

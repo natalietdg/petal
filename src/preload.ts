@@ -124,6 +124,14 @@ const api = {
     addSession: (tabId: TabId) => invoke('library:add-session', { tabId }),
     onChanged: (callback: () => void) => subscribe('library:changed', callback),
   },
+  testing: {
+    detect: (tabId: TabId) => invoke('testing:detect', { tabId }),
+    history: (tabId: TabId) => invoke('testing:history', { tabId }),
+    savePipeline: (request: InvokeArgs<'testing:save-pipeline'>[0]) => invoke('testing:save-pipeline', request),
+    run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
+    stop: (runId: string) => invoke('testing:stop', { runId }),
+    onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),
+  },
   factory: {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),

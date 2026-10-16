@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="1" tests="6" time="0.015" timestamp="2026-10-16T10:54:53.288821+08:00" hostname="demo-mac.local"><testcase classname="tests.test_auth.TestAuth.TestTokens" name="test_issues_a_token_for_a_valid_user" time="0.000" /><testcase classname="tests.test_auth.TestAuth.TestTokens" name="test_refreshes_a_token_before_expiry" time="0.000" /><testcase classname="tests.test_auth.TestAuth.TestTokens" name="test_rejects_an_expired_token" time="0.000"><failure message="assert 1700000000 &gt; 1800000000">self = &lt;test_auth.TestAuth.TestTokens object at 0x109efad70&gt;
+
+    def test_rejects_an_expired_token(self):
+        expires_at = 1700000000
+&gt;       assert expires_at &gt; 1800000000
+E       assert 1700000000 &gt; 1800000000
+
+tests/test_auth.py:14: AssertionError</failure></testcase><testcase classname="tests.test_auth.TestAuth.TestTokens" name="test_rotates_signing_keys" time="0.000"><skipped type="pytest.skip" message="key rotation not implemented">/Users/demo/acme/tests/test_auth.py:16: key rotation not implemented</skipped></testcase><testcase classname="tests.test_math" name="test_adds_two_numbers" time="0.000" /><testcase classname="tests.test_math" name="test_multiplies_two_numbers" time="0.000" /></testsuite></testsuites>

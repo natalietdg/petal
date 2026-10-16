@@ -1,0 +1,33 @@
+
+
+  auth
+    tokens
+      ✔ issues a token for a valid user
+      ✔ refreshes a token before expiry
+      1) rejects an expired token
+      - rotates signing keys
+
+  math
+    ✔ adds two numbers
+    ✔ multiplies two numbers
+
+
+  4 passing (2ms)
+  1 pending
+  1 failing
+
+  1) auth
+       tokens
+         rejects an expired token:
+
+      AssertionError [ERR_ASSERTION]: expected token to be expired
+      + expected - actual
+
+      -false
+      +true
+      
+      at Context.<anonymous> (test/auth.spec.js:13:14)
+      at process.processImmediate (node:internal/timers:484:21)
+
+
+

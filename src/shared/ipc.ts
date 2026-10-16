@@ -23,6 +23,7 @@ import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
 import type { LibraryDoc, LibraryList, LibraryRunResult } from './library';
+import type { PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -186,6 +187,12 @@ export interface InvokeChannels {
   'library:list': { args: []; result: Guarded<LibraryList> };
   'library:read': { args: [request: { slug: string }]; result: Guarded<LibraryDoc> };
   'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
+  // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
+  'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
+  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null }> };
+  'testing:save-pipeline': { args: [request: { tabId: TabId; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:run': { args: [request: { tabId: TabId; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
+  'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };
   'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };
@@ -274,6 +281,7 @@ export interface EventChannels {
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
   'library:changed': void; // a run added or updated notes
+  'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };
