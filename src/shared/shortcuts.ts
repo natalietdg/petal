@@ -20,6 +20,7 @@ export const ACCEL = {
   board: 'CmdOrCtrl+Shift+O',
   focus: 'CmdOrCtrl+Shift+F',
   shortcuts: 'CmdOrCtrl+/',
+  stopClaude: 'CmdOrCtrl+.',
 } as const;
 
 export const themeAccelerator = (index: number): string => `CmdOrCtrl+${index + 1}`;
@@ -83,6 +84,7 @@ export const GUIDE: readonly GuideGroup[] = [
       menuRow('Previous tab', ACCEL.previousTab, ACCEL.previousTabCtrl),
       menuRow('Close tab', ACCEL.closeTab),
       menuRow('Close window', ACCEL.closeWindow),
+      menuRow('Stop Claude while it works (Esc in the terminal)', ACCEL.stopClaude),
       keyRow('Send from the reply box', 'Enter'),
       keyRow('New line in the reply box', 'Shift+Enter'),
       keyRow('Move between Board cards', 'Up', 'Down', 'Left', 'Right'),

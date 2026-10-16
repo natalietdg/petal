@@ -37,6 +37,9 @@ export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0, organize
 // Snapshot runs record the keys a prompt answer would type instead of sending them to the fixture tab's shell.
 export const promptWrites: string[][] = [];
 
+// Snapshot runs record each Stop's keys per tab, so the harness can count Escs per tab.
+export const stopWrites: { tabId: string; keys: string[] }[] = [];
+
 // Snapshot runs also record what the terminal typed, so the harness can see a pasted image's Ctrl+V.
 export const ptyWrites: { tabId: string; data: string }[] = [];
 

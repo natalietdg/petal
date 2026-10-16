@@ -50,10 +50,12 @@ export type PickerStep = { pick: number } | { other: number; text: string } | { 
 // One move on a Claude Code menu: a digit, arrows (then Enter when picking), or Esc.
 export type MenuStep = { digit: number } | { arrows: number; enter: boolean } | { cancel: true };
 
+// interrupt: one Esc to stop a working Claude, offered only while nothing on screen is asking.
 export type PromptAnswer =
   | { kind: 'picker'; step: PickerStep }
   | { kind: 'permission'; option: number }
-  | { kind: 'menu'; step: MenuStep };
+  | { kind: 'menu'; step: MenuStep }
+  | { kind: 'interrupt' };
 
 export interface PromptAnswerRequest {
   tabId: TabId;

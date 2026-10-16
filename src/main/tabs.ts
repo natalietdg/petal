@@ -10,7 +10,7 @@ import * as organizer from './session-organizer';
 import { harvest } from './library-extract';
 import { onTurnFinished } from './testing-ipc';
 import { sessionTitleFor } from './session-title';
-import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
+import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites, stopWrites } from './snapshot-mode';
 import { claudePath } from './claude-cli';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand, shellQuote } from './resume-command';
@@ -134,16 +134,20 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
 const ANSWER_SETTLE_MS = 1000;
 const PICKER_SETTLE_MS = 250; // picker and menu steps come one per screen change, e.g. ticking several boxes
 const answeringUntil = new WeakMap<TabSession, number>();
+const ANSWER_KINDS: readonly string[] = ['picker', 'permission', 'menu', 'interrupt'] satisfies PromptAnswer['kind'][];
 
 // Types an answer into the tab's claude: the renderer only offers one while the prompt is on its screen.
 function answerPrompt(session: TabSession, answer: PromptAnswer): void {
   if (Date.now() < (answeringUntil.get(session) ?? 0)) return;
+  // Esc on an idle or waiting claude would clear her draft or cancel a prompt.
+  if (answer.kind === 'interrupt' && session.feed.session?.status !== 'busy') return;
   const keys = keysFor(answer);
   if (!keys) return;
   // A steering arrow is one key the next redraw answers, so it holds nothing back.
   const steering = answer.kind === 'menu' && 'arrows' in answer.step && !answer.step.enter;
-  const settle = answer.kind === 'permission' ? ANSWER_SETTLE_MS : PICKER_SETTLE_MS;
+  const settle = answer.kind === 'permission' || answer.kind === 'interrupt' ? ANSWER_SETTLE_MS : PICKER_SETTLE_MS;
   answeringUntil.set(session, steering ? Date.now() : Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle);
+  if (isSnapshotRun() && answer.kind === 'interrupt') { stopWrites.push({ tabId: session.tabId, keys }); return; }
   if (isSnapshotRun()) { promptWrites.push(keys); return; }
   keys.forEach((key, i) => setTimeout(() => {
     if (sessions.has(tabKey(session.contentsId, session.tabId))) session.pty.write(key);
@@ -210,7 +214,7 @@ export function registerTabIpc(): void {
 
   on('prompt:answer', (event, { tabId, answer }) => {
     const session = tabFor(event, tabId);
-    if (session && (answer?.kind === 'picker' || answer?.kind === 'permission' || answer?.kind === 'menu')) answerPrompt(session, answer);
+    if (session && ANSWER_KINDS.includes(answer?.kind)) answerPrompt(session, answer);
   });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.

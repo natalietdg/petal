@@ -39,6 +39,7 @@ import * as headersMin from './headers-min';
 import * as shortcuts from './shortcuts';
 import * as library from './library';
 import * as testing from './testing';
+import * as stopClaude from './stop-claude';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -46,7 +47,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, testing };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, testing, stopClaude };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -82,7 +83,7 @@ async function start(): Promise<void> {
   };
 
   // The reader and the pet always follow the active tab, from its last update.
-  promptDock.hooks.askingChanged = reader.setAsking;
+  promptDock.hooks.askingChanged = (asking) => { reader.setAsking(asking); stopClaude.paintComposer(); };
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
@@ -91,6 +92,7 @@ async function start(): Promise<void> {
     favorites.followReader(tab.id, update.sessionId);
     cat.setBusy(update.busy);
     readScreen(tab);
+    stopClaude.paintComposer();
   };
   // Pickers come and go with pty output; read the active screen once a burst settles.
   let screenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -189,6 +191,9 @@ async function start(): Promise<void> {
   });
 
   window.addEventListener('petal:focus-terminal', focusTerminal);
+  // A Stop click or its 3s limit: repaint the reader's and reply box's Stop.
+  window.addEventListener(stopClaude.CHANGED_EVENT, () => { const active = tabs.active(); if (active) showTab(active); });
+  window.pastel.onStopClaude(() => void stopClaude.stopActive());
   // The reply box added or took back a pending message.
   window.addEventListener('petal:reader-refresh', (event) => {
     const tabId = (event as CustomEvent<string>).detail;

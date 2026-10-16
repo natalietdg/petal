@@ -38,6 +38,7 @@ export interface MenuOptions {
   onToggleBoard: () => void;
   onToggleFocus: () => void;
   onToggleHeaders: () => void;
+  onStopClaude: () => void;
   onOpenSettings: () => void;
   onOpenWelcome: () => void;
   onOpenGetStarted: () => void;
@@ -48,7 +49,7 @@ export interface MenuOptions {
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onStopClaude, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -103,6 +104,8 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
         { label: 'New Tab', accelerator: ACCEL.newTab, click: onNewTab },
         { label: 'New Window', accelerator: ACCEL.newWindow, click: onNewWindow },
         { label: 'Open Repo…', accelerator: ACCEL.openRepo, click: onOpenRepo },
+        { type: 'separator' },
+        { label: 'Stop Claude', accelerator: ACCEL.stopClaude, click: onStopClaude },
         { type: 'separator' },
         { label: 'Next Tab', accelerator: ACCEL.nextTab, click: () => onCycleTab(1) },
         { label: 'Previous Tab', accelerator: ACCEL.previousTab, click: () => onCycleTab(-1) },

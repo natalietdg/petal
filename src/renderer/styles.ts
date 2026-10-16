@@ -38,6 +38,7 @@ import './history.css';
 import './favorites.css';
 import './notes.css';
 import './composer.css';
+import './stop-claude.css';
 import './slash-menu.css';
 import './library.css';
 import './testing.css';

@@ -10,6 +10,7 @@ import { createStrip, paintStrip } from './status-strip';
 import { paintConclusion } from './conclusion-banner';
 import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
+import * as stopClaude from './stop-claude';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
@@ -174,6 +175,7 @@ export function update(shown: ShownUpdate): void {
   status.textContent = state === 'ended'
     ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
     : `Latest reply · ${timeOfReply(newest.timestamp)}`;
+  appendStop();
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
   latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...replyBody(newest), ...writing);
   latest.dataset.replyId = newest.id;
@@ -187,11 +189,18 @@ export function update(shown: ShownUpdate): void {
 function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]): void {
   status.classList.remove('empty');
   status.textContent = `You · ${timeOfReply(open.time)}`;
+  appendStop();
   latest.replaceChildren(...open.bubbles, ...writing);
   delete latest.dataset.replyId;
   older.replaceChildren(...[...replies].reverse().map(olderTurn)); // oldest first
   bringIntoView(open.id);
   if (view === 'flow') scheduleFlowRefresh();
+}
+
+// The streaming reply's own Stop, at the end of its header line.
+function appendStop(): void {
+  const control = lastUpdate?.tabId ? stopClaude.control(lastUpdate.tabId, 'reader') : null;
+  if (control) status.append(control);
 }
 
 // A new turn or reply: bring it into view once; the same one updating keeps her place.
