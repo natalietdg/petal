@@ -83,3 +83,10 @@ export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
 
 // The Library's extractor in snapshot runs: the harness's stub, given the prompt; null skips the run. Never a real claude.
 export const libraryFixture: { extract: ((prompt: string) => Promise<string>) | null } = { extract: null };
+
+// The Testing tab in snapshot runs: a stand-in project and Claude folder, and every run it would have typed (never executed).
+export const testingFixture: {
+  project: string | null;
+  claudeDir: string | null;
+  runs: { runId: string; dir: string; typed: string; script: string; stages: { name: string; command: string; exec: string; report: string | null; exit: string; log: string }[] }[];
+} = { project: null, claudeDir: null, runs: [] };

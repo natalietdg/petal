@@ -13,6 +13,7 @@ import * as responseHook from './response-hook';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerSlashIpc } from './slash-ipc';
 import { registerLibraryIpc } from './library-ipc';
+import { registerTestingIpc } from './testing-ipc';
 import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
@@ -152,6 +153,7 @@ function registerIpc(): void {
   registerWorkflowIpc({ sessions, history, organizer });
   registerSlashIpc();
   registerLibraryIpc({ sessions });
+  registerTestingIpc({ sessions, openTab });
   registerFactoryIpc({ activeSession });
   registerLookIpc();
   registerTabIpc();

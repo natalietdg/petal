@@ -16,4 +16,4 @@ export type TabSessions = Map<string, TabSession>;
 
 export type ActiveSession = (contentsId: number) => TabSession | undefined;
 
-export type OpenTab = (contents: WebContents | undefined, options?: { command?: string; background?: boolean }) => void;
+export type OpenTab = (contents: WebContents | undefined, options?: { command?: string; background?: boolean }) => TabId | undefined; // the new tab's id

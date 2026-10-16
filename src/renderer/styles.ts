@@ -40,6 +40,7 @@ import './notes.css';
 import './composer.css';
 import './slash-menu.css';
 import './library.css';
+import './testing.css';
 import './prompt-dock.css';
 import './workflow.css';
 import './workflow-factory.css';

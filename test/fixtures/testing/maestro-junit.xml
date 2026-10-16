@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="Pixel_7_API_34" tests="3" failures="1" time="44.981" timestamp="2026-10-16T10:12:03">
+    <testcase id="login" name="login" classname="login" file=".maestro/login.yaml" time="12.408" timestamp="2026-10-16T10:12:03" status="SUCCESS"/>
+    <testcase id="checkout" name="checkout" classname="checkout" file=".maestro/checkout.yaml" time="21.736" timestamp="2026-10-16T10:12:16" status="ERROR">
+      <failure>Element not found: "Place order"</failure>
+    </testcase>
+    <testcase id="onboarding" name="onboarding" classname="onboarding" file=".maestro/onboarding.yaml" time="10.802" timestamp="2026-10-16T10:12:37" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

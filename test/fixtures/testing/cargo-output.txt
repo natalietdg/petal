@@ -1,0 +1,40 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/acme-33f5672b421bba16)
+
+running 4 tests
+test auth::tokens::rotates_signing_keys ... ignored, key rotation not implemented
+test auth::tokens::refreshes_a_token_before_expiry ... ok
+test auth::tokens::issues_a_token_for_a_valid_user ... ok
+test auth::tokens::rejects_an_expired_token ... FAILED
+
+failures:
+
+---- auth::tokens::rejects_an_expired_token stdout ----
+
+thread 'auth::tokens::rejects_an_expired_token' panicked at src/lib.rs:22:13:
+expected token to be expired
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    auth::tokens::rejects_an_expired_token
+
+test result: FAILED. 2 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+     Running tests/math.rs (target/debug/deps/math-afa56ed2675b20e5)
+
+running 2 tests
+test adds_two_numbers ... ok
+test multiplies_two_numbers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests acme
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 1 target failed:
+    `--lib`
