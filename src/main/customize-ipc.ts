@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app, shell } from 'electron';
 import { CAT_CHOICES, SCENE_CHOICES, READING_CHOICES, isReadingChoice } from './menu';
 import * as organizer from './session-organizer';
+import { callsToday } from './background-calls';
 import * as configStore from './config-store';
 import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
@@ -110,6 +111,8 @@ function customizeState(): CustomizeState {
     petalSkills: dir ? petalSkills(petalSkillPaths()) : NO_PETAL_SKILLS,
     magazinePath,
     organizer: organizer.status(),
+    backgroundCalls: callsToday(),
+    backgroundModels: configStore.BACKGROUND_MODELS,
     hookRuns: responseHook.recentRuns(),
     hookDir: responseHook.hookDir(),
     configFile: path.join(app.getPath('userData'), 'config.json'),

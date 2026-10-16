@@ -18,9 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has sixteen sections with the documented defaults', () => {
+  it('has eighteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates', 'text']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -30,6 +30,8 @@ describe('config-store defaults and load', () => {
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
     expect(d.library).toEqual({ autoBuild: false }); // it spends her Claude plan, so she opts in
+    expect(d.lessons).toEqual({ learn: false }); // same: opt in
+    expect(d.background).toEqual({ model: 'haiku' }); // new installs; returning users get 'organizer' (migratedBase)
     expect(d.updates).toEqual({ lastNotifiedVersion: '', lastSeenVersion: '' });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 20 });
@@ -63,7 +65,7 @@ describe('config-store defaults and load', () => {
 
   it('corrupt file -> defaults', () => {
     fs.writeFileSync(configFile(), '{not json');
-    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true } }); // a config file means a returning user
+    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, background: { model: 'organizer' } }); // a config file means a returning user
   });
 
   it('a corrupt file is moved aside once and never overwritten by the next save', () => {
@@ -156,7 +158,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates', 'text']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
