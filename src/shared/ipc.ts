@@ -27,6 +27,7 @@ import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEdit
 import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
+import type { ActivityEvent } from './activity';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -247,6 +248,8 @@ export interface InvokeChannels {
   'paste:save-image': { args: [request: { bytes: Uint8Array }]; result: Guarded<{ file: string }> };
   // An image path in one of her messages, as a data URL; prompt is the text that names it.
   'paste:image': { args: [request: { file: string; prompt: string }]; result: Guarded<PromptImage> };
+  // The Board's Activity tab: every recorded event, newest first.
+  'activity:list': { args: []; result: Guarded<ActivityEvent[]> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.
@@ -307,6 +310,7 @@ export interface EventChannels {
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };
+  'activity:changed': void; // the activity feed gained or changed an event
 }
 
 export type InvokeChannel = keyof InvokeChannels;
