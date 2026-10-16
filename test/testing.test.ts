@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
-import { detectStack, proposeStages, testingSkills } from '../src/main/testing-detect';
+import { detectStack, isAboutTestingSoftware, proposeStages, testingSkills } from '../src/main/testing-detect';
 import { slashCatalog } from '../src/main/slash-catalog';
 import { parseGoJson, parseJUnit, parseJestJson, parsePlaywrightJson, parseReport, parseText, stripAnsi } from '../src/main/testing-parse';
 import { claudeRun, forgetLogs, isCheckCommand, scanLog } from '../src/main/testing-claude';
@@ -106,6 +106,37 @@ describe('detecting what a project tests with', () => {
       ['smoke', 'command', 'project commands', '/smoke '],
       ['qa-runner', 'agent', 'user agents', '@agent-qa-runner '],
     ]);
+  });
+
+  it.each([
+    ['a prove-it skill', 'Verify that claimed changes actually landed in the running app and inventory what is real vs mocked.'],
+    ['a playwright skill', 'Drive the browser with Playwright to click through the signup flow.'],
+    ['a QA agent', 'QA agent that runs the regression pack before a release.'],
+    ['a deploy check', 'Verify the deploy on staging before announcing it.'],
+    ['a hyphenated unit-test skill', 'Write unit-tests for the function you just changed.'],
+    ['a prove phrase', 'Prove it works: run the change and show the output.'],
+  ])('counts %s as testing software', (_, description) => {
+    expect(isAboutTestingSoftware(description)).toBe(true);
+  });
+
+  it.each([
+    ['a mom-test agent', 'Use after the editor to mom-test the piece against a non-expert reader: would they understand it and keep reading?'],
+    ['a stress-test agent', 'Stress-test the argument before it goes out and flag weak claims.'],
+    ['an A/B test copywriting skill', 'Write two headline variants to A/B test on the landing page copy.'],
+    ['a final QA pass on writing', 'Use after the CTA step for the last QA pass before delivery: a full read of hook, body and CTA as one piece.'],
+    ['a fact-checking agent', 'Verify and strengthen technical accuracy: facts, mechanisms, numbers, terminology.'],
+    ['an idea-testing skill', 'Test the idea with three customers before building anything.'],
+    ['a spec far from any code word', 'Turn a plan / spec / migration doc into an interactive, self-tracking checklist with a markdown source of truth plus a browser mirror.'],
+    ['an end-to-end trace', 'Trace a request flow end-to-end across the microservice repos.'],
+  ])('does not count %s as testing software', (_, description) => {
+    expect(isAboutTestingSoftware(description)).toBe(false);
+  });
+
+  it('scores the description, never the name alone', () => {
+    const claudeDir = tempDir();
+    write(claudeDir, 'agents/mom-test.md', '---\nname: mom-test\ndescription: Read the draft as a newcomer would and say where they get lost.\n---\n');
+    write(claudeDir, 'skills/test-utils/SKILL.md', '---\nname: test-utils\ndescription: Helpers for writing vitest cases against the api.\n---\n');
+    expect(testingSkills(slashCatalog({ claudeDir, projectDir: null })).map((s) => s.label)).toEqual(['test-utils']);
   });
 });
 
