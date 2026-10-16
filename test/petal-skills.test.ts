@@ -101,13 +101,14 @@ describe('the bundled skills', () => {
   const text = (dir: string) => fs.readFileSync(path.join(REPO_BUNDLE, dir, 'SKILL.md'), 'utf8');
 
   it('ships the testing suite and library skills, each named after its folder', () => {
-    expect(dirs).toEqual(['petal-library', 'petal-testing-suite']);
+    expect(dirs).toEqual(['petal-conclude', 'petal-library', 'petal-testing-suite']);
     for (const dir of dirs) expect(frontmatter(text(dir)).name).toBe(dir);
   });
 
   it('their descriptions carry the trigger phrases', () => {
     expect(frontmatter(text('petal-testing-suite')).description).toMatch(/"testing suite".*"set up tests".*"test suite for this project".*\/petal-testing-suite/);
     expect(frontmatter(text('petal-library')).description).toMatch(/"library".*"check the library".*"what do we know about X".*\/petal-library/);
+    expect(frontmatter(text('petal-conclude')).description).toMatch(/"conclude".*\/petal-conclude/);
   });
 
   it('the library skill names the Library folder only through the token', () => {

@@ -101,9 +101,9 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
 
     // ---- Customize › Formatting › Petal skills.
     const bundle = skillsBundleDir();
-    check(fs.readdirSync(bundle).sort().join() === 'petal-library,petal-testing-suite', `the app carries both skills: ${bundle}`);
+    check(fs.readdirSync(bundle).sort().join() === 'petal-conclude,petal-library,petal-testing-suite', `the app carries all three skills: ${bundle}`);
     const before: Page = await showFormatting();
-    check(before && JSON.stringify(before.rows.map((r: string[]) => [r[0], r[1]])) === JSON.stringify([['petal-library', 'Not installed'], ['petal-testing-suite', 'Not installed']]), `both listed as not installed: ${JSON.stringify(before?.rows)}`);
+    check(before && JSON.stringify(before.rows.map((r: string[]) => [r[0], r[1]])) === JSON.stringify([['petal-conclude', 'Not installed'], ['petal-library', 'Not installed'], ['petal-testing-suite', 'Not installed']]), `all listed as not installed: ${JSON.stringify(before?.rows)}`);
     check(before?.button === 'Install' && /“library”/.test(await js("document.querySelector('#customize .cz-skill[data-skill=\"petal-library\"] .cz-style-name').textContent")), `Install offered, rows named by phrase: ${before?.button}`);
     await scrollToSkills();
     await capture('customize-skills');
@@ -115,7 +115,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     const suiteText = fs.readFileSync(path.join(claudeDir, 'skills', 'petal-testing-suite', 'SKILL.md'), 'utf8');
     check(libraryText.includes(`\`${libraryDir()}\``) && !libraryText.includes(LIBRARY_DIR_TOKEN), `the Library path is filled in: ${libraryDir()}`);
     check(suiteText === fs.readFileSync(path.join(bundle, 'petal-testing-suite', 'SKILL.md'), 'utf8'), 'the testing suite skill is copied byte for byte');
-    check(fs.readFileSync(path.join(claudeDir, 'skills', 'prove-it', 'SKILL.md'), 'utf8') === '---\nname: prove-it\ndescription: Hers.\n---\n' && fs.readdirSync(path.join(claudeDir, 'skills')).sort().join() === 'petal-library,petal-testing-suite,prove-it', 'her own skill untouched, nothing else added');
+    check(fs.readFileSync(path.join(claudeDir, 'skills', 'prove-it', 'SKILL.md'), 'utf8') === '---\nname: prove-it\ndescription: Hers.\n---\n' && fs.readdirSync(path.join(claudeDir, 'skills')).sort().join() === 'petal-conclude,petal-library,petal-testing-suite,prove-it', 'her own skill untouched, nothing else added');
     await scrollToSkills();
     await capture('customize-skills-installed');
 

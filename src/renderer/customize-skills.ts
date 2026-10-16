@@ -5,7 +5,7 @@ import type { PetalSkill, PetalSkills } from '../main/petal-skills';
 import type { PetalStyleState } from '../main/petal-styles';
 
 // The phrase that starts each skill in a Claude session.
-const PHRASES: Record<string, string> = { 'petal-testing-suite': 'testing suite', 'petal-library': 'library' };
+const PHRASES: Record<string, string> = { 'petal-testing-suite': 'testing suite', 'petal-library': 'library', 'petal-conclude': 'conclude' };
 
 const BADGES: Record<PetalStyleState, { text: string; className: string }> = {
   missing: { text: 'Not installed', className: 'cz-skill-missing' },
