@@ -1,5 +1,6 @@
 // IPC for the Library: list and read its notes (Petal's own folder), and gather from the active tab's session now.
 // Gathering reads that session's log, so it asks the Claude folder gate first; listing and reading never touch ~/.claude.
+import fs from 'node:fs';
 import { BrowserWindow } from 'electron';
 import { handle, send } from './ipc';
 import { claudeFolderAllowed } from './claude-folder';
@@ -23,6 +24,8 @@ export function registerLibraryIpc({ sessions }: { sessions: TabSessions }): voi
     if (!claudeFolderAllowed()) return { added: 0, updated: 0, skipped: 'Petal isn’t reading your Claude folder' };
     const session = [...sessions.values()].find((s) => s.contentsId === event.sender.id && s.tabId === tabId)?.feed.session;
     if (!session) return { added: 0, updated: 0, skipped: 'no Claude session in this tab' };
+    // Claude Code writes the log only after the first message, so a fresh session has none yet.
+    if (!fs.existsSync(session.transcript)) return { added: 0, updated: 0, skipped: 'nothing said in this session yet' };
     return queueSession({ sessionId: session.sessionId, transcript: session.transcript }, { force: true });
   });
 

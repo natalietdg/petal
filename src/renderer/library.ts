@@ -477,7 +477,10 @@ addButton.addEventListener('click', async () => {
   status = 'Reading this session for domain knowledge…';
   drawNote();
   const result = await window.pastel.library.addSession(tab.id);
-  if (isIpcError(result)) status = `Couldn’t add from this session: ${result.error}`;
+  if (isIpcError(result)) {
+    console.error('[petal] library add failed:', result.error); // the raw error stays out of the page
+    status = 'Couldn’t read this session. Try again after Claude’s next reply.';
+  }
   else if (result.skipped) status = `Nothing added: ${result.skipped}.`;
   else if (!result.added && !result.updated) status = 'No new domain knowledge in this session since it was last read.';
   else status = [result.added ? `Added ${plural(result.added, 'note')}` : '', result.updated ? `updated ${plural(result.updated, 'note')}` : ''].filter(Boolean).join(', ').replace(/^u/, 'U') + '.';
