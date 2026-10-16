@@ -18,6 +18,7 @@ import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
+import { registerReplyImages, registerReplyImageScheme } from './reply-image-ipc';
 import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
@@ -45,6 +46,8 @@ configStore.onChange((config) => {
   folderAllowed = now;
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'claude-folder:changed', now);
 });
+
+registerReplyImageScheme(); // schemes must be registered before app ready
 
 const focusedContents = () => BrowserWindow.getFocusedWindow()?.webContents;
 
@@ -171,6 +174,7 @@ function registerIpc(): void {
   registerCustomizeIpc();
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
+  registerReplyImages({ sessions });
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));

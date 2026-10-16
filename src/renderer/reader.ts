@@ -16,7 +16,7 @@ import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -48,7 +48,7 @@ const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you',
 
 // Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
 const replyBody = (reply: Reply): HTMLDivElement[] =>
-  replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply) }));
+  replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply), images: { cwd: lastUpdate?.cwd ?? null } }));
 
 // Sent from the reply box, not yet in Claude's log.
 function pendingBubble(echo: PendingEcho): HTMLDivElement {

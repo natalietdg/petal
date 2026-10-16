@@ -6,6 +6,7 @@ import { loopBarHtml, parseLoopLine, type LoopProgress } from '../shared/loop-li
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
 import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
+import { inlineImages } from './reply-images';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
 
@@ -221,11 +222,13 @@ function wrapStory(root: HTMLElement): void {
 }
 
 // fold: a reply's key, so its sections fold and keep what she opened across redraws; other prose never folds.
-export function render(markdownText: string, options: { fold?: string } = {}): HTMLDivElement {
+// images: a reply's pictures become thumbnails; cwd is the session's folder, for relative paths.
+export function render(markdownText: string, options: { fold?: string; images?: { cwd: string | null } } = {}): HTMLDivElement {
   const html = DOMPurify.sanitize(marked.parse(markdownText, { async: false }), { FORBID_ATTR: ['style'] });
   const root = document.createElement('div');
   root.className = 'prose';
   root.innerHTML = html;
+  if (options.images) inlineImages(root, options.images.cwd); // first, so a remote image's link gets its short label below
   shortenBareLinks(root); // first, so headline length counts the label, not the URL
   tagCallouts(root);
   tagHeadline(root); // after callouts, so a leading label is never the headline

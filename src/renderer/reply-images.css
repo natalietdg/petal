@@ -1,0 +1,121 @@
+/* Pictures in Claude's replies (reader, History, focus mode): a rounded thumbnail, then its filename and two quiet buttons. */
+.prose figure.reply-image {
+  display: block;
+  max-width: 100%;
+  margin: 0.8em 0 1.1em;
+}
+li > figure.reply-image, td > figure.reply-image { margin: 0.5em 0; }
+.reply-image-open {
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--code-bg);
+  cursor: zoom-in;
+}
+.reply-image-open:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+.reply-image-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  height: auto;
+  object-fit: contain;
+}
+/* Room to land in before the lazy bytes arrive, so the page doesn't jump much. */
+.reply-image[data-state="loading"] .reply-image-thumb { min-width: 160px; min-height: 96px; }
+.reply-image-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  max-width: 100%;
+  margin-top: 0.35em;
+  font: 0.78rem/1.4 var(--ui-font);
+  color: var(--muted);
+}
+.reply-image-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reply-image-action {
+  padding: 1px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.reply-image-action:hover { color: var(--reader-fg); background: var(--code-bg); }
+.reply-image-action:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 1px; }
+.reply-image-missing {
+  display: inline-block;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0.15em 0.75em;
+  border: 1px dashed var(--rule);
+  border-radius: 999px;
+  font: 0.78rem/1.45 var(--ui-font);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.prose figure.reply-image:is([data-state="missing"], [data-state="refused"]) { margin: 0.4em 0 0.8em; }
+[data-reading="print"] .reply-image-open { border-color: var(--print-ink); border-radius: 0; }
+
+/* Opened larger: over a veil of the reader's paper; arrows step, Esc or a click on the veil closes. */
+.reply-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 30; /* above History and the overlays (20) */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  place-items: center;
+  gap: 10px;
+  padding: 40px 72px 20px;
+  background: color-mix(in srgb, var(--reader-bg) 90%, transparent);
+  cursor: zoom-out;
+}
+.reply-lightbox:focus { outline: none; }
+.reply-lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--code-bg);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+  cursor: default;
+}
+.reply-lightbox-caption { margin: 0; font: 13px/1.4 var(--ui-font); color: var(--reader-fg); }
+.reply-lightbox :is(.reply-lightbox-step, .reply-lightbox-close) {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 22px/1 var(--ui-font);
+  cursor: pointer;
+}
+.reply-lightbox :is(.reply-lightbox-step, .reply-lightbox-close):hover { background: var(--code-bg); }
+.reply-lightbox :is(.reply-lightbox-step, .reply-lightbox-close):focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+.reply-lightbox-step[hidden] { display: none; }
+.reply-lightbox-prev { left: 16px; top: calc(50% - 20px); }
+.reply-lightbox-next { right: 16px; top: calc(50% - 20px); }
+.reply-lightbox-close { top: 14px; right: 16px; }
+[data-reading="print"] .reply-lightbox-image { border-radius: 0; border-color: var(--print-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .reply-lightbox { animation: reply-lightbox-in 140ms ease-out; }
+  @keyframes reply-lightbox-in { from { opacity: 0; } }
+}
