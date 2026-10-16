@@ -23,6 +23,7 @@ import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
+import type { Delivery } from './mentions';
 import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
 import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
@@ -243,6 +244,8 @@ export interface InvokeChannels {
 
   // The reply box's send: answered, so a send that never reached the pty can be taken back.
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
+  // A message to other sessions in this window (mentions, Board's Message…, a reply's To line); main wraps and pastes it.
+  'mentions:send': { args: [request: { from: TabId | null; to: TabId[]; text: string }]; result: Guarded<{ deliveries: Delivery[] }> };
   // An image pasted into the reply box, saved as a PNG; Claude reads it by the returned path.
   'paste:save-image': { args: [request: { bytes: Uint8Array }]; result: Guarded<{ file: string }> };
   // An image path in one of her messages, as a data URL; prompt is the text that names it.

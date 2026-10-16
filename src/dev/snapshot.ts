@@ -56,6 +56,7 @@ import { shapeGuideCheck } from './snapshot-shape-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
+import { mentionsCheck } from './snapshot-mentions';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
@@ -700,6 +701,14 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await sessionsBoardCheck(kit, { win, openTab, sessions }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // Messages between sessions: "@" picker, To line, wrapped pastes per tab, Board's Message…, a reply's Send to.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'mentions' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await mentionsCheck(kit, { win, openTab, sessions, fixtureFile: fakeTranscript() ?? '' }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

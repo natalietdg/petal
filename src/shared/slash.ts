@@ -1,6 +1,6 @@
 // The reply box's "/" menu: what an item is, Claude Code's own commands, and the filter that ranks what she types.
 
-export type SlashKind = 'skill' | 'command' | 'agent' | 'builtin';
+export type SlashKind = 'skill' | 'command' | 'agent' | 'builtin' | 'session'; // session: the "@" picker only
 
 export interface SlashItem {
   kind: SlashKind;
@@ -8,6 +8,7 @@ export interface SlashItem {
   description: string;
   source: string; // user, project, plugin <name>, or Claude Code
   insert: string; // what lands in the box, trailing space included
+  label?: string; // shown in place of the insert (a session's name)
 }
 
 // allowed false: the Claude folder is off, so main read nothing and the menu offers Allow.
@@ -21,6 +22,12 @@ export const SLASH_GROUPS: { kind: SlashKind; label: string }[] = [
   { kind: 'command', label: 'Commands' },
   { kind: 'agent', label: 'Agents' },
   { kind: 'builtin', label: 'Claude Code' },
+];
+
+// Typing "@": other sessions in this window first, then agents, so `@agent-name` still comes from here.
+export const MENTION_GROUPS: { kind: SlashKind; label: string }[] = [
+  { kind: 'session', label: 'Sessions' },
+  { kind: 'agent', label: 'Agents' },
 ];
 
 export const slashInsert = (kind: SlashKind, name: string): string => (kind === 'agent' ? `@agent-${name} ` : `/${name} `);

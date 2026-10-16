@@ -38,6 +38,8 @@ let openedTabs = 0; // main-picked tab ids are m1, m2, ...; the renderer's own a
 const tabKey = (contentsId: number, tabId: TabId | undefined) => `${contentsId}:${tabId}`;
 const tabsOf = (contentsId: number) => [...sessions.values()].filter((s) => s.contentsId === contentsId);
 export const activeSession = (contentsId: number) => sessions.get(tabKey(contentsId, activeTabs.get(contentsId)));
+// One tab of one window, for main-side sends that name a tab (mentions); never a pty the renderer picked.
+export const tabSession = (contentsId: number, tabId: TabId): TabSession | undefined => sessions.get(tabKey(contentsId, tabId));
 export const openSessionIds = (): string[] => [...sessions.values()].flatMap((s) => (s.feed.session?.sessionId ? [s.feed.session.sessionId] : []));
 
 // The renderer creates the tab and starts its shell; a pending command is typed into it.
@@ -53,12 +55,16 @@ export const openTab: OpenTab = (contents, { command, background = false } = {})
 // What each tab was last called, so a title that lands later (organizer, Claude Code's ai-title) is pushed once.
 const RELABEL_MS = 2000;
 const shownLabels = new Map<string, { label: string; update: ReaderUpdate }>(); // tabKey -> last label sent
+const sessionLabels = new Map<string, string>(); // tabKey -> last label while it had a Claude session, kept after it ends
 
 // The shared session name; a tab with no Claude in it is just a shell.
 function labelFor({ sessionId, cwd, replies = [] }: Pick<ReaderUpdate, 'sessionId' | 'cwd'> & { replies?: ReaderUpdate['replies'] }): string {
   if (!sessionId) return NO_SESSION_LABEL;
   return sessionTitleFor(sessionId, { cwd, firstPrompt: replies.at(-1)?.prompt });
 }
+
+// The tab's session name, as its tab, the reader and the board show it; an ended session keeps its last name.
+export const tabLabel = (session: TabSession): string => sessionLabels.get(tabKey(session.contentsId, session.tabId)) ?? NO_SESSION_LABEL;
 
 // Every tab, every window: a label that changed since it was sent goes to the tab, and History re-lists.
 let organizerSeen: Readonly<organizer.OrganizerStore> | null = null; // loadCached hands back a new object once the file changes
@@ -68,10 +74,11 @@ function relabelTabs(): void {
   organizerSeen = store;
   for (const [key, shown] of shownLabels) {
     const session = sessions.get(key);
-    if (!session) { shownLabels.delete(key); continue; }
+    if (!session) { shownLabels.delete(key); sessionLabels.delete(key); continue; }
     const label = labelFor(shown.update);
     if (label === shown.label) continue;
     shown.label = label;
+    if (shown.update.sessionId) sessionLabels.set(key, label);
     changed = true;
     const contents = webContents.fromId(session.contentsId);
     if (contents && !contents.isDestroyed()) send(contents, 'tab:label', { tabId: session.tabId, label });
@@ -105,6 +112,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   const feed = new ReaderFeed(pty.pid, (channel, update) => {
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });
+    if (update.sessionId) sessionLabels.set(tabKey(contentsId, tabId), label);
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
   }, { fixture, onReplyFinished, onConcluded: (target) => void concludeTab(session, target), onEnded: harvest });
   const session: TabSession = { pty, feed, contentsId, tabId };

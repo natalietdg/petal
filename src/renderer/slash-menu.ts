@@ -1,12 +1,15 @@
 // The "/" menu for a reply box: skills, commands, agents and Claude Code's own commands, filtered as she types.
 // One popup serves every box (the reader's and History's); it only fills the box, Send still sends.
+// A box given `mentions` also opens it on "@": other sessions here, then agents.
 import { el, isIpcError } from './dom';
-import { BUILTINS, SLASH_GROUPS, applySlash, filterSlash, slashQuery, type SlashItem, type SlashList } from '../shared/slash';
+import { BUILTINS, MENTION_GROUPS, SLASH_GROUPS, applySlash, filterSlash, slashQuery, type SlashItem, type SlashList } from '../shared/slash';
+import { applyMention, mentionQuery } from '../shared/mentions';
 
 interface Owner {
   input: HTMLTextAreaElement;
   button: HTMLButtonElement;
   cwd: () => string | null;
+  mentions?: () => SlashItem[];
 }
 
 const MAX_HEIGHT = 380;
@@ -33,6 +36,7 @@ let active = 0;
 let fetched: SlashList | null = null;
 let fetchedFor: string | null | undefined; // the cwd `fetched` was read for; undefined: read again
 let request = 0;
+let mention: { start: number; end: number } | null = null; // the "@word" being picked for; null: the "/" menu
 
 export const isOpen = (): boolean => !popup.hidden;
 
@@ -78,7 +82,7 @@ function option(item: SlashItem, index: number): HTMLElement {
   row.setAttribute('role', 'option');
   row.setAttribute('aria-selected', 'false');
   const head = el('span', 'slash-head');
-  head.append(el('span', 'slash-name', item.insert.trimEnd()), el('span', 'slash-source', item.source));
+  head.append(el('span', 'slash-name', item.label ?? item.insert.trimEnd()), el('span', 'slash-source', item.source));
   row.append(head);
   if (item.description) row.append(el('span', 'slash-desc', item.description));
   row.addEventListener('mousemove', () => { if (active !== index) setActive(index); });
@@ -86,13 +90,27 @@ function option(item: SlashItem, index: number): HTMLElement {
   return row;
 }
 
+// "@" matches sessions without their "session:" and agents without their "agent-".
+function mentionMatches(list: SlashList): SlashItem[] {
+  const sessions = filterSlash(owner?.mentions?.() ?? [], query.replace(/^session:/i, ''));
+  const agents = filterSlash(list.items.filter((i) => i.kind === 'agent'), query.replace(/^agent-/i, ''));
+  return [...sessions, ...agents];
+}
+
+function emptyText(): string {
+  if (mention) return query ? `Nothing matches @${query}` : 'No other sessions in this window';
+  return query ? `Nothing matches /${query}` : 'Nothing to show yet';
+}
+
 function render(): void {
   const list = fetched ?? OFF;
-  const matches = filterSlash([...list.items, ...BUILTINS], query);
-  shown = SLASH_GROUPS.flatMap(({ kind }) => matches.filter((m) => m.kind === kind));
+  const groups = mention ? MENTION_GROUPS : SLASH_GROUPS;
+  const matches = mention ? mentionMatches(list) : filterSlash([...list.items, ...BUILTINS], query);
+  shown = groups.flatMap(({ kind }) => matches.filter((m) => m.kind === kind));
   listbox.replaceChildren();
+  listbox.setAttribute('aria-label', mention ? 'Sessions and agents' : 'Skills, commands and agents');
   let index = 0;
-  for (const { kind, label } of SLASH_GROUPS) {
+  for (const { kind, label } of groups) {
     const items = shown.filter((m) => m.kind === kind);
     if (!items.length) continue;
     const group = el('div', 'slash-group');
@@ -104,7 +122,7 @@ function render(): void {
     group.append(heading, ...items.map((item) => option(item, index++)));
     listbox.append(group);
   }
-  if (!shown.length) listbox.append(el('p', 'slash-empty', query ? `Nothing matches /${query}` : 'Nothing to show yet'));
+  if (!shown.length) listbox.append(el('p', 'slash-empty', emptyText()));
   footer.replaceChildren();
   if (fetched && !fetched.allowed) {
     const allow = el('button', 'slash-allow', 'Allow reading your Claude folder');
@@ -131,9 +149,10 @@ async function load(): Promise<void> {
   if (!popup.hidden) render();
 }
 
-function open(next: Owner, text: string, browse: boolean): void {
+function open(next: Owner, text: string, browse: boolean, at: { start: number; end: number } | null = null): void {
   if (!next.input.getClientRects().length) return; // a box hidden under an overlay never opens a menu in mid-air
-  const fresh = popup.hidden || owner !== next;
+  const fresh = popup.hidden || owner !== next || (mention === null) !== (at === null);
+  mention = at;
   if (owner && owner !== next) setExpanded(owner, false);
   owner = next;
   browsing = browse;
@@ -150,22 +169,27 @@ function open(next: Owner, text: string, browse: boolean): void {
 function choose(item: SlashItem): void {
   if (!owner) return;
   const { input } = owner;
+  const range = mention;
   close();
-  input.value = applySlash(input.value, item.insert);
-  input.setSelectionRange(item.insert.length, item.insert.length);
+  const next = range ? applyMention(input.value, range, item.insert) : { value: applySlash(input.value, item.insert), caret: item.insert.length };
+  input.value = next.value;
+  input.setSelectionRange(next.caret, next.caret);
   input.focus();
   input.dispatchEvent(new Event('input', { bubbles: true })); // the box refits and History keeps the draft
 }
 
 function sync(target: Owner): void {
-  const text = slashQuery(target.input.value, target.input.selectionStart ?? 0);
+  const { value, selectionStart } = target.input;
+  const text = slashQuery(value, selectionStart ?? 0);
+  const at = text === null && target.mentions ? mentionQuery(value, selectionStart ?? 0) : null;
   if (text !== null) open(target, text, false);
+  else if (at) open(target, at.query, false, { start: at.start, end: at.end });
   else if (owner === target && !browsing) close();
 }
 
-// Wires one reply box and its "/" button. Call once per box.
-export function attach(input: HTMLTextAreaElement, button: HTMLButtonElement, cwd: () => string | null): void {
-  const self: Owner = { input, button, cwd };
+// Wires one reply box and its "/" button. Call once per box; `mentions` turns on the "@" picker.
+export function attach(input: HTMLTextAreaElement, button: HTMLButtonElement, cwd: () => string | null, mentions?: () => SlashItem[]): void {
+  const self: Owner = { input, button, cwd, ...(mentions ? { mentions } : {}) };
   input.setAttribute('aria-autocomplete', 'list');
   input.setAttribute('aria-haspopup', 'listbox');
   input.setAttribute('aria-expanded', 'false');
@@ -195,7 +219,7 @@ export function attach(input: HTMLTextAreaElement, button: HTMLButtonElement, cw
   button.addEventListener('click', () => {
     if (owner === self && !popup.hidden) { close(); input.focus(); return; }
     input.focus();
-    open(self, slashQuery(input.value, input.selectionStart ?? 0) ?? '', true);
+    open(self, slashQuery(input.value, input.selectionStart ?? 0) ?? '', true, null);
   });
 }
 

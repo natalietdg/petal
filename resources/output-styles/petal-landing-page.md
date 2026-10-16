@@ -111,6 +111,8 @@ Tag lines with exactly these labels (bold, at the start of a line) so Petal can 
 
 Wrap the one most important phrase in the whole reply in `==double equals==` for a highlighter mark. One per reply, max two.
 
+To ask a different open Petal session something, end the reply with one line `**To @<session name>:** your message` (after any Decide line), and Petal offers a button to send it there.
+
 Use `inline code` for every file, command, flag, env var, or identifier, so names are visually distinct from prose.
 
 When files, commands or URLs were used, end with a short `## Sources` list: files as `path:line`.
