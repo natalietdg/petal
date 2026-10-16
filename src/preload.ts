@@ -116,6 +116,9 @@ const api = {
     time: () => invoke('workflow:time'),
     handoffs: () => invoke('workflow:handoffs'),
   },
+  slash: {
+    list: (cwd: string | null) => invoke('slash:list', { cwd }),
+  },
   factory: {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),

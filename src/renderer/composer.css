@@ -77,6 +77,6 @@
 }
 /* Thumbnails on top at the same measure; box and Send share the cell below, Send in the box's corner so it never moves the box. */
 #composer-attachments { grid-row: 1; margin-bottom: 10px; } /* a margin, not row-gap: no gap while it's hidden */
-#composer-input, #composer-send { grid-area: 2 / 1; }
-#composer-input { justify-self: stretch; min-width: 0; padding: 10px 88px 10px 14px; } /* stays content-box: fit() in composer.ts sizes the height that way */
-#composer-send { justify-self: end; align-self: end; margin: 0 7px 7px 0; }
+#composer-input, #composer-actions { grid-area: 2 / 1; }
+#composer-input { justify-self: stretch; min-width: 0; padding: 10px 124px 10px 14px; } /* stays content-box: fit() in composer.ts sizes the height that way */
+#composer-actions { justify-self: end; align-self: end; display: flex; align-items: center; gap: 6px; margin: 0 7px 7px 0; }

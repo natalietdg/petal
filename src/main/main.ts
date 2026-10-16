@@ -11,6 +11,7 @@ import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
 import { registerWorkflowIpc } from './workflow-ipc';
+import { registerSlashIpc } from './slash-ipc';
 import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
@@ -164,6 +165,7 @@ onLookChanged(refreshMenu);
 function registerIpc(): void {
   registerHistoryIpc({ sessions, activeSession, openTab, currentTheme });
   registerWorkflowIpc({ sessions, history, organizer });
+  registerSlashIpc();
   registerFactoryIpc({ activeSession });
   registerLookIpc();
   registerTabIpc();

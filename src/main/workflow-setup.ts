@@ -4,9 +4,9 @@ import path from 'node:path';
 import { label, LABEL_CHARS, readJson, readText } from './workflow-common';
 import { frontmatter, oneLine, parseClaudeMd, type ClaudeMdOutline } from './workflow-frontmatter';
 
-const isFile = (file: string) => { try { return fs.statSync(file).isFile(); } catch { return false; } };
-const isDir = (dir: string) => { try { return fs.statSync(dir).isDirectory(); } catch { return false; } };
-const listDir = (dir: string) => { try { return fs.readdirSync(dir).sort(); } catch { return []; } };
+export const isFile = (file: string) => { try { return fs.statSync(file).isFile(); } catch { return false; } };
+export const isDir = (dir: string) => { try { return fs.statSync(dir).isDirectory(); } catch { return false; } };
+export const listDir = (dir: string) => { try { return fs.readdirSync(dir).sort(); } catch { return []; } };
 
 export interface SkillInfo {
   name: string;
@@ -17,8 +17,8 @@ export interface AgentInfo extends SkillInfo {
   group: string | null;
 }
 
-function listSkills(claudeDir: string): SkillInfo[] {
-  const dir = path.join(claudeDir, 'skills');
+// <dir>/<name>/SKILL.md: a Claude folder's skills/, a project's, or a plugin's.
+export function skillsIn(dir: string): SkillInfo[] {
   return listDir(dir)
     .map((name) => ({ name, file: path.join(dir, name, 'SKILL.md') }))
     .filter(({ file }) => isFile(file))
@@ -28,9 +28,10 @@ function listSkills(claudeDir: string): SkillInfo[] {
     });
 }
 
+const listSkills = (claudeDir: string): SkillInfo[] => skillsIn(path.join(claudeDir, 'skills'));
+
 // Top-level agents, plus one level of folders (e.g. a marketing pipeline) as a group.
-function listAgents(claudeDir: string): AgentInfo[] {
-  const dir = path.join(claudeDir, 'agents');
+export function agentsIn(dir: string): AgentInfo[] {
   const read = (file: string, group: string | null): AgentInfo => {
     const meta = frontmatter(readText(file));
     return { name: meta.name || path.basename(file, '.md'), description: oneLine(meta.description), group };
@@ -43,6 +44,8 @@ function listAgents(claudeDir: string): AgentInfo[] {
   });
   return agents.sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '')); // ungrouped first, stable within groups
 }
+
+const listAgents = (claudeDir: string): AgentInfo[] => agentsIn(path.join(claudeDir, 'agents'));
 
 function activeOutputStyle(claudeDir: string): SkillInfo {
   const wanted = readJson<{ outputStyle?: string } | null>(path.join(claudeDir, 'settings.json'), {})?.outputStyle;

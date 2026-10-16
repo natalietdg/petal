@@ -38,6 +38,7 @@ import './history.css';
 import './favorites.css';
 import './notes.css';
 import './composer.css';
+import './slash-menu.css';
 import './prompt-dock.css';
 import './workflow.css';
 import './workflow-factory.css';

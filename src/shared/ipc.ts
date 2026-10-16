@@ -22,6 +22,7 @@ import type { SaveResult } from '../main/notes-store';
 import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
+import type { SlashList } from './slash';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -179,6 +180,8 @@ export interface InvokeChannels {
   'workflow:setup': { args: []; result: Guarded<SetupData> };
   'workflow:time': { args: []; result: Guarded<TimeData> };
   'workflow:handoffs': { args: []; result: Guarded<HandoffData> };
+  // The reply box's "/" menu; cwd is the session's folder, for its project skills, commands and agents.
+  'slash:list': { args: [request: { cwd: string | null }]; result: Guarded<SlashList> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };
   'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };

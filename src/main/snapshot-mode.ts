@@ -77,3 +77,6 @@ export const claudeStarts: { tabId: string; command: string }[] = [];
 
 // Every close a "conclude" set off, with how it ended; snapshot runs stop before the signal.
 export const concludeCloses: { sessionId: string; outcome: string }[] = [];
+
+// A stand-in ~/.claude for the reply box's "/" menu (read only); null reads the real one.
+export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
