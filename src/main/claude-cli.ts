@@ -35,11 +35,15 @@ export function claudePath({ recheck = false }: { recheck?: boolean } = {}): Pro
   return resolved;
 }
 
-// Same env hygiene as the pty: a nested claude must not inherit this app's CLAUDE*/ELECTRON_* vars.
+// A nested claude must not inherit this app's ELECTRON_* or a parent claude's CLAUDE* session vars.
+// CLAUDE_CONFIG_DIR stays: it names the folder Petal reads, so the claude it starts must use the same one.
+export const dropFromChildEnv = (key: string): boolean => /^(ELECTRON_|CLAUDE)/.test(key) && key !== 'CLAUDE_CONFIG_DIR';
+
+// Same env hygiene as the pty.
 export function cleanEnv(claude: string | null): NodeJS.ProcessEnv {
   const dir = claude ? `${path.dirname(claude)}:` : '';
   const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${dir}${process.env.PATH ?? '/usr/bin:/bin'}` };
-  for (const key of Object.keys(env)) if (/^(ELECTRON_|CLAUDE)/.test(key)) delete env[key];
+  for (const key of Object.keys(env)) if (dropFromChildEnv(key)) delete env[key];
   return env;
 }
 
