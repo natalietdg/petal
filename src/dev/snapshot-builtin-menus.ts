@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { promptWrites } from '../main/snapshot-mode';
-import { harnessLine } from '../main/snapshot-shell';
+import { harnessLine, plainText, shellOutput } from '../main/snapshot-shell';
 import type { Kit, TabsDeps } from './snapshot';
 import { unclippedCheck } from './snapshot-divider';
 
@@ -75,16 +75,25 @@ export async function builtinMenusCheck(kit: Kit, { win, activeSession }: Pick<T
     await js(`document.querySelectorAll(${JSON.stringify(selector)})[${index}].click()`);
     return writesAfter(before);
   };
+  // zsh drops typeahead on ^C, so the next line waits for a fresh prompt; a busy run takes longer than any fixed sleep.
+  const interruptToPrompt = async () => {
+    const key = `${session.contentsId}:${session.tabId}`;
+    const before = (shellOutput.get(key) ?? '').length;
+    session.pty.write('\x03');
+    for (let waited = 0; waited < 5000; waited += 50) {
+      if (plainText((shellOutput.get(key) ?? '').slice(before)).includes('petal-snapshot % ')) break;
+      await wait(50);
+    }
+    await wait(50);
+  };
   const show = async (name: string, lines: string[]) => {
     const target = path.join(outDir, `screen-${name}.txt`);
     fs.writeFileSync(target, `${lines.join('\n')}\n`);
-    session.pty.write('\x03');
-    await wait(200);
+    await interruptToPrompt();
     session.pty.write(harnessLine(`clear; cat '${target}'; read -r _`));
   };
   const clearScreen = async () => {
-    session.pty.write('\x03');
-    await wait(300);
+    await interruptToPrompt();
     session.pty.write(harnessLine('clear'));
   };
   const shot = (name: string) => kit.verifiedCapture({ ...kit, theme: kit.themes.paleSky, panelOpen: false, name, scrollTo: '#prompt-dock' });
