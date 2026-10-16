@@ -52,5 +52,6 @@ import './get-started.css';
 import './agents.css';
 import './conclusion.css';
 import './sessions-board.css';
+import './mentions.css';
 import './focus.css';
 import './head-fit.css';

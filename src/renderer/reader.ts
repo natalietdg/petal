@@ -13,6 +13,7 @@ import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
 import { noticeLines } from './reader-notice';
+import * as mentions from './mentions';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
@@ -56,8 +57,12 @@ const foldKey = (reply: Reply): string => reply.id ?? `text:${reply.markdown.sli
 const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
 
 // Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
-const replyBody = (reply: Reply): HTMLDivElement[] =>
-  replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply) }));
+// A reply ending in a `**To @<session>:**` line gets its Send to button after the text.
+const replyBody = (reply: Reply): HTMLElement[] => {
+  const blocks: HTMLElement[] = replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply) }));
+  const send = mentions.replyAction(reply, lastUpdate?.tabId ?? null);
+  return send ? [...blocks, send] : blocks;
+};
 
 // Sent from the reply box, not yet in Claude's log.
 function pendingBubble(echo: PendingEcho): HTMLDivElement {

@@ -1,0 +1,104 @@
+/* Messages between sessions: the reply box's To line, a reply's Send to button, Board's Message… composer. */
+
+/* To line: sits above the box at the reading measure; chips name each mentioned session. */
+#composer-to { display: grid; gap: 4px; margin-bottom: 8px; font: 13px/1.4 var(--ui-font); color: var(--muted); }
+#composer-to[hidden], .composer-to-row[hidden], .composer-to-result[hidden] { display: none; }
+.composer-to-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.composer-to-label { font-weight: 650; color: var(--reader-fg); }
+.composer-to-chips { display: contents; }
+.composer-to-here { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--reader-fg); cursor: pointer; }
+.composer-to-here input { margin: 0; accent-color: var(--link); }
+.composer-to-result { margin: 0; color: var(--reader-fg); }
+
+.mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--link);
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--link);
+  font-weight: 600;
+}
+.mention-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention-chip.off { border-style: dashed; border-color: var(--rule); color: var(--reader-fg); }
+.mention-chip-state { color: var(--muted); font-weight: 400; }
+.mention-chip-remove {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: 600 13px/18px var(--ui-font);
+  cursor: pointer;
+}
+.mention-chip-remove:hover, .mention-chip-remove:focus-visible { background: var(--rule); }
+
+/* A reply that asks another session something: the button never sends by itself. */
+.reply-mention { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 14px 0 4px; font: 13px/1.4 var(--ui-font); }
+.reply-mention-send {
+  padding: 6px 14px;
+  border: 1px solid var(--link);
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--link);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.reply-mention-send:hover:not(:disabled) { background: var(--link); color: var(--reader-bg); }
+.reply-mention-send:disabled { border-color: var(--rule); color: var(--muted); cursor: default; }
+.reply-mention-note { color: var(--muted); }
+
+/* Board card's Message… and its small composer. */
+.board-message-open {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--link);
+  font: 600 13px var(--ui-font);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.board-message-open:focus-visible, .reply-mention-send:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.board-message {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+  font-family: var(--ui-font);
+}
+.board-message[hidden] { display: none; }
+.board-message-title { margin: 0; font: 650 13px/1.35 var(--ui-font); overflow-wrap: anywhere; }
+.board-message-input {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 15px/1.45 var(--body-font, Georgia, serif);
+  outline: none;
+}
+.board-message-input:focus { border-color: var(--link); }
+.board-message-status { margin: 0; min-height: 1em; color: var(--reader-fg); font-size: 13px; }
+.board-message-status:empty { display: none; }
+.board-message-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }

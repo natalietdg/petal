@@ -5,6 +5,7 @@ import * as tabs from './tabs';
 import * as sessionsPanel from './sessions-panel';
 import * as favorites from './favorites';
 import * as stopClaude from './stop-claude';
+import * as boardMessage from './board-message';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
@@ -135,6 +136,8 @@ function cardElement(card: BoardCard): HTMLLIElement {
   // A working session in this window: Stop sits on the card's corner, outside the card's own button.
   const stop = card.tabId ? stopClaude.control(card.tabId, 'board') : null;
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
+  const message = boardMessage.control(card);
+  if (message) item.append(message);
 
   const confirm = confirms.get(card.sessionId);
   if (confirm) {

@@ -9,6 +9,9 @@ import { quotePaths } from '../shared/quote-path';
 import { OPEN_THREAD_EVENT } from './open-threads';
 import * as slashMenu from './slash-menu';
 import { applySlash } from '../shared/slash';
+import * as mentions from './mentions';
+import * as mentionBar from './mention-bar';
+import type { MentionPlan } from '../shared/mentions';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -19,6 +22,7 @@ const chips = el('div');
 chips.id = 'composer-attachments';
 chips.hidden = true;
 form.prepend(chips);
+const toLine = mentionBar.create(form, input, () => mentions.targets());
 // Bracketed paste keeps multi-line replies as one message instead of sending at each newline.
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
@@ -40,6 +44,7 @@ const clear = (): void => {
   input.value = '';
   attachments.length = 0;
   renderChips();
+  toLine.refresh();
   fit();
 };
 
@@ -123,7 +128,20 @@ async function deliver(text: string, taken: () => void): Promise<void> {
 async function send(): Promise<void> {
   // Claude turns an image path in a pasted message into [Image #n].
   const text = [stripControls(input.value).trim(), quotePaths(attachments.map((a) => a.file))].filter(Boolean).join(' ');
-  await deliver(text, clear);
+  const plan = toLine.plan(text);
+  if (!plan) { await deliver(text, clear); return; }
+  if (!plan.body) { toLine.note('Write a message after the mention, then send.'); return; }
+  await sendMentions(plan);
+}
+
+// Mentions go to their sessions through main; this session gets the message only when she ticked Also send.
+async function sendMentions(plan: MentionPlan): Promise<void> {
+  const from = tabs.active()?.id ?? null;
+  clear();
+  const result = plan.to.length ? await mentions.send(from, plan.to.map((t) => t.tabId), plan.body) : [];
+  if ('error' in result) toLine.note(`Couldn’t send: ${result.error}`);
+  else toLine.showResult(result, plan.unknown);
+  if (plan.alsoHere) await deliver(plan.body, () => {});
 }
 
 // An Open threads card in the reader asks its question as if typed here; her draft in the box stays.
@@ -156,7 +174,7 @@ input.addEventListener('keydown', (event) => {
     focusTerminal();
   }
 });
-slashMenu.attach(input, byId<HTMLButtonElement>('composer-slash'), () => tabs.active()?.update?.cwd ?? null);
+slashMenu.attach(input, byId<HTMLButtonElement>('composer-slash'), () => tabs.active()?.update?.cwd ?? null, mentions.pickerItems);
 new ResizeObserver(fit).observe(form);
 fit();
 

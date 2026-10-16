@@ -19,6 +19,7 @@ import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
+import { registerMentionsIpc } from './mentions-ipc';
 import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
@@ -183,6 +184,7 @@ function registerIpc(): void {
   registerCustomizeIpc();
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
+  registerMentionsIpc();
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));
