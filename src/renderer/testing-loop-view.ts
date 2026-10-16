@@ -35,6 +35,8 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   stop.title = 'Interrupts Claude with Esc, then asks it to stop and summarise';
   stop.addEventListener('click', () => handlers.stop());
   top.append(heading, pill, stop);
+  const about = el('p', 'tst-muted tst-loop-about',
+    'Claude writes new tests for what you name, runs the pipeline, and turns every bug it finds into a test before fixing it. Then it runs again, until everything passes or the rounds run out. It never commits.');
 
   // Built once, so the 4s refresh never wipes what she is typing.
   const form = el('form', 'tst-loop-start');
@@ -44,7 +46,8 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   const roundsLabel = el('label', 'tst-loop-rounds');
   const roundsInput = el('input', 'tst-input tst-loop-rounds-input');
   Object.assign(roundsInput, { type: 'number', min: '1', max: String(MAX_ROUNDS), value: String(DEFAULT_ROUNDS) });
-  roundsLabel.append(el('span', null, 'Rounds'), roundsInput);
+  roundsLabel.title = 'Most write, test and fix cycles before Claude stops. It stops sooner once everything passes.';
+  roundsLabel.append(el('span', null, 'Max rounds'), roundsInput);
   const startButton = el('button', 'tst-button tst-primary tst-loop-go', 'Start test loop');
   startButton.type = 'submit';
   form.append(focusInput, roundsLabel, startButton);
@@ -57,7 +60,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   note.setAttribute('role', 'status');
 
   const body = el('div', 'tst-loop-body');
-  panel.append(top, form, hint, note, body);
+  panel.append(top, about, form, hint, note, body);
 
   function progressBlock(model: LoopModel): HTMLElement {
     const box = el('div', 'tst-loop-progress');
@@ -154,6 +157,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
     startButton.disabled = !model.canStart;
     hint.textContent = model.why;
     hint.hidden = active || !model.why;
+    about.hidden = active; // explained before a loop starts, out of the way while one runs
     note.textContent = model.note;
     note.hidden = !model.note;
     const showBody = model.status !== 'idle' || Boolean(model.criteria && (model.criteria.scenarios.length || model.criteria.bugs.length));
