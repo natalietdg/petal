@@ -34,25 +34,26 @@ export const agentFile = (dir: string, agentId: string): string => path.join(dir
 export const isAgentId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,80}$/.test(value);
 
 // Counts tool calls in [from, to) by byte search; appends are counted once, so a long run stays cheap.
-function countToolUses(file: string, from: number, to: number): number {
+// Async, a chunk per read: a first listing of a long agent log never holds up the main thread.
+async function countToolUses(file: string, from: number, to: number): Promise<number> {
   let count = 0;
-  let fd: number | undefined;
+  let handle: fs.promises.FileHandle | undefined;
   try {
-    fd = fs.openSync(file, 'r');
+    handle = await fs.promises.open(file, 'r');
+    const chunk = Buffer.alloc(Math.min(COUNT_CHUNK, Math.max(0, to - from)));
     let carry = Buffer.alloc(0);
     for (let pos = from; pos < to;) {
-      const chunk = Buffer.alloc(Math.min(COUNT_CHUNK, to - pos));
-      const read = fs.readSync(fd, chunk, 0, chunk.length, pos);
-      if (!read) break;
-      pos += read;
-      const data = Buffer.concat([carry, chunk.subarray(0, read)]);
+      const { bytesRead } = await handle.read(chunk, 0, Math.min(chunk.length, to - pos), pos);
+      if (!bytesRead) break;
+      pos += bytesRead;
+      const data = Buffer.concat([carry, chunk.subarray(0, bytesRead)]);
       for (let i = data.indexOf(TOOL_USE_MARK); i !== -1; i = data.indexOf(TOOL_USE_MARK, i + TOOL_USE_MARK.length)) count++;
       carry = data.subarray(Math.max(0, data.length - TOOL_USE_MARK.length + 1)); // a mark split across chunks
     }
   } catch {
     // Unreadable now; the next listing retries.
   } finally {
-    if (fd !== undefined) fs.closeSync(fd);
+    await handle?.close().catch(() => undefined);
   }
   return count;
 }
@@ -81,10 +82,11 @@ interface Cached {
 // Reread only when a file's mtime or size moves (like session-organizer.loadCached).
 const cache = new Map<string, Cached>();
 
-function describe(file: string, mtime: number, size: number, birth: number): Cached {
+async function describe(file: string, mtime: number, size: number, birth: number): Promise<Cached> {
   const before = cache.get(file);
   if (before && before.mtime === mtime && before.size === size) return before;
   const grew = before && before.size <= size;
+  const toolCalls = (grew ? before.toolCalls : 0) + await countToolUses(file, grew ? before.size : 0, size);
   const entries = tailEntries(file);
   const next: Cached = {
     mtime,
@@ -93,7 +95,7 @@ function describe(file: string, mtime: number, size: number, birth: number): Cac
     startedAt: before?.startedAt ?? startedAt(file, birth),
     finished: isFinished(entries),
     step: latestStep(entries) ?? before?.step ?? NO_STEP,
-    toolCalls: (grew ? before.toolCalls : 0) + countToolUses(file, grew ? before.size : 0, size),
+    toolCalls,
   };
   cache.set(file, next);
   return next;
@@ -102,7 +104,7 @@ function describe(file: string, mtime: number, size: number, birth: number): Cac
 const startOfDay = (now: number): number => new Date(now).setHours(0, 0, 0, 0);
 
 // Running first, then stalled, then finished; only agents that wrote today.
-export function listAgents(dir: string, now = Date.now()): AgentsList {
+export async function listAgents(dir: string, now = Date.now()): Promise<AgentsList> {
   let names: string[];
   try {
     names = fs.readdirSync(dir).filter((name) => /^agent-[\w-]+\.jsonl$/.test(name));
@@ -110,22 +112,23 @@ export function listAgents(dir: string, now = Date.now()): AgentsList {
     return { agents: [], running: 0 };
   }
   const today = startOfDay(now);
-  const agents = names.flatMap((name): AgentSummary[] => {
+  const agents: AgentSummary[] = [];
+  for (const name of names) {
     const file = path.join(dir, name);
     let stat: fs.Stats;
     try {
       stat = fs.statSync(file);
     } catch {
-      return []; // deleted between readdir and stat
+      continue; // deleted between readdir and stat
     }
     if (stat.mtimeMs < today && now - stat.mtimeMs > STALLED_AFTER_MS) {
       cache.delete(file);
-      return [];
+      continue;
     }
-    const d = describe(file, stat.mtimeMs, stat.size, stat.birthtimeMs);
+    const d = await describe(file, stat.mtimeMs, stat.size, stat.birthtimeMs);
     const id = name.replace(/^agent-|\.jsonl$/g, '');
-    return [{ id, task: d.task, status: agentStatus(d.finished, d.mtime, now), startedAt: d.startedAt, updatedAt: d.mtime, toolCalls: d.toolCalls, step: d.step }];
-  });
+    agents.push({ id, task: d.task, status: agentStatus(d.finished, d.mtime, now), startedAt: d.startedAt, updatedAt: d.mtime, toolCalls: d.toolCalls, step: d.step });
+  }
   agents.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.updatedAt - a.updatedAt);
   return { agents, running: agents.filter((a) => a.status === 'running').length };
 }
@@ -146,11 +149,12 @@ export class AgentTimeline {
   private items: TimelineItem[] = [];
   private dropped = 0;
   private finished = false;
-  private started = false;
+  private started = false; // false while the first read fills `items`; after it, rows go out through onAppend
+  private readonly ready: Promise<void>;
 
   constructor(file: string, private readonly onAppend: (update: TimelineUpdate) => void) {
-    this.tail = new JsonlTail(file, (lines) => this.add(lines), () => this.restart());
-    this.started = true;
+    this.tail = new JsonlTail(file, { lines: (lines) => this.add(lines), restart: () => this.restart() });
+    this.ready = this.tail.firstRead.then(() => { this.started = true; });
   }
 
   // A rewritten log is re-read from the top, so the rows read so far go first instead of showing twice.
@@ -161,7 +165,9 @@ export class AgentTimeline {
     if (this.started) this.onAppend({ items: [], finished: false, reset: true });
   }
 
-  start(): TimelineStart {
+  // The rows so far, once the first read is done.
+  async start(): Promise<TimelineStart> {
+    await this.ready;
     return { items: this.items, finished: this.finished, dropped: this.dropped };
   }
 
@@ -188,8 +194,8 @@ export class AgentTimeline {
     }
   }
 
-  poll(): void {
-    this.tail.poll();
+  poll(): Promise<void> {
+    return this.tail.poll();
   }
 
   stop(): void {

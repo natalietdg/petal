@@ -22,12 +22,12 @@ function agent(dir: string, id: string, entries: TranscriptEntry[], { ageMs = 0,
 }
 
 describe('agents list', () => {
-  it('orders running, stalled, finished, with step, tool calls and elapsed start', () => {
+  it('orders running, stalled, finished, with step, tool calls and elapsed start', async () => {
     const dir = tempDir();
     agent(dir, 'fin', [prompt('Write the notes'), read('a.ts'), done('All done.')], { description: 'Notes pass', ageMs: 60_000 });
     agent(dir, 'run', [prompt('Fix print'), read('print.css', 'x1'), read('print.ts', 'x2')], { description: 'Print fixes', ageMs: 5_000 });
     agent(dir, 'stuck', [prompt('Hang here'), read('b.ts')], { ageMs: STALLED_AFTER_MS + 60_000 });
-    const { agents, running } = listAgents(dir);
+    const { agents, running } = await listAgents(dir);
     expect(agents.map((a) => [a.id, a.status])).toEqual([['run', 'running'], ['stuck', 'stalled'], ['fin', 'finished']]);
     expect(running).toBe(1);
     expect(agents[0]).toMatchObject({ task: 'Print fixes', step: 'Reading print.ts', toolCalls: 2 });
@@ -35,19 +35,19 @@ describe('agents list', () => {
     expect(agents[0]?.startedAt).toBeLessThan(agents[0]?.updatedAt ?? 0);
   });
 
-  it('counts only appended tool calls on a reread, and finishes when the report lands', () => {
+  it('counts only appended tool calls on a reread, and finishes when the report lands', async () => {
     const dir = tempDir();
     const file = agent(dir, 'grow', [prompt('Grow'), read('one.ts', 'g1')]);
-    expect(listAgents(dir).agents[0]).toMatchObject({ toolCalls: 1, status: 'running' });
+    expect((await listAgents(dir)).agents[0]).toMatchObject({ toolCalls: 1, status: 'running' });
     fs.appendFileSync(file, `${JSON.stringify(read('two.ts', 'g2'))}\n${JSON.stringify(done('Report'))}\n`);
-    expect(listAgents(dir).agents[0]).toMatchObject({ toolCalls: 2, status: 'finished', step: 'Reading two.ts' });
+    expect((await listAgents(dir)).agents[0]).toMatchObject({ toolCalls: 2, status: 'finished', step: 'Reading two.ts' });
   });
 
-  it('leaves out agents from before today and an empty folder is empty', () => {
+  it('leaves out agents from before today and an empty folder is empty', async () => {
     const dir = tempDir();
     agent(dir, 'old', [prompt('Yesterday')], { ageMs: 48 * 3600_000 });
-    expect(listAgents(dir).agents).toEqual([]);
-    expect(listAgents(path.join(dir, 'missing'))).toEqual({ agents: [], running: 0 });
+    expect((await listAgents(dir)).agents).toEqual([]);
+    expect(await listAgents(path.join(dir, 'missing'))).toEqual({ agents: [], running: 0 });
   });
 });
 
@@ -57,21 +57,21 @@ describe('agent timeline', () => {
     const file = agent(dir, 'live', [prompt('Follow me'), read('a.ts')]);
     const updates: TimelineUpdate[] = [];
     const timeline = new AgentTimeline(file, (u) => updates.push(u));
-    expect(timeline.start().items.map((i) => i.kind)).toEqual(['prompt', 'step']);
+    expect((await timeline.start()).items.map((i) => i.kind)).toEqual(['prompt', 'step']);
     fs.appendFileSync(file, `${JSON.stringify(done('Finished.'))}\n`);
-    timeline.poll();
+    await timeline.poll();
     timeline.stop();
     expect(updates.at(-1)).toEqual({ items: [{ kind: 'report', markdown: 'Finished.', at: undefined }], finished: true });
   });
 
-  it('a rewritten log clears the rows shown so far instead of repeating them', () => {
+  it('a rewritten log clears the rows shown so far instead of repeating them', async () => {
     const dir = tempDir();
     const file = agent(dir, 'rewritten', [prompt('Follow me'), read('a.ts'), read('b.ts', 't2')]);
     const updates: TimelineUpdate[] = [];
     const timeline = new AgentTimeline(file, (u) => updates.push(u));
-    expect(timeline.start().items).toHaveLength(3);
+    expect((await timeline.start()).items).toHaveLength(3);
     writeJsonl(file, [prompt('Again')]); // shorter than what was read: a rewrite
-    timeline.poll();
+    await timeline.poll();
     timeline.stop();
     expect(updates[0]).toEqual({ items: [], finished: false, reset: true });
     expect(updates.slice(1).flatMap((u) => u.items).map((i) => i.kind)).toEqual(['prompt']);

@@ -45,29 +45,42 @@ function readLine(state: LogState, line: string, sessionId: string): void {
   }
 }
 
+export interface LogScan { calls: ClaudeCall[]; edits: number }
+
+const scanning = new Map<string, Promise<unknown>>(); // one scan per log at a time, so offsets never race
+
 // Reads what the log gained since last time; a log that shrank (rewritten) is read again from the start.
-export function scanLog(file: string, sessionId: string): { calls: ClaudeCall[]; edits: number } {
+// Async, a chunk per read: a first scan of a long log never holds up the main thread.
+export function scanLog(file: string, sessionId: string): Promise<LogScan> {
+  const run = (scanning.get(file) ?? Promise.resolve()).then(() => readAppended(file, sessionId));
+  const settled = run.catch(() => undefined);
+  scanning.set(file, settled);
+  void settled.then(() => { if (scanning.get(file) === settled) scanning.delete(file); });
+  return run;
+}
+
+async function readAppended(file: string, sessionId: string): Promise<LogScan> {
   let state = states.get(file);
   let size: number;
-  try { size = fs.statSync(file).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0 }; }
+  try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0 }; }
   if (!state || size < state.offset) {
     state = { offset: 0, rest: '', pending: new Map(), calls: [], edits: 0 };
     states.set(file, state);
   }
   if (size > state.offset) {
-    const fd = fs.openSync(file, 'r');
+    const handle = await fs.promises.open(file, 'r');
     try {
       const buffer = Buffer.alloc(Math.min(CHUNK, size - state.offset));
       while (state.offset < size) {
-        const read = fs.readSync(fd, buffer, 0, Math.min(buffer.length, size - state.offset), state.offset);
-        if (read <= 0) break;
-        state.offset += read;
-        const lines = (state.rest + buffer.toString('utf8', 0, read)).split('\n');
+        const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - state.offset), state.offset);
+        if (bytesRead <= 0) break;
+        state.offset += bytesRead;
+        const lines = (state.rest + buffer.toString('utf8', 0, bytesRead)).split('\n');
         state.rest = lines.pop() ?? '';
         for (const line of lines) readLine(state, line, sessionId);
       }
     } finally {
-      fs.closeSync(fd);
+      await handle.close();
     }
     if (state.calls.length > MAX_CALLS) state.calls = state.calls.slice(-MAX_CALLS);
   }
