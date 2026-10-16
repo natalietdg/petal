@@ -70,7 +70,10 @@
       <section id="prompt-dock" aria-live="polite"></section>
       <form id="composer" autocomplete="off">
         <textarea id="composer-input" rows="1" placeholder="Message Claude…" aria-label="Message Claude"></textarea>
-        <button id="composer-send" type="submit" aria-label="Send">Send</button>
+        <div id="composer-actions">
+          <button id="composer-slash" class="slash-button" type="button" aria-label="Browse skills, commands and agents" title="Skills, commands and agents">/</button>
+          <button id="composer-send" type="submit" aria-label="Send">Send</button>
+        </div>
       </form>
       <button id="focus-exit" class="focus-button focus-exit" type="button" hidden title="Back to the full layout (Esc · ⌘⇧F)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>Exit focus</button>
     </div>

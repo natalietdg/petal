@@ -5,6 +5,7 @@ import * as tabs from './tabs';
 import * as reply from './history-reply';
 import { el } from './dom';
 import { promptBubble } from './prompt-bubble';
+import * as slashMenu from './slash-menu';
 import { hooks, type Session } from './history-state';
 import { parsePermissionPrompt, parseQuestionPicker } from '../shared/prompt-answer';
 import type { Tab } from './tabs';
@@ -132,10 +133,14 @@ export function replyBox(session: Session): HTMLFormElement {
   input.value = drafts.get(session.sessionId) ?? '';
   const send = el('button', 'flow-button history-reply-send', 'Send');
   send.type = 'submit';
+  const slash = el('button', 'slash-button history-reply-slash', '/');
+  slash.type = 'button';
+  slash.title = 'Skills, commands and agents';
+  slash.setAttribute('aria-label', 'Browse skills, commands and agents');
   const row = el('div', 'history-reply-row');
   const petSlot = el('span', 'history-cat-slot'); // the pet sits here while History previews (cat.ts)
   petSlot.setAttribute('aria-hidden', 'true');
-  row.append(input, send, fullButton(session), petSlot);
+  row.append(input, slash, send, fullButton(session), petSlot);
   const note = el('p', 'history-note history-reply-note');
   note.setAttribute('aria-live', 'polite');
   form.append(el('div', 'history-reply-status'), row, note);
@@ -154,6 +159,7 @@ export function replyBox(session: Session): HTMLFormElement {
       drafts.delete(session.sessionId);
     });
   });
+  slashMenu.attach(input, slash, () => session.cwd ?? null);
   paintStatus(form, session);
   return form;
 }

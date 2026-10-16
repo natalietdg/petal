@@ -7,6 +7,7 @@ import { byId, el, focusTerminal, isIpcError } from './dom';
 import { acceptFileDrags, droppedPaths } from './terminal';
 import { quotePaths } from '../shared/quote-path';
 import { OPEN_THREAD_EVENT } from './open-threads';
+import * as slashMenu from './slash-menu';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -154,6 +155,7 @@ input.addEventListener('keydown', (event) => {
     focusTerminal();
   }
 });
+slashMenu.attach(input, byId<HTMLButtonElement>('composer-slash'), () => tabs.active()?.update?.cwd ?? null);
 new ResizeObserver(fit).observe(form);
 fit();
 

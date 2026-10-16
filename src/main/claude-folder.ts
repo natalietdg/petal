@@ -24,3 +24,6 @@ export function claudeFolderAllowed(): boolean {
 
 // ~/.claude when she allowed reading it, otherwise null.
 export const allowedClaudeHome = (): string | null => (claudeFolderAllowed() ? claudeHome() : null);
+
+// A project's own Claude folder (<cwd>/.claude): a path only; slash-ipc.ts reads it behind the same gate.
+export const projectClaudeDir = (cwd: string): string => path.join(cwd, '.claude');
