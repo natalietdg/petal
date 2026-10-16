@@ -100,7 +100,9 @@ const DOCK = `(() => {
   const mid = (e) => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
   const rows = buttons.every((e) => Math.abs(mid(e) - mid(buttons[0])) < 4) ? 1 : 2;
   const out = buttons.filter((e) => { const r = e.getBoundingClientRect(); return r.left < box.left - 1 || r.right > Math.min(box.right, window.innerWidth) + 1; }).map((e) => e.id);
-  return { rows, out, inner: window.innerWidth, buttons: buttons.map((e) => e.id) };
+  const icons = dock.classList.contains('fit-icons');
+  const tips = [...dock.querySelectorAll('.dock-button')].map((b) => ({ label: b.textContent, title: b.title }));
+  return { rows, out, inner: window.innerWidth, buttons: buttons.map((e) => e.id), icons, tips };
 })()`;
 
 const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, ...fields });
@@ -403,7 +405,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     check(pressed === 'true' && Math.abs(beside.board - beside.history) < 2 && beside.after, `Board opens the board, pressed, on History's row: ${JSON.stringify({ pressed, ...beside })}`);
     // Each dock button: one hidden line icon before its label, and the label alone is its accessible name.
     const icons = await js("[...document.querySelectorAll('#sessions-dock .dock-button')].map((b) => ({ id: b.id, svgs: b.querySelectorAll(':scope > svg[aria-hidden=\"true\"]').length, first: b.firstElementChild?.tagName, named: !b.hasAttribute('aria-label') && !b.hasAttribute('aria-labelledby'), label: b.textContent }))");
-    const DOCK_LABELS = ['Customize', 'Workflow', 'History', 'Board', 'Add Session'];
+    const DOCK_LABELS = ['Customize', 'Workflow', 'History', 'Library', 'Board', 'Add Session'];
     check(icons.length === DOCK_LABELS.length && icons.every((b: { svgs: number; first: string; named: boolean; label: string }, i: number) => b.svgs === 1 && b.first === 'svg' && b.named && b.label === DOCK_LABELS[i]),
       `every dock button has one icon and its label as its name: ${JSON.stringify(icons)}`);
     for (const width of WIDTHS) {
@@ -411,6 +413,9 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
       await wait(200);
       const dock = await js(DOCK);
       check(dock.rows === 1 && dock.out.length === 0 && dock.buttons.includes('board-button'), `${width}px: the dock is one row, nothing past its edge ${JSON.stringify(dock)}`);
+      if (width === WIDTHS[0]) check(!dock.icons, `${width}px: the dock buttons keep their full labels ${JSON.stringify(dock)}`);
+      if (dock.icons) check(dock.tips.every((t: { label: string; title: string }) => t.title.startsWith(t.label)), `${width}px: icon-only buttons show their label as a tooltip ${JSON.stringify(dock.tips)}`);
+      await capture(`dock-${width}`);
       // An update ready: the pill takes a shorter form rather than wrap the dock. A long version is the worst case.
       await js("PastelTerm.updatePill.show('10.10.10')");
       await wait(200);
@@ -418,6 +423,14 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
       check(withPill.rows === 1 && withPill.out.length === 0 && withPill.buttons.includes('update-pill'), `${width}px: with the update pill, the dock is one row ${JSON.stringify(withPill)}`);
       await js('PastelTerm.updatePill.reset()');
     }
+    // Room to grow: two more dock buttons (8) and the update pill still fit one row at the narrowest width.
+    await js(`(() => { const add = document.getElementById('add-session-button'); for (const n of [1, 2]) { const b = document.getElementById('history-button').cloneNode(true); b.id = 'dummy-dock-' + n; add.before(b); } })()`);
+    await js("PastelTerm.updatePill.show('10.10.10')");
+    await wait(200);
+    const eight = await js(DOCK);
+    check(eight.rows === 1 && eight.out.length === 0 && eight.buttons.filter((b: string) => b.startsWith('dummy-dock')).length === 2, `${WIDTHS.at(-1)}px with 8 dock buttons and the update pill: one row ${JSON.stringify(eight)}`);
+    await capture(`dock-grown-${WIDTHS.at(-1)}`);
+    await js("document.querySelectorAll('[id^=dummy-dock]').forEach((b) => b.remove()); PastelTerm.updatePill.reset()");
     check(await sizeTo(1600), 'back to 1600px');
     await js("document.getElementById('board-button').click()");
     const shut = await waitFor(async () => (!(await boardOpen()) && (await js("document.getElementById('board-button').getAttribute('aria-pressed')")) === 'false') || null, 3000);
