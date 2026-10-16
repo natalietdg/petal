@@ -1,7 +1,7 @@
 // Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (shape guide, output styles, preview).
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
-import { portrait, setSize } from './cat';
+import { petWords, portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import { outputStylesCard } from './customize-styles';
@@ -50,17 +50,25 @@ function birthdayCard(): HTMLDivElement {
   return card('Birthday', field('Date of birth', control, "For your Tarot Room reading. Kept in Petal's settings on this Mac, never sent anywhere."));
 }
 
+// Pet size wording uses the chosen pet's name and pronoun.
+function sizeNoteText(id: string): string {
+  const { name, they, their } = petWords(id);
+  const They = they[0].toUpperCase() + they.slice(1);
+  return `Pet size is the biggest ${name} gets. ${They} shrinks on ${their} own when a line of text would sit under ${they === 'he' ? 'him' : 'her'}.`;
+}
+
 export function renderLook(): HTMLElement[] {
   const { choices, look } = page.state;
   const { look: set } = window.pastel;
+  const sizeNote = note(sizeNoteText(look.cat));
   return [
     chipGroup('Theme', choices.themes, look.theme, (id) => { look.theme = id; set.setTheme(id); }),
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
-    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }, portrait),
+    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); sizeNote.textContent = sizeNoteText(id); }, portrait),
     chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
     birthdayCard(),
-    note('Pet size is the biggest she gets. She shrinks on her own when a line of text would sit under her.'),
+    sizeNote,
     note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
   ];
 }
