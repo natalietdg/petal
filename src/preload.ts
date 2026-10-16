@@ -48,6 +48,11 @@ const api = {
   savePastedImage: (bytes: Uint8Array) => invoke('paste:save-image', { bytes }),
   sendMention: (from: TabId | null, to: TabId[], text: string) => invoke('mentions:send', { from, to, text }),
   promptImage: (file: string, prompt: string) => invoke('paste:image', { file, prompt }),
+  replyImage: {
+    status: (path: string, cwd: string | null) => invoke('reply-image:status', { path, cwd }),
+    reveal: (path: string, cwd: string | null) => invoke('reply-image:reveal', { path, cwd }),
+    open: (path: string, cwd: string | null) => invoke('reply-image:open', { path, cwd }),
+  },
   // A dropped file's absolute path; '' for a file made in the page.
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   answerPrompt: (tabId: TabId, answer: PromptAnswer) => send('prompt:answer', { tabId, answer }),

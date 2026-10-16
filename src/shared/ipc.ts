@@ -22,6 +22,7 @@ import type { SaveResult } from '../main/notes-store';
 import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
+import type { ReplyImageStatus } from './reply-image-url';
 import type { SlashList } from './slash';
 import type { Delivery } from './mentions';
 import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
@@ -263,6 +264,10 @@ export interface InvokeChannels {
   'tasks:change': { args: [request: { tabId: TabId; op: TaskOp }]; result: Guarded<TaskChangeResult> };
   // Every live session's repo, branch, task and file clashes.
   'coord:get': { args: []; result: Guarded<CoordView> };
+  // A picture a reply names (main/reply-image.ts checks each): why it isn't shown, Show in Finder, Open in its default app.
+  'reply-image:status': { args: [request: { path: string; cwd: string | null }]; result: Guarded<ReplyImageStatus> };
+  'reply-image:reveal': { args: [request: { path: string; cwd: string | null }]; result: Guarded<{ ok: boolean }> };
+  'reply-image:open': { args: [request: { path: string; cwd: string | null }]; result: Guarded<{ ok: boolean }> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.

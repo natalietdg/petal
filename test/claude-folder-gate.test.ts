@@ -12,7 +12,9 @@ const GATE = /\b(claudeFolderAllowed|allowedClaudeHome)\(/;
 // The modules that read under ~/.claude; each asks the gate itself.
 const READERS = ['claude-session.ts', 'claude-fallback.ts', 'sessions-monitor.ts', 'history.ts', 'reader-feed.ts', 'conclusions-store.ts', 'agents-ipc.ts', 'workflow-ipc.ts', 'customize-ipc.ts', 'factory-ipc.ts', 'slash-ipc.ts', 'library-ipc.ts', 'library-extract.ts', 'library-backfill.ts', 'testing-ipc.ts'];
 // claudeHome() without the gate: a path only, never read. claude-cli checks an install spot exists; claude-session names a log's path.
-const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder.ts'];
+const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder.ts', 'reply-image-ipc.ts'];
+// reply-image-ipc asks the gate per request and names the folder only to refuse pictures in it; reply-image.ts is handed that answer.
+const GATE_PASSED_IN = { file: 'reply-image.ts', field: /\bclaudeAllowed\b/ };
 
 // The one allowed exception: the repo-level project skill (<repo>/.claude/skills/...), not ~/.claude.
 // Only this exact string, only in factory-store.ts; any other mention of .claude there still counts.
@@ -54,8 +56,10 @@ describe('the ~/.claude gate, by source', () => {
   it('every module that takes a path into the folder also asks the gate, except the path-only ones', () => {
     const takesPath = /\b(claudeHome|allowedClaudeHome|sessionsDir|transcriptPath|subagentsDir)\b/;
     const offenders = mainFiles()
-      .filter((f) => !UNGATED_PATH_USERS.includes(f) && takesPath.test(source(f)) && !GATE.test(source(f)));
+      .filter((f) => !UNGATED_PATH_USERS.includes(f) && f !== GATE_PASSED_IN.file && takesPath.test(source(f)) && !GATE.test(source(f)));
     expect(offenders).toEqual([]);
+    expect(source(GATE_PASSED_IN.file)).toMatch(GATE_PASSED_IN.field);
+    expect(source('reply-image-ipc.ts')).toMatch(GATE);
   });
 
   it('claudeHome() is used bare only where the path is never read', () => {

@@ -17,6 +17,7 @@ import './layout.css';
 import './tabs.css';
 import './reader.css';
 import './prompt-images.css';
+import './reply-images.css';
 import './magazine.css';
 import './print.css';
 import './colour-key.css';

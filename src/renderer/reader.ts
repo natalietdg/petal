@@ -19,7 +19,7 @@ import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -59,7 +59,7 @@ const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you',
 // Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
 // A reply ending in a `**To @<session>:**` line gets its Send to button after the text.
 const replyBody = (reply: Reply): HTMLElement[] => {
-  const blocks: HTMLElement[] = replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply) }));
+  const blocks: HTMLElement[] = replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply), images: { cwd: lastUpdate?.cwd ?? null } }));
   const send = mentions.replyAction(reply, lastUpdate?.tabId ?? null);
   return send ? [...blocks, send] : blocks;
 };

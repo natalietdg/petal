@@ -23,6 +23,7 @@ import { registerMentionsIpc } from './mentions-ipc';
 import { registerTasksIpc } from './tasks-ipc';
 import * as coord from './coord';
 import { flush as flushActivity } from './activity-feed';
+import { registerReplyImages, registerReplyImageScheme } from './reply-image-ipc';
 import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
@@ -59,6 +60,8 @@ configStore.onChange((config) => {
   textSizes = now;
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'text-size:changed', config.text);
 });
+
+registerReplyImageScheme(); // schemes must be registered before app ready
 
 const focusedContents = () => BrowserWindow.getFocusedWindow()?.webContents;
 
@@ -189,6 +192,7 @@ function registerIpc(): void {
   registerPasteIpc();
   registerMentionsIpc();
   registerTasksIpc({ sessions });
+  registerReplyImages({ sessions });
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));

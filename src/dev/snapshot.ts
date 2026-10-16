@@ -17,6 +17,7 @@ import { tablesCheck } from './snapshot-tables';
 import { headlineLinksCheck } from './snapshot-headline-links';
 import { pastedCheck } from './snapshot-pasted';
 import { bubbleImagesCheck } from './snapshot-bubble-images';
+import { replyImagesCheck } from './snapshot-reply-images';
 import { addSessionCheck } from './snapshot-add-session';
 import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
@@ -813,6 +814,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'bubble-images') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await bubbleImagesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // Pictures in replies; needs HOME inside PASTEL_SNAPSHOT_DIR, where it writes the fixture PNGs.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'reply-images') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await replyImagesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

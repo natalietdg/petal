@@ -205,7 +205,7 @@ async function renderRepliesBody(session: Session, body: HTMLElement): Promise<v
     earlier.textContent = `Show earlier · ${start} more`;
   };
   const append = (turns: Turn[], where: 'top' | 'bottom') => {
-    const cards = turns.map((turn) => turnCard(turn));
+    const cards = turns.map((turn) => turnCard(turn, '', session.cwd ?? null));
     if (where === 'top') thread.prepend(...cards);
     else thread.append(...cards);
     cards.forEach((card) => diagrams.render(card));

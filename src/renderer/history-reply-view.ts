@@ -15,7 +15,8 @@ export type Turn = { index: number; prompt: string; reply: string };
 const drafts = new Map<string, string>(); // sessionId -> unsent text, so switching sessions loses nothing
 
 // One turn: what she asked, then Claude's reply rendered like the reader.
-export function turnCard(turn: Turn, youClass = ''): HTMLElement {
+// cwd: the session's folder, so a relative picture path in the reply resolves.
+export function turnCard(turn: Turn, youClass = '', cwd: string | null = null): HTMLElement {
   const card = el('article', 'history-turn');
   card.dataset.turn = String(turn.index);
   // No prompt: Claude answering a subagent's report, so no empty bubble of hers.
@@ -26,7 +27,7 @@ export function turnCard(turn: Turn, youClass = ''): HTMLElement {
   if (turn.reply) {
     const body = el('div', 'history-reply');
     // Keyed by its opening words, which a streaming reply never rewrites, so redraws keep what she opened.
-    body.append(markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}` }));
+    body.append(markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}`, images: { cwd } }));
     card.append(body);
   }
   return card;
@@ -41,7 +42,8 @@ export const liveTab = (session: Session): Tab | null => {
 export function liveThread(tab: Tab): HTMLElement {
   const { replies = [], waiting = [] } = tab.update ?? {};
   const thread = el('div', 'history-thread');
-  [...replies].reverse().forEach((r, i) => thread.append(turnCard({ index: i, prompt: r.prompt, reply: r.markdown })));
+  const cwd = tab.update?.cwd ?? null;
+  [...replies].reverse().forEach((r, i) => thread.append(turnCard({ index: i, prompt: r.prompt, reply: r.markdown }, '', cwd)));
   waiting.forEach((w, i) => thread.append(turnCard({ index: replies.length + i, prompt: w.prompt, reply: '' })));
   thread.querySelectorAll<HTMLElement>('.history-turn').forEach((card) => diagrams.render(card));
   return thread;
