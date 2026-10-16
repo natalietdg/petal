@@ -106,6 +106,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
+  const startTabs = await js('PastelTerm.tabs.ids()') as string[];
   try {
     resizeOffscreen(win, 1280, 900);
     await wait(1200); // the reader takes in the appended Claude run
@@ -225,6 +226,9 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     testingFixture.project = null;
     testingFixture.claudeDir = null;
     await js('PastelTerm.overlays.hideCurrent()');
+    // Run pipeline's tab: later steps (Get started) count tabs from a clean start.
+    for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
+    check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the pipeline tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }
