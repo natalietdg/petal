@@ -45,6 +45,7 @@ import { slashMenuCheck } from './snapshot-slash';
 import { libraryCheck } from './snapshot-library';
 import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
+import { distillationCheck } from './snapshot-distillation';
 import { petalSkillsCheck } from './snapshot-petal-skills';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
@@ -441,6 +442,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['testing', () => testingCheck(kit, win)], // records the pipeline line, never runs it; appends a Claude run to the fixture
     ['petal skills', () => petalSkillsCheck(kit, win)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', () => testLoopCheck(kit, win, feed)], // records the brief paste and Esc, never a real claude; appends Loop lines
+    ['distillation', () => distillationCheck(kit, win)], // appends two loop rounds; records the thread, answer and brief pastes, never a real claude
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
@@ -653,6 +655,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'test-loop') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testLoopCheck(kit, win, feed).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'distillation') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await distillationCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

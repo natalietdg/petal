@@ -90,6 +90,7 @@ export interface TestingState {
   running: string | null; // the run id still going
   sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
   claudePipeline: ClaudePipelineState | null; // <repo>/.petal/pipeline.json, when there is one
+  changed: string[]; // files changed recently (git), for Suite health's core stage
 }
 
 // What the Testing tab shows about the pipeline Claude wrote: in use as the proposal, offered over a saved one, or why it was refused.

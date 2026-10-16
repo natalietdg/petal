@@ -1,0 +1,73 @@
+/* Distillation: the Testing tab's collapsible rounds, Suite health, and the "Claude needs you" cards in the reader and on the Board. */
+
+/* ---- Testing: one collapsible section per loop or Claude session. */
+.tst-distill { border: 1px solid var(--rule); border-radius: 10px; background: var(--reader-bg); }
+.tst-distill-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 7px 12px; cursor: pointer; list-style: none; }
+.tst-distill-summary::-webkit-details-marker { display: none; }
+.tst-distill-summary::before { content: '▸'; color: var(--muted); font-size: 12px; }
+.tst-distill[open] > .tst-distill-summary::before { content: '▾'; }
+.tst-distill-summary:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; border-radius: 10px; }
+.tst-distill-title { font-weight: 700; color: var(--reader-fg); }
+.tst-distill-count { color: var(--muted); font-size: 12.5px; }
+.tst-distill-body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 10px; }
+.tst-distill-round { padding-top: 8px; border-top: 1px solid var(--rule); min-width: 0; }
+.tst-distill-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.tst-distill-round-title { margin: 0; color: var(--reader-fg); font: 700 13px var(--ui-font); }
+.tst-distill-reason { margin: 2px 0 0; color: var(--reader-fg); font-size: 13px; overflow-wrap: anywhere; }
+.tst-course { padding: 0 9px; border-radius: 999px; background: var(--code-bg); color: var(--reader-fg); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tst-course.is-add-scenarios { background: var(--next-pill); color: var(--next-ink); }
+.tst-course.is-retest { background: var(--watch-pill); color: var(--watch-ink); }
+.tst-course.is-fix-bug { background: var(--why-pill); color: var(--why-ink); }
+.tst-course.is-hand-to-you { background: var(--decide-pill); color: var(--decide-ink); }
+.tst-distill-qs { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.tst-distill-q { padding: 4px 8px; border-left: 3px solid var(--rule); min-width: 0; }
+.tst-distill-q.is-needs-you { border-left-color: var(--decide-ink); background: var(--decide-wash); }
+.tst-distill-ask, .tst-distill-answer { display: flex; gap: 6px; margin: 0; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
+.tst-distill-ask { color: var(--reader-fg); font-weight: 600; }
+.tst-distill-answer { color: var(--reader-fg); }
+.tst-distill-mark { flex: none; width: 1.1em; color: var(--muted); font-weight: 700; }
+.tst-needs-you { flex: none; align-self: baseline; padding: 0 8px; border-radius: 999px; background: var(--decide-pill); color: var(--decide-ink); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tst-runs .tst-distill { margin: 4px 0 2px 18px; }
+
+/* Each round's Open threads: the reader's own cards, with what became of each thread in later rounds. */
+.tst-distill-threads { margin-top: 8px; }
+.tst-distill-threads-title { margin: 0 0 4px; color: var(--muted); font: 700 12px var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
+#testing ul.threads { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--reader-fg); }
+#testing li.tst-thread { margin: 0; min-width: 0; }
+#testing li.tst-thread.is-needs-you .thread-card { border-color: var(--decide-ink); background: var(--decide-wash); }
+.tst-thread-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 3px 0 0 4px; font-size: 12px; }
+.tst-thread-word { font-weight: 700; color: var(--reader-fg); }
+.tst-thread-word.is-open { color: var(--decide-ink); }
+.tst-thread-word.is-settled { color: var(--done-ink); }
+.tst-thread-word.is-carried { color: var(--watch-ink); }
+.tst-thread-word.is-dropped { color: var(--muted); }
+.tst-thread-note { color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+
+/* ---- Suite health. */
+.tst-health { display: flex; flex-direction: column; gap: 2px; }
+.tst-health-about, .tst-health-hint { font-size: 12.5px; }
+.tst-health-head { display: flex; align-items: baseline; gap: 8px; }
+.tst-health-core { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.tst-health-command { display: block; max-width: 100%; white-space: pre-wrap; }
+.tst-health-list { display: flex; flex-direction: column; margin: 4px 0 0; padding: 0; list-style: none; }
+.tst-health-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-top: 1px solid var(--rule); font-size: 13px; min-width: 0; }
+.tst-health-name { flex: 1; min-width: 0; color: var(--reader-fg); overflow-wrap: anywhere; }
+.tst-health-meta { flex: none; color: var(--muted); font-size: 12px; font-weight: 600; }
+.tst-health-row.is-flaky .tst-health-meta { color: var(--watch-ink); }
+
+/* ---- "Claude needs you": in the reader under the newest reply, and on the session's Board card. */
+.distill-card { margin: 18px 0 6px; padding: 12px 14px; border: 1px solid var(--decide-ink); border-radius: 12px; background: var(--decide-wash); color: var(--reader-fg); font: 15px/1.45 var(--ui-font); }
+.distill-card.is-board { margin: 6px 0 0; padding: 8px 10px; font-size: 13px; }
+.distill-card-title { margin: 0; overflow-wrap: anywhere; }
+.distill-card-label { color: var(--decide-ink); font-weight: 700; }
+.distill-card-asks { margin: 6px 0 0; padding-left: 20px; font-size: 0.93em; }
+.distill-card-reason { margin: 4px 0 0; color: var(--reader-fg); font-size: 0.93em; }
+.distill-card-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.distill-card-input { flex: 1 1 220px; min-width: 0; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--reader-bg); color: var(--reader-fg); font: inherit; resize: vertical; }
+.distill-card.is-board .distill-card-input { flex-basis: 140px; }
+.distill-card-send { padding: 5px 13px; border: 1px solid var(--reader-fg); border-radius: 999px; background: var(--reader-fg); color: var(--reader-bg); font: 600 13px var(--ui-font); white-space: nowrap; cursor: pointer; }
+.distill-card-send:hover { opacity: 0.88; }
+:is(.distill-card-input, .distill-card-send):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.distill-card-note { margin: 4px 0 0; color: var(--reader-fg); font-size: 12.5px; }
+.distill-card-note:empty { display: none; }
+.board-card.needs-you { border-color: var(--decide-ink); }

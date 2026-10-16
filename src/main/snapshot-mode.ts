@@ -98,4 +98,5 @@ export const testingFixture: {
   claudeDir: string | null;
   runs: { runId: string; dir: string; typed: string; script: string; stages: { name: string; command: string; exec: string; report: string | null; exit: string; log: string }[] }[];
   loopStarts: { command: string }[]; // a test loop started in a new tab: the line it would have typed
-} = { project: null, claudeDir: null, runs: [], loopStarts: [] };
+  changed: string[] | null; // the project's recently changed files, instead of asking git
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null };

@@ -4,6 +4,8 @@ import { el } from './dom';
 import { loopBarHtml, phaseWord, type LoopPhase, type LoopProgress } from '../shared/loop-line';
 import { DEFAULT_ROUNDS, MAX_ROUNDS, FOCUS_CAP, openBugs, type Criteria, type CriteriaItem, type CriteriaStatus, type LoopStatus } from '../shared/test-loop';
 import type { StageStatus } from '../shared/testing';
+import type { DistillRecord } from '../shared/distillation';
+import { distillSection } from './testing-distill-view';
 
 export interface LoopModel {
   status: LoopStatus;
@@ -14,9 +16,11 @@ export interface LoopModel {
   stages: { name: string; status: StageStatus }[]; // Claude's latest result per stage since the loop started
   stopping: boolean;
   note: string;
+  distillation: DistillRecord[]; // this loop's rounds of self-review, oldest first
+  distillKey: string; // which loop session they belong to, so the open/closed state follows it
 }
 
-export interface LoopHandlers { start: (focus: string, rounds: number) => void; stop: () => void }
+export interface LoopHandlers { start: (focus: string, rounds: number) => void; stop: () => void; askThread: (prompt: string) => void }
 
 const STATUS_WORD: Record<LoopStatus, string> = { idle: 'Not started', starting: 'Starting', running: 'Running', done: 'Done', stopped: 'Stopped' };
 const STEPS: LoopPhase[] = ['scenarios', 'testing', 'fixing', 'verifying'];
@@ -160,11 +164,12 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
     about.hidden = active; // explained before a loop starts, out of the way while one runs
     note.textContent = model.note;
     note.hidden = !model.note;
-    const showBody = model.status !== 'idle' || Boolean(model.criteria && (model.criteria.scenarios.length || model.criteria.bugs.length));
+    const showBody = model.status !== 'idle' || model.distillation.length > 0 || Boolean(model.criteria && (model.criteria.scenarios.length || model.criteria.bugs.length));
     body.hidden = !showBody;
     if (!showBody) { body.replaceChildren(); return; }
     const live = liveBlock(model);
-    body.replaceChildren(...(model.status === 'idle' ? [] : [progressBlock(model)]), ...(live ? [live] : []), criteriaBlock(model.criteria));
+    const distill = distillSection(model.distillation, `loop:${model.distillKey}`, handlers.askThread);
+    body.replaceChildren(...(model.status === 'idle' ? [] : [progressBlock(model)]), ...(live ? [live] : []), ...(distill ? [distill] : []), criteriaBlock(model.criteria));
   }
 
   return { element: panel, update, focusInput };

@@ -27,6 +27,7 @@ import type { SlashList } from './slash';
 import type { Delivery } from './mentions';
 import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
 import type { DuplicatePair } from './library-titles';
+import type { DistillRecord } from './distillation';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
 import type { TextStep } from './text-size';
@@ -215,7 +216,7 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null; distillation: DistillRecord[] }> };
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
   'testing:save-pipeline': { args: [request: { tabId: TabId; root?: string | null; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:use-claude-pipeline': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };

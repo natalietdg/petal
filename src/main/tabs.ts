@@ -8,7 +8,7 @@ import { foregroundJobIn } from './updater';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
 import { harvest } from './library-extract';
-import { onTurnFinished } from './testing-ipc';
+import { captureFinishedReply, onTurnFinished } from './testing-ipc';
 import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites, stopWrites } from './snapshot-mode';
 import { guardsShell, harnessLine, recordShellOutput } from './snapshot-shell';
@@ -114,6 +114,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   const onReplyFinished = ({ reply, sessionId, cwd }: ReplyFinished) => {
     responseHook.onReplyFinished({ reply, sessionId, cwd, title: labelFor({ sessionId, cwd }) });
     void onTurnFinished(session).catch((error: Error) => console.error('[petal] testing auto-run failed:', error)); // off unless she turned it on
+    captureFinishedReply(reply, sessionId, cwd); // a test loop round's distillation, kept in the repo's .petal/
   };
   const feed = new ReaderFeed(pty.pid, (channel, update) => {
     const label = labelFor(update);

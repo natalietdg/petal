@@ -10,6 +10,7 @@ import * as coord from './coord';
 import * as boardTasks from './board-tasks';
 import * as boardActivity from './board-activity';
 import * as reader from './reader';
+import * as distillCard from './distill-card';
 import * as testing from './testing';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
@@ -168,6 +169,8 @@ function cardElement(card: BoardCard): HTMLLIElement {
   }
   button.addEventListener('click', () => void choose(card, false));
   item.append(button);
+  const needsYou = card.tabId && card.status !== 'working' ? distillCard.card(card.tabId, 'board') : null;
+  if (needsYou) { button.classList.add('needs-you'); item.append(needsYou); }
   const tasks = card.tabId ? boardTasks.giveable(info?.root ?? null) : [];
   if (card.tabId && tasks.length) acceptTaskDrops(button, card.tabId);
   if (card.tabId && tasks.length) item.append(giveControls(card.sessionId, card.tabId, tasks));
@@ -355,7 +358,7 @@ function render(force = false): void {
   grid.hidden = !sessionsView;
   boardTasks.element().hidden = !sessionsView;
   title.textContent = sessionsView ? 'Sessions' : 'Activity';
-  const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops, coord.current(), boardTasks.current()]);
+  const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops, coord.current(), boardTasks.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -425,5 +428,6 @@ new MutationObserver(() => {
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });
 window.addEventListener('petal:open-board', open);
 window.addEventListener(stopClaude.CHANGED_EVENT, () => render(true));
+window.addEventListener(distillCard.CHANGED_EVENT, () => render(true));
 window.pastel.onToggleBoard(toggle);
 byId('board-button').addEventListener('click', toggle);

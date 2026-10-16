@@ -71,6 +71,11 @@ export class ReaderFeed implements ProcessListener {
     subscribe(this);
   }
 
+  // The replies on screen, newest first; Testing reads a loop's distillation from them.
+  get shownReplies(): readonly Reply[] {
+    return this.replies;
+  }
+
   get needsProcesses(): boolean {
     return !this.fixture;
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading, splitThread, threadCheckStart, threadPrompt } from '../src/shared/reply-threads';
+import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading, parseThreads, sameThread, splitThread, threadCheckStart, threadNeedsYou, threadPrompt } from '../src/shared/reply-threads';
 import { isOpen, newFold } from '../src/shared/reply-fold';
 
 describe('isOpenThreadsHeading', () => {
@@ -67,5 +67,25 @@ describe('threadPrompt', () => {
 describe('Open threads in the fold state', () => {
   it('starts open like Steps', () => {
     expect(isOpen(newFold(), 2, true)).toBe(true);
+  });
+});
+
+describe('parseThreads', () => {
+  it('reads the section’s items from markdown, emphasis and links dropped, continuation lines joined', () => {
+    const md = 'Intro.\n\n## Open threads\n- Does the cache expire? *Check: read [cache.ts](src/cache.ts) line 40*\n- Is **retry** safe\n  on a 503? Check: `npm test -- retry`\n\n## Next\n- not a thread';
+    expect(parseThreads(md)).toEqual([
+      { question: 'Does the cache expire?', check: 'read cache.ts line 40' },
+      { question: 'Is retry safe on a 503?', check: 'npm test -- retry' },
+    ]);
+  });
+  it('skips code fences and stops at a bold label line', () => {
+    expect(parseThreads('```\n## Open threads\n- in code\n```\nNo threads.')).toEqual([]);
+    expect(parseThreads('### 4. Open threads\n- One? Check: x\n**Loop:** round 1/2 · testing\n- after')).toEqual([{ question: 'One?', check: 'x' }]);
+  });
+  it('spots needs-you checks and the same thread reworded', () => {
+    expect(threadNeedsYou({ question: 'q', check: 'needs you · the product rule' })).toBe(true);
+    expect(threadNeedsYou({ question: 'q', check: 'read api.ts' })).toBe(false);
+    expect(sameThread('Is tax rounded per line in the API as well?', 'Is tax rounded per line in the API too?')).toBe(true);
+    expect(sameThread('Is tax rounded per line?', 'Does the retry test fail on a slow network?')).toBe(false);
   });
 });
