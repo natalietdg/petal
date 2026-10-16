@@ -147,7 +147,7 @@ const STRONG_SIGNALS: RegExp[] = [
 // Count only with a software word close by.
 const WEAK_WORDS = new Set(['test', 'tests', 'testing', 'tested', 'verify', 'verifies', 'verification', 'spec', 'specs', 'check', 'checks', 'checking']);
 const SOFTWARE_WORDS = new Set([
-  'code', 'app', 'apps', 'build', 'builds', 'ui', 'api', 'apis', 'endpoint', 'endpoints', 'diff', 'repo', 'repos', 'branch',
+  'code', 'app', 'apps', 'build', 'builds', 'ui', 'api', 'apis', 'endpoint', 'endpoints', 'diff',
   'deploy', 'deployed', 'staging', 'component', 'components', 'function', 'functions', 'bug', 'bugs', 'fix', 'fixes',
   'landed', 'browser', 'mobile', 'ci',
 ]);
