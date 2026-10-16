@@ -5,12 +5,19 @@ import * as tabs from './tabs';
 import * as sessionsPanel from './sessions-panel';
 import * as favorites from './favorites';
 import * as stopClaude from './stop-claude';
+import * as coord from './coord';
+import * as boardTasks from './board-tasks';
+import * as boardActivity from './board-activity';
+import * as reader from './reader';
+import * as testing from './testing';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
 import { screenIsAsking } from '../shared/prompt-answer';
 import { STATUS_KEYS, STATUS_TITLES } from '../shared/status-lines';
 import { agentsBadgeText, type SessionsView } from '../shared/ipc';
+import { TASK_STATUS_WORDS } from '../shared/tasks';
+import type { ActivityEvent } from '../shared/activity';
 import {
   BOARD_FILTERS, EMPTY_DIGEST, FILTER_WORDS, STATUS_WORDS, digestReplies, filterCards, lastUpdate, matchesFilter, sortCards, toCard,
   type BoardCard, type BoardFilter, type BoardSource,
@@ -26,10 +33,30 @@ filterRow.setAttribute('aria-label', 'Show');
 view.tabIndex = -1; // focusable, so Esc reaches the overlay with no card to focus
 const grid = el('ul', 'board-grid');
 grid.setAttribute('aria-label', 'Open Claude sessions');
-head.append(title, summary, filterRow);
-view.append(head, grid);
+// Sessions (cards and the project's tasks) or Activity (the shared feed); one branch filter for both.
+type BoardView = 'sessions' | 'activity';
+const viewTabs = el('div', 'board-views');
+viewTabs.setAttribute('role', 'tablist');
+viewTabs.setAttribute('aria-label', 'Board view');
+const viewButtons = (['sessions', 'activity'] as const).map((id) => {
+  const b = el('button', 'board-view', id === 'sessions' ? 'Sessions' : 'Activity');
+  b.type = 'button';
+  b.dataset.view = id;
+  b.setAttribute('role', 'tab');
+  b.addEventListener('click', () => setView(id));
+  return b;
+});
+viewTabs.append(...viewButtons);
+const branchSelect = el('select', 'board-branch');
+branchSelect.setAttribute('aria-label', 'Branch');
+branchSelect.addEventListener('change', () => { branchFilter = branchSelect.value || null; boardActivity.setBranch(branchFilter); render(true); });
+head.append(title, viewTabs, summary, branchSelect, filterRow);
+view.append(head, boardTasks.element(), grid, boardActivity.element());
 
 let filter: BoardFilter = 'all';
+let boardView: BoardView = 'sessions';
+let branchFilter: string | null = null;
+let givingFor: string | null = null; // the card whose Give task list is open
 let lastView: SessionsView | null = null;
 let folderAllowed = true;
 let shownKey = '';
@@ -130,8 +157,19 @@ function cardElement(card: BoardCard): HTMLLIElement {
     button.append(block);
   }
   if (card.conclusion) button.append(labelled('board-conclusion', 'Conclusion', card.conclusion));
+  const info = coord.session(card.sessionId);
+  if (info?.task) button.append(labelled(`board-task ${info.task.status}`, 'Task', `${info.task.title} · ${TASK_STATUS_WORDS[info.task.status]}`));
+  const clash = info?.clashes[0];
+  if (clash) {
+    const chip = el('span', 'board-clash', `Clash · ${clash.file}`);
+    chip.title = info.clashes.map((c) => `Also being edited in ${c.otherName}: ${c.file}`).join('\n');
+    button.append(chip);
+  }
   button.addEventListener('click', () => void choose(card, false));
   item.append(button);
+  const tasks = card.tabId ? boardTasks.giveable(info?.root ?? null) : [];
+  if (card.tabId && tasks.length) acceptTaskDrops(button, card.tabId);
+  if (card.tabId && tasks.length) item.append(giveControls(card.sessionId, card.tabId, tasks));
   // A working session in this window: Stop sits on the card's corner, outside the card's own button.
   const stop = card.tabId ? stopClaude.control(card.tabId, 'board') : null;
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
@@ -178,6 +216,94 @@ async function choose(card: BoardCard, confirmFork: boolean): Promise<void> {
   render(true);
 }
 
+// A task dragged from the Tasks list onto a card gives it to that session.
+function acceptTaskDrops(button: HTMLElement, tabId: string): void {
+  const carriesTask = (event: DragEvent) => event.dataTransfer?.types.includes(boardTasks.TASK_DRAG_TYPE) ?? false;
+  button.addEventListener('dragover', (event) => {
+    if (!carriesTask(event)) return;
+    event.preventDefault();
+    button.classList.add('drop-target');
+  });
+  button.addEventListener('dragleave', () => button.classList.remove('drop-target'));
+  button.addEventListener('drop', (event) => {
+    button.classList.remove('drop-target');
+    const taskId = event.dataTransfer?.getData(boardTasks.TASK_DRAG_TYPE);
+    if (!taskId) return;
+    event.preventDefault();
+    void boardTasks.give(taskId, tabId);
+  });
+}
+
+// Give task: the project's unfinished tasks, one click each; a task someone else holds says who.
+function giveControls(sessionId: string, tabId: string, tasks: ReturnType<typeof boardTasks.giveable>): HTMLElement {
+  const box = el('div', 'board-give');
+  const toggle = el('button', 'session-link board-give-toggle', givingFor === sessionId ? 'Close' : 'Give task');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-expanded', String(givingFor === sessionId));
+  toggle.addEventListener('click', () => { givingFor = givingFor === sessionId ? null : sessionId; render(true); });
+  box.append(toggle);
+  if (givingFor === sessionId) {
+    const list = el('ul', 'board-give-list');
+    for (const task of tasks) {
+      const li = el('li');
+      const pick = el('button', 'board-give-task', task.title);
+      pick.type = 'button';
+      pick.dataset.taskId = task.id;
+      const held = task.owner && task.owner.sessionId !== sessionId ? task.owner.name : task.owner ? 'already this session’s' : null;
+      if (held) pick.append(el('span', 'board-give-owner', held.startsWith('already') ? ` · ${held}` : ` · with ${held}`));
+      pick.addEventListener('click', () => { givingFor = null; void boardTasks.give(task.id, tabId); });
+      li.append(pick);
+      list.append(li);
+    }
+    box.append(list);
+  }
+  return box;
+}
+
+// An Activity item: its tab here (and reply), Testing for a run, else the session as a card click opens it.
+function jump(event: ActivityEvent): void {
+  if (event.target?.runId) {
+    close();
+    void testing.open();
+    return;
+  }
+  const source = event.sessionId ? sources(lastView?.rows).find((s) => s.sessionId === event.sessionId) : null;
+  if (!source) return;
+  if (source.tabId && tabs.get(source.tabId)) {
+    close();
+    tabs.activate(source.tabId);
+    const replyId = event.target?.replyId;
+    if (replyId) setTimeout(() => reader.showReply([replyId]), 0);
+    return;
+  }
+  setView('sessions');
+  void choose(toCard(source), false);
+}
+
+function setView(next: BoardView): void {
+  boardView = next;
+  givingFor = null;
+  boardActivity.show(next === 'activity');
+  render(true);
+}
+
+function branchOptions(cards: readonly BoardCard[]): void {
+  const branches = new Set<string>();
+  for (const card of cards) { const b = coord.session(card.sessionId)?.branch; if (b) branches.add(b); }
+  for (const e of boardActivity.all()) if (e.branch) branches.add(e.branch);
+  if (branchFilter) branches.add(branchFilter);
+  const options = [['', 'All branches'], ...[...branches].sort().map((b) => [b, b])];
+  const key = JSON.stringify(options);
+  if (branchSelect.dataset.key !== key) {
+    branchSelect.replaceChildren(...options.map(([value, label]) => Object.assign(el('option', null, label), { value })));
+    branchSelect.dataset.key = key;
+  }
+  branchSelect.value = branchFilter ?? '';
+  branchSelect.hidden = branches.size === 0;
+}
+
+const onBranch = (card: BoardCard): boolean => !branchFilter || coord.session(card.sessionId)?.branch === branchFilter;
+
 function filterButtons(cards: readonly BoardCard[]): HTMLButtonElement[] {
   return BOARD_FILTERS.map((id) => {
     const count = cards.filter((c) => matchesFilter(c, id)).length;
@@ -215,10 +341,18 @@ function render(force = false): void {
     shownKey = 'folder-off';
     return;
   }
-  const cards = sortCards(sources(lastView?.rows).map(toCard));
+  const all = sortCards(sources(lastView?.rows).map(toCard));
+  branchOptions(all);
+  const cards = all.filter(onBranch);
   const shown = filterCards(cards, filter);
   const stops = cards.map((c) => (c.tabId ? stopClaude.phaseOf(c.tabId) : 'hidden'));
-  const key = JSON.stringify([filter, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops]);
+  for (const b of viewButtons) b.setAttribute('aria-selected', String(b.dataset.view === boardView));
+  const sessionsView = boardView === 'sessions';
+  filterRow.hidden = !sessionsView;
+  grid.hidden = !sessionsView;
+  boardTasks.element().hidden = !sessionsView;
+  title.textContent = sessionsView ? 'Sessions' : 'Activity';
+  const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops, coord.current(), boardTasks.current()]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -248,6 +382,8 @@ grid.addEventListener('keydown', (event) => {
 export function open(): void {
   if (!overlays.show('board')) return;
   shownKey = '';
+  void boardTasks.load();
+  boardActivity.show(boardView === 'activity');
   render(true);
   following = true;
   sessionsPanel.setBoardOpen(true); // fresh rows now, then every 2s while open
@@ -271,6 +407,9 @@ sessionsPanel.onView((next) => {
   render();
 });
 favorites.onChange(() => render());
+coord.onChange(() => render());
+boardTasks.init(() => render(true));
+boardActivity.init(jump);
 // The overlay can close by Esc or by another view opening: stop asking for digests then.
 new MutationObserver(() => {
   if (!view.hidden || !following) return;
@@ -278,6 +417,7 @@ new MutationObserver(() => {
   sessionsPanel.setBoardOpen(false);
   notes.clear();
   confirms.clear();
+  givingFor = null;
 })
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });
 window.addEventListener('petal:open-board', open);

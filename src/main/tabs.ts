@@ -60,6 +60,12 @@ function labelFor({ sessionId, cwd, replies = [] }: Pick<ReaderUpdate, 'sessionI
   return sessionTitleFor(sessionId, { cwd, firstPrompt: replies.at(-1)?.prompt });
 }
 
+// The name a tab here last showed for this session, or null when no tab here follows it.
+export function tabLabelOf(sessionId: string): string | null {
+  for (const shown of shownLabels.values()) if (shown.update.sessionId === sessionId) return shown.label;
+  return null;
+}
+
 // Every tab, every window: a label that changed since it was sent goes to the tab, and History re-lists.
 let organizerSeen: Readonly<organizer.OrganizerStore> | null = null; // loadCached hands back a new object once the file changes
 function relabelTabs(): void {

@@ -14,6 +14,8 @@ import { parseEntry } from './transcript-entry';
 import { canonicalCategory, cleanFact, knownTopics, listEntries, mergeTopics, squash, STARTER_CATEGORIES, type TopicInput } from './library-store';
 import { counters, isSnapshotRun, libraryFixture } from './snapshot-mode';
 import type { LibraryRunResult } from '../shared/library';
+import { recordActivity } from './activity-feed';
+import { sessionTitleFor } from './session-title';
 
 export const CHUNK_BYTES = 1024 * 1024; // of raw log per Claude call; tool output makes logs bulky
 export const DIGEST_CHARS = 30_000; // of prompts and replies sent per call
@@ -204,6 +206,15 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
   return result;
 }
 
+const notes = (n: number): string => `${n} note${n === 1 ? '' : 's'}`;
+
+// The activity feed's line for a run that added or updated notes.
+function recordLibraryRun(sessionId: string, { added, updated }: LibraryRunResult): void {
+  const parts = [added ? `${notes(added)} added` : '', updated ? `${updated} updated` : ''].filter(Boolean).join(', ');
+  const name = sessionTitleFor(sessionId);
+  recordActivity({ kind: 'library', sessionId, sessionName: name, branch: null, repo: null, text: `Library: ${parts} from ${name}` });
+}
+
 // Queues a session; a second call while it waits shares the first. force: an explicit click (Add to Library, Read past sessions).
 export function queueSession(target: SessionTarget, { force = false }: { force?: boolean } = {}): Promise<LibraryRunResult> {
   const waiting = queued.get(target.sessionId);
@@ -213,7 +224,10 @@ export function queueSession(target: SessionTarget, { force = false }: { force?:
     active += 1;
     try {
       const result = await runSession(target, force);
-      if (result.added || result.updated) for (const listener of changeListeners) listener();
+      if (result.added || result.updated) {
+        for (const listener of changeListeners) listener();
+        recordLibraryRun(target.sessionId, result);
+      }
       return result;
     } catch (error) {
       console.error(`[petal] library skipped ${target.sessionId}:`, String((error as Error).message ?? error).split('\n')[0]);

@@ -28,6 +28,7 @@ import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
 import type { ActivityEvent } from './activity';
+import type { CoordView, TaskChangeResult, TaskOp, TasksView } from './coord';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -250,6 +251,11 @@ export interface InvokeChannels {
   'paste:image': { args: [request: { file: string; prompt: string }]; result: Guarded<PromptImage> };
   // The Board's Activity tab: every recorded event, newest first.
   'activity:list': { args: []; result: Guarded<ActivityEvent[]> };
+  // The Board's Tasks: the tab's project list, and one change to it (giving a task returns the brief to send).
+  'tasks:get': { args: [request: { tabId: TabId }]; result: Guarded<TasksView> };
+  'tasks:change': { args: [request: { tabId: TabId; op: TaskOp }]; result: Guarded<TaskChangeResult> };
+  // Every live session's repo, branch, task and file clashes.
+  'coord:get': { args: []; result: Guarded<CoordView> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.
@@ -311,6 +317,7 @@ export interface EventChannels {
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };
   'activity:changed': void; // the activity feed gained or changed an event
+  'coord:update': CoordView; // a session's task, branch or file clashes changed
 }
 
 export type InvokeChannel = keyof InvokeChannels;

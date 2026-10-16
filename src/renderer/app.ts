@@ -34,6 +34,10 @@ import * as agentsMenu from './agents-menu';
 import * as agentPanel from './agent-panel';
 import * as favorites from './favorites';
 import * as sessionsBoard from './sessions-board';
+import * as coord from './coord';
+import * as boardTasks from './board-tasks';
+import * as boardActivity from './board-activity';
+import * as clashNotice from './clash-notice';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
 import * as headersMin from './headers-min';
@@ -49,7 +53,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, coord, boardTasks, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 

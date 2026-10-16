@@ -278,7 +278,7 @@ for (const button of toggles) {
 }
 
 // Jump from a flow step to its reply; only the newest 20 replies are kept on screen.
-function showReply(replyIds: readonly (string | undefined)[]): void {
+export function showReply(replyIds: readonly (string | undefined)[]): void {
   setView('replies');
   const target = [...replyIds].reverse().map((id) => document.querySelector<HTMLElement>(`[data-reply-id="${CSS.escape(String(id))}"]`)).find(Boolean);
   if (!target) {

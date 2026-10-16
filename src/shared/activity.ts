@@ -7,6 +7,11 @@ export const KIND_WORDS: Record<ActivityKind, string> = {
   task: 'Tasks', edits: 'Edits', test: 'Tests', conclusion: 'Conclusions', library: 'Library', clash: 'Clashes', message: 'Messages',
 };
 
+// One item's badge.
+export const KIND_BADGES: Record<ActivityKind, string> = {
+  task: 'Task', edits: 'Edits', test: 'Test run', conclusion: 'Conclusion', library: 'Library', clash: 'Clash', message: 'Message',
+};
+
 export const ACTIVITY_CAP = 500;
 
 // Where a click on the item goes: the session's tab, one of its replies, or a Testing run.

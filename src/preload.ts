@@ -149,6 +149,18 @@ const api = {
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
     onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),
   },
+  tasks: {
+    get: (tabId: TabId) => invoke('tasks:get', { tabId }),
+    change: (tabId: TabId, op: InvokeArgs<'tasks:change'>[0]['op']) => invoke('tasks:change', { tabId, op }),
+  },
+  coord: {
+    get: () => invoke('coord:get'),
+    onUpdate: (callback: (view: EventChannels['coord:update']) => void) => subscribe('coord:update', callback),
+  },
+  activity: {
+    list: () => invoke('activity:list'),
+    onChanged: (callback: () => void) => subscribe('activity:changed', callback),
+  },
   factory: {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),
