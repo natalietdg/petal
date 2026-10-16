@@ -130,6 +130,7 @@ const api = {
     savePipeline: (request: InvokeArgs<'testing:save-pipeline'>[0]) => invoke('testing:save-pipeline', request),
     run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
     stop: (runId: string) => invoke('testing:stop', { runId }),
+    loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
     onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),
   },
   factory: {

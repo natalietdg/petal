@@ -89,4 +89,5 @@ export const testingFixture: {
   project: string | null;
   claudeDir: string | null;
   runs: { runId: string; dir: string; typed: string; script: string; stages: { name: string; command: string; exec: string; report: string | null; exit: string; log: string }[] }[];
-} = { project: null, claudeDir: null, runs: [] };
+  loopStarts: { command: string }[]; // a test loop started in a new tab: the line it would have typed
+} = { project: null, claudeDir: null, runs: [], loopStarts: [] };

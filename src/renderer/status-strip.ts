@@ -1,6 +1,8 @@
-// The Doing / Recommend / Next strip, plus the factory Station bar, shown in the reader's header and atop History's preview.
+// The Doing / Recommend / Next strip, plus one progress bar (the test loop's, else the factory Station's),
+// shown in the reader's header and atop History's preview.
 import { el } from './dom';
 import { parseStation, stationBarHtml, type StationProgress } from '../shared/station-line';
+import { loopBarHtml, parseLoop, type LoopProgress } from '../shared/loop-line';
 import { hasStatus, parseStatus, STATUS_KEYS, STATUS_TITLES, type StatusLines } from '../shared/status-lines';
 
 export function createStrip(): HTMLDivElement {
@@ -29,19 +31,32 @@ function stationRow(station: StationProgress): HTMLElement {
   return row;
 }
 
-// Replies newest first: the newest one carrying any status or Station line drives the whole strip.
-function newestLines(newestFirst: readonly string[]): { lines: StatusLines; station: StationProgress | null } | null {
+function loopRow(loop: LoopProgress): HTMLElement {
+  const row = el('div', 'status-row status-station status-loop');
+  row.append(el('span', 'status-chip', 'Loop'));
+  row.insertAdjacentHTML('beforeend', loopBarHtml(loop)); // built from escaped text only
+  return row;
+}
+
+type Found = { lines: StatusLines; station: StationProgress | null; loop: LoopProgress | null };
+
+// Replies newest first: the newest one carrying any status, Station or Loop line drives the whole strip.
+function newestLines(newestFirst: readonly string[]): Found | null {
   for (const markdown of newestFirst) {
     const lines = parseStatus(markdown);
     const station = parseStation(markdown);
-    if (hasStatus(lines) || station) return { lines, station };
+    const loop = parseLoop(markdown);
+    if (hasStatus(lines) || station || loop) return { lines, station, loop };
   }
   return null;
 }
+
+// One bar: a Loop line wins over a Station line in the same reply.
+const barRow = (found: Found): HTMLElement[] => (found.loop ? [loopRow(found.loop)] : found.station ? [stationRow(found.station)] : []);
 
 // Replies newest first; hidden when none carries a status line.
 export function paintStrip(strip: HTMLElement, newestFirst: readonly string[]): void {
   const found = newestLines(newestFirst);
   strip.hidden = !found;
-  strip.replaceChildren(...(found ? [...rows(found.lines), ...(found.station ? [stationRow(found.station)] : [])] : []));
+  strip.replaceChildren(...(found ? [...rows(found.lines), ...barRow(found)] : []));
 }

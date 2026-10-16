@@ -24,6 +24,7 @@ import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
 import type { LibraryDoc, LibraryList, LibraryRunResult } from './library';
 import type { PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
+import type { Criteria } from './test-loop';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -189,7 +190,8 @@ export interface InvokeChannels {
   'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null }> };
+  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null }> };
+  'testing:loop-start': { args: [request: { tabId: TabId; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
   'testing:save-pipeline': { args: [request: { tabId: TabId; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:run': { args: [request: { tabId: TabId; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };

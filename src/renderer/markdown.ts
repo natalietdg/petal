@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
 import { linkLabel } from '../shared/link-label';
 import { parseStationLine, stationBarHtml, type StationProgress } from '../shared/station-line';
+import { loopBarHtml, parseLoopLine, type LoopProgress } from '../shared/loop-line';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
 import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
@@ -25,9 +26,9 @@ const highlight: TokenizerAndRendererExtension = {
   },
 };
 
-// A run of Doing / Recommend / Next (and a factory Station) lines becomes one block of labelled rows.
-const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next|station)(?:\*\*|__)?\s*:/i;
-type StatusRow = { key: StatusKey; tokens: Token[] } | { key: 'station'; station: StationProgress };
+// A run of Doing / Recommend / Next (and a factory Station or test Loop) lines becomes one block of labelled rows.
+const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next|station|loop)(?:\*\*|__)?\s*:/i;
+type StatusRow = { key: StatusKey; tokens: Token[] } | { key: 'station'; station: StationProgress } | { key: 'loop'; loop: LoopProgress };
 const statusBlock: TokenizerAndRendererExtension = {
   name: 'statusBlock',
   level: 'block',
@@ -42,8 +43,10 @@ const statusBlock: TokenizerAndRendererExtension = {
     for (const line of src.split('\n')) {
       const status = parseStatusLine(line);
       const station = status ? null : parseStationLine(line);
+      const loop = status || station ? null : parseLoopLine(line);
       if (status) rows.push({ key: status.key, tokens: this.lexer.inlineTokens(status.text) });
       else if (station) rows.push({ key: 'station', station });
+      else if (loop) rows.push({ key: 'loop', loop });
       else break;
       length += line.length + 1;
     }
@@ -53,6 +56,8 @@ const statusBlock: TokenizerAndRendererExtension = {
   renderer(token) {
     const rows = (token.rows as StatusRow[]).map((row) => row.key === 'station'
       ? `<div class="status-row status-station"><span class="status-chip">Station</span>${stationBarHtml(row.station)}</div>`
+      : row.key === 'loop'
+      ? `<div class="status-row status-station status-loop"><span class="status-chip">Loop</span>${loopBarHtml(row.loop)}</div>`
       : `<div class="status-row status-${row.key}"><span class="status-chip">${STATUS_TITLES[row.key]}</span><span class="status-text">${this.parser.parseInline(row.tokens)}</span></div>`);
     return `<div class="status-block">${rows.join('')}</div>`;
   },

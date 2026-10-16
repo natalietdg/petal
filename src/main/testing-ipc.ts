@@ -15,6 +15,10 @@ import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from '.
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
 import { claudeRun, scanLog } from './testing-claude';
 import * as store from './testing-store';
+import { ensureSelfIgnore } from './factory-store';
+import { writeFileDurable } from './atomic-file';
+import { buildStartCommand, shellQuote } from './resume-command';
+import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
   type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type StageResult, type TestingState,
@@ -25,6 +29,8 @@ const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
 const MAX_STAGES = 20;
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
+const LOOP_STAND_IN = ': petal-loop-start\r'; // typed in snapshot runs instead of starting claude
+const BRIEF_CAP = 12000;
 
 interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
 const watching = new Map<string, Watched>(); // run id -> its watch
@@ -201,6 +207,30 @@ export function cleanPipeline(raw: unknown, previous: PipelineConfig | null): Pi
   return { stages, keepGoing: value.keepGoing === true, autoRun: value.autoRun === true, confirmed: previous?.confirmed ?? [] };
 }
 
+// ---- Test loop: Petal makes .petal/ (kept out of git) and reads the criteria file; Claude runs the loop itself.
+const criteriaFile = (root: string): string => path.join(root, ...CRITERIA_PATH.split('/'));
+
+export function prepareLoop(root: string): void {
+  const file = criteriaFile(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  ensureSelfIgnore(path.dirname(file));
+  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON);
+}
+
+// Read only, the first CRITERIA_CAP bytes; null when there is no file yet.
+export function readCriteria(root: string): Criteria | null {
+  let fd: number;
+  try { fd = fs.openSync(criteriaFile(root), 'r'); } catch { return null; }
+  try {
+    const size = fs.fstatSync(fd).size;
+    const buffer = Buffer.alloc(Math.min(size, CRITERIA_CAP));
+    const read = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    return parseCriteria(buffer.toString('utf8', 0, read), size > CRITERIA_CAP);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export interface TestingDeps { sessions: TabSessions; openTab: OpenTab }
 let deps: TestingDeps | null = null;
 
@@ -220,11 +250,28 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId }) => {
-    if (!claudeFolderAllowed()) return { runs: [], running: null };
+    if (!claudeFolderAllowed()) return { runs: [], running: null, sessionTab: null, criteria: null };
+    const asking = sessionFor(sessions, event.sender.id, tabId);
+    const root = await projectOf(asking);
+    if (!root) return { runs: [], running: null, sessionTab: null, criteria: null };
+    // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
+    mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposeStages(root, detectStack(root)));
+    return { runs: store.load(root).runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root) };
+  });
+
+  // Prepares .petal/, then either leaves the paste to the reply box's path or starts claude with the brief in a new tab.
+  handle('testing:loop-start', async (event, { tabId, brief, newTab }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
     const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
-    if (!root) return { runs: [], running: null };
-    mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? []);
-    return { runs: store.load(root).runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null };
+    if (!root) return { note: 'No project in this tab. Open one first.' };
+    if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'The loop brief is empty or too long.' };
+    prepareLoop(root);
+    if (newTab !== true) return { tabId: null };
+    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief)}`;
+    if (isSnapshotRun()) testingFixture.loopStarts.push({ command });
+    const opened = openTab(event.sender, { command: isSnapshotRun() ? LOOP_STAND_IN : command, background: true });
+    if (opened) runTabs.set(`${event.sender.id}:${opened}`, root);
+    return { tabId: opened ?? null };
   });
 
   handle('testing:save-pipeline', async (event, { tabId, pipeline }) => {

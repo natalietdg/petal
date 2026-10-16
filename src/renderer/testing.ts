@@ -6,9 +6,13 @@ import * as tabs from './tabs';
 import * as composer from './composer';
 import { byId, el, isIpcError } from './dom';
 import { pipelineStrip, runList, stackList, stageResults, trend } from './testing-view';
+import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineConfig, type PipelineRun, type StackItem, type StageConfig, type StageResult, type TestCase, type TestingState } from '../shared/testing';
+import { latestLoop } from '../shared/loop-line';
+import { buildLoopBrief, isActive, loopStatus, loopTarget, stopLoop, type Criteria } from '../shared/test-loop';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
+const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh faster
 
 const view = byId('testing');
 view.tabIndex = -1;
@@ -41,7 +45,8 @@ const stackBox = el('section', 'tst-stackbox');
 stackBox.setAttribute('aria-label', 'What this project tests with');
 side.append(historyBox, stackBox);
 body.append(results, side);
-view.append(head, note, confirmBox, strip, editor, body);
+const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop() });
+view.append(head, note, confirmBox, loopPanel.element, strip, editor, body);
 
 // ---- State, per window.
 let data: TestingState | null = null;
@@ -53,6 +58,12 @@ let confirming: { stageId: string | null; commands: { name: string; command: str
 let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
+let criteria: Criteria | null = null;
+let loopNote = '';
+// A loop Petal started or stopped this run, per project root; Claude's Loop lines carry the rest.
+interface LoopRecord { tabId: string | null; startedAt: number; stoppedAt: number | null; stopping: boolean }
+const loops = new Map<string, LoopRecord>();
+let loopTick: ReturnType<typeof setInterval> | null = null;
 
 export const isOpen = (): boolean => overlays.isOpen('testing');
 const pipeline = (): PipelineConfig | null => data?.pipeline ?? null;
@@ -266,10 +277,109 @@ function drawSide(): void {
   stackBox.append(el('h3', 'tst-section-title', 'What this project tests with'), stackList(data.stack, insertSkill));
 }
 
+// ---- Test loop.
+const isLive = (id: string): boolean => tabs.get(id)?.update?.state === 'live';
+const loopRecord = (): LoopRecord | null => (data?.project ? loops.get(data.project.root) ?? null : null);
+const loopTabId = (): string | null => {
+  const record = loopRecord();
+  const id = record?.tabId ?? data?.sessionTab ?? null;
+  return id && tabs.get(id) ? id : null;
+};
+
+function loopFacts() {
+  const record = loopRecord();
+  const id = loopTabId();
+  const update = id ? tabs.get(id)?.update ?? null : null;
+  const progress = latestLoop(update?.replies ?? [], record?.startedAt ?? 0);
+  const status = loopStatus({ progress, live: id ? isLive(id) : false, startedAt: record?.startedAt ?? null, stoppedAt: record?.stoppedAt ?? null, now: Date.now() });
+  return { record, id, progress, status };
+}
+
+// Claude's newest result per stage since the loop started.
+function claudeStages(since: number): LoopModel['stages'] {
+  const p = pipeline();
+  if (!p || !data) return [];
+  const claudeRuns = data.runs.filter((r) => r.by === 'claude' && r.startedAt >= since);
+  if (!claudeRuns.length) return [];
+  return p.stages.map((stage) => ({ name: stage.name, status: claudeRuns.find((r) => r.stages.some((s) => s.stageId === stage.id))?.stages.find((s) => s.stageId === stage.id)?.status ?? 'waiting' }));
+}
+
+function drawLoop(): void {
+  loopPanel.element.hidden = !folderAllowed || !data?.project;
+  if (loopPanel.element.hidden) return;
+  const { record, progress, status } = loopFacts();
+  const stages = pipeline()?.stages ?? [];
+  const target = loopTarget(data?.sessionTab ?? null, isLive);
+  const why = !stages.length ? 'Add pipeline stages first. The loop runs them each round.'
+    : target.kind === 'paste' ? 'Claude in this project’s session writes scenarios as tests, runs the pipeline, fixes real bugs and runs again. It never commits.'
+      : 'No Claude is running on this project, so Start opens a new tab with Claude and the brief. It never commits.';
+  loopPanel.update({
+    status, progress, criteria, why,
+    canStart: Boolean(stages.length) && !isActive(status) && draft === null,
+    stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
+    stopping: record?.stopping ?? false,
+    note: loopNote,
+  });
+  // A live loop refreshes faster than the general poll.
+  const wantTick = isOpen() && isActive(status);
+  if (wantTick && !loopTick) loopTick = setInterval(() => { if (isOpen()) void refresh(); else stopLoopTick(); }, LOOP_POLL_MS);
+  if (!wantTick) stopLoopTick();
+}
+
+function stopLoopTick(): void {
+  if (loopTick) clearInterval(loopTick);
+  loopTick = null;
+}
+
+async function startLoop(focus: string, rounds: number): Promise<void> {
+  const id = tabId();
+  const p = pipeline();
+  if (!id || !data?.project || !p?.stages.length || isActive(loopFacts().status)) return;
+  const root = data.project.root;
+  const brief = buildLoopBrief({ focus, rounds, stages: p.stages, stack: data.stack });
+  const target = loopTarget(data.sessionTab, isLive);
+  const reply = await window.pastel.testing.loopStart({ tabId: id, brief, newTab: target.kind === 'new-tab' });
+  if (isIpcError(reply) || 'note' in reply) { loopNote = isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note; drawLoop(); return; }
+  if (target.kind === 'paste') {
+    const tab = tabs.get(target.tabId);
+    if (!tab || !(await composer.pasteToClaude(tab, brief))) { loopNote = 'Couldn’t reach Claude in that tab. Try again.'; drawLoop(); return; }
+    loopNote = '';
+  } else {
+    loopNote = reply.tabId ? 'Claude is starting in a new tab with the brief.' : 'Couldn’t open a new tab for Claude.';
+    if (!reply.tabId) { drawLoop(); return; }
+  }
+  loops.set(root, { tabId: target.kind === 'paste' ? target.tabId : reply.tabId, startedAt: Date.now(), stoppedAt: null, stopping: false });
+  await refresh();
+}
+
+// Esc interrupts the current step; the stop message follows once that claude is idle.
+async function stopCurrentLoop(): Promise<void> {
+  const id = loopTabId();
+  const root = data?.project?.root;
+  if (!id || !root) return;
+  const record = loops.get(root) ?? { tabId: id, startedAt: 0, stoppedAt: null, stopping: false };
+  if (record.stopping) return;
+  record.stopping = true;
+  loops.set(root, record);
+  loopNote = 'Interrupting Claude, then asking it to stop and summarise.';
+  drawLoop();
+  await stopLoop({
+    sendEsc: () => window.pastel.answerPrompt(id, { kind: 'menu', step: { cancel: true } }),
+    isIdle: () => !tabs.get(id)?.update?.busy,
+    send: async (text) => { const tab = tabs.get(id); return tab ? composer.pasteToClaude(tab, text) : false; },
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  });
+  record.stopping = false;
+  record.stoppedAt = Date.now();
+  loopNote = 'Asked Claude to stop. Its summary shows in that tab.';
+  drawLoop();
+}
+
 function drawAll(): void {
   drawHead();
   drawNote();
   drawConfirm();
+  drawLoop();
   drawStrip();
   drawEditor();
   drawResults();
@@ -337,8 +447,9 @@ async function refresh(): Promise<void> {
   if (!id || !data) return load();
   const result = await window.pastel.testing.history(id);
   if (isIpcError(result) || !data) return;
-  data = { ...data, runs: result.runs, running: result.running };
-  if (draft) { drawHead(); drawNote(); drawResults(); drawSide(); return; } // the editor keeps her typing
+  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab };
+  criteria = result.criteria;
+  if (draft) { drawHead(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
 }
 
@@ -350,9 +461,12 @@ export async function open(): Promise<void> {
   confirming = null;
   draft = null;
   message = '';
+  loopNote = '';
   data = null;
+  criteria = null;
   drawAll();
   await load();
+  await refresh();
   view.focus();
   poll ??= setInterval(() => { if (isOpen()) void refresh(); else stopPolling(); }, POLL_MS);
 }
@@ -386,7 +500,9 @@ window.pastel.testing.onRunUpdate(({ run: updated }) => {
   data = { ...data, runs: [updated, ...others].sort((a, b) => b.startedAt - a.startedAt), running: updated.state === 'running' ? updated.id : data.running === updated.id ? null : data.running };
   if (!draft) drawAll();
 });
+// A Loop line or a busy flip in the loop's tab shows at once, not on the next poll.
+window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === loopTabId()) queueMicrotask(drawLoop); });
 byId('testing-button').addEventListener('click', toggle);
 
 // For the snapshot harness.
-export const state = () => ({ project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
