@@ -8,6 +8,15 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 - During a factory run, a Station bar in the top strip shows which step Claude is on and whether it has passed.
 - Updates are easier to spot: the pill names the version, a Mac notification says when one is ready, Petal › Check for Updates… checks on demand, and a "What's new" note follows each update.
 - Petal's reply styles now cover Steps and Conclude.
+- Library: a half dial of domain knowledge Claude gathers from your sessions, colour-coded by category. Add to Library from any session, read past sessions, and tidy duplicates by merging, renaming or deleting notes. Turn it on in Customize › Organizer.
+- Testing tab: your project's test pipeline in one click, results grouped by file, Ask Claude to fix, and a pass-rate history.
+- Test loop: Claude writes test scenarios, turns each bug it finds into a test, fixes it and runs again. Stop it any time; it never commits.
+- Say "testing suite" or "library" in any session once the Petal skills are installed (Customize › Formatting).
+- Type / in the reply box for every skill, command and agent you have.
+- Claude Code's own menus, like /model, show as cards you can pick from in the reader.
+- A Stop button stops Claude mid-reply, from the reply box, the reply or the Board (⌘.).
+- Replies can end with Open threads: question cards you click to ask next.
+- Concluding a session also closes its tab.
 
 ## [1.0.6] · 2026-10-14
 - Icons on the top bar buttons.
