@@ -46,7 +46,7 @@ const isInside = (child: string, root: string): boolean => {
 };
 
 // Where a write to `file` lands: the end of its symlink chain, checked against `within` when given.
-export function writeTarget(file: string, { within }: WriteGuard = {}): string {
+function writeTarget(file: string, { within }: WriteGuard = {}): string {
   const target = followLinks(file);
   if (within && !isInside(realPathOf(target), realPathOf(within))) {
     throw new Error(`Petal didn’t write ${file}: it leads to ${realPathOf(target)}, outside ${within}.`);
