@@ -63,6 +63,12 @@ function propSvg(prop: Prop): string {
 }
 
 // A still picture of one cat for pickers; wrap it in .cat-portrait[data-cat] so her coat colours apply.
+// Words for copy about a pet: "she shrinks on her own" / "he shrinks on his own".
+export function petWords(id: string): { name: string; they: string; their: string } {
+  const pet = ALL_CATS[isCatId(id) ? id : 'mika'];
+  return pet.pronoun === 'he' ? { name: pet.name, they: 'he', their: 'his' } : { name: pet.name, they: 'she', their: 'her' };
+}
+
 export const portrait = (id: string): string => sittingSvg(ALL_CATS[isCatId(id) ? id : 'mika']);
 
 const root = byId('cat');

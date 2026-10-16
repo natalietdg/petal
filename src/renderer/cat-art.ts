@@ -4,6 +4,7 @@ export type Line = readonly [y: number, row: string];
 
 export interface Pet {
   name: string;
+  pronoun?: 'she' | 'he'; // used in copy about the pet; she when unset
   // Her own silhouette; the cats share SITTING.
   base?: readonly string[];
   eyesOpen: readonly Line[];
@@ -78,6 +79,7 @@ export const CATS = {
   // Mika, an orange tabby: forehead and cheek stripes, green eyes, cream chest, brown outline.
   mika: {
     name: 'Mika',
+    pronoun: 'she',
     eyesOpen: EYES_OPEN,
     sitting: [
       [1, '...L..........L.....'],
@@ -92,6 +94,7 @@ export const CATS = {
   // dark 2x2 eyes set low, black nose over a tongue, a white bib, a stocky tan body and white socks. No tail.
   corgi: {
     name: 'Corgi',
+    pronoun: 'he',
     base: [
       '...O..........O',
       '..OPO........OPO',
@@ -128,6 +131,7 @@ export const CATS = {
   // Near-black grey tabby: M on the forehead, white muzzle, amber eyes, collar with a white tag.
   miki: {
     name: 'Miki',
+    pronoun: 'he',
     eyesOpen: EYES_OPEN,
     sitting: [
       [4, '......S.SS.S........'],
@@ -143,6 +147,7 @@ export const CATS = {
   // Calico: grey tabby with orange and dark patches, white muzzle, belly and paws, green eyes.
   kira: {
     name: 'Kira',
+    pronoun: 'she',
     eyesOpen: EYES_OPEN,
     sitting: [
       [4, '..RRR...R.S..SSS....'],
@@ -162,6 +167,7 @@ export const CATS = {
   // violet eyes, a pink puff dress with a white frill and a big rose bow. No tail under the dress.
   hoshi: {
     name: 'Hoshi',
+    pronoun: 'she',
     base: [
       '...O....O.....O.....',
       '..OPO..OAO...OPO....',
