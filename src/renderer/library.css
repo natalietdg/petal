@@ -3,6 +3,7 @@
 #reader-area:has(> #library:not([hidden])) #sessions-dock { background: none; }
 
 #library {
+  position: relative; /* the toast sits over its bottom edge */
   contain: inline-size; /* the dial's width never widens the window's column */
   display: flex;
   flex-direction: column;
@@ -61,11 +62,43 @@
 .lib-add:hover { background: var(--code-bg); }
 .lib-add:disabled { border-color: var(--rule); color: var(--muted); cursor: default; background: var(--reader-bg); }
 
+/* ---- Category colour: library.ts sets data-hue from the category name; the theme's label hues carry it. */
+#library [data-hue="next"] { --cat-ink: var(--next-ink); --cat-pill: var(--next-pill); --cat-wash: var(--next-wash); }
+#library [data-hue="done"] { --cat-ink: var(--done-ink); --cat-pill: var(--done-pill); --cat-wash: var(--done-wash); }
+#library [data-hue="watch"] { --cat-ink: var(--watch-ink); --cat-pill: var(--watch-pill); --cat-wash: var(--watch-wash); }
+#library [data-hue="why"] { --cat-ink: var(--why-ink); --cat-pill: var(--why-pill); --cat-wash: var(--why-wash); }
+#library [data-hue="decide"] { --cat-ink: var(--decide-ink); --cat-pill: var(--decide-pill); --cat-wash: var(--decide-wash); }
+/* The disc's slices: the label pill, lit with some of its ink where the pointer is. */
+#library {
+  --sector-next: var(--next-pill); --sector-next-on: color-mix(in srgb, var(--next-ink) 32%, var(--next-pill));
+  --sector-done: var(--done-pill); --sector-done-on: color-mix(in srgb, var(--done-ink) 32%, var(--done-pill));
+  --sector-watch: var(--watch-pill); --sector-watch-on: color-mix(in srgb, var(--watch-ink) 32%, var(--watch-pill));
+  --sector-why: var(--why-pill); --sector-why-on: color-mix(in srgb, var(--why-ink) 32%, var(--why-pill));
+  --sector-decide: var(--decide-pill); --sector-decide-on: color-mix(in srgb, var(--decide-ink) 32%, var(--decide-pill));
+}
+.lib-dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--cat-ink); vertical-align: 0; }
+.lib-filter[data-hue] { border-color: var(--cat-pill); background: var(--cat-wash); color: var(--reader-fg); }
+.lib-filter[data-hue]:hover { background: var(--cat-pill); }
+.lib-filter[data-hue][aria-pressed="true"] { border-color: var(--cat-ink); background: var(--cat-ink); color: var(--reader-bg); }
+.lib-filter[data-hue][aria-pressed="true"] .lib-dot { background: var(--reader-bg); }
+
 .lib-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
 .lib-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 2px 0 6px; font-size: 14px; color: var(--muted); }
 .lib-link { padding: 0; border: 0; background: none; color: var(--link); font: 600 14px var(--ui-font); text-decoration: underline; cursor: pointer; }
 
-:is(.lib-sort-button, .lib-filter, .lib-search, .lib-add, .lib-link, .lib-read, .lib-back):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.lib-progress { margin: 0; font-size: 14px; font-weight: 600; color: var(--reader-fg); }
+.lib-progress .lib-link { font-size: 14px; }
+
+/* ---- Read past sessions: the ask before it starts. */
+.lib-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; padding: 14px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--code-bg); }
+.lib-confirm-text { flex: 1 1 100%; margin: 0; font-size: 15px; line-height: 1.45; color: var(--reader-fg); }
+.lib-confirm .lib-sort { background: var(--reader-bg); }
+.lib-confirm-actions { display: flex; gap: 8px; margin-left: auto; }
+.lib-confirm-cancel { padding: 8px 16px; border: 1px solid var(--rule); border-radius: 999px; background: var(--reader-bg); color: var(--reader-fg); font: 600 14px var(--ui-font); cursor: pointer; }
+.lib-confirm-cancel:hover { background: var(--code-bg); }
+.lib-read:disabled { border-color: var(--rule); background: var(--reader-bg); color: var(--muted); cursor: default; }
+
+:is(.lib-sort-button, .lib-filter, .lib-search, .lib-add, .lib-link, .lib-read, .lib-back, .lib-confirm-cancel):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 
 /* ---- The stage: dial column sized from its radius (library.ts sets --dial-r, --dial-w, --label-w). */
 .lib-stage {
@@ -93,7 +126,11 @@
   border: 1px solid var(--rule);
   border-left: 0;
   border-radius: 0 999px 999px 0;
-  background: radial-gradient(circle at 0 50%, var(--reader-bg) 0 calc(var(--dial-r) * 0.34), var(--code-bg) calc(var(--dial-r) * 0.34 + 1px));
+  /* Slices fade in from the hub and are strongest at the rim. */
+  background:
+    radial-gradient(circle at 0 50%, var(--reader-bg) 0 calc(var(--dial-r) * 0.34), color-mix(in srgb, var(--reader-bg) 62%, transparent) calc(var(--dial-r) * 0.34 + 1px), color-mix(in srgb, var(--reader-bg) 8%, transparent) calc(var(--dial-r) * 0.97)),
+    var(--sectors, none),
+    var(--code-bg);
 }
 .lib-disc::before {
   content: "";
@@ -116,7 +153,8 @@
   border: 1px solid var(--rule);
   border-left: 0;
   border-radius: 0 999px 999px 0;
-  background: var(--reader-bg);
+  background: var(--cat-pill, var(--reader-bg));
+  border-color: var(--cat-ink, var(--rule));
 }
 
 .lib-rim,
@@ -126,19 +164,23 @@
 .lib-list:focus-visible .lib-tab.selected { outline: 2px solid var(--next-ink); outline-offset: 3px; }
 
 .lib-tick,
+.lib-seg,
 .lib-letter,
 .lib-tab { position: absolute; top: 0; left: 0; will-change: transform; }
-.lib-tick { width: 9px; height: 1.5px; margin-top: -0.75px; background: var(--rule); transform-origin: 0 50%; }
+.lib-tick { width: 9px; height: 1.5px; margin-top: -0.75px; background: var(--cat-ink, var(--rule)); transform-origin: 0 50%; }
+/* The coloured band just inside the rim, one segment per note, so neighbours in a category read as one sector. */
+.lib-seg { width: 12px; height: var(--seg-h, 8px); margin-top: calc(var(--seg-h, 8px) / -2); border-radius: 2px; background: color-mix(in srgb, var(--cat-ink) 55%, var(--cat-pill)); transform-origin: 0 50%; }
 .lib-letter {
   display: grid;
   place-items: center;
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: var(--muted);
+  background: var(--reader-bg); /* a small badge, so the letter reads on any slice */
+  color: var(--cat-ink, var(--muted));
   font: 650 12px/1 var(--ui-font);
 }
-.lib-letter.current { background: var(--reader-fg); color: var(--reader-bg); }
+.lib-letter.current { background: var(--cat-ink, var(--reader-fg)); color: var(--reader-bg); }
 
 /* The 3 o'clock pointer, just inside the rim. */
 .lib-pointer {
@@ -160,29 +202,31 @@
   box-sizing: border-box;
   max-width: var(--label-w, 220px);
   padding: 5px 12px 5px 10px;
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--rule);
+  border: 1px solid color-mix(in srgb, var(--cat-ink, var(--rule)) 30%, var(--cat-pill, var(--rule)));
+  border-left: 4px solid var(--cat-ink, var(--rule));
   border-radius: 4px 10px 10px 4px;
-  background: var(--reader-bg);
+  background: var(--cat-pill, var(--reader-bg));
   color: var(--reader-fg);
   font-size: 14px;
   line-height: 1.25;
   transform-origin: 0 50%;
   cursor: pointer;
 }
-.lib-tab:hover { background: var(--code-bg); }
-.lib-tab.far { color: var(--muted); }
+.lib-tab:hover { background: color-mix(in srgb, var(--cat-ink) 14%, var(--cat-pill)); }
+.lib-tab.far { background: var(--cat-wash, var(--reader-bg)); color: var(--cat-ink, var(--muted)); }
 .lib-tab-name { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .lib-tab-cat { display: none; flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-.lib-tab.selected { border-color: var(--reader-fg); background: var(--reader-fg); color: var(--reader-bg); box-shadow: 0 6px 18px -10px var(--reader-fg); z-index: 2; }
+.lib-tab.selected { max-width: calc(var(--label-w, 220px) + 60px); border-color: var(--cat-ink, var(--reader-fg)); background: var(--cat-ink, var(--reader-fg)); color: var(--reader-bg); box-shadow: 0 6px 18px -10px var(--cat-ink, var(--reader-fg)); z-index: 2; }
+/* The selected note has room for a long title, on two lines at most. */
+.lib-tab.selected .lib-tab-name { display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .lib-tab.selected .lib-tab-cat { display: inline; }
 
 /* Turning glides; new marks appear in place; dragging follows the pointer. */
-.lib-tab, .lib-tick, .lib-letter { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 160ms, color 160ms; }
-.lib-dial.dragging :is(.lib-tab, .lib-tick, .lib-letter),
+.lib-tab, .lib-tick, .lib-seg, .lib-letter { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 160ms, color 160ms; }
+.lib-dial.dragging :is(.lib-tab, .lib-tick, .lib-seg, .lib-letter),
 .lib-enter { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .lib-tab, .lib-tick, .lib-letter { transition: none !important; }
+  .lib-tab, .lib-tick, .lib-seg, .lib-letter { transition: none !important; }
 }
 
 /* ---- Preview of the selected note. */
@@ -191,9 +235,10 @@
   max-width: 560px;
   margin: 0 28px 0 8px;
   padding: 24px 26px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--cat-pill, var(--rule));
+  border-left: 6px solid var(--cat-ink, var(--rule));
   border-radius: 18px;
-  background: var(--reader-bg);
+  background: var(--cat-wash, var(--reader-bg));
 }
 .lib-chip {
   display: inline-block;
@@ -205,15 +250,16 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.lib-chip[data-hue] { background: var(--cat-ink); color: var(--reader-bg); }
 .lib-preview-title { margin: 10px 0 4px; font: 600 1.6em/1.15 var(--display-font); letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .lib-preview-meta { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
 .lib-preview-facts { margin: 0 0 18px; padding-left: 1.1em; font-size: 15px; line-height: 1.5; }
 .lib-preview-facts li + li { margin-top: 6px; }
 .lib-read {
   padding: 8px 18px;
-  border: 1px solid var(--reader-fg);
+  border: 1px solid var(--cat-ink, var(--reader-fg));
   border-radius: 999px;
-  background: var(--reader-fg);
+  background: var(--cat-ink, var(--reader-fg));
   color: var(--reader-bg);
   font: 600 14px var(--ui-font);
   cursor: pointer;
@@ -242,6 +288,30 @@
 .lib-back:hover { background: var(--code-bg); }
 .lib-reading-column { padding-top: 0; padding-bottom: 48px; }
 .lib-reading-head { margin: 8px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+/* ---- Managing a note, under its title. */
+.lib-manage { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 0; }
+.lib-manage-button { padding: 5px 13px; border: 1px solid var(--rule); border-radius: 999px; background: var(--reader-bg); color: var(--reader-fg); font: 600 13px var(--ui-font); cursor: pointer; }
+.lib-manage-button:hover { background: var(--code-bg); }
+.lib-manage-delete { color: var(--decide-ink); border-color: var(--decide-pill); }
+.lib-manage-save { border-color: var(--reader-fg); background: var(--reader-fg); color: var(--reader-bg); }
+.lib-manage-save:hover { background: var(--reader-fg); }
+.lib-manage-edit { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--code-bg); }
+.lib-manage-input { flex: 1 1 260px; min-width: 0; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--reader-bg); color: var(--reader-fg); font: 15px var(--ui-font); }
+.lib-manage-hint { flex: 1 1 100%; margin: 0; font-size: 13px; color: var(--muted); }
+:is(.lib-manage-button, .lib-manage-input, .lib-tidy-merge, .lib-tidy-keep):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+
+/* ---- The toast after an edit, with Undo for a delete. */
+.lib-toast { position: absolute; left: 50%; bottom: 20px; z-index: 5; display: flex; align-items: baseline; gap: 12px; max-width: min(560px, calc(100% - 48px)); padding: 10px 18px; border-radius: 999px; background: var(--reader-fg); color: var(--reader-bg); font: 600 14px var(--ui-font); box-shadow: 0 10px 28px -14px var(--reader-fg); transform: translateX(-50%); }
+.lib-toast .lib-undo { color: var(--reader-bg); }
+
+/* ---- Tidy duplicates: one row per pair, tinted by its category. */
+.lib-tidy-list { flex: 1 1 100%; display: grid; gap: 8px; max-height: 40vh; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.lib-tidy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; border-left: 5px solid var(--cat-ink); border-radius: 10px; background: var(--cat-wash); }
+.lib-tidy-names { flex: 1 1 280px; margin: 0; font-size: 15px; line-height: 1.4; color: var(--reader-fg); }
+.lib-tidy-and, .lib-tidy-cat { color: var(--muted); }
+.lib-tidy .lib-read { padding: 6px 14px; font-size: 13px; }
+.lib-tidy .lib-confirm-cancel { padding: 6px 14px; font-size: 13px; }
+
 .lib-reading-title { margin: 10px 0 4px; font: 600 2em/1.12 var(--display-font); letter-spacing: -0.015em; overflow-wrap: anywhere; }
 
 @media (max-width: 900px) {
@@ -249,3 +319,18 @@
   .lib-preview { margin-right: 16px; padding: 18px 18px; }
   .lib-preview-title { font-size: 1.35em; }
 }
+
+/* ---- Add to Library, in the session header (library-add.ts): styled like Notes, with its status beside it. */
+.library-add { display: inline-flex; flex: none; align-items: center; gap: 6px; padding-inline: 12px 14px; white-space: nowrap; }
+.library-add .dock-icon { width: 15px; height: 15px; }
+.library-add:hover:not(:disabled) { color: var(--reader-fg); background: var(--code-bg); }
+.library-add:disabled { cursor: default; }
+.library-add:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.library-add-status { display: inline-flex; flex: 0 1 auto; min-width: 0; align-items: baseline; gap: 8px; white-space: nowrap; font: 500 13px/1.3 var(--ui-font); color: var(--reader-fg); opacity: 1; transition: opacity 400ms; }
+.library-add-status[hidden] { display: none; }
+.library-add-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#reader-head .view-toggle { flex-shrink: 0; } /* the status line gives way, never Replies and Flow */
+.library-add-status.fading { opacity: 0; }
+.library-add-open { flex: none; padding: 0; border: 0; background: none; color: var(--link); font: 600 13px var(--ui-font); text-decoration: underline; cursor: pointer; }
+.library-add-open:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .library-add-status { transition: none; } }

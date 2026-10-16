@@ -97,10 +97,18 @@ describe('mergeTopics', () => {
 
   it('a different title with the same slug gets its own file', async () => {
     const { mergeTopics } = await store();
+    const long = 'Settlement instruction rules for cross border payouts in region';
+    mergeTopics([topic(`${long} one`, 'Payments', ['Rule one.'])], source, { dir, now });
+    const second = mergeTopics([topic(`${long} two`, 'Payments', ['Rule two.'])], source, { dir, now });
+    expect(second.slugs).toEqual(['settlement-instruction-rules-for-cross-border-payouts-in-r-2']);
+    expect(fs.readdirSync(dir)).toHaveLength(2);
+  });
+
+  it('the same title with other punctuation is the same note', async () => {
+    const { mergeTopics } = await store();
     mergeTopics([topic('Auth tokens', 'Auth', ['Access tokens last one hour.'])], source, { dir, now });
     const second = mergeTopics([topic('Auth: tokens!', 'Auth', ['Tokens are JWTs.'])], source, { dir, now });
-    expect(second.slugs).toEqual(['auth-tokens-2']);
-    expect(fs.readdirSync(dir).sort()).toEqual(['auth-tokens-2.md', 'auth-tokens.md']);
+    expect(second).toMatchObject({ added: 0, updated: 1, slugs: ['auth-tokens'] });
   });
 
   it('categories reuse her spelling, then the starter list, before a new one', async () => {

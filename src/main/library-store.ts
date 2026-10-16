@@ -1,10 +1,12 @@
 // The Library's notes: <userData>/library/<slug>.md, one per domain topic. Petal owns the folder; nothing here touches ~/.claude.
-// Reads never follow a symlink or leave the folder and stop at MAX_NOTE_BYTES; writes only ever add facts.
+// Reads never follow a symlink or leave the folder and stop at MAX_NOTE_BYTES. Extraction only ever adds facts;
+// her own edits rename, recategorise, merge and delete, and a deleted or merged-away note goes to .trash, never gone.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import { writeFileAtomic } from './atomic-file';
-import type { LibraryDoc, LibraryEntry } from '../shared/library';
+import type { LibraryDoc, LibraryEditResult as EditResult, LibraryEntry } from '../shared/library';
+import { aliasesFrom, findDuplicates, keepBothKey, topicKey, type DuplicatePair } from '../shared/library-titles';
 
 export const MAX_NOTE_BYTES = 512 * 1024;
 const SLUG_CHARS = 60;
@@ -212,11 +214,13 @@ export interface MergeResult {
   slugs: string[]; // every note written
 }
 
-// New topics become notes; a topic already there (same title, any case) gains only facts it lacks.
+// New topics become notes; a topic already there gains only facts it lacks. "Already there" is the same title once
+// case, punctuation, plurals and abbreviations another title spells out are set aside (shared/library-titles.ts).
 export function mergeTopics(topics: readonly TopicInput[], source: NoteSource, { dir = libraryDir(), now = new Date() }: { dir?: string; now?: Date } = {}): MergeResult {
   fs.mkdirSync(dir, { recursive: true });
   const notes = readNotes(dir);
-  const byTitle = new Map(notes.map((n) => [n.title.toLowerCase(), n]));
+  const aliases = aliasesFrom([...notes.map((n) => n.title), ...topics.map((t) => squash(t.topic, TITLE_CHARS))]);
+  const byTitle = new Map(notes.map((n) => [topicKey(n.title, aliases), n]));
   const taken = new Set(notes.map((n) => n.slug));
   const categories = notes.map((n) => n.category);
   const sourceLine = `${source.sessionId} ${source.date}`;
@@ -226,7 +230,7 @@ export function mergeTopics(topics: readonly TopicInput[], source: NoteSource, {
     const title = squash(topic.topic, TITLE_CHARS);
     const facts = topic.facts.map(cleanFact).filter(Boolean);
     if (!title || !facts.length) continue;
-    const existing = byTitle.get(title.toLowerCase());
+    const existing = byTitle.get(topicKey(title, aliases));
     const known = new Set(bulletsOf(existing?.facts ?? '').map(factKey));
     const fresh = facts.filter((f) => { const key = factKey(f); if (!key || known.has(key)) return false; known.add(key); return true; });
     if (!fresh.length) continue;
@@ -254,11 +258,149 @@ export function mergeTopics(topics: readonly TopicInput[], source: NoteSource, {
     } else {
       added.add(note.slug);
       result.added += 1;
-      byTitle.set(title.toLowerCase(), note);
+      byTitle.set(topicKey(title, aliases), note);
       taken.add(note.slug);
       categories.push(note.category);
     }
     if (!result.slugs.includes(note.slug)) result.slugs.push(note.slug);
   }
   return result;
+}
+
+// ---- Her edits: rename, recategorise, merge, delete and undo. Every path is checked like a read; .trash is never a link.
+
+const TRASH = '.trash';
+const TRASH_ID = /^[a-z0-9][a-z0-9-]{0,79}\.\d{13}$/;
+
+function trashDir(dir: string): string | null {
+  const trash = path.join(dir, TRASH);
+  try {
+    const stat = fs.lstatSync(trash);
+    return stat.isDirectory() ? trash : null; // a link or a file in its place: refuse
+  } catch {
+    fs.mkdirSync(trash);
+    return trash;
+  }
+}
+
+const write = (dir: string, note: Note): void => writeFileAtomic(path.join(dir, `${note.slug}.md`), serializeNote(note));
+
+// Moves a note into .trash as <slug>.<ms>.md; the id brings it back.
+function toTrash(dir: string, slug: string, now: Date): string | null {
+  const found = safeNotePath(dir, slug);
+  const trash = found ? trashDir(dir) : null;
+  if (!found || !trash) return null;
+  const id = `${slug}.${String(now.getTime()).padStart(13, '0')}`;
+  fs.renameSync(found.file, path.join(trash, `${id}.md`));
+  return id;
+}
+
+export function renameNote(slug: unknown, title: unknown, { dir = libraryDir(), now = new Date() }: { dir?: string; now?: Date } = {}): EditResult {
+  const note = typeof slug === 'string' ? readNote(dir, slug) : null;
+  const name = squash(title, TITLE_CHARS);
+  if (!note) return { error: 'That note is gone' };
+  if (!name) return { error: 'A title is needed' };
+  const taken = new Set(readNotes(dir).map((n) => n.slug).filter((s) => s !== note.slug));
+  const nextSlug = slugify(name) === note.slug ? note.slug : freeSlug(dir, slugify(name), taken);
+  const oldFile = path.join(dir, `${note.slug}.md`);
+  note.title = name;
+  note.updated = now.toISOString();
+  const moved = { ...note, slug: nextSlug };
+  write(dir, moved); // the new file first, so a failure never loses the note
+  if (nextSlug !== note.slug) fs.unlinkSync(oldFile);
+  return { slug: nextSlug };
+}
+
+export function setCategory(slug: unknown, category: unknown, { dir = libraryDir(), now = new Date() }: { dir?: string; now?: Date } = {}): EditResult {
+  const note = typeof slug === 'string' ? readNote(dir, slug) : null;
+  if (!note) return { error: 'That note is gone' };
+  if (!squash(category, CATEGORY_CHARS)) return { error: 'A category is needed' };
+  note.category = canonicalCategory(category, readNotes(dir).map((n) => n.category));
+  note.updated = now.toISOString();
+  write(dir, note);
+  return { slug: note.slug };
+}
+
+export function deleteNote(slug: unknown, { dir = libraryDir(), now = new Date() }: { dir?: string; now?: Date } = {}): EditResult {
+  if (typeof slug !== 'string' || !readNote(dir, slug)) return { error: 'That note is gone' };
+  const trashId = toTrash(dir, slug, now);
+  return trashId ? { slug, trashId } : { error: 'Couldn’t move it to the trash' };
+}
+
+// Undo: back to its own name, or the next free one if a new note took it meanwhile.
+export function restoreNote(trashId: unknown, { dir = libraryDir() }: { dir?: string } = {}): EditResult {
+  if (typeof trashId !== 'string' || !TRASH_ID.test(trashId)) return { error: 'Nothing to undo' };
+  const trash = trashDir(dir);
+  const file = trash ? path.join(trash, `${trashId}.md`) : '';
+  try {
+    if (!trash || !fs.lstatSync(file).isFile()) return { error: 'Nothing to undo' };
+  } catch {
+    return { error: 'Nothing to undo' };
+  }
+  const slug = freeSlug(dir, trashId.slice(0, trashId.lastIndexOf('.')), new Set());
+  fs.renameSync(file, path.join(dir, `${slug}.md`));
+  return { slug };
+}
+
+const unionLines = (a: string[], b: string[], key: (line: string) => string): string[] => {
+  const seen = new Set(a.map(key));
+  return [...a, ...b.filter((line) => { const k = key(line); if (!k || seen.has(k)) return false; seen.add(k); return true; })];
+};
+
+// Folds one note into another: facts unioned without repeats, sources and evidence combined; the folded one goes to .trash.
+export function mergeNotes(from: unknown, into: unknown, { dir = libraryDir(), now = new Date() }: { dir?: string; now?: Date } = {}): EditResult {
+  if (from === into) return { error: 'Pick another note' };
+  const source = typeof from === 'string' ? readNote(dir, from) : null;
+  const target = typeof into === 'string' ? readNote(dir, into) : null;
+  if (!source || !target) return { error: 'That note is gone' };
+  const facts = unionLines(bulletsOf(target.facts), bulletsOf(source.facts), factKey);
+  target.facts = facts.map((f) => `- ${f}`).join('\n');
+  target.evidence = unionLines(target.evidence.split('\n').filter(Boolean), source.evidence.split('\n').filter(Boolean), (l) => l.trim()).join('\n');
+  target.sources = unionLines(target.sources, source.sources, (l) => l);
+  target.updated = now.toISOString();
+  write(dir, target);
+  const trashId = toTrash(dir, source.slug, now);
+  return trashId ? { slug: target.slug, trashId } : { error: 'Merged, but the old note couldn’t be moved to the trash' };
+}
+
+// ---- Tidy duplicates: pairs she said to keep both of are remembered in the folder.
+const keptFile = (dir: string) => path.join(dir, '.keep-both.json');
+
+function keptBoth(dir: string): Set<string> {
+  try {
+    if (fs.lstatSync(keptFile(dir)).isSymbolicLink()) return new Set();
+    const list = JSON.parse(fs.readFileSync(keptFile(dir), 'utf8')) as unknown;
+    return new Set(Array.isArray(list) ? list.filter((k): k is string => typeof k === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function duplicates({ dir = libraryDir() }: { dir?: string } = {}): DuplicatePair[] {
+  const notes = readNotes(dir).map((n) => ({ slug: n.slug, title: n.title, category: n.category, facts: bulletsOf(n.facts).length, sources: n.sources.length }));
+  return findDuplicates(notes, keptBoth(dir));
+}
+
+export function keepBoth(a: unknown, b: unknown, { dir = libraryDir() }: { dir?: string } = {}): { ok: true } | { error: string } {
+  if (typeof a !== 'string' || typeof b !== 'string' || !SLUG.test(a) || !SLUG.test(b)) return { error: 'Unknown notes' };
+  const kept = keptBoth(dir);
+  kept.add(keepBothKey(a, b));
+  const file = keptFile(dir);
+  if (present(file) && fs.lstatSync(file).isSymbolicLink()) return { error: 'Couldn’t save that' };
+  writeFileAtomic(file, JSON.stringify([...kept].slice(-500)));
+  return { ok: true };
+}
+
+// One line per note for the extractor, so it reuses a title instead of inventing a near copy.
+export function knownTopics(dir: string = libraryDir(), maxChars = 6000): string {
+  const lines: string[] = [];
+  let used = 0;
+  for (const note of readNotes(dir).sort((a, b) => updatedMsOf(b) - updatedMsOf(a))) {
+    const gist = squash(bulletsOf(note.facts)[0] ?? '', 100);
+    const line = `- ${note.title} (${note.category})${gist ? `: ${gist}` : ''}`;
+    if (used + line.length > maxChars) break;
+    lines.push(line);
+    used += line.length + 1;
+  }
+  return lines.join('\n');
 }
