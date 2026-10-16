@@ -3,17 +3,21 @@
 // so an auto run knows a turn changed files. testing-ipc.ts calls this behind the folder gate.
 import fs from 'node:fs';
 import { parseEntry, type ContentItem } from './transcript-entry';
+import { promptText, trimTo } from './prompts';
 import { parseText, keepOutput, shortenPaths } from './testing-parse';
 import { resolveRunner } from './testing-runner';
 import { isTestCommand, matchStage, runnerOf, type PipelineRun, type StageConfig, type StageResult } from '../shared/testing';
 
-export interface ClaudeCall { id: string; command: string; at: number; output: string; isError: boolean; sessionId: string }
+// at: the tool_use's timestamp; endAt: its tool_result's. prompt: her prompt that turn answered. cwd: Claude's folder then.
+export interface ClaudeCall { id: string; command: string; at: number; endAt: number; output: string; isError: boolean; sessionId: string; prompt: string; cwd: string | null }
 
-interface LogState { offset: number; rest: string; pending: Map<string, { command: string; at: number }>; calls: ClaudeCall[]; edits: number }
+interface Pending { command: string; at: number; prompt: string; cwd: string | null }
+interface LogState { offset: number; rest: string; pending: Map<string, Pending>; calls: ClaudeCall[]; seen: Set<string>; edits: number; prompt: string }
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const CHECK_SCRIPT = /\b(npm|pnpm|yarn|bun)\s+(?:run\s+)?(typecheck|type-check|lint|check)\b/;
 const MAX_CALLS = 400; // per log, newest kept
+const PROMPT_KEEP = 200;
 const CHUNK = 1 << 20;
 
 // Commands worth keeping: tests, plus the typecheck and lint a pipeline usually starts with.
@@ -27,20 +31,27 @@ const textOf = (content: unknown): string => (typeof content === 'string' ? cont
 
 const itemsOf = (content: unknown): ContentItem[] => (Array.isArray(content) ? content as ContentItem[] : []);
 
+// Only the conversation's own entries count: Claude Code also logs request copies with no timestamp
+// ("api-request-blob") that repeat earlier tool calls, which once filed each call twice at "now".
 function readLine(state: LogState, line: string, sessionId: string): void {
-  if (!line.includes('"tool_use"') && !line.includes('"tool_result"')) return;
+  if (!line.includes('"tool_use"') && !line.includes('"tool_result"') && !line.includes('"type":"user"')) return;
   let entry;
   try { entry = parseEntry(line); } catch { return; }
-  const at = Date.parse(entry.timestamp ?? '') || Date.now();
+  const at = Date.parse(entry.timestamp ?? '');
+  if (!at || entry.isSidechain || (entry.type !== 'assistant' && entry.type !== 'user')) return;
+  const prompt = promptText(entry);
+  if (prompt) state.prompt = trimTo(prompt, PROMPT_KEEP);
+  const cwd = typeof entry.cwd === 'string' ? entry.cwd : null;
   for (const item of itemsOf(entry.message?.content)) {
     if (item.type === 'tool_use' && item.name && EDIT_TOOLS.has(item.name)) state.edits += 1;
-    if (item.type === 'tool_use' && item.name === 'Bash' && item.id && typeof item.input?.command === 'string' && isCheckCommand(item.input.command)) {
-      state.pending.set(item.id, { command: item.input.command, at });
+    if (item.type === 'tool_use' && item.name === 'Bash' && item.id && !state.seen.has(item.id) && typeof item.input?.command === 'string' && isCheckCommand(item.input.command)) {
+      state.pending.set(item.id, { command: item.input.command, at, prompt: state.prompt, cwd });
     }
     if (item.type === 'tool_result' && item.tool_use_id && state.pending.has(item.tool_use_id)) {
       const call = state.pending.get(item.tool_use_id);
       state.pending.delete(item.tool_use_id);
-      if (call) state.calls.push({ id: item.tool_use_id, command: call.command, at: call.at, output: textOf(item.content), isError: item.is_error === true, sessionId });
+      state.seen.add(item.tool_use_id);
+      if (call) state.calls.push({ id: item.tool_use_id, command: call.command, at: call.at, endAt: Math.max(call.at, at), output: textOf(item.content), isError: item.is_error === true, sessionId, prompt: call.prompt, cwd: call.cwd });
     }
   }
 }
@@ -64,7 +75,7 @@ async function readAppended(file: string, sessionId: string): Promise<LogScan> {
   let size: number;
   try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0 }; }
   if (!state || size < state.offset) {
-    state = { offset: 0, rest: '', pending: new Map(), calls: [], edits: 0 };
+    state = { offset: 0, rest: '', pending: new Map(), calls: [], seen: new Set(), edits: 0, prompt: '' };
     states.set(file, state);
   }
   if (size > state.offset) {
@@ -89,6 +100,8 @@ async function readAppended(file: string, sessionId: string): Promise<LogScan> {
 
 export const forgetLogs = (): void => states.clear();
 
+const wallTime = (call: ClaudeCall): number | null => (call.endAt > call.at ? call.endAt - call.at : null);
+
 // One Claude call as a one-stage run, put on the stage whose command matches.
 export function claudeRun(call: ClaudeCall, stages: StageConfig[], scripts: Record<string, string> = {}, root: string | null = null): PipelineRun {
   const runner = runnerOf(call.command);
@@ -102,11 +115,14 @@ export function claudeRun(call: ClaudeCall, stages: StageConfig[], scripts: Reco
     command: call.command,
     status: failed ? 'failed' : 'passed',
     exitCode,
-    durationMs: parsed.durationMs,
+    durationMs: wallTime(call) ?? parsed.durationMs, // the command's own time, from the log, as her runs measure theirs
     counts: parsed.counts,
     tests: parsed.tests,
     output: failed ? keepOutput(call.output) : '',
     runner: parsed.runner ?? runner,
   };
-  return { id: `claude-${call.id}`, by: 'claude', trigger: 'transcript', startedAt: call.at, finishedAt: call.at, state: failed ? 'failed' : 'passed', stages: [result], totals: parsed.counts, sessionId: call.sessionId };
+  return {
+    id: `claude-${call.id}`, by: 'claude', trigger: 'transcript', startedAt: call.at, finishedAt: call.endAt, state: failed ? 'failed' : 'passed',
+    stages: [result], totals: parsed.counts, sessionId: call.sessionId, prompt: call.prompt, ...(call.cwd ? { cwd: call.cwd } : {}),
+  };
 }

@@ -16,12 +16,15 @@ export function load(root: string, dir = testingDir()): ProjectTesting {
   const data = readJsonOrSetAside(projectFile(root, dir)) as ProjectTesting | undefined;
   // A hash collision or a hand-edited file for another folder reads as empty.
   if (!data || data.root !== root || !Array.isArray(data.runs)) return empty(root);
-  return { ...empty(root), ...data };
+  return { ...empty(root), ...data, runs: compact(data.runs) };
 }
 
 // Newest first, capped; older runs keep their failing tests only, so the file stays small.
+// A run id twice (an older log reader filed some Claude calls again at "now") keeps its earliest copy.
 export function compact(runs: PipelineRun[]): PipelineRun[] {
-  return [...runs]
+  const earliest = new Map<string, PipelineRun>();
+  for (const run of runs) if (!earliest.has(run.id) || run.startedAt < (earliest.get(run.id) as PipelineRun).startedAt) earliest.set(run.id, run);
+  return [...earliest.values()]
     .sort((a, b) => b.startedAt - a.startedAt)
     .slice(0, RUN_CAP)
     .map((run, i) => (i < FULL_TESTS_KEPT ? run : { ...run, stages: run.stages.map((s) => ({ ...s, tests: s.tests.filter((t) => t.status === 'failed') })) }));

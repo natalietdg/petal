@@ -2,8 +2,11 @@
 // Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and a proposed pipeline;
 // Run pipeline confirms the exact commands, then records the line a new tab would run (never executed);
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
-// records the paste; a Claude run in the fixture log lands in history; editing saves; every theme, style and width fits.
+// records the paste; Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
+// how long it took; a tab in ~ picks a project instead; a project with no stages makes one from Claude's commands;
+// editing saves; every theme, style and width fits.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
@@ -25,11 +28,13 @@ const fixtureOutput = (name: string): string => {
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
 // A fake project and Claude folder under the snapshot folder; nothing of hers.
-export function seedTestingProject(outDir: string): { project: string; claudeDir: string } {
+export function seedTestingProject(outDir: string): { project: string; claudeDir: string; bare: string } {
   const project = path.join(outDir, 'testing-fixture', 'acme');
+  const bare = path.join(outDir, 'testing-fixture', 'notes-app'); // a repo with nothing to detect: no stages
   const claudeDir = path.join(outDir, 'testing-fixture', 'claude');
   fs.rmSync(path.dirname(project), { recursive: true, force: true });
   fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+  fs.mkdirSync(path.join(bare, '.git'), { recursive: true });
   put(path.join(project, 'package.json'), JSON.stringify({
     name: 'acme', scripts: { typecheck: 'tsc --noEmit', test: 'vitest run' },
     devDependencies: { vitest: '^5.0.0', typescript: '^5.9.0', '@testing-library/react': '^16.0.0' },
@@ -40,16 +45,37 @@ export function seedTestingProject(outDir: string): { project: string; claudeDir
   put(path.join(claudeDir, 'skills', 'prove-it', 'SKILL.md'), '---\nname: prove-it\ndescription: Verify that claimed changes actually landed in the running app.\n---\n');
   put(path.join(claudeDir, 'skills', 'deploy', 'SKILL.md'), '---\nname: deploy\ndescription: Ship the app to staging.\n---\n');
   put(path.join(claudeDir, 'agents', 'qa-runner.md'), '---\nname: qa-runner\ndescription: Runs the e2e suite and reports failures.\n---\n');
-  return { project, claudeDir };
+  return { project, claudeDir, bare };
 }
 
-// Claude ran the unit tests in the fixture session: a Bash call and its failing result.
-export function appendClaudeRun(transcript: string, cwd: string, minutesAgo = 20): void {
-  const at = (s: number) => new Date(Date.now() - minutesAgo * 60000 + s * 1000).toISOString();
-  const line = (o: object, s: number) => `${JSON.stringify({ isSidechain: false, timestamp: at(s), cwd, ...o })}\n`;
-  fs.appendFileSync(transcript,
-    line({ type: 'assistant', uuid: 'tst-a1', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_tst_1', name: 'Bash', input: { command: 'npx vitest run', description: 'Run the unit tests' } }] } }, 0)
-    + line({ type: 'user', uuid: 'tst-u1', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_tst_1', is_error: true, content: `Exit code 1\n${fixtureOutput('vitest-output.txt')}` }] } }, 6));
+const VITEST_PASS = (n: number) => ` ✓ src/theme.test.ts (${n} tests) 4ms\n\n Test Files  1 passed (1)\n      Tests  ${n} passed (${n})\n`;
+const JEST_PASS = 'PASS src/notes.test.ts\nTests:       12 passed, 12 total\n';
+
+// Claude's checks in the fixture session, oldest first: yesterday's suite, a repeated theme test, a jest call that
+// printed nothing, a typecheck, then the failing unit run (newest, so Unit shows failed); two in notes-app via cd.
+export function appendClaudeRun(transcript: string, cwd: string, bare = ''): void {
+  let n = 0;
+  const lines: string[] = [];
+  const line = (o: object, minutesAgo: number, s = 0) => lines.push(`${JSON.stringify({ isSidechain: false, timestamp: new Date(Date.now() - minutesAgo * 60000 + s * 1000).toISOString(), cwd, ...o })}\n`);
+  const prompt = (text: string, minutesAgo: number) => line({ type: 'user', uuid: `tst-p${minutesAgo}`, message: { role: 'user', content: text } }, minutesAgo, -5);
+  const bash = (command: string, output: string, minutesAgo: number, seconds: number, failed = false) => {
+    n += 1;
+    line({ type: 'assistant', uuid: `tst-a${n}`, message: { role: 'assistant', content: [{ type: 'tool_use', id: `toolu_tst_${n}`, name: 'Bash', input: { command } }] } }, minutesAgo);
+    line({ type: 'user', uuid: `tst-u${n}`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `toolu_tst_${n}`, is_error: failed, content: failed ? `Exit code 1\n${output}` : output }] } }, minutesAgo, seconds);
+  };
+  prompt('set up the settings screen with a theme picker', 26 * 60);
+  bash('npx vitest run', VITEST_PASS(5), 26 * 60, 9);
+  if (bare) {
+    prompt('make the notes list sort by date', 60);
+    bash(`cd ${bare} && npx jest`, JEST_PASS, 60, 12);
+    bash(`cd ${bare} && npx tsc --noEmit`, '', 59, 6);
+  }
+  prompt('add a dark mode toggle to the settings screen', 50);
+  for (const m of [44, 42, 40]) bash('npx vitest run src/theme', VITEST_PASS(3), m, 4);
+  bash('npx jest --listTests > /tmp/jest-list.txt', '', 36, 2);
+  bash('npm run typecheck 2>&1 | tail -n 20', '', 22, 7);
+  bash('npx vitest run', fixtureOutput('vitest-output.txt'), 20, 6, true);
+  fs.appendFileSync(transcript, lines.join(''));
 }
 
 const PROBE = `(() => {
@@ -60,9 +86,10 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...view.querySelectorAll('.tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
+  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const chips = [...view.querySelectorAll('.tst-stage-item')].map((li) => [li.querySelector('.tst-stage-name')?.textContent, [...li.classList].find((c) => c.startsWith('is-'))?.slice(3)]);
+  const history = [...view.querySelectorAll('.tst-day, .tst-runs > li > .tst-run, .tst-other')].map((n) => n.textContent);
   const groups = [...view.querySelectorAll('.tst-group')].map((g) => [g.querySelector('.tst-group-file')?.textContent, g.open, g.classList.contains('is-failed')]);
   return {
     state: PastelTerm.testing.state(),
@@ -72,6 +99,12 @@ const PROBE = `(() => {
     tools: [...view.querySelectorAll('.tst-tool')].map((t) => [t.querySelector('.tst-tool-name')?.textContent, t.querySelector('.tst-found')?.textContent]),
     confirm: view.querySelector('.tst-confirm')?.hidden ? null : [...view.querySelectorAll('.tst-confirm-list code')].map((c) => c.textContent),
     runs: [...view.querySelectorAll('.tst-run')].map((r) => r.textContent),
+    history,
+    chartLabels: [...view.querySelectorAll('.tst-trend-label')].map((n) => n.textContent),
+    timedParts: [...view.querySelectorAll('.tst-durations .tst-part')].filter((p) => parseFloat(p.style.height) > 0).length,
+    picker: [...view.querySelectorAll('.tst-pick-name')].map((n) => n.textContent),
+    pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
+    makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
     bars: view.querySelectorAll('.tst-bar').length,
     sumbar: view.querySelector('.tst-sumbar')?.textContent ?? '',
     failRows: [...view.querySelectorAll('.tst-row.is-failed .tst-row-name')].map((n) => n.textContent),
@@ -84,7 +117,7 @@ const PROBE = `(() => {
   };
 })()`;
 
-type Probe = { state: { project: string | null; stages: string[]; runs: number; editing: boolean; confirming: string[] | null }; [k: string]: unknown };
+type Probe = { state: { project: string | null; stages: string[]; runs: number; editing: boolean; confirming: string[] | null; elsewhere: { reason: string } | null }; history: string[]; [k: string]: unknown };
 
 export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, outDir } = kit;
@@ -97,12 +130,12 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
   };
 
-  const { project, claudeDir } = seedTestingProject(outDir);
+  const { project, claudeDir, bare } = seedTestingProject(outDir);
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.runs.length = 0;
   const transcript = fixtureFile();
-  if (transcript) appendClaudeRun(transcript, project);
+  if (transcript) appendClaudeRun(transcript, project, bare);
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
@@ -127,6 +160,24 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const claude = await settle((p) => (p.runs as string[]).some((r) => /by Claude/.test(r)));
     check(claude && (claude.chips as string[][]).some(([n, s]) => n === 'Unit' && s === 'failed'), `Claude's failing vitest run lands on Unit: ${JSON.stringify(claude?.chips)}`);
     check(claude && /by Claude/.test(claude.sumbar as string), `its results say by Claude: ${String(claude?.sumbar).slice(0, 80)}`);
+
+    // History rows say what ran, why, what changed and how long; repeats collapse; the jest call with no output folds.
+    const rows = (await settle((p) => p.history.length >= 6))?.history ?? [];
+    const rowOf = (re: RegExp) => rows.find((r) => re.test(r)) ?? '';
+    check(rows[0] === 'Today' && rows.includes('Yesterday'), `grouped by day: ${JSON.stringify(rows.filter((r) => r.length < 12))}`);
+    check(/^Unit.*by Claude/.test(rowOf(/1 newly failing/)) && /while: add a dark mode toggle/.test(rowOf(/1 newly failing/)) && /auth\.test\.js › rejects an expired token/.test(rowOf(/1 newly failing/)), `the failing unit run names the new failure and the prompt: ${rowOf(/1 newly failing/)}`);
+    check(/1 failed · 4 passed · 1 skipped · 6\.0s/.test(rowOf(/1 newly failing/)), `with counts and the time from the log: ${rowOf(/1 newly failing/)}`);
+    check(/^Typecheck.*Passed · 7\.0s/.test(rowOf(/^Typecheck/)), `Claude's typecheck lands on Typecheck with a time: ${rowOf(/^Typecheck/)}`);
+    check(/×3 · last/.test(rowOf(/×3/)), `three identical theme runs collapse: ${rowOf(/×3/)}`);
+    check(rows.some((r) => /^1 other command, no test results$/.test(r)), `the jest call with no results folds: ${JSON.stringify(rows.filter((r) => /other/.test(r)))}`);
+    check(!rows.some((r) => /Claude’s run/.test(r)) && !rows.some((r) => /notes-app|npx jest(?! --listTests)/.test(r)), 'no row is titled "Claude’s run"; notes-app’s runs stay out of acme');
+    const chart = await probe();
+    check(JSON.stringify(chart?.chartLabels) === JSON.stringify(['Pass rate · last 6 runs', 'Stage time · seconds per stage, last 6 runs']) && (chart?.timedParts as number) >= 6, `the chart is labelled and has times: ${JSON.stringify(chart?.chartLabels)} ${chart?.timedParts} timed`);
+    await click('#testing .tst-repeats');
+    check(await settle((p) => (p.runs as string[]).length > (chart?.runs as string[]).length, 3000), 'a collapsed row opens to its repeats');
+    await js("document.querySelector('#testing .tst-history')?.scrollIntoView({ block: 'start' })");
+    await wait(150);
+    await capture('testing-history');
 
     // Run pipeline: a confirm naming each exact command; nothing recorded yet.
     const tabsBefore = await js('PastelTerm.tabs.ids().length') as number;
@@ -161,7 +212,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(groups.length === 2 && groups[0][0] === 'src/auth.test.js' && groups[0][2] && groups[0][1] && !groups[1][2] && !groups[1][1], `grouped by file, failing group first and open, passing collapsed: ${JSON.stringify(groups)}`);
     check(JSON.stringify(doneRun?.failRows) === JSON.stringify(['auth > tokens > rejects an expired token']), `the failing test row: ${JSON.stringify(doneRun?.failRows)}`);
     check(/1\s*failed/.test(String(doneRun?.sumbar)) && /4\s*passed/.test(String(doneRun?.sumbar)) && /by you/.test(String(doneRun?.sumbar)), `summary bar: ${String(doneRun?.sumbar).slice(0, 90)}`);
-    check(doneRun && (doneRun.bars as number) >= 2 && (doneRun.runs as string[]).length === 2, `history shows two runs with a trend: ${doneRun?.bars} bars`);
+    check(doneRun && (doneRun.bars as number) >= 2 && /^Pipeline · 3 stages.*by you.*Run pipeline/.test(doneRun.history[1] ?? ''), `her run is the newest row, titled by what ran: ${JSON.stringify(doneRun?.history.slice(0, 2))}`);
     await capture('testing-pipeline');
 
     // Edit pipeline: add a stage, save, and it is kept; then back to the three.
@@ -216,6 +267,27 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await click('#testing .tst-row.is-failed .tst-fix');
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
+
+    // A tab in the home folder is not a project: pick one instead; a repo with no stages starts from Claude's commands.
+    testingFixture.project = os.homedir();
+    await js('PastelTerm.overlays.hideCurrent()');
+    await click('#testing-button');
+    const home = await settle((p) => p.state.elsewhere?.reason === 'home');
+    check(home && /^This tab is in your home folder, not a project\. Pick a project:/.test(home.pickerTitle as string) && JSON.stringify(home.picker) === JSON.stringify(['acme', 'notes-app']), `home folder shows the picker: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+    check(home && home.state.stages.length === 0 && !home.history.length, 'no pipeline or history for ~');
+    await capture('testing-picker');
+    await js(`document.querySelector(${JSON.stringify(`#testing .tst-pick[data-root="${bare}"]`)})?.click()`);
+    const notes = await settle((p) => p.state.project === 'notes-app' && Boolean(p.makePipeline));
+    check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
+    await click('#testing .tst-make-pipeline');
+    const made = await settle((p) => p.state.editing);
+    const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('input')].map((i) => i.value))") as string[][];
+    check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Make a pipeline proposes Claude's checks: ${JSON.stringify(fields)}`);
+    await capture('testing-make-pipeline');
+    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
+    await click('#testing .tst-change-project');
+    check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change project goes back to the picker');
+    testingFixture.project = project;
 
     // Esc closes it.
     await click('#testing-button');

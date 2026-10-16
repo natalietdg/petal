@@ -2,8 +2,9 @@
 // and what the project tests with. testing.ts owns the state and wires the handlers passed in here.
 import { el } from './dom';
 import { groupByFile, passRate, type PipelineConfig, type PipelineRun, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
+import { chartRuns, resultText, runDuration, runTitle, runWhy, shortCommand, type HistoryDay, type RunRow } from '../shared/testing-history';
 
-const TREND_RUNS = 24;
+const TREND_RUNS = 20;
 const STATUS_WORD: Record<StageStatus, string> = { waiting: 'Not run', running: 'Running', passed: 'Passed', failed: 'Failed', skipped: 'Skipped', stopped: 'Stopped' };
 
 export function duration(ms: number | null): string {
@@ -140,61 +141,135 @@ export function stageResults(stage: StageResult | null, run: PipelineRun | null,
   return box;
 }
 
-// ---- History: pass or fail per run and stacked stage durations, oldest left; then the run list.
-export function trend(runs: PipelineRun[], stageIds: string[], stageNames: string[] = []): HTMLElement {
-  const recent = runs.filter((r) => r.state !== 'running').slice(0, TREND_RUNS).reverse();
+// ---- History: pass rate and seconds per stage for the last runs with results, oldest left; then the run list.
+const seconds = (ms: number): string => (ms >= 60000 ? `${Math.round(ms / 60000)}m` : `${Math.round(ms / 1000)}s`);
+
+export function trend(allRuns: PipelineRun[], stageIds: string[], stageNames: string[] = []): HTMLElement {
+  const recent = chartRuns(allRuns, TREND_RUNS).reverse();
   const box = el('div', 'tst-trend');
   box.setAttribute('role', 'img');
   const passed = recent.filter((r) => r.state === 'passed').length;
-  box.setAttribute('aria-label', `Last ${recent.length} runs: ${passed} passed, ${recent.length - passed} failed`);
+  const timed = recent.filter((r) => runDuration(r) !== null).length;
+  box.setAttribute('aria-label', `Last ${recent.length} runs: ${passed} passed, ${recent.length - passed} failed; ${timed} with a time`);
   const rate = el('div', 'tst-bars');
   const times = el('div', 'tst-bars tst-durations');
-  const longest = Math.max(1, ...recent.map((r) => r.stages.reduce((sum, s) => sum + (s.durationMs ?? 0), 0)));
+  const longest = Math.max(1, ...recent.map((r) => runDuration(r) ?? 0));
+  let other = false;
   for (const run of recent) {
     const bar = el('span', `tst-bar is-${run.state}`);
     bar.style.height = `${Math.max(10, Math.round(passRate(run) * 100))}%`;
-    bar.title = `${when(run.startedAt)} · ${run.state} · ${run.totals.passed} passed, ${run.totals.failed} failed`;
+    bar.title = `${when(run.startedAt)} · ${runTitle(run)} · ${resultText(run)}`;
     rate.append(bar);
     const stack = el('span', 'tst-stack');
     for (const stage of run.stages) {
-      const part = el('span', `tst-part tone-${Math.max(0, stageIds.indexOf(stage.stageId ?? '')) % 5}`);
+      const index = stageIds.indexOf(stage.stageId ?? '');
+      if (index < 0) other = true;
+      const part = el('span', `tst-part ${index < 0 ? 'tone-other' : `tone-${index % 5}`}`);
       part.style.height = `${((stage.durationMs ?? 0) / longest) * 100}%`;
-      part.title = `${stage.name} ${duration(stage.durationMs)}`;
+      part.title = `${stage.stageId ? stage.name : shortCommand(stage.command)} ${duration(stage.durationMs) || 'no time'}`;
       stack.append(part);
     }
     times.append(stack);
   }
-  box.append(el('span', 'tst-trend-label', 'Pass rate'), rate, el('span', 'tst-trend-label', 'Stage time'), times);
+  const axis = (text: string) => el('span', 'tst-axis', text);
+  const rateRow = el('div', 'tst-chart');
+  rateRow.append(rate, axis('100%'));
+  const timeRow = el('div', 'tst-chart');
+  timeRow.append(times, axis(timed ? seconds(longest) : ''));
+  box.append(
+    el('span', 'tst-trend-label', `Pass rate · last ${recent.length} runs`), rateRow,
+    el('span', 'tst-trend-label', `Stage time · seconds per stage, last ${recent.length} runs`), timeRow,
+  );
   const legend = el('ul', 'tst-legend');
   legend.setAttribute('aria-hidden', 'true'); // the bars' titles and the run list carry the same facts
-  stageNames.forEach((name, i) => {
-    const item = el('li');
-    item.append(el('span', `tst-key tone-${i % 5}`), name);
-    legend.append(item);
-  });
-  if (stageNames.length) box.append(legend);
+  const key = (tone: string, name: string) => { const item = el('li'); item.append(el('span', `tst-key ${tone}`), name); legend.append(item); };
+  stageNames.forEach((name, i) => key(`tone-${i % 5}`, name));
+  if (other) key('tone-other', 'Other commands');
+  if (legend.childElementCount) box.append(legend);
   return box;
 }
 
-export function runList(runs: PipelineRun[], selectedId: string | null, choose: (id: string) => void): HTMLElement {
-  const list = el('ul', 'tst-runs');
-  list.setAttribute('aria-label', 'Runs, newest first');
-  for (const run of runs.slice(0, 40)) {
-    const item = el('li');
-    const button = el('button', 'tst-run');
-    button.type = 'button';
-    button.dataset.run = run.id;
-    button.setAttribute('aria-pressed', String(run.id === selectedId));
-    const label = run.stages.length === 1 ? run.stages[0].name : `Pipeline, ${run.stages.length} stages`;
-    const tally = run.totals.failed || run.totals.passed ? `${run.totals.failed ? `${run.totals.failed} failed · ` : ''}${run.totals.passed} passed` : STATUS_WORD[run.state === 'running' ? 'running' : run.state];
-    const top = el('span', 'tst-run-top');
-    top.append(dot(run.state), el('span', 'tst-run-name', label), el('span', `tst-by${run.by === 'claude' ? ' is-claude' : ''}`, byLabel(run)));
-    button.append(top, el('span', 'tst-run-meta', `${when(run.startedAt)} · ${tally}`));
-    button.addEventListener('click', () => choose(run.id));
-    item.append(button);
-    list.append(item);
+export interface HistoryHandlers { choose: (id: string) => void; toggle: (key: string) => void }
+
+function runButton(row: RunRow, selectedId: string | null, choose: (id: string) => void): HTMLElement {
+  const { run } = row;
+  const button = el('button', `tst-run${run.state === 'failed' ? ' is-failed' : ''}`);
+  button.type = 'button';
+  button.dataset.run = run.id;
+  button.setAttribute('aria-pressed', String(row.repeats.some((r) => r.id === selectedId)));
+  button.title = run.stages.map((s) => s.command).join('\n');
+  const top = el('span', 'tst-run-top');
+  top.append(dot(run.state), el('span', 'tst-run-name', row.title), el('span', `tst-by${run.by === 'claude' ? ' is-claude' : ''}`, row.by));
+  button.append(top);
+  if (row.why) button.append(el('span', 'tst-run-why', row.why));
+  const result = el('span', 'tst-run-meta');
+  const repeat = row.repeats.length > 1 ? `×${row.repeats.length} · last ` : '';
+  result.append(el('span', 'tst-run-result', row.result), ...[duration(row.durationMs), `${repeat}${when(run.startedAt)}`].filter(Boolean).map((t) => el('span', null, ` · ${t}`)));
+  button.append(result);
+  if (row.change.length) button.append(el('span', 'tst-run-change', row.change.join(' · ')));
+  if (row.failing && !row.change.some((c) => c.includes('newly failing'))) button.append(el('span', 'tst-run-failing', `Failing: ${row.failing}`));
+  button.addEventListener('click', () => choose(run.id));
+  return button;
+}
+
+// Days newest first; a run repeated with the same result is one row that opens to its repeats.
+export function historyList(days: HistoryDay[], selectedId: string | null, expanded: ReadonlySet<string>, handlers: HistoryHandlers): HTMLElement {
+  const box = el('div', 'tst-runs-box');
+  for (const day of days) {
+    box.append(el('h4', 'tst-day', day.label));
+    const list = el('ul', 'tst-runs');
+    list.setAttribute('aria-label', `Runs ${day.label.toLowerCase()}, newest first`);
+    for (const row of day.rows) {
+      const item = el('li');
+      if (row.kind === 'other') {
+        const key = `other:${day.label}`;
+        const open = expanded.has(key);
+        const toggle = el('button', 'tst-other', `${row.runs.length} other command${row.runs.length === 1 ? '' : 's'}, no test results`);
+        toggle.type = 'button';
+        toggle.dataset.toggle = key;
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.addEventListener('click', () => handlers.toggle(key));
+        item.append(toggle);
+        if (open) {
+          const names = el('ul', 'tst-other-list');
+          for (const command of row.commands) names.append(el('li', null, command));
+          item.append(names);
+        }
+        list.append(item);
+        continue;
+      }
+      item.append(runButton(row, selectedId, handlers.choose));
+      if (row.repeats.length > 1) {
+        const key = `repeat:${row.run.id}`;
+        const open = expanded.has(key);
+        const more = el('button', 'tst-link tst-repeats', open ? 'Hide repeats' : `Show all ${row.repeats.length}`);
+        more.type = 'button';
+        more.dataset.toggle = key;
+        more.setAttribute('aria-expanded', String(open));
+        more.addEventListener('click', () => handlers.toggle(key));
+        item.append(more);
+        if (open) {
+          const repeats = el('ul', 'tst-repeat-list');
+          for (const run of row.repeats.slice(1)) {
+            const sub = el('li');
+            const b = el('button', 'tst-run tst-run-sub');
+            b.type = 'button';
+            b.dataset.run = run.id;
+            b.setAttribute('aria-pressed', String(run.id === selectedId));
+            const why = runWhy(run);
+            b.append(el('span', 'tst-run-meta', [when(run.startedAt), duration(runDuration(run)), why !== row.why ? why : ''].filter(Boolean).join(' · ')));
+            b.addEventListener('click', () => handlers.choose(run.id));
+            sub.append(b);
+            repeats.append(sub);
+          }
+          item.append(repeats);
+        }
+      }
+      list.append(item);
+    }
+    box.append(list);
   }
-  return list;
+  return box;
 }
 
 // ---- What the project tests with, each with where it was found; skills and agents can go into the reply box.

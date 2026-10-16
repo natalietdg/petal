@@ -1,7 +1,6 @@
 // A concluded session's "This session" facts: its Library notes, the test runs during it, and its test loop's last Loop line.
 // Petal fills these in because Claude can't know them. Reads only that session's log, behind the folder gate.
 import fs from 'node:fs';
-import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { claudeFolderAllowed } from './claude-folder';
 import * as configStore from './config-store';
@@ -9,7 +8,8 @@ import * as history from './history';
 import * as librarySessions from './library-sessions';
 import * as testingStore from './testing-store';
 import { isReadingSession, onSessionChange } from './library-extract';
-import { mergeLogRuns, readCriteria, repoRoot } from './testing-ipc';
+import { mergeLogRuns, readCriteria } from './testing-ipc';
+import { projectRootOf } from './testing-project';
 import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
 import { handle, send } from './ipc';
@@ -86,10 +86,8 @@ function locate(sessionId: string, sessions: TabSessions): Located | null {
   return record ? { transcript: record.file, cwd: record.cwd, live: false } : null;
 }
 
-const projectRoot = (cwd: string | null): string | null => {
-  const dir = (isSnapshotRun() && testingFixture.project) || cwd;
-  return dir && path.isAbsolute(dir) ? repoRoot(dir) : null;
-};
+// Claude's folder for the session; a snapshot run's fixture stands in for it.
+const claudeFolder = (cwd: string | null): string | null => (isSnapshotRun() && testingFixture.project) || cwd;
 
 export async function sessionInfo(sessionId: string, sessions: TabSessions, now = Date.now()): Promise<SessionInfo | null> {
   if (!claudeFolderAllowed()) return null;
@@ -97,11 +95,12 @@ export async function sessionInfo(sessionId: string, sessions: TabSessions, now 
   if (!found || !fs.existsSync(found.transcript)) return null;
   const log = await logFacts(found.transcript);
   const library = libraryLine({ reading: isReadingSession(sessionId), stored: librarySessions.stored(sessionId), autoBuild: configStore.load().library.autoBuild });
-  const root = projectRoot(found.cwd);
+  const cwd = claudeFolder(found.cwd);
+  const root = projectRootOf(cwd);
   let tests = null;
   let loop = null;
   if (root) {
-    await mergeLogRuns(root, [{ transcript: found.transcript, sessionId }]);
+    await mergeLogRuns(root, [{ transcript: found.transcript, sessionId, cwd }]);
     const span: Span = { start: log.first ?? now, end: found.live ? now : log.last ?? now };
     tests = testsLine(runsInSpan(testingStore.load(root).runs, span, sessionId));
     if (log.loop) {

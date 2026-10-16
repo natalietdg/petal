@@ -153,10 +153,10 @@ const api = {
     onInfoChanged: (callback: (change: EventChannels['conclusion:info-changed']) => void) => subscribe('conclusion:info-changed', callback),
   },
   testing: {
-    detect: (tabId: TabId) => invoke('testing:detect', { tabId }),
-    history: (tabId: TabId) => invoke('testing:history', { tabId }),
+    detect: (tabId: TabId, root: string | null = null) => invoke('testing:detect', { tabId, root }),
+    history: (tabId: TabId, root: string | null = null) => invoke('testing:history', { tabId, root }),
     savePipeline: (request: InvokeArgs<'testing:save-pipeline'>[0]) => invoke('testing:save-pipeline', request),
-    useClaudePipeline: (tabId: TabId) => invoke('testing:use-claude-pipeline', { tabId }),
+    useClaudePipeline: (tabId: TabId, root: string | null = null) => invoke('testing:use-claude-pipeline', { tabId, root }),
     run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
     stop: (runId: string) => invoke('testing:stop', { runId }),
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),

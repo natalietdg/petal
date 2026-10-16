@@ -43,7 +43,7 @@
 .tst-empty { margin: 8px 0; color: var(--muted); }
 .tst-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--muted); }
 
-:is(.tst-button, .tst-link, .tst-stage, .tst-loop-focus, .tst-loop-rounds-input, .tst-stage-run, .tst-run, .tst-fix, .tst-insert, .tst-icon, .tst-input, .tst-group-head, .tst-failure):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+:is(.tst-button, .tst-link, .tst-stage, .tst-pick, .tst-other, .tst-loop-focus, .tst-loop-rounds-input, .tst-stage-run, .tst-run, .tst-fix, .tst-insert, .tst-icon, .tst-input, .tst-group-head, .tst-failure):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 
 /* ---- Status dots: passed done-green, failed decide-rose, running next-blue, the rest muted. */
 .tst-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); }
@@ -186,8 +186,10 @@
 
 /* ---- History. */
 .tst-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.tst-trend { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 6px 10px; margin-bottom: 10px; }
-.tst-trend-label { color: var(--muted); font-size: 12px; white-space: nowrap; align-self: center; }
+.tst-trend { display: grid; grid-template-columns: 1fr; gap: 3px; margin-bottom: 10px; }
+.tst-chart { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 6px; margin-bottom: 6px; }
+.tst-axis { min-width: 3ch; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.tst-trend-label { color: var(--muted); font-size: 12px; }
 .tst-bars { display: flex; align-items: flex-end; gap: 3px; height: 42px; padding-bottom: 1px; border-bottom: 1px solid var(--rule); }
 .tst-durations { height: 30px; }
 .tst-bar { flex: 1 1 0; max-width: 14px; min-width: 4px; border-radius: 3px 3px 0 0; background: var(--done-ink); }
@@ -200,11 +202,14 @@
 .tone-2 { background: var(--watch-ink); }
 .tone-3 { background: var(--muted); }
 .tone-4 { background: var(--link); }
-.tst-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; grid-column: 2; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
+.tone-other { background: var(--rule); }
+.tst-legend { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 12px; }
 .tst-legend li { display: inline-flex; align-items: center; gap: 5px; }
 .tst-key { width: 9px; height: 9px; border-radius: 2px; }
 
-.tst-runs { display: flex; flex-direction: column; gap: 2px; max-height: 320px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.tst-runs-box { max-height: 420px; overflow: auto; }
+.tst-day { position: sticky; top: 0; z-index: 1; margin: 8px 0 2px; padding: 2px 10px; background: var(--reader-bg); color: var(--muted); font: 700 12px var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
+.tst-runs { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .tst-run { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 6px 10px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--reader-fg); font: inherit; text-align: left; cursor: pointer; }
 .tst-run:hover { background: var(--code-bg); }
 .tst-run[aria-pressed="true"] { border-color: var(--reader-fg); background: var(--code-bg); }
@@ -213,6 +218,26 @@
 .tst-by { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .tst-by.is-claude { padding: 0 8px; border-radius: 999px; background: var(--why-pill); color: var(--why-ink); font-weight: 700; }
 .tst-run-meta { padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+.tst-run-result { color: var(--reader-fg); font-weight: 600; }
+.tst-run.is-failed .tst-run-result { color: var(--watch-ink); }
+.tst-run-why { padding-left: 18px; overflow: hidden; color: var(--muted); font-size: 12.5px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
+.tst-run-change, .tst-run-failing { padding-left: 18px; color: var(--reader-fg); font-size: 12.5px; overflow-wrap: anywhere; }
+.tst-run-failing { color: var(--watch-ink); }
+.tst-repeats { margin: 0 0 4px 28px; font-size: 12.5px; }
+.tst-repeat-list { margin: 0 0 4px 18px; padding: 0; list-style: none; }
+.tst-run-sub { padding: 3px 10px; }
+.tst-other { width: 100%; padding: 4px 10px; border: 0; background: none; color: var(--muted); font: 12.5px var(--ui-font); text-align: left; cursor: pointer; }
+.tst-other::before { content: '▸ '; }
+.tst-other[aria-expanded="true"]::before { content: '▾ '; }
+.tst-other-list { margin: 0 0 4px 28px; padding: 0; list-style: none; color: var(--muted); font: 12px var(--mono-font); overflow-wrap: anywhere; }
+.tst-make-pipeline { margin-top: 4px; }
+.tst-picker { display: flex; flex-direction: column; gap: 8px; }
+.tst-picker-title { margin: 0; font-weight: 600; }
+.tst-picker-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tst-pick { display: flex; flex-direction: column; gap: 1px; width: 100%; max-width: 520px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 10px; background: none; color: var(--reader-fg); font: inherit; text-align: left; cursor: pointer; }
+.tst-pick:hover { background: var(--code-bg); }
+.tst-pick-name { font-weight: 600; }
+.tst-pick-path { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
 
 /* ---- What it tests with. */
 .tst-tools { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
