@@ -1,5 +1,5 @@
 // Add to Library: the session header's button that reads the shown tab's session now and adds its domain knowledge.
-// Main looks the tab up and runs it through the Library's queue; the result shows beside the button, then fades.
+// Main looks the tab up and runs it through the Library's queue; the result shows under the header row, then fades.
 import * as library from './library';
 import { byId, el, isIpcError } from './dom';
 import { addButtonState, addResultText } from '../shared/library';
@@ -32,7 +32,9 @@ function showStatus(text: string, { fade }: { fade: boolean }): void {
   const open = el('button', 'library-add-open', 'Open Library');
   open.type = 'button';
   open.addEventListener('click', () => void library.open());
-  status.replaceChildren(el('span', null, text), open);
+  const line = el('span', null, text);
+  line.title = text; // the full line, when a narrow header cuts it short
+  status.replaceChildren(line, open);
   status.classList.remove('fading');
   status.hidden = false;
   if (!fade) return;

@@ -51,7 +51,7 @@ const READER_STAR = `(() => {
   const head = document.getElementById('reader-head');
   return { shown: !s.hidden && b.width > 0, size: [Math.round(b.width), Math.round(b.height)], pressed: s.getAttribute('aria-pressed'),
     session: s.dataset.sessionId, inEnd: Boolean(s.closest('.reader-head-end')), reachable: at === s || s.contains(at), at: at ? at.id || (typeof at.className === 'string' && at.className) || at.tagName : null, overlaps: others.length,
-    sideways: head.scrollWidth - head.clientWidth };
+    sideways: head.scrollWidth - head.clientWidth, fit: PastelTerm.headFit.state().step };
 })()`;
 
 export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -193,8 +193,8 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
     await js('PastelTerm.history.close()');
     if (startActive) await js(`PastelTerm.tabs.activate(${JSON.stringify(startActive)})`);
 
-    // 7 Every look and theme, 1280 and 800: stars readable, titles clear of them, tabs fit, nothing sideways.
-    for (const width of [1280, 800]) {
+    // 7 Every look and theme, 1600 down to 800: stars readable, titles clear of them, tabs fit, nothing sideways.
+    for (const width of [1600, 1280, 990, 800]) {
       check(await sizeTo(width), `${width}px window sized`);
       for (const [themeId] of Object.entries(themes)) {
         applyTheme(themeId, { persist: false });
@@ -214,6 +214,7 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
           await wait(150);
           const r = await js(READER_STAR);
           check(r.shown && r.reachable && r.overlaps === 0 && r.sideways <= 1, `${tag} reader star clickable, clear of the header controls: ${JSON.stringify(r)}`);
+          if (look === 'newspaper' && themeId === 'paleSky') await capture(`favorites-reader-head-${width}`);
         }
       }
     }

@@ -1,0 +1,13 @@
+/* Reader header fit steps (head-fit.ts): snug spacing, then icon-only buttons. Loaded last so each step beats the buttons' own rules. */
+.reader-head-end .head-icon-only { display: none; } /* Notes shows its icon only once its label is hidden */
+
+.reader-head-end.fit-snug { gap: 6px; }
+.reader-head-end.fit-snug :is(.colour-key-button, .focus-button) { gap: 5px; padding-inline: 4px; }
+.reader-head-end.fit-snug .notes-toggle { padding: 5px 11px; font-size: 13px; }
+
+.reader-head-end.fit-icons { gap: 4px; }
+.reader-head-end.fit-icons :is(.colour-key-button, .focus-button, .notes-toggle) { position: relative; gap: 0; }
+.reader-head-end.fit-icons .notes-toggle { display: inline-flex; align-items: center; padding: 6px 8px; font-size: 14px; }
+.reader-head-end.fit-icons :is(.colour-key-button, .focus-button) { padding: 6px; font-size: 14px; }
+.reader-head-end.fit-icons .head-icon-only { display: block; }
+.reader-head-end.fit-icons .head-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -29,6 +29,7 @@ import * as launchScreens from './launch-screens';
 import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import * as dockFit from './dock-fit';
+import * as headFit from './head-fit';
 import * as agentsMenu from './agents-menu';
 import * as agentPanel from './agent-panel';
 import * as favorites from './favorites';
@@ -48,7 +49,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -211,6 +212,7 @@ async function start(): Promise<void> {
     colourKey.open();
   });
   dockFit.init();
+  headFit.init();
   updatePill.init();
 
   // The first tab starts Claude too, once she has allowed the reader to follow it (a new install answers that first).

@@ -13,7 +13,7 @@ import { serializeNote } from '../main/library-store';
 import { READING_CHOICES } from '../main/menu';
 
 const MIN_RATIO = 4.5;
-const WIDTHS = [800, 1280, 1600];
+const WIDTHS = [800, 990, 1280, 1600];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Fake, realistic domain notes for a made-up company; no real data.
@@ -96,6 +96,18 @@ const HEADER_PROBE = `(() => {
     nextTo: (() => { const n = document.getElementById('notes-toggle').getBoundingClientRect(); return Math.abs((n.top + n.bottom) / 2 - (r.top + r.bottom) / 2) < 3; })(),
     ratios: [b, ...(s.hidden ? [] : [...s.querySelectorAll('span, button')])].map(ratio),
   };
+})()`;
+
+// At a narrow window: the header row stays inside itself, and the status sits on its own line under the row.
+const HEADER_FIT_PROBE = `(() => {
+  const head = document.getElementById('reader-head');
+  const row = head.querySelector('.reader-head-row').getBoundingClientRect();
+  const column = head.querySelector('.reader-head-column').getBoundingClientRect();
+  const s = document.getElementById('library-add-status');
+  const b = s.getBoundingClientRect();
+  const line = s.querySelector('span');
+  return { sideways: head.scrollWidth - head.clientWidth, step: PastelTerm.headFit.state().step, shown: !s.hidden && b.width > 0,
+    under: b.top >= row.bottom - 0.5, inside: b.left >= column.left - 0.5 && b.right <= column.right + 0.5, tooltip: line?.title === line?.textContent };
 })()`;
 
 export function seedLibrary(dir: string, now = Date.now()): void {
@@ -339,9 +351,17 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       await capture('library-header-status');
       const faded = await waitFor(async () => { const h = await header(); return h.status === '' ? h : null; }, 9000);
       check(faded, 'the status fades after a few seconds');
+      resizeOffscreen(win, 800, 900);
+      await wait(400);
       await click('#library-add-session');
       const again2 = await waitFor(async () => { const h = await header(); return /Nothing new since/.test(h.status) ? h : null; }, 5000);
       check(again2 && prompts.length === 1, 'a second add with nothing new calls nothing');
+      const narrow = await js(HEADER_FIT_PROBE);
+      check(narrow.sideways <= 1 && narrow.shown && narrow.under && narrow.inside && narrow.tooltip, `800px: the header row fits with its status on a line under it: ${JSON.stringify(narrow)}`);
+      check(again2 && again2.visible && again2.nextTo && again2.ratios.every((r) => r >= MIN_RATIO), `800px: Add to Library still beside Notes and readable: ${JSON.stringify(again2)}`);
+      await capture('library-header-status-800');
+      resizeOffscreen(win, 1280, 900);
+      await wait(400);
       await js("document.querySelector('#library-add-status .library-add-open')?.click()");
       const openedFromStatus = await settle((p) => p.state.shown.includes('Invoice numbering'));
       check(openedFromStatus, 'Open Library in the status opens the Library with the new note');
