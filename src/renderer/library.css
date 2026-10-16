@@ -320,16 +320,16 @@
   .lib-preview-title { font-size: 1.35em; }
 }
 
-/* ---- Add to Library, in the session header (library-add.ts): styled like Notes, with its status beside it. */
+/* ---- Add to Library, in the session header (library-add.ts): styled like Notes, its status on a line under the row. */
 .library-add { display: inline-flex; flex: none; align-items: center; gap: 6px; padding-inline: 12px 14px; white-space: nowrap; }
 .library-add .dock-icon { width: 15px; height: 15px; }
 .library-add:hover:not(:disabled) { color: var(--reader-fg); background: var(--code-bg); }
 .library-add:disabled { cursor: default; }
 .library-add:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
-.library-add-status { display: inline-flex; flex: 0 1 auto; min-width: 0; align-items: baseline; gap: 8px; white-space: nowrap; font: 500 13px/1.3 var(--ui-font); color: var(--reader-fg); opacity: 1; transition: opacity 400ms; }
+.library-add-status { display: flex; justify-content: flex-end; min-width: 0; align-items: baseline; gap: 8px; margin: 6px 0 0; white-space: nowrap; font: 500 13px/1.3 var(--ui-font); color: var(--reader-fg); opacity: 1; transition: opacity 400ms; }
 .library-add-status[hidden] { display: none; }
 .library-add-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-#reader-head .view-toggle { flex-shrink: 0; } /* the status line gives way, never Replies and Flow */
+#reader-head .view-toggle { flex-shrink: 0; } /* the end buttons compact (head-fit.ts), never Replies and Flow */
 .library-add-status.fading { opacity: 0; }
 .library-add-open { flex: none; padding: 0; border: 0; background: none; color: var(--link); font: 600 13px var(--ui-font); text-decoration: underline; cursor: pointer; }
 .library-add-open:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
