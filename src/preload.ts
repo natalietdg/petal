@@ -109,6 +109,7 @@ const api = {
     openStyle: (file: string) => invoke('config:open-style', file),
     useStyle: (name: string) => invoke('config:use-style', name),
     addPetalStyles: () => invoke('config:add-petal-styles'),
+    addPetalSkills: () => invoke('config:add-petal-skills'),
   },
   workflow: {
     today: (openTabs?: NonNullable<InvokeArgs<'workflow:today'>[0]>['openTabs']) => invoke('workflow:today', { openTabs }),
@@ -129,6 +130,7 @@ const api = {
     detect: (tabId: TabId) => invoke('testing:detect', { tabId }),
     history: (tabId: TabId) => invoke('testing:history', { tabId }),
     savePipeline: (request: InvokeArgs<'testing:save-pipeline'>[0]) => invoke('testing:save-pipeline', request),
+    useClaudePipeline: (tabId: TabId) => invoke('testing:use-claude-pipeline', { tabId }),
     run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
     stop: (runId: string) => invoke('testing:stop', { runId }),
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),

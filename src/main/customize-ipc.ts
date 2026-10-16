@@ -11,6 +11,8 @@ import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from
 import { handle, on } from './ipc';
 import { activeStyleName, listOutputStyles, setOutputStyle, type OutputStyles } from './output-styles';
 import { installPetalStyles, petalStyles, type PetalPaths, type PetalStyles } from './petal-styles';
+import { installPetalSkills, petalSkills, type PetalSkillPaths, type PetalSkills } from './petal-skills';
+import { libraryDir } from './library-store';
 import { isSnapshotRun, stylesFixture } from './snapshot-mode';
 import { allowedClaudeHome } from './claude-folder';
 import type { StyleSwitch } from './output-styles';
@@ -62,6 +64,15 @@ function addPetalStyles(): PetalStyles {
   return installPetalStyles(petalPaths());
 }
 
+// Packaged: Contents/Resources/skills; dev: the repo's resources folder.
+export const skillsBundleDir = (): string => (app.isPackaged ? path.join(process.resourcesPath, 'skills') : path.join(app.getAppPath(), 'resources', 'skills'));
+const petalSkillPaths = (): PetalSkillPaths => ({ claudeDir: claudeDirOrRefuse(), bundleDir: skillsBundleDir(), recordFile: path.join(app.getPath('userData'), 'petal-skills.json'), libraryDir: libraryDir() });
+
+function addPetalSkills(): PetalSkills {
+  refuseRealWriteInSnapshot();
+  return installPetalSkills(petalSkillPaths());
+}
+
 const HANDOFF_SAMPLE = {
   record: { title: 'Fix the reader session', cwd: '~/Code/petal', sessionId: '<session id>', file: '~/.claude/projects/<folder>/<session id>.jsonl' },
   turns: [{ prompt: 'why did the reader switch sessions?', reply: ['**The reader now follows only the claude inside this window.**'] }],
@@ -76,6 +87,7 @@ export const findMagazineStyle = (stylesDir: string): string | null =>
 // Reading off: no styles listed and nothing to add, so nothing under ~/.claude is read.
 const NO_STYLES: OutputStyles = { dir: '', active: null, styles: [], problem: FOLDER_OFF };
 const NO_PETAL_STYLES: PetalStyles = { styles: [], installable: false };
+const NO_PETAL_SKILLS: PetalSkills = { skills: [], installable: false };
 
 function customizeState(): CustomizeState {
   const dir = claudeDir();
@@ -95,6 +107,7 @@ function customizeState(): CustomizeState {
     outputStyle: dir ? activeStyleName(dir) : null,
     outputStyles: dir ? listOutputStyles(dir) : NO_STYLES,
     petalStyles: dir ? petalStyles(petalPaths()) : NO_PETAL_STYLES,
+    petalSkills: dir ? petalSkills(petalSkillPaths()) : NO_PETAL_SKILLS,
     magazinePath,
     organizer: organizer.status(),
     hookRuns: responseHook.recentRuns(),
@@ -116,6 +129,7 @@ export function registerCustomizeIpc(): void {
   handle('config:open-style', (_event, file) => openStyle(file));
   handle('config:use-style', (_event, name) => useStyle(name));
   handle('config:add-petal-styles', () => addPetalStyles());
+  handle('config:add-petal-skills', () => addPetalSkills());
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
   on('look:reading', (_event, id) => { if (isReadingChoice(id)) applyReading(id); });
   on('look:cat', (_event, id) => { if (valid(CAT_CHOICES, id)) applyCat(id); });
