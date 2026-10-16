@@ -123,7 +123,7 @@ function saveGlobal(claudeDir: string, factory: Factory): void {
 }
 
 // Keeps a folder Petal writes in a repo out of git; a .gitignore she put there stays as it is.
-function ensureSelfIgnore(dir: string): void {
+export function ensureSelfIgnore(dir: string): void {
   const file = path.join(dir, '.gitignore');
   if (!fs.existsSync(file)) writeFileDurable(file, SELF_IGNORE);
 }
