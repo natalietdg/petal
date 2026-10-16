@@ -122,7 +122,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     fs.appendFileSync(path.join(claudeDir, 'skills', 'petal-library', 'SKILL.md'), '\nMy own line.\n');
     await js('PastelTerm.customize.close()');
     const edited: Page = await showFormatting();
-    check(edited && edited.rows[0][1] === 'Edited' && edited.button === null && /edited since Petal wrote it/.test(edited.notes.join()), `an edit shows as Edited and is never offered for update: ${JSON.stringify(edited?.rows)} ${JSON.stringify(edited?.notes)}`);
+    check(edited && edited.rows.find((row: string[]) => row[0] === 'petal-library')?.[1] === 'Edited' && edited.button === null && /edited since Petal wrote it/.test(edited.notes.join()), `an edit shows as Edited and is never offered for update: ${JSON.stringify(edited?.rows)} ${JSON.stringify(edited?.notes)}`);
 
     for (const theme of Object.keys(themes)) {
       applyTheme(theme, { persist: false });
