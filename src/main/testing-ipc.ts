@@ -14,6 +14,7 @@ import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
 import { claudeRun, scanLog } from './testing-claude';
+import { adoptClaudePipeline, offersClaudePipeline, readClaudePipeline, type ClaudePipeline } from './testing-claude-pipeline';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
 import { writeFileDurable } from './atomic-file';
@@ -21,7 +22,7 @@ import { buildStartCommand, shellQuote } from './resume-command';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type StageResult, type TestingState,
+  type ClaudePipelineState, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type StageResult, type TestingState,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 
@@ -74,6 +75,21 @@ function skillsFor(root: string) {
 
 const defaultPipeline = (stages: StageConfig[]): PipelineConfig => ({ stages, keepGoing: false, autoRun: false, confirmed: [] });
 
+const validClaudePipeline = (root: string): ClaudePipeline | null => {
+  const claude = readClaudePipeline(root);
+  return claude && 'stages' in claude ? claude : null;
+};
+
+// The stages to offer when nothing is saved: the pipeline Claude drew up, else what detection suggests.
+const proposalFor = (root: string, stack = detectStack(root)): StageConfig[] => validClaudePipeline(root)?.stages ?? proposeStages(root, stack);
+
+function claudePipelineState(root: string, saved: PipelineConfig | null): ClaudePipelineState | null {
+  const claude = readClaudePipeline(root);
+  if (!claude) return null;
+  if ('problem' in claude) return { problem: claude.problem };
+  return { proposal: !saved, offer: offersClaudePipeline(saved, claude), stages: claude.stages.length };
+}
+
 // Claude's runs in every open session on this project, added to its history once each.
 function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): void {
   if (!claudeFolderAllowed()) return;
@@ -100,13 +116,13 @@ async function sessionTabFor(root: string, sessions: TabSessions, asking: TabSes
 
 function stateFor(root: string, sessions: TabSessions, sessionTab: string | null): TestingState {
   const stack = [...detectStack(root), ...skillsFor(root)];
-  const proposed = proposeStages(root, stack);
+  const proposed = proposalFor(root, stack);
   const saved = store.load(root).pipeline;
   const pipeline = saved ?? defaultPipeline(proposed);
   mergeClaudeRuns(root, sessions, pipeline.stages);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
-  return { allowed: true, project: { root, name: path.basename(root) }, stack, proposed, pipeline, saved: Boolean(saved), runs: data.runs, running, sessionTab };
+  return { allowed: true, project: { root, name: path.basename(root) }, stack, proposed, pipeline, saved: Boolean(saved), runs: data.runs, running, sessionTab, claudePipeline: claudePipelineState(root, saved) };
 }
 
 // ---- Watching a run: each stage's exit file, then its report or log.
@@ -204,7 +220,7 @@ export function cleanPipeline(raw: unknown, previous: PipelineConfig | null): Pi
     if (!name || !command || !id || command.length > 2000 || /[\r\n]/.test(command) || stages.some((x) => x.id === id)) return null;
     stages.push({ id, name, command });
   }
-  return { stages, keepGoing: value.keepGoing === true, autoRun: value.autoRun === true, confirmed: previous?.confirmed ?? [] };
+  return { stages, keepGoing: value.keepGoing === true, autoRun: value.autoRun === true, confirmed: previous?.confirmed ?? [], savedAt: Date.now() };
 }
 
 // ---- Test loop: Petal makes .petal/ (kept out of git) and reads the criteria file; Claude runs the loop itself.
@@ -239,7 +255,7 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
-  const blank = (allowed: boolean): TestingState => ({ allowed, project: null, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null });
+  const blank = (allowed: boolean): TestingState => ({ allowed, project: null, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null });
 
   handle('testing:detect', async (event, { tabId }) => {
     if (!claudeFolderAllowed()) return blank(false);
@@ -250,13 +266,14 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId }) => {
-    if (!claudeFolderAllowed()) return { runs: [], running: null, sessionTab: null, criteria: null };
+    if (!claudeFolderAllowed()) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await projectOf(asking);
-    if (!root) return { runs: [], running: null, sessionTab: null, criteria: null };
+    if (!root) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
     // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
-    mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposeStages(root, detectStack(root)));
-    return { runs: store.load(root).runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root) };
+    mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
+    const data = store.load(root);
+    return { runs: data.runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline) };
   });
 
   // Prepares .petal/, then either leaves the paste to the reply box's path or starts claude with the brief in a new tab.
@@ -284,13 +301,24 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     return { ok: true };
   });
 
+  // Use it: re-reads and re-checks the file here, never the renderer's copy. New commands still ask before their first run.
+  handle('testing:use-claude-pipeline', async (event, { tabId }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
+    if (!root) return { note: 'No project in this tab.' };
+    const claude = validClaudePipeline(root);
+    if (!claude) return { note: 'Claude’s .petal/pipeline.json is gone or no longer valid.' };
+    store.savePipeline(root, adoptClaudePipeline(store.load(root).pipeline, claude));
+    return { ok: true };
+  });
+
   handle('testing:run', async (event, { tabId, stageId = null, confirmed = false }): Promise<RunReply> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
     const root = await projectOf(sessionFor(sessions, event.sender.id, tabId));
     if (!root) return { note: 'No project in this tab. Open one first.' };
     if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
     const data = store.load(root);
-    const pipeline = data.pipeline ?? defaultPipeline(proposeStages(root, detectStack(root)));
+    const pipeline = data.pipeline ?? defaultPipeline(proposalFor(root));
     const stages = stageId ? pipeline.stages.filter((s) => s.id === stageId) : pipeline.stages;
     if (!stages.length) return { note: 'There are no stages to run.' };
     const fresh = unconfirmed(pipeline, stages);

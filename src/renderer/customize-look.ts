@@ -5,6 +5,7 @@ import { portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import { outputStylesCard } from './customize-styles';
+import { petalSkillsCard } from './customize-skills';
 import { shapeGuide } from './shape-guide';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
@@ -120,6 +121,7 @@ export function renderFormatting(): HTMLElement[] {
   return [
     card('Shape guide', note(`Each shape as Claude types it, and how the reader shows it in ${readingName}. Switch the reading style under Look to compare.`), shapeGuide(), style),
     outputStylesCard(),
+    petalSkillsCard(),
     card(`Live preview · ${readingName}`, note('Switch the reading style under Look to see this change.'), column),
   ];
 }

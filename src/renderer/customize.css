@@ -193,6 +193,13 @@ select.cz-input { justify-self: start; }
 .cz-ok { background: var(--done-pill); color: var(--done-ink); }
 .cz-fail { background: var(--decide-pill); color: var(--decide-ink); }
 
+/* Petal skills: one row per skill, its phrase, status and summary. */
+.cz-skills { display: flex; flex-direction: column; margin: 4px 0 10px; }
+.cz-skill { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--rule); font-size: 14px; color: var(--reader-fg); }
+.cz-skill:first-child { border-top: 0; }
+.cz-skill-missing { background: var(--watch-pill); color: var(--watch-ink); }
+.cz-skill-outdated { background: var(--next-pill); color: var(--next-ink); }
+
 @media (max-width: 700px) {
   .customize-pane { padding: 64px 16px 40px; }
   .cz-field { grid-template-columns: minmax(0, 1fr); }

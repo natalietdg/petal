@@ -23,6 +23,7 @@ export interface PipelineConfig {
   keepGoing: boolean; // run later stages after a failed one
   autoRun: boolean; // run after a Claude turn that changed files; off by default
   confirmed: string[]; // commands she has confirmed once; a new or edited one asks again
+  savedAt?: number; // her last save, or when she took Claude's; a newer .petal/pipeline.json is offered
 }
 
 export interface StageResult {
@@ -79,7 +80,13 @@ export interface TestingState {
   runs: PipelineRun[];
   running: string | null; // the run id still going
   sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
+  claudePipeline: ClaudePipelineState | null; // <repo>/.petal/pipeline.json, when there is one
 }
+
+// What the Testing tab shows about the pipeline Claude wrote: in use as the proposal, offered over a saved one, or why it was refused.
+export type ClaudePipelineState =
+  | { proposal: boolean; offer: boolean; stages: number; problem?: undefined }
+  | { problem: string };
 
 export type RunRequest = { tabId: string; stageId?: string | null; confirmed?: boolean };
 export type RunReply =

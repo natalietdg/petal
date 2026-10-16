@@ -9,6 +9,7 @@ import type { MermaidExport } from '../main/flow-mermaid';
 import type { HookRun, HookTestResult } from '../main/response-hook';
 import type { OutputStyles, StyleSwitch } from '../main/output-styles';
 import type { PetalStyles } from '../main/petal-styles';
+import type { PetalSkills } from '../main/petal-skills';
 import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/session-organizer';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { FactoryScope, FactoryState } from '../main/factory-store';
@@ -23,7 +24,7 @@ import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
 import type { LibraryDoc, LibraryList, LibraryRunResult } from './library';
-import type { PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
+import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
 
 // A guarded handler never rejects: a failure comes back as { error }.
@@ -99,6 +100,7 @@ export interface CustomizeState {
   outputStyle: string | null;
   outputStyles: OutputStyles;
   petalStyles: PetalStyles;
+  petalSkills: PetalSkills;
   magazinePath: string | null;
   organizer: OrganizerStatus;
   hookRuns: HookRun[];
@@ -174,6 +176,7 @@ export interface InvokeChannels {
   'config:open-style': { args: [file: string]; result: Guarded<Ok> };
   'config:use-style': { args: [name: string]; result: Guarded<StyleSwitch> };
   'config:add-petal-styles': { args: []; result: Guarded<PetalStyles> };
+  'config:add-petal-skills': { args: []; result: Guarded<PetalSkills> };
   // This window's saved reader share, or null for the default.
   'layout:get-split': { args: []; result: Guarded<number | null> };
   'layout:save-split': { args: [fraction: number]; result: Guarded<Ok> };
@@ -190,9 +193,10 @@ export interface InvokeChannels {
   'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null }> };
+  'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
   'testing:loop-start': { args: [request: { tabId: TabId; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
   'testing:save-pipeline': { args: [request: { tabId: TabId; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:use-claude-pipeline': { args: [request: { tabId: TabId }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:run': { args: [request: { tabId: TabId; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.

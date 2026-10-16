@@ -29,9 +29,9 @@ export interface PetalPaths {
   recordFile: string; // in Petal's userData: file name → hash of what Petal last wrote
 }
 
-const hash = (text: string): string => crypto.createHash('sha256').update(text).digest('hex');
+export const hash = (text: string): string => crypto.createHash('sha256').update(text).digest('hex');
 
-function readOrNull(file: string): string | null {
+export function readOrNull(file: string): string | null {
   try {
     return fs.readFileSync(file, 'utf8');
   } catch (error) {
@@ -40,7 +40,7 @@ function readOrNull(file: string): string | null {
   }
 }
 
-function readRecord(recordFile: string): Record<string, string> {
+export function readRecord(recordFile: string): Record<string, string> {
   try {
     const record: unknown = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
     return typeof record === 'object' && record !== null && !Array.isArray(record) ? (record as Record<string, string>) : {};
@@ -59,7 +59,7 @@ function bundled(bundleDir: string): { file: string; text: string }[] {
   return names.map((file) => ({ file, text: fs.readFileSync(path.join(bundleDir, file), 'utf8') }));
 }
 
-function stateOf(onDisk: string | null, text: string, recorded: string | undefined): PetalStyleState {
+export function stateOf(onDisk: string | null, text: string, recorded: string | undefined): PetalStyleState {
   if (onDisk === null) return 'missing';
   const diskHash = hash(onDisk);
   if (diskHash === hash(text)) return 'current';
@@ -80,7 +80,7 @@ export function petalStyles({ claudeDir, bundleDir, recordFile }: PetalPaths): P
 }
 
 // A temp file linked into place: fails with EEXIST rather than replace a file that appeared meanwhile.
-function createNew(target: string, text: string): void {
+export function createNew(target: string, text: string): void {
   const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
   writeFileDurable(tmp, text);
   try {

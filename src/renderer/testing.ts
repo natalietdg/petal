@@ -108,6 +108,7 @@ function drawNote(): void {
   } else if (message) {
     note.append(el('span', null, message));
   }
+  drawClaudePipeline();
   const running = runById(data?.running ?? null);
   if (running) {
     const stop = el('button', 'tst-link', 'Stop watching');
@@ -117,6 +118,23 @@ function drawNote(): void {
     note.append(el('span', null, 'Running in a new tab. Press Ctrl+C there to stop it.'), stop);
   }
   note.hidden = !note.childElementCount;
+}
+
+// The pipeline the testing-suite skill wrote to .petal/pipeline.json: in use as the proposal, offered, or refused.
+function drawClaudePipeline(): void {
+  const claude = data?.claudePipeline;
+  if (!claude || draft) return;
+  if (claude.problem !== undefined) {
+    note.append(el('span', 'tst-claude-pipeline', `Claude’s .petal/pipeline.json was not used: ${claude.problem}.`));
+  } else if (claude.offer) {
+    const use = el('button', 'tst-link tst-use-claude', 'Use it');
+    use.type = 'button';
+    use.title = 'Replaces the saved stages. New commands still ask before their first run.';
+    use.addEventListener('click', () => void useClaudePipeline());
+    note.append(el('span', 'tst-claude-pipeline', 'Claude drew up a new pipeline ·'), use);
+  } else if (claude.proposal) {
+    note.append(el('span', 'tst-claude-pipeline', 'This pipeline is the one Claude drew up in .petal/pipeline.json.'));
+  }
 }
 
 function drawConfirm(): void {
@@ -431,6 +449,17 @@ async function savePipeline(): Promise<void> {
   editButton.focus();
 }
 
+async function useClaudePipeline(): Promise<void> {
+  const id = tabId();
+  if (!id) return;
+  const reply = await window.pastel.testing.useClaudePipeline(id);
+  if (isIpcError(reply) || 'note' in reply) { message = isIpcError(reply) ? reply.error : reply.note; drawNote(); return; }
+  message = 'Now using Claude’s pipeline.';
+  selectedStage = null;
+  await load();
+  runButton.focus();
+}
+
 async function load(): Promise<void> {
   const id = tabId();
   if (!id) return;
@@ -447,7 +476,7 @@ async function refresh(): Promise<void> {
   if (!id || !data) return load();
   const result = await window.pastel.testing.history(id);
   if (isIpcError(result) || !data) return;
-  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab };
+  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, claudePipeline: result.claudePipeline };
   criteria = result.criteria;
   if (draft) { drawHead(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
@@ -505,4 +534,4 @@ window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === l
 byId('testing-button').addEventListener('click', toggle);
 
 // For the snapshot harness.
-export const state = () => ({ sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

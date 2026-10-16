@@ -43,6 +43,7 @@ import { slashMenuCheck } from './snapshot-slash';
 import { libraryCheck } from './snapshot-library';
 import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
+import { petalSkillsCheck } from './snapshot-petal-skills';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -428,6 +429,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
     ['library', () => libraryCheck(kit, win)], // a stubbed extractor only; never a real claude
     ['testing', () => testingCheck(kit, win)], // records the pipeline line, never runs it; appends a Claude run to the fixture
+    ['petal skills', () => petalSkillsCheck(kit, win)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', () => testLoopCheck(kit, win, feed)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
@@ -621,6 +623,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'testing') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testingCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'petal-skills') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await petalSkillsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
