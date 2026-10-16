@@ -1,7 +1,7 @@
 import os from 'node:os';
 import * as pty from 'node-pty';
 import type { IPty } from 'node-pty';
-import { dropFromChildEnv } from './claude-cli';
+import { dropFromChildEnv, installedClaudeDir, pathWithClaudeDir } from './claude-cli';
 import { guardedShell, guardsShell } from './snapshot-shell';
 import type { TermSize } from '../shared/types';
 
@@ -14,6 +14,7 @@ function shellEnv(): Record<string, string> {
   for (const key of Object.keys(env)) {
     if (dropFromChildEnv(key) || key === 'TERM_SESSION_ID') delete env[key];
   }
+  env.PATH = pathWithClaudeDir(env.PATH, installedClaudeDir()); // Petal ticks Install when it sees claude there, so the tab must run it
   env.TERM_PROGRAM = 'Petal';
   return Object.fromEntries(Object.entries(env).filter((pair): pair is [string, string] => pair[1] !== undefined));
 }

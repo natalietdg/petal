@@ -3,8 +3,9 @@
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
+import * as layout from './layout';
 import { byId, el, isIpcError } from './dom';
-import { allDone, factsFrom, needsReopen, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
+import { allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
 
 // From code.claude.com/docs/en/setup (native install, macOS and Linux).
 export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
@@ -174,6 +175,10 @@ export function checklist(): HTMLElement {
 export function refresh(): void {
   if (!loaded) return;
   const all = states();
+  const setup = needsSetupRoom(all);
+  layout.makeRoomForClaudeSetup(setup);
+  reader.setClaudeSetup(setup);
+  if (setup && facts().claudeRunning && layout.isTerminalMinimised()) layout.setTerminalMinimised(false, false); // its first-run screens are there
   const next = toSave(all, saved);
   if (!sameSteps(next, saved)) {
     saved = next;

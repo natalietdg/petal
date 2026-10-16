@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { MIN_CONTRAST, toXterm } from './theme';
+import { noteTerminalRows } from './layout';
 import { pathsFromUriList, quotePaths } from '../shared/quote-path';
 import type { TabId, Theme } from '../shared/types';
 
@@ -93,7 +94,12 @@ export function create(container: HTMLElement, theme: Theme, tabId: TabId): Term
   const renderer = loadRenderer(term);
 
   // Hidden pane (reader-only) has no size; fitting it would collapse the grid.
-  const refit = () => { if (container.offsetHeight > 0) fit.fit(); };
+  const refit = () => {
+    if (container.offsetHeight <= 0) return;
+    fit.fit();
+    const screen = container.querySelector<HTMLElement>('.xterm-screen');
+    if (screen && term.rows > 0) noteTerminalRows(term.rows, screen.offsetHeight / term.rows);
+  };
   new ResizeObserver(refit).observe(container);
   refit();
 

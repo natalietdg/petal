@@ -1,5 +1,5 @@
 import { byId, el, isIpcError } from './dom';
-import { READER_SPLIT, clampSplit } from '../shared/reader-split';
+import { CLAUDE_SETUP_ROWS, READER_SPLIT, clampSplit, readerShareForRows } from '../shared/reader-split';
 
 const app = byId('app');
 const divider = byId('divider');
@@ -9,6 +9,10 @@ const SAVE_DELAY_MS = 300; // held arrow keys save once
 const SNAP_MINIMISED = 0.95; // a drag released this low folds the terminal away
 let readerFraction: number = READER_SPLIT.initial;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let chosenSplit = false; // she dragged, keyed or reset the divider, or a saved split came back
+let setupRoom = false; // a new user: Claude Code's first-run screens are on screen
+let rowPx = 33; // one terminal row at 16px × 1.5 in Petal's mono font; the terminal reports the real one
+let rowsShown = 0; // the terminal's rows when it last reported
 
 // The reader's fixed bands (dock, header, prompts, reply box); the split never squeezes the reader below them.
 const CHROME = ['sessions-dock', 'reader-head', 'prompt-dock', 'composer'].map(byId);
@@ -21,7 +25,29 @@ function chromeHeight(): number {
 function shownFraction(): number {
   const rows = app.clientHeight - divider.offsetHeight;
   const chromeFloor = rows > 0 ? chromeHeight() / rows : 0;
-  return clampSplit(Math.max(chromeFloor, readerFraction));
+  const wanted = setupRoom && !chosenSplit ? readerShareForRows(CLAUDE_SETUP_ROWS, paneSize(rows)) : readerFraction;
+  return clampSplit(Math.max(chromeFloor, wanted));
+}
+
+// Everything in the pane but its rows: tab strip, padding, and the part-row fit leaves over.
+function paneSize(totalPx: number) {
+  const pane = byId('terminal-pane').offsetHeight;
+  return { totalPx, rowPx, paneExtraPx: rowsShown > 0 ? pane - rowsShown * rowPx : pane - byId('terminal').offsetHeight };
+}
+
+// The terminal's rows and measured row height, so the setup room is counted in real rows.
+export function noteTerminalRows(rows: number, px: number): void {
+  if (!(px > 0) || rows <= 0 || (rows === rowsShown && Math.abs(px - rowPx) < 0.5)) return;
+  rowsShown = rows;
+  rowPx = px;
+  if (setupRoom) applySplit();
+}
+
+// Get started turns this on for a new user and off once sign-in is behind her; a split she chose always wins.
+export function makeRoomForClaudeSetup(on: boolean): void {
+  if (on === setupRoom) return;
+  setupRoom = on;
+  applySplit();
 }
 
 function applySplit(): void {
@@ -37,6 +63,7 @@ function setSplit(fraction: number): void {
 }
 
 function saveSplit(): void {
+  chosenSplit = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => void window.pastel.layout.saveSplit(readerFraction), SAVE_DELAY_MS);
 }
@@ -129,7 +156,9 @@ applySplit();
 
 // This window's saved split and whether the terminal was minimised; a failed read keeps the defaults.
 void window.pastel.layout.getSplit().then((saved) => {
-  if (typeof saved === 'number') setSplit(saved);
+  if (typeof saved !== 'number') return;
+  chosenSplit = true;
+  setSplit(saved);
 });
 // Reads the saved choice again; runs at startup.
 export async function restoreTerminalMinimised(): Promise<void> {

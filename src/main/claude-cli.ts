@@ -28,6 +28,19 @@ function fromLoginShell(): Promise<string | null> {
   });
 }
 
+// The folder of a claude at a known install spot, read synchronously for the pty's env; null when none is there.
+export function installedClaudeDir(): string | null {
+  const found = CANDIDATES.find((file) => fs.existsSync(file));
+  return found ? path.dirname(found) : null;
+}
+
+// PATH with the install folder added last, so a fresh native install (~/.local/bin, not yet on her PATH) still runs `claude`.
+export function pathWithClaudeDir(current: string | undefined, dir: string | null): string {
+  const base = current || '/usr/bin:/bin';
+  if (!dir || base.split(':').includes(dir)) return base;
+  return `${base}:${dir}`;
+}
+
 // Finds `claude` for whoever runs Petal: known install spots first, then their login shell's PATH. Cached; recheck looks again.
 export function claudePath({ recheck = false }: { recheck?: boolean } = {}): Promise<string | null> {
   if (recheck) resolved = null;

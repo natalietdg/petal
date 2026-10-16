@@ -130,8 +130,10 @@ function showMessage(html: string, action: EmptyAction | null = null): void {
 // state: 'none' (no claude in the pty), 'live', or 'ended' (claude exited, replies kept).
 let lastUpdate: ShownUpdate | null = null;
 let claudeMissing = false;
+let claudeSetup = false; // a new user: Claude Code's first-run screens, not replies, are what's next
 let folderAllowed = true; // set at startup; off means no replies can arrive, whatever the state
 const GET_STARTED: EmptyAction = { label: 'Get started', event: 'petal:get-started' };
+const SHOW_TERMINAL: EmptyAction = { label: 'Show the terminal', event: 'petal:show-terminal' };
 const ALLOW_FOLDER: EmptyAction = { label: 'Allow reading your Claude folder', event: 'petal:allow-folder' };
 
 // Theme switch: rebuild so diagrams pick up the new colours.
@@ -161,6 +163,10 @@ export function update(shown: ShownUpdate): void {
     return;
   }
   const [newest, ...rest] = replies;
+  if (!newest && live && claudeSetup) {
+    showMessage('Claude Code is setting up in the terminal below. Pick your options there (arrow keys and Enter).', SHOW_TERMINAL);
+    return;
+  }
   if (!folderAllowed) {
     showMessage('Petal isn’t reading your Claude folder, so replies won’t show here. The terminal below works as usual.', ALLOW_FOLDER);
     return;
@@ -286,6 +292,7 @@ function showReply(replyIds: readonly (string | undefined)[]): void {
 }
 
 export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; rerender(); };
+export const setClaudeSetup = (setup: boolean): void => { if (setup !== claudeSetup) { claudeSetup = setup; rerender(); } };
 export const setFolderAllowed = (allowed: boolean): void => { folderAllowed = allowed; rerender(); };
 
 // A standing line above the replies, for startup reads from main that failed; reply updates leave it alone.

@@ -359,9 +359,49 @@ function menuOption(text: string, focused: boolean): MenuOption {
   };
 }
 
+// Claude Code's first-run pickers have no Enter/Esc footer: a known title, then a ❯ list (2.1.301, theme and login method).
+const FIRST_RUN_TITLES = ['Choose the text style that looks best with your terminal', 'Select login method:'];
+const FIRST_RUN_SCROLL = /^[↓↑] \d+ more$/;
+const FIRST_RUN_NUMBER = /^\d+\.\s+/;
+
+// One first-run row: cursor, ✔ for the current pick, then "label · description". Unnumbered, so the dock steers by arrows.
+function firstRunOption(row: string): MenuOption {
+  const focused = row.startsWith('❯ ');
+  let text = (focused ? row.slice(2) : row).trim();
+  const current = text.startsWith('✔ ');
+  if (current) text = text.slice(2).trim();
+  const [label = '', ...rest] = text.replace(FIRST_RUN_NUMBER, '').split(' · ');
+  return { number: null, label, description: rest.join(' · '), current, focused };
+}
+
+function parseFirstRunMenu(lines: readonly string[]): BuiltinMenu | null {
+  const titleAt = lines.findLastIndex((line) => FIRST_RUN_TITLES.includes(line.trim()));
+  if (titleAt < 0) return null;
+  const cursorAt = lines.findIndex((line, i) => i > titleAt && line.trimStart().startsWith('❯ '));
+  if (cursorAt < 0) return null;
+  let first = cursorAt;
+  while (first > titleAt + 1 && lines[first - 1]?.trim()) first -= 1;
+  let last = cursorAt;
+  while (last < lines.length - 1 && lines[last + 1]?.trim()) last += 1;
+  const options: MenuOption[] = [];
+  let scrolled = false;
+  for (const line of lines.slice(first, last + 1)) {
+    const row = line.trim();
+    if (FIRST_RUN_SCROLL.test(row)) scrolled = true;
+    else options.push(firstRunOption(row));
+  }
+  if (options.length < 2 || options.some((option) => !option.label)) return null;
+  const subtitle = lines.slice(titleAt + 1, first).map((line) => line.trim()).filter(Boolean).join(' ');
+  return { title: (lines[titleAt] ?? '').trim(), subtitle: subtitle.slice(0, MAX_SUBTITLE), options, numbered: false, scrolled };
+}
+
 // A Claude Code menu at the bottom of the visible screen, or null unless every part matches.
 export function parseBuiltinMenu(screen: readonly string[]): BuiltinMenu | null {
   const lines = screen.map((line) => line.trimEnd());
+  return parseFooterMenu(lines) ?? parseFirstRunMenu(lines);
+}
+
+function parseFooterMenu(lines: readonly string[]): BuiltinMenu | null {
   const footerAt = lastFilled(lines);
   const footer = (lines[footerAt] ?? '').trim();
   if (footerAt < 0 || !MENU_FOOTER_ENTER.test(footer) || !MENU_FOOTER_ESC.test(footer)) return null;
