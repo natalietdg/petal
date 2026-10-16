@@ -22,6 +22,7 @@ export type LibraryDoc = { slug: string; title: string; category: string; update
 export interface LibraryRunResult {
   added: number; // new topic notes
   updated: number; // notes that gained facts
+  lessons?: number; // new lessons kept from the same run, when Learn lessons is on
   skipped?: string; // why nothing ran
 }
 

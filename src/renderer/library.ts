@@ -12,6 +12,7 @@ import {
   type BackfillDays, type BackfillPlan, type BackfillState, type LibraryEntry, type LibraryList, type LibrarySort,
 } from '../shared/library';
 import { aliasesFrom, likeness } from '../shared/library-titles';
+import * as lessons from './library-lessons';
 
 const MAX_ANGLE = 72; // degrees above and below 3 o'clock that still show a note
 const ITEM_GAP_PX = 44; // vertical room per note, so horizontal labels never overlap near the poles
@@ -75,7 +76,28 @@ const reading = el('article', 'lib-reading');
 reading.hidden = true;
 reading.tabIndex = -1;
 
-view.append(head, confirmBox, chips, noteLine, stage, reading);
+view.append(head, confirmBox, chips, noteLine, stage, reading, lessons.panel);
+
+// Lessons: a second view in the Library, swapped in for the dial (library-lessons.ts).
+const lessonsButton = el('button', 'lib-add lib-lessons-button', 'Lessons');
+lessonsButton.type = 'button';
+lessonsButton.setAttribute('aria-pressed', 'false');
+lessonsButton.title = 'How to work with you, learned from your sessions';
+tools.append(lessonsButton);
+lessons.setCountListener((n) => { lessonsButton.textContent = n ? `Lessons ${n}` : 'Lessons'; });
+
+function showLessons(show: boolean): void {
+  if (show) { lessons.open(); confirmBox.hidden = true; tidyBox.hidden = true; } else lessons.close();
+  lessonsButton.setAttribute('aria-pressed', String(show));
+  for (const node of [sortGroup, search, pastButton, tidyButton, stage]) node.hidden = show;
+  chips.hidden = show || !(data?.entries.length);
+  noteLine.hidden = show || !noteLine.childElementCount;
+  if (show) { lessonsButton.focus(); return; }
+  refilter(); // notes may have changed meanwhile (load skips the dial while Lessons shows)
+  list.focus();
+}
+lessonsButton.addEventListener('click', () => showLessons(!lessons.isOpen()));
+export const openLessons = (): Promise<void> => open().then(() => showLessons(true));
 
 // ---- State, per window.
 let sort: LibrarySort = 'az';
@@ -812,6 +834,7 @@ pastButton.addEventListener('click', () => { if (confirmBox.hidden) openConfirm(
 view.addEventListener('keydown', (event) => {
   const editing = (event.target as HTMLElement | null)?.closest?.('.lib-manage-edit');
   if (event.key === 'Escape' && editing) { event.stopImmediatePropagation(); (editing as HTMLElement).hidden = true; return; }
+  if (event.key === 'Escape' && lessons.isOpen()) { event.stopImmediatePropagation(); showLessons(false); return; }
   if (event.key === 'Escape' && !tidyBox.hidden && reading.hidden) { event.stopImmediatePropagation(); tidyBox.hidden = true; return; }
   if (event.key === 'Escape' && !confirmBox.hidden && reading.hidden) { event.stopImmediatePropagation(); closeConfirm(); return; }
   if (event.key !== 'Escape' || reading.hidden) return;
@@ -833,7 +856,7 @@ export async function load(): Promise<void> {
   const result = await window.pastel.library.list();
   data = isIpcError(result) ? { allowed: folderAllowed, autoBuild: false, running: false, entries: [] } : result;
   if (!isIpcError(result)) folderAllowed = result.allowed;
-  if (!reading.hidden) return;
+  if (!reading.hidden || lessons.isOpen()) return;
   refilter();
 }
 
@@ -844,8 +867,10 @@ export async function open(): Promise<void> {
   tidyBox.hidden = true;
   search.value = text;
   closeDoc();
+  if (lessons.isOpen()) showLessons(false);
   drawAll();
   await load();
+  void lessons.load();
   list.focus();
 }
 
@@ -857,7 +882,7 @@ export function setFolderAllowed(allowed: boolean): void {
   if (isOpen()) void load();
 }
 
-export const state = () => ({ sort, category, text, selected, shown: shown.map((e) => e.title), backfill: { ...backfill }, confirm: confirmBox.hidden ? '' : confirmText(),
+export const state = () => ({ lessons: lessons.state(), sort, category, text, selected, shown: shown.map((e) => e.title), backfill: { ...backfill }, confirm: confirmBox.hidden ? '' : confirmText(),
   tidy: tidyBox.hidden ? null : [...tidyBox.querySelectorAll('.lib-tidy-names')].map((n) => n.textContent ?? ''), toast: toast.hidden ? '' : toast.textContent ?? '' });
 
 window.pastel.library.onChanged(() => { if (isOpen()) void load(); });

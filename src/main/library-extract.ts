@@ -1,12 +1,18 @@
 // Builds the Library: after a session concludes, its claude exits or its tab closes, one headless Claude run reads
 // the part of its log not read before and returns new domain knowledge, which library-store.ts merges into notes.
-// Off unless she turns it on (config library.autoBuild); behind the Claude folder gate; one run at a time; never blocks the UI.
+// The same run also returns lessons (how to work) when Learn lessons is on: one call for both, lessons-store.ts keeps them.
+// Off unless she turns one on (library.autoBuild, lessons.learn); behind the Claude folder gate; one run at a time; never blocks the UI.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import * as configStore from './config-store';
+import { backgroundModel } from './config-store';
 import { allowedClaudeHome } from './claude-folder';
 import { claudePath, runClaude } from './claude-cli';
+import { MAX_REPLY_CHARS, replyJson } from './claude-reply';
+import { LESSON_SHAPE, LESSONS_INSTRUCTIONS, lessonsFrom, lessonsPromptFor, parseLessons } from './lessons-extract';
+import { addLessons } from './lessons-store';
+import type { LessonInput } from '../shared/lessons';
 import { readJsonOrSetAside, writeJsonAtomic } from './atomic-file';
 import { commandText, promptText } from './prompts';
 import { assistantText } from './replies';
@@ -23,7 +29,7 @@ export const CHUNK_BYTES = 1024 * 1024; // of raw log per Claude call; tool outp
 export const DIGEST_CHARS = 30_000; // of prompts and replies sent per call
 const MESSAGE_CHARS = 3000;
 export const MAX_CHUNKS_PER_RUN = 3;
-export const MAX_REPLY_CHARS = 64 * 1024;
+export { MAX_REPLY_CHARS };
 const MAX_TOPICS = 8;
 const MAX_FACTS = 12;
 const MAX_OFFSETS = 500;
@@ -52,6 +58,7 @@ export interface Chunk {
   digest: string; // "User: …" and "Claude: …" lines
   next: number; // byte offset to start from next time
   atEnd: boolean;
+  cwd: string | null; // the session's folder, from its first line that names one
 }
 
 // The log from `offset`: at most CHUNK_BYTES, whole lines only, and stops early once the digest is full.
@@ -68,33 +75,58 @@ export function readChunk(file: string, offset: number, { chunkBytes = CHUNK_BYT
   const parts: string[] = [];
   let used = 0;
   let at = 0;
+  let cwd: string | null = null;
   while (at < usable) {
     const end = buffer.indexOf(0x0a, at);
     const lineEnd = end === -1 || end >= usable ? usable : end + 1;
-    const line = buffer.subarray(at, lineEnd).toString('utf8').trim();
-    const text = lineText(line);
+    const { text, cwd: lineCwd } = lineText(buffer.subarray(at, lineEnd).toString('utf8').trim());
     if (text && used + text.length > digestChars && parts.length) break; // the rest waits for the next chunk
     if (text) { parts.push(text); used += text.length + 1; }
+    cwd ??= lineCwd;
     at = lineEnd;
   }
-  return { digest: parts.join('\n'), next: start + at, atEnd: start + at >= size };
+  return { digest: parts.join('\n'), next: start + at, atEnd: start + at >= size, cwd };
 }
 
-function lineText(line: string): string {
-  if (!line) return '';
+function lineText(line: string): { text: string; cwd: string | null } {
+  if (!line) return { text: '', cwd: null };
   try {
     const entry = parseEntry(line);
-    if (entry.isSidechain) return ''; // subagents' own talk
+    const cwd = typeof entry.cwd === 'string' && path.isAbsolute(entry.cwd) ? entry.cwd : null;
+    if (entry.isSidechain) return { text: '', cwd: null }; // subagents' own talk
     const prompt = promptText(entry) || commandText(entry);
-    if (prompt) return `User: ${squash(prompt, MESSAGE_CHARS)}`;
+    if (prompt) return { text: `User: ${squash(prompt, MESSAGE_CHARS)}`, cwd };
     const reply = entry.type === 'assistant' ? assistantText(entry) : '';
-    return reply ? `Claude: ${squash(reply, MESSAGE_CHARS)}` : '';
+    return { text: reply ? `Claude: ${squash(reply, MESSAGE_CHARS)}` : '', cwd };
   } catch {
-    return '';
+    return { text: '', cwd: null };
   }
 }
 
+const TOPIC_SHAPE = '{"topic": "<topic>", "category": "<category>", "facts": ["<fact>"], "evidence": "<evidence>"}';
+
 export function promptFor(digest: string, categories: readonly string[], known = ''): string {
+  return `${libraryInstructions(categories, known)}
+Answer with JSON only, no prose:
+{"topics": [${TOPIC_SHAPE}]}
+
+Session:
+${digest}`;
+}
+
+// One call for both: the Library's instructions, then the lessons', and one answer holding both lists.
+export function combinedPromptFor(digest: string, categories: readonly string[], known = ''): string {
+  return `${libraryInstructions(categories, known)}
+${LESSONS_INSTRUCTIONS}
+
+Answer with JSON only, no prose, with both lists (either may be empty):
+{"topics": [${TOPIC_SHAPE}], "lessons": [${LESSON_SHAPE}]}
+
+Session:
+${digest}`;
+}
+
+function libraryInstructions(categories: readonly string[], known: string): string {
   const offered = [...new Set([...categories, ...STARTER_CATEGORIES])].join(', ');
   const existing = known
     ? `\nThe library already has these notes, as title (category): first fact. When a topic is one of them, use that exact title,
@@ -112,33 +144,29 @@ From the session below, list only genuinely new, durable domain facts that were 
 and invent a new short one only when none fits: ${offered}.
 Each fact is one self-contained sentence, readable without the session. Evidence is a short pointer to where it came from.
 If there is nothing, answer {"topics": []}.
-${existing}
-Answer with JSON only, no prose:
-{"topics": [{"topic": "<topic>", "category": "<category>", "facts": ["<fact>"], "evidence": "<evidence>"}]}
-
-Session:
-${digest}`;
+${existing}`;
 }
 
 const textOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-// The CLI's JSON envelope, then the {...} or [...] inside its result, wrapped in prose or a fence or not.
+// A Library-only answer: {"topics": [...]} or a bare array.
 export function parseTopics(stdout: string): TopicInput[] {
-  if (stdout.length > MAX_REPLY_CHARS) throw new Error('Reply too large');
-  let text = stdout;
-  try {
-    const envelope = JSON.parse(stdout) as { result?: unknown; is_error?: unknown; topics?: unknown };
-    if (envelope?.is_error === true) throw new Error(`Claude error: ${squash(envelope.result, 200)}`);
-    if (typeof envelope?.result === 'string') text = envelope.result;
-  } catch (error) {
-    if ((error as Error).message.startsWith('Claude error')) throw error;
-  }
-  const open = text.search(/[[{]/);
-  const close = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
-  if (open === -1 || close < open) throw new Error('No JSON in reply');
-  const json = JSON.parse(text.slice(open, close + 1)) as unknown;
+  const json = replyJson(stdout);
   const list = Array.isArray(json) ? json : (json as { topics?: unknown })?.topics;
   if (!Array.isArray(list)) throw new Error('No topics list in reply');
+  return topicsFrom(list);
+}
+
+// A combined answer: both lists; one missing reads as empty, both missing is a broken answer.
+export function parseCombined(stdout: string): { topics: TopicInput[]; lessons: LessonInput[] } {
+  const json = replyJson(stdout) as { topics?: unknown; lessons?: unknown } | null;
+  const topics = json && typeof json === 'object' && !Array.isArray(json) ? json.topics : undefined;
+  const lessons = json && typeof json === 'object' && !Array.isArray(json) ? json.lessons : undefined;
+  if (!Array.isArray(topics) && !Array.isArray(lessons)) throw new Error('No topics or lessons list in reply');
+  return { topics: Array.isArray(topics) ? topicsFrom(topics) : [], lessons: lessonsFrom(lessons) };
+}
+
+function topicsFrom(list: unknown[]): TopicInput[] {
   return list.flatMap((raw): TopicInput[] => {
     if (!raw || typeof raw !== 'object') return [];
     const item = raw as Record<string, unknown>;
@@ -159,12 +187,18 @@ let active = 0;
 const reading = new Set<string>(); // sessions queued or being read now
 const changeListeners = new Set<() => void>();
 const sessionListeners = new Set<(sessionId: string) => void>();
+const lessonListeners = new Set<() => void>();
 
 export const isRunning = (): boolean => active > 0 || queued.size > 0;
 export const isReadingSession = (sessionId: string): boolean => reading.has(sessionId);
 export function onChange(listener: () => void): () => void {
   changeListeners.add(listener);
   return () => { changeListeners.delete(listener); };
+}
+// A run kept new lessons, so an open Lessons view relists.
+export function onLessons(listener: () => void): () => void {
+  lessonListeners.add(listener);
+  return () => { lessonListeners.delete(listener); };
 }
 // A session started or finished being read, so its conclusion's This session line can redraw.
 export function onSessionChange(listener: (sessionId: string) => void): () => void {
@@ -174,11 +208,16 @@ export function onSessionChange(listener: (sessionId: string) => void): () => vo
 const sessionChanged = (sessionId: string): void => { for (const listener of sessionListeners) listener(sessionId); };
 
 // In a snapshot run only the harness's stub answers; a real claude never runs there.
+// Runs on the Model for background work (Customize › Organizer), read per run so a change applies to the next one.
 async function extractor(): Promise<Extractor | null> {
   if (isSnapshotRun()) return libraryFixture.extract;
   if (!(await claudePath())) return null;
-  const { model } = configStore.load().organizer;
-  return (prompt) => runClaude(prompt, { model });
+  return (prompt) => runClaude(prompt, { model: backgroundModel(configStore.load()) });
+}
+
+// What one run asks for: the Library when it is on or she clicked, lessons when Learn lessons is on.
+export function runWants(force: boolean, config = configStore.load()): { library: boolean; lessons: boolean } {
+  return { library: force || config.library.autoBuild, lessons: config.lessons.learn };
 }
 
 // Only a log under her Claude folder, outside snapshot runs; nothing else is ever read here.
@@ -191,7 +230,8 @@ function readableLog(transcript: string): boolean {
 async function runSession(target: SessionTarget, force: boolean): Promise<LibraryRunResult> {
   const result: LibraryRunResult = { added: 0, updated: 0 };
   if (!allowedClaudeHome()) return { ...result, skipped: 'Petal isn’t reading your Claude folder' };
-  if (!force && !configStore.load().library.autoBuild) return { ...result, skipped: 'Build my Library is off' };
+  const wants = runWants(force);
+  if (!wants.library && !wants.lessons) return { ...result, skipped: 'Build my Library is off' };
   if (!readableLog(target.transcript)) return { ...result, skipped: 'not a Claude session log' };
   const run = await extractor();
   if (!run) {
@@ -199,25 +239,37 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
     return { ...result, skipped: isSnapshotRun() ? 'snapshot run' : 'Claude Code isn’t installed' };
   }
   let offset = loadOffsets()[target.sessionId]?.offset ?? 0;
+  let cwd: string | null = null; // a later chunk may not repeat the folder
   const notes = { added: [] as NoteRef[], updated: [] as NoteRef[] };
   for (let i = 0; i < MAX_CHUNKS_PER_RUN; i += 1) {
     const chunk = readChunk(target.transcript, offset);
     if (chunk.next === offset && !chunk.digest) break; // nothing new
     if (chunk.digest) {
-      const categories = listEntries().map((e) => e.category);
-      const topics = parseTopics(await run(promptFor(chunk.digest, categories, knownTopics())))
-        .map((t) => ({ ...t, category: canonicalCategory(t.category, categories) }));
-      const merged = mergeTopics(topics, { sessionId: target.sessionId, date: new Date().toISOString().slice(0, 10) });
-      result.added += merged.added;
-      result.updated += merged.updated;
-      for (const { slug, title, added } of merged.notes) (added ? notes.added : notes.updated).push({ slug, title });
+      const categories = wants.library ? listEntries().map((e) => e.category) : [];
+      const answer = await askFor(run, wants, chunk.digest, categories);
+      if (wants.library) {
+        const topics = answer.topics.map((t) => ({ ...t, category: canonicalCategory(t.category, categories) }));
+        const merged = mergeTopics(topics, { sessionId: target.sessionId, date: new Date().toISOString().slice(0, 10) });
+        result.added += merged.added;
+        result.updated += merged.updated;
+        for (const { slug, title, added } of merged.notes) (added ? notes.added : notes.updated).push({ slug, title });
+      }
+      if (answer.lessons.length) result.lessons = (result.lessons ?? 0) + addLessons(answer.lessons, { sessionId: target.sessionId, cwd: chunk.cwd ?? cwd }).length;
     }
+    cwd ??= chunk.cwd;
     offset = chunk.next;
     saveOffset(target.sessionId, offset); // after the merge, so a failed call is retried next time
     if (chunk.atEnd) break;
   }
-  librarySessions.record(target.sessionId, notes);
+  if (wants.library) librarySessions.record(target.sessionId, notes); // a lessons-only run says nothing about the Library
   return result;
+}
+
+// One call per chunk, shaped by what the run wants.
+async function askFor(run: Extractor, wants: { library: boolean; lessons: boolean }, digest: string, categories: readonly string[]): Promise<{ topics: TopicInput[]; lessons: LessonInput[] }> {
+  if (wants.library && wants.lessons) return parseCombined(await run(combinedPromptFor(digest, categories, knownTopics())));
+  if (wants.lessons) return { topics: [], lessons: parseLessons(await run(lessonsPromptFor(digest))) };
+  return { topics: parseTopics(await run(promptFor(digest, categories, knownTopics()))), lessons: [] };
 }
 
 const notes = (n: number): string => `${n} note${n === 1 ? '' : 's'}`;
@@ -247,6 +299,7 @@ export function queueSession(target: SessionTarget, { force = false }: { force?:
         for (const listener of changeListeners) listener();
         recordLibraryRun(target.sessionId, result);
       }
+      if (result.lessons) for (const listener of lessonListeners) listener();
       return result;
     } catch (error) {
       console.error(`[petal] library skipped ${target.sessionId}:`, String((error as Error).message ?? error).split('\n')[0]);

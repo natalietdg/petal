@@ -3,6 +3,7 @@ import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResu
 import type { FlowTarget, TabId, TermSize } from './shared/types';
 import type { PromptAnswer } from './shared/prompt-answer';
 import type { BackfillDays, BackfillState } from './shared/library';
+import type { LessonTarget } from './shared/lessons';
 
 // Typed against the contract in shared/ipc.ts; ipcRenderer itself is untyped.
 const invoke = <C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>> => ipcRenderer.invoke(channel, ...args);
@@ -147,6 +148,12 @@ const api = {
     merge: (from: string, into: string) => invoke('library:merge', { from, into }),
     duplicates: () => invoke('library:duplicates'),
     keepBoth: (a: string, b: string) => invoke('library:keep-both', { a, b }),
+    lessons: () => invoke('lessons:list'),
+    dismissLesson: (id: string) => invoke('lessons:dismiss', { id }),
+    mergeLessons: (keep: string, fold: string) => invoke('lessons:merge', { keep, fold }),
+    previewLesson: (id: string, target: LessonTarget) => invoke('lessons:preview', { id, target }),
+    addLesson: (token: string) => invoke('lessons:add', { token }),
+    onLessonsChanged: (callback: () => void) => subscribe('lessons:changed', callback),
   },
   conclusion: {
     info: (sessionId: string) => invoke('conclusion:info', { sessionId }),

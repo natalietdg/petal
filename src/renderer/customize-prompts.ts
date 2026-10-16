@@ -43,15 +43,34 @@ function lastPassText(organizer: OrganizerStatus | null): string {
   return `Last pass ${timeOf(last.at, true)} · ${last.titled} titled · ${last.failed} failed · ${last.due} due`;
 }
 
-// The Library's switch: one headless Claude run per finished session, on the model above.
+const MODEL_LABELS: Record<string, string> = { haiku: 'Haiku', sonnet: 'Sonnet', organizer: 'Same as organizer' };
+const calls = (n: number): string => `Background work used ${n} call${n === 1 ? '' : 's'} today`;
+
+// The session-end switches (Library, lessons) and the model their runs use; both run in one headless call when both are on.
 function libraryCard(): HTMLDivElement {
-  const autoBuild = el('input');
-  Object.assign(autoBuild, { type: 'checkbox', checked: page.state.config.library.autoBuild });
-  autoBuild.addEventListener('change', () => save({ library: { autoBuild: autoBuild.checked } }));
+  const checkbox = (checked: boolean, onChange: (on: boolean) => unknown): HTMLInputElement => {
+    const box = el('input');
+    Object.assign(box, { type: 'checkbox', checked });
+    box.addEventListener('change', () => onChange(box.checked));
+    return box;
+  };
+  const config = page.state.config;
+  const model = el('select', 'cz-input');
+  model.id = 'cz-background-model';
+  for (const id of page.state.backgroundModels) {
+    const label = id === 'organizer' ? `${MODEL_LABELS[id]} (${config.organizer.model})` : MODEL_LABELS[id] ?? id;
+    model.append(Object.assign(el('option', null, label), { value: id, selected: id === config.background.model }));
+  }
+  model.addEventListener('change', () => save({ background: { model: model.value } }));
   const fields = el('div', 'cz-fields');
-  fields.append(field('Build my Library from sessions · uses your Claude plan', autoBuild,
-    'When a session ends, Claude reads what was new in it and adds domain knowledge (how systems, rules and terms work) to the Library. Off unless you turn it on.'));
-  return card('Library', fields);
+  fields.append(
+    field('Build my Library from sessions · uses your Claude plan', checkbox(config.library.autoBuild, (on) => save({ library: { autoBuild: on } })),
+      'When a session ends, Claude reads what was new in it and adds domain knowledge (how systems, rules and terms work) to the Library. Off unless you turn it on.'),
+    field('Learn lessons from sessions · uses your Claude plan', checkbox(config.lessons.learn, (on) => save({ lessons: { learn: on } })),
+      'When a session ends, Claude notes how to work with you: your corrections, its mistakes, approaches you approved. They wait in Library › Lessons; nothing goes into a CLAUDE.md until you add it.'),
+    field('Model for background work', model, 'Library and lessons runs. Haiku is fastest and cheapest.'),
+  );
+  return card('Library and lessons', fields, note(calls(page.state.backgroundCalls), 'cz-status cz-background-calls'));
 }
 
 export function renderOrganizer(): HTMLElement[] {
