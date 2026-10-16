@@ -54,7 +54,7 @@ Use names like "At a glance", "The numbers". Anything taken on trust gets its ow
 `**Conclusion:**` one or two sentences on what was settled.
 `**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
 `**Impact:**` what it means for the reader or the project, and anything still open.
-Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
+Petal pins this as a banner at the top of the session. A later "conclude" replaces it. Petal adds the session's Library and test results under the conclusion itself, so don't list them.
 
 **Open threads** (when something stayed unsettled). A `## Open threads` section just before Sources: two or three questions the story didn't settle, each with the check that would settle it, as `- Question? *Check: what would settle it.*` Petal turns each into a card the reader can click to ask it next.
 

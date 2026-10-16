@@ -11,6 +11,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { load as loadConfig } from '../main/config-store';
+import { bashTestTurn, historyLineCheck, LINE, lineReadable, sessionLineCheck, setUpSessionLine, type LineState, type SessionLineFixture } from './snapshot-conclusion-info';
 
 const CONCLUDED = 'c0c0c0c0-0000-4000-8000-0000000000c1';
 const PLAIN = 'c0c0c0c0-0000-4000-8000-0000000000c2';
@@ -56,7 +57,7 @@ function addHistory(outDir: string): () => void {
     return { sessionId, file, cwd: path.join(dir, 'repo'), title, firstPrompt: 'build the banner', lastAt: Date.now() + 60_000 - ageMs, messages: lines.length, messagesExact: true };
   };
   historyFixture.records = [
-    record(CONCLUDED, 'Conclusion banner', [...turn('build the banner', 'Built.'), ...FILLER(), ...turn('conclude', block(FIRST)), ...turn('one more fix', 'Fixed.'), ...turn('conclude: again', block(SECOND))], 0),
+    record(CONCLUDED, 'Conclusion banner', [...turn('build the banner', 'Built.'), ...bashTestTurn(), ...FILLER(), ...turn('conclude', block(FIRST)), ...turn('one more fix', 'Fixed.'), ...turn('conclude: again', block(SECOND))], 0),
     record(PLAIN, 'Refactor later', [...turn('conclude the refactor later', `**Conclusion:** ${FIRST.conclusion}`)], 1000),
   ];
   historyFixture.live = [];
@@ -131,6 +132,9 @@ const PIN = (scroller: string, pin: string, full: string, content: string) => `(
     fullLast: Boolean(f && shown(f)) && f.parentElement === document.querySelector(${JSON.stringify(content)}) && visibleAfter(f).length === 0,
     fullLabels: f ? [...f.querySelectorAll('.conclusion-label')].filter(shown).map((e) => e.textContent) : [],
     fullInView: Boolean(fr) && fr.top >= slot.bottom - 1 && fr.bottom <= sr.bottom + 1, // wholly visible, none of it under the pin
+    // Taller than the room under the pin (the This session line adds a row): it fills that room instead, its top or its end showing.
+    fullFills: Boolean(fr) && fr.height > sr.bottom - slot.bottom + 1 && fr.top < sr.bottom && fr.bottom > slot.bottom,
+    fullTopUnderPin: Boolean(fr) && fr.top >= slot.bottom - 1 && fr.top < sr.bottom,
   };
 })()`;
 const READER_PIN = () => PIN('#reader', '#reader-conclusion-pin', '#reader-conclusion', '#replies-view');
@@ -166,6 +170,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
   const readable = (b: { contrast?: { text: number | null; label: number | null; when: number } } | null) =>
     Boolean(b?.contrast && (b.contrast.text ?? 0) >= 4.5 && (b.contrast.label ?? 0) >= 3 && b.contrast.when >= 3);
   const removeHistory = addHistory(outDir);
+  let line: SessionLineFixture | null = null;
 
   try {
     await js('PastelTerm.welcome.close()');
@@ -180,6 +185,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
 
     // Her "conclude" lands in the log; the feed reads Claude's answer and the banner appears.
     check(concludeCloses.length === 0, `a conclusion already in a log never closes its session: ${JSON.stringify(concludeCloses)}`);
+    line = setUpSessionLine(kit, fixture, CONCLUDED); // runs, a Loop line and the stub Library, for the This session line
     setFixtureStatus(feed, 'busy'); // this tab's claude works on the answer, so the close is its own
     appendTurns(fixture, turn('conclude', block(FIRST)));
     const first = await waitFor(async () => { const b = await reader(); return b.shown && b.texts?.[0] === FIRST.conclusion ? b : null; }, 10000);
@@ -192,6 +198,13 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     const opened = await pinned();
     check(opened.shown && opened.oneLine && opened.gist === FIRST.conclusion && opened.title === FIRST.title && /^Concluded · /.test(opened.when) && opened.topGap >= 0 && opened.topGap < 40,
       `the reader opens with the one-line summary at the top: ${JSON.stringify(opened)}`);
+    await sessionLineCheck(kit, line);
+    await scrollReader('top');
+    await wait(200);
+    await capture('conclusion-line-banner');
+    await scrollReader('bottom');
+    await wait(200);
+    await capture('conclusion-line-full');
 
     // Every look and theme: shown, three rows, readable, nothing sideways.
     for (const [look] of READING_CHOICES) {
@@ -201,8 +214,9 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
         await wait(250);
         const b = await reader();
         const sideways = await js(SIDEWAYS);
-        check(b.shown && fullRows(b) && readable(b) && b.overflow <= 1 && Math.abs(b.width - b.column) <= 1 && sideways.length === 0,
-          `${look} ${themeId}: ${JSON.stringify({ labels: b.labels, contrast: b.contrast, width: b.width, column: b.column, overflow: b.overflow, sideways })}`);
+        const lines = [await js(LINE('#reader-conclusion')), await js(LINE('#reader-conclusion-pin'))] as LineState[];
+        check(b.shown && fullRows(b) && readable(b) && b.overflow <= 1 && Math.abs(b.width - b.column) <= 1 && sideways.length === 0 && lines.every(lineReadable),
+          `${look} ${themeId}: ${JSON.stringify({ labels: b.labels, contrast: b.contrast, line: lines.map((l) => l.contrast), width: b.width, column: b.column, overflow: b.overflow, sideways })}`);
         if ((look === 'newspaper' || look === 'print') && themeId === 'paleSky') {
           await toTop();
           await wait(200);
@@ -222,7 +236,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
       await scrollReader('bottom');
       await wait(150);
       const bottom = await pinned();
-      check(bottom.shown && bottom.oneLine && bottom.atBottom && bottom.scrollTop > 0 && Math.abs(bottom.pinTop) <= 1 && bottom.fullLast && bottom.fullInView && fullRows({ labels: bottom.fullLabels }),
+      check(bottom.shown && bottom.oneLine && bottom.atBottom && bottom.scrollTop > 0 && Math.abs(bottom.pinTop) <= 1 && bottom.fullLast && (bottom.fullInView || bottom.fullFills) && fullRows({ labels: bottom.fullLabels }),
         `${look}: summary one line and pinned at the top with the reader scrolled to the bottom; full banner is the last thing in the reader, wholly in view: ${JSON.stringify(bottom)}`);
       await scrollReader('top');
       await wait(150);
@@ -230,7 +244,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
       await js("document.querySelector('#reader-conclusion-pin .conclusion-summary').click()");
       await wait(150);
       const jumped = await pinned();
-      check(jumped.fullInView && Math.abs(jumped.pinTop) <= 1, `${look}: clicking the summary brings the full banner into view, below the pin: ${JSON.stringify(jumped)}`);
+      check((jumped.fullInView || (jumped.fullFills && jumped.fullTopUnderPin)) && Math.abs(jumped.pinTop) <= 1, `${look}: clicking the summary brings the full banner into view, below the pin: ${JSON.stringify(jumped)}`);
       await capture(`conclusion-${look}-pinned`);
     }
     appendTurns(fixture, turn('one more fix', 'Fixed the spacing.'));
@@ -262,6 +276,8 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
       `800px reader: ${JSON.stringify({ width: narrow.width, column: narrow.column, overflow: narrow.overflow, sideways: narrowSideways })}`);
     const narrowPin = await pinned();
     check(narrowPin.shown && narrowPin.oneLine && (await js(SIDEWAYS)).length === 0, `800px summary stays one line: ${JSON.stringify(narrowPin)}`);
+    const narrowLines = [await js(LINE('#reader-conclusion')), await js(LINE('#reader-conclusion-pin'))] as LineState[];
+    check(narrowLines.every((l) => l.shown && (l.overflow ?? 99) <= 1) && (narrowLines[1].height ?? 99) <= 26, `800px: the This session line fits, the pinned one stays one line: ${JSON.stringify(narrowLines)}`);
     await toTop();
     await capture('conclusion-reader-800');
 
@@ -283,6 +299,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     const previewPin = await waitFor(async () => { const p = await js(PREVIEW_PIN()); return p.shown && p.atBottom ? p : null; }, 5000);
     check(previewPin && previewPin.oneLine && previewPin.gist === SECOND.conclusion && Math.abs(previewPin.pinTop) <= 1 && previewPin.fullLast,
       `History preview: summary pinned at the top when scrolled to the newest turn, full banner last: ${JSON.stringify(previewPin)}`);
+    await historyLineCheck(kit);
     const headAbove = await js("(() => { const p = document.getElementById('history-preview'); p.scrollTop = 0; const h = p.querySelector('.history-preview-head').getBoundingClientRect(); const b = p.querySelector('.history-conclusion-pin').getBoundingClientRect(); return h.bottom <= b.top + 1; })()");
     check(headAbove, 'History preview summary starts under the session header');
     await js("document.querySelector('#history-preview .conclusion-summary').click()");
@@ -319,6 +336,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
     await bannersAndFocusCheck(kit, win, fixture);
   } finally {
     await js('PastelTerm.history.close()');
+    line?.cleanUp();
     removeHistory();
     applyTheme('paleSky', { persist: false });
     await setLook('newspaper');

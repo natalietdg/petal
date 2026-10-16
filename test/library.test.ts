@@ -70,7 +70,7 @@ describe('mergeTopics', () => {
   it('a new topic becomes a note with frontmatter, facts and evidence', async () => {
     const { mergeTopics, readDoc, listEntries } = await store();
     const result = mergeTopics([topic('Payout cutoff', 'payments', ['Payouts after 3pm settle next day.'], 'ops runbook')], source, { dir, now });
-    expect(result).toEqual({ added: 1, updated: 0, slugs: ['payout-cutoff'] });
+    expect(result).toEqual({ added: 1, updated: 0, slugs: ['payout-cutoff'], notes: [{ slug: 'payout-cutoff', title: 'Payout cutoff', added: true }] });
     const text = fs.readFileSync(path.join(dir, 'payout-cutoff.md'), 'utf8');
     expect(text).toContain('title: Payout cutoff\ncategory: Payments\nupdated: 2026-10-16T08:00:00.000Z\nsources:\n  - aaaaaaaa-0000-4000-8000-000000000001 2026-10-16\n---');
     expect(text).toContain('- Payouts after 3pm settle next day.');

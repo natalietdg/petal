@@ -31,7 +31,7 @@ When the reader has to do several things in order, add a `## Steps` section as a
 `**Conclusion:**` one or two sentences on what was settled.
 `**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
 `**Impact:**` what it means for the reader or the project, and anything still open.
-Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
+Petal pins this as a banner at the top of the session. A later "conclude" replaces it. Petal adds the session's Library and test results under the conclusion itself, so don't list them.
 
 ## The principles (why these rules exist)
 

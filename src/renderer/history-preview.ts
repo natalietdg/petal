@@ -15,6 +15,7 @@ import { limitNote } from './sessions-panel';
 import { askThread, liveTab, liveTail, liveThread, paintStatus, replyBox, turnCard, type Turn } from './history-reply-view';
 import { OPEN_THREAD_EVENT } from './open-threads';
 import { paintConclusion } from './conclusion-banner';
+import { infoFor, onInfo } from './conclusion-info';
 
 // A title that landed while the preview is up: rename it in place instead of reloading the replies.
 export function repaintTitle(): void {
@@ -76,7 +77,7 @@ export async function renderPreview(): Promise<void> {
 
   const pin = el('div', 'history-conclusion-pin');
   const conclusion = el('div', 'history-conclusion');
-  paintConclusion(pin, conclusion, session.conclusion);
+  paintSessionConclusion(session, pin, conclusion);
   const body = el('div', 'history-preview-body');
   preview.replaceChildren(head, pin, body, conclusion);
   preview.dataset.sessionId = session.sessionId; // which session the heading names, for repaintTitle
@@ -91,8 +92,15 @@ export function repaintConclusion(): void {
   const session = selectedSession();
   const pin = preview.querySelector<HTMLElement>('.history-conclusion-pin');
   const slot = preview.querySelector<HTMLElement>('.history-conclusion');
-  if (session && pin && slot) paintConclusion(pin, slot, session.conclusion);
+  if (session && pin && slot) paintSessionConclusion(session, pin, slot);
 }
+
+function paintSessionConclusion(session: Session, pin: HTMLElement, slot: HTMLElement): void {
+  const { conclusion } = session;
+  paintConclusion(pin, slot, conclusion, conclusion ? infoFor(session.sessionId, conclusion.at ?? '') : null);
+}
+// Its This session line landed or changed: repaint the banners in place.
+onInfo((sessionId) => { if (preview.dataset.sessionId === sessionId) repaintConclusion(); });
 
 // The session's newest replies: the live tab's when one follows it, else the log on disk.
 async function fillStrip(session: Session, strip: HTMLElement): Promise<void> {

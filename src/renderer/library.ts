@@ -6,6 +6,7 @@ import * as overlays from './overlays';
 import * as markdown from './markdown';
 import * as customize from './customize';
 import { byId, el, isIpcError } from './dom';
+import { OPEN_NOTE_EVENT } from './conclusion-banner';
 import {
   BACKFILL_RANGES, IDLE_BACKFILL, LIBRARY_SORTS, categoriesOf, categoryHue, filterEntries, letterOf, rangeText, sortEntries,
   type BackfillDays, type BackfillPlan, type BackfillState, type LibraryEntry, type LibraryList, type LibrarySort,
@@ -863,3 +864,8 @@ window.pastel.library.onChanged(() => { if (isOpen()) void load(); });
 window.pastel.library.onBackfill(setBackfill);
 void window.pastel.library.backfillState().then((result) => { if (!isIpcError(result)) setBackfill(result); });
 byId('library-button').addEventListener('click', toggle);
+// A note named in a conclusion's This session line; no slug opens the Library's list.
+window.addEventListener(OPEN_NOTE_EVENT, (event) => {
+  const slug = (event as CustomEvent<string | null>).detail;
+  void open().then(() => (slug && isOpen() ? openDoc(slug) : undefined));
+});

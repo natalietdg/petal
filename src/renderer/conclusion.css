@@ -63,8 +63,71 @@
 .conclusion-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .conclusion-text { margin: 0; overflow-wrap: anywhere; }
 
+/* Petal's This session line: Library notes, test runs, test loop. Wraps in the full banner; one clipped line in the pin. */
+.conclusion-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2em 0.55em;
+  margin: 0.75em 0 0;
+  padding-top: 0.6em;
+  border-top: 1px solid color-mix(in srgb, var(--done-ink) 28%, transparent);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--reader-fg);
+}
+.conclusion-session-label {
+  flex-shrink: 0;
+  color: var(--done-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.conclusion-session-part { min-width: 0; overflow-wrap: anywhere; }
+.conclusion-session-dot { color: var(--done-ink); }
+.conclusion-session-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.conclusion-session-link:hover { text-decoration-color: currentColor; }
+.conclusion-session-link:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; border-radius: 2px; }
+
+/* In the pin it hangs under the summary as one strip of the same banner. */
+.conclusion-summary:has(+ .conclusion-session-pinned) { border-bottom-right-radius: 0; }
+.conclusion-session-pinned {
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 1.1em 0.5em;
+  border-top: 0;
+  border-left: 3px solid var(--done-ink);
+  border-radius: 0 0 10px 0;
+  background: var(--done-wash);
+  font-family: var(--ui-font);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conclusion-session-pinned .conclusion-session-label { margin-right: 0.7em; }
+.conclusion-session-pinned .conclusion-session-dot { margin: 0 0.45em; }
+/* The pin grows by the line; a reply scrolled to its top still lands under it. */
+#reader-area:not(.banners-collapsed) #reader:has(#reader-conclusion-pin:not([hidden]) .conclusion-session-pinned),
+.history-preview:has(.history-conclusion-pin:not([hidden]) .conclusion-session-pinned) { scroll-padding-top: 92px; }
+
 /* Looks: Lifestyle rounds it; Print draws it in ink and mono like its kicker. */
 [data-reading="lifestyle"] .conclusion-banner { border-left: 0; border-radius: 16px; }
+[data-reading="lifestyle"] .conclusion-summary:has(+ .conclusion-session-pinned) { border-radius: 16px 16px 0 0; }
+[data-reading="lifestyle"] .conclusion-session-pinned { border-left: 0; border-radius: 0 0 16px 16px; }
+[data-reading="editorial"] .conclusion-session-pinned { border-radius: 0; border-left-width: 4px; }
 [data-reading="editorial"] .conclusion-banner { border-radius: 0; border-left-width: 4px; }
 [data-reading="print"] .conclusion-banner {
   border: 1px solid var(--print-ink, var(--reader-fg));
@@ -72,6 +135,10 @@
   border-radius: 0;
   background: var(--print-tint, var(--done-wash));
 }
+[data-reading="print"] .conclusion-session-pinned { border: 1px solid var(--print-ink, var(--reader-fg)); border-width: 0 0 1px; border-radius: 0; background: var(--print-tint, var(--done-wash)); }
+[data-reading="print"] .conclusion-summary:has(+ .conclusion-session-pinned) { border-bottom-width: 0; }
+[data-reading="print"] .conclusion-session { border-top-color: var(--print-ink, var(--reader-fg)); }
+[data-reading="print"] :is(.conclusion-session-label, .conclusion-session-dot) { font-family: var(--print-mono, var(--mono-font)); font-weight: 400; color: var(--print-ink, var(--reader-fg)); }
 [data-reading="print"] :is(.conclusion-when, .conclusion-label) { font-family: var(--print-mono, var(--mono-font)); font-weight: 400; color: var(--print-ink, var(--reader-fg)); }
 
 /* History's list: the mark beside the title, the conclusion's gist under it. */

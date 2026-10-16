@@ -142,6 +142,10 @@ const api = {
     duplicates: () => invoke('library:duplicates'),
     keepBoth: (a: string, b: string) => invoke('library:keep-both', { a, b }),
   },
+  conclusion: {
+    info: (sessionId: string) => invoke('conclusion:info', { sessionId }),
+    onInfoChanged: (callback: (change: EventChannels['conclusion:info-changed']) => void) => subscribe('conclusion:info-changed', callback),
+  },
   testing: {
     detect: (tabId: TabId) => invoke('testing:detect', { tabId }),
     history: (tabId: TabId) => invoke('testing:history', { tabId }),

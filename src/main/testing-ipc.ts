@@ -94,14 +94,25 @@ function claudePipelineState(root: string, saved: PipelineConfig | null): Claude
 // Claude's runs in every open session on this project, added to its history once each.
 // The store is loaded after the logs are read, so a run saved meanwhile is never lost.
 async function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): Promise<void> {
-  if (!claudeFolderAllowed()) return;
-  const calls: ClaudeCall[] = [];
+  const logs: SessionLog[] = [];
   for (const { feed } of sessions.values()) {
     const s = feed.session;
     const cwd = (isSnapshotRun() && testingFixture.project) || s?.cwd;
-    if (!s?.transcript || !cwd || repoRoot(cwd) !== root) continue;
-    calls.push(...(await scanLog(s.transcript, s.sessionId)).calls);
+    if (s?.transcript && cwd && repoRoot(cwd) === root) logs.push({ transcript: s.transcript, sessionId: s.sessionId });
   }
+  await mergeLogRuns(root, logs, stages);
+}
+
+export interface SessionLog { transcript: string; sessionId: string }
+
+// The pipeline's stages as the Testing tab would show them: saved, else the proposal.
+export const stagesFor = (root: string): StageConfig[] => store.load(root).pipeline?.stages ?? proposalFor(root);
+
+// Claude's runs in these logs, added to the project's history once each; also used for a concluded session's This session line.
+export async function mergeLogRuns(root: string, logs: readonly SessionLog[], stages: StageConfig[] = stagesFor(root)): Promise<void> {
+  if (!claudeFolderAllowed()) return;
+  const calls: ClaudeCall[] = [];
+  for (const log of logs) calls.push(...(await scanLog(log.transcript, log.sessionId)).calls);
   const data = store.load(root);
   const known = new Set(data.runs.map((r) => r.id));
   const scripts = scriptsOf(root);
