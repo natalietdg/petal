@@ -1,13 +1,11 @@
-// Open threads: in every theme (High tech included) and every reading style, the cards render visible, unclipped and
+// Open threads: in every theme and every reading style, the cards render visible, unclipped and
 // readable, the Checked line and Assumed sidebar get their classes, a card click goes out through the reply box's
 // send path (her draft left alone), every width and focus mode keep the cards whole, and a reply without them is unchanged.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import * as configStore from '../main/config-store';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { claudeStarts, pasteWrites } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
-import { HIGH_TECH_PALETTES } from '../shared/high-tech';
 
 const MIN_RATIO = 4.5;
 const WIDTHS = [800, 990, 1280, 1600];
@@ -132,11 +130,6 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
   };
-  const setHighTech = async (palette: string | null) => {
-    configStore.save({ highTech: palette ? { on: true, palette: palette as 'cyan' } : { on: false } });
-    await waitFor(async () => (await js('document.documentElement.dataset.hightech ?? null')) === palette, 5000);
-    await wait(300);
-  };
   const scrollToHead = () => js(`(() => { const r = document.getElementById('reader'); r.scrollTop += document.querySelector('#latest .story-head').getBoundingClientRect().top - r.getBoundingClientRect().top - 16; })()`);
   // A feed redraw can land during the capture's wait: retake it with our reply back in place.
   const captureShown = async (name: string) => {
@@ -158,7 +151,6 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     return p;
   };
 
-  const saved = configStore.load().highTech;
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   await js("PastelTerm.reader.setView('replies')");
@@ -174,12 +166,9 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(parsed?.questions[0] === 'Does the History preview send to the right session?' && parsed.checks[0] === 'Check open History and click a card.' && parsed.checks[2] === 'Check resize to 800px.',
       `questions and checks split: ${JSON.stringify({ q: parsed?.questions, c: parsed?.checks })}`);
 
-    // Every theme by every reading style, High tech palettes included.
-    const themes = ['paleSky', 'blush', 'nightPastel'];
-    for (const theme of [...themes, ...HIGH_TECH_PALETTES]) {
-      const hud = (HIGH_TECH_PALETTES as readonly string[]).includes(theme);
-      if (hud) await setHighTech(theme);
-      else { await setHighTech(null); applyTheme(theme, { persist: false }); }
+    // Every theme by every reading style.
+    for (const theme of ['paleSky', 'blush', 'nightPastel']) {
+      applyTheme(theme, { persist: false });
       for (const [look] of READING_CHOICES) {
         await setReading(look);
         await show(THREADS_REPLY);
@@ -189,7 +178,6 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
         for (const shot of shots) await captureShown(shot);
       }
     }
-    await setHighTech(null);
     applyTheme('paleSky', { persist: false });
 
     // The width sweep in every reading style; the magazine rails take the Assumed box when they open.
@@ -205,18 +193,14 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     }
     resizeOffscreen(win, 990, 1600);
 
-    // Focus mode, plain and High tech.
+    // Focus mode.
     await setReading('newspaper');
-    for (const palette of [null, 'cyan']) {
-      await setHighTech(palette);
-      await js('PastelTerm.focusMode.set(true)');
-      await wait(400);
-      await show(THREADS_REPLY);
-      await assertLook(`focus${palette ? ` high tech ${palette}` : ''}`);
-      await js('PastelTerm.focusMode.set(false)');
-      await wait(300);
-    }
-    await setHighTech(null);
+    await js('PastelTerm.focusMode.set(true)');
+    await wait(400);
+    await show(THREADS_REPLY);
+    await assertLook('focus');
+    await js('PastelTerm.focusMode.set(false)');
+    await wait(300);
 
     // A click sends through the reply box's path: pasted to a live Claude, else Claude starts with it.
     await show(THREADS_REPLY);
@@ -248,7 +232,6 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(plain && plain.added === 0 && plain.plainItem === 'A plain item. Check: it stays plain.' && plain.sidebars === 1 && plain.refs && plain.checkedOut,
       `reply without the section unchanged: ${JSON.stringify(plain)}`);
   } finally {
-    configStore.save({ highTech: saved });
     if (!terminalWasMin) await js('PastelTerm.layout.toggleTerminalMinimised()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }

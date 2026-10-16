@@ -25,7 +25,6 @@ import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReady
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
 import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions } from './tabs';
 import { applyCat, applyReading, applyScene, applyTheme, currentTheme, onLookChanged, registerLookIpc, settings, themes } from './look';
-import highTechThemes from '../high-tech-themes.json';
 import type { EventArgs, EventChannel } from '../shared/ipc';
 
 const WINDOW_WIDTH = 1280;
@@ -45,19 +44,6 @@ configStore.onChange((config) => {
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'claude-folder:changed', now);
 });
 
-// High tech mode: every window restyles and the View menu's tick follows, whether Customize or the menu changed it.
-let highTech = configStore.load().highTech;
-configStore.onChange((config) => {
-  if (JSON.stringify(config.highTech) === JSON.stringify(highTech)) return;
-  highTech = config.highTech;
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.setBackgroundColor(windowBackground());
-    send(win.webContents, 'high-tech:changed', highTech);
-  }
-  refreshMenu();
-});
-const windowBackground = (): string => (highTech.on ? highTechThemes[highTech.palette] : currentTheme()).reader.background;
-
 const focusedContents = () => BrowserWindow.getFocusedWindow()?.webContents;
 
 function createWindow(): BrowserWindow {
@@ -66,7 +52,7 @@ function createWindow(): BrowserWindow {
     width: Math.min(WINDOW_WIDTH, width),
     height: Math.min(WINDOW_HEIGHT, height),
     show: false,
-    backgroundColor: windowBackground(),
+    backgroundColor: currentTheme().reader.background,
     title: 'Petal',
     ...(isSnapshotRun() && offscreenWindowOptions()),
     webPreferences: {
@@ -148,8 +134,6 @@ function refreshMenu(): void {
     onToggleHistory: () => sendToFocused('history:toggle'),
     onToggleBoard: () => sendToFocused('board:toggle'),
     onToggleFocus: () => sendToFocused('focus:toggle'),
-    highTechOn: highTech.on,
-    onToggleHighTech: () => configStore.save({ highTech: { on: !highTech.on } }),
     onToggleHeaders: () => sendToFocused('headers:toggle'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,

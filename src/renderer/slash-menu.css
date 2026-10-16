@@ -89,10 +89,3 @@
   cursor: pointer;
 }
 .slash-allow:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
-
-/* High tech: square corners, the HUD line and monospace labels, like the rest of its chrome. */
-[data-hightech] .slash-button { border-radius: var(--hud-radius); border-color: var(--hud-line-dim); }
-[data-hightech] .slash-button[aria-expanded="true"] { border-color: var(--hud-line); box-shadow: var(--hud-glow); }
-[data-hightech] .slash-menu { border-radius: var(--hud-radius); border-color: var(--hud-line-dim); box-shadow: var(--hud-glow); }
-[data-hightech] .slash-option, [data-hightech] .slash-allow { border-radius: var(--hud-radius); }
-[data-hightech] .slash-group-label, [data-hightech] .slash-source { font-family: var(--hud-font); }

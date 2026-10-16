@@ -37,8 +37,6 @@ export interface MenuOptions {
   onToggleHistory: () => void;
   onToggleBoard: () => void;
   onToggleFocus: () => void;
-  highTechOn: boolean;
-  onToggleHighTech: () => void;
   onToggleHeaders: () => void;
   onOpenSettings: () => void;
   onOpenWelcome: () => void;
@@ -50,7 +48,7 @@ export interface MenuOptions {
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, highTechOn, onToggleHighTech, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -125,7 +123,6 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
         { label: 'History', accelerator: ACCEL.history, click: onToggleHistory },
         { label: 'Sessions Board', accelerator: ACCEL.board, click: onToggleBoard },
         { label: 'Focus on Reply', accelerator: ACCEL.focus, click: onToggleFocus },
-        { label: 'High Tech Mode', type: 'checkbox', checked: highTechOn, click: onToggleHighTech },
         { type: 'separator' },
         ...readingItems,
       ],
