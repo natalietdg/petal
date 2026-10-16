@@ -11,7 +11,7 @@ import { readJsonOrSetAside, writeJsonAtomic } from './atomic-file';
 import { commandText, promptText } from './prompts';
 import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
-import { canonicalCategory, cleanFact, listEntries, mergeTopics, squash, STARTER_CATEGORIES, type TopicInput } from './library-store';
+import { canonicalCategory, cleanFact, knownTopics, listEntries, mergeTopics, squash, STARTER_CATEGORIES, type TopicInput } from './library-store';
 import { counters, isSnapshotRun, libraryFixture } from './snapshot-mode';
 import type { LibraryRunResult } from '../shared/library';
 
@@ -90,8 +90,14 @@ function lineText(line: string): string {
   }
 }
 
-export function promptFor(digest: string, categories: readonly string[]): string {
+export function promptFor(digest: string, categories: readonly string[], known = ''): string {
   const offered = [...new Set([...categories, ...STARTER_CATEGORIES])].join(', ');
+  const existing = known
+    ? `\nThe library already has these notes, as title (category): first fact. When a topic is one of them, use that exact title,
+even when the session words it differently or abbreviates it (SI and Settlement Instruction are the same topic):
+${known}
+`
+    : '';
   return `You keep a library of DOMAIN KNOWLEDGE learned from work sessions with Claude Code.
 Domain knowledge is a durable fact about the subject matter: how a system, business process, API, data model or field works;
 what a term means; a rule or constraint of the domain. It is NOT task status, progress, plans, the user's preferences or
@@ -102,7 +108,7 @@ From the session below, list only genuinely new, durable domain facts that were 
 and invent a new short one only when none fits: ${offered}.
 Each fact is one self-contained sentence, readable without the session. Evidence is a short pointer to where it came from.
 If there is nothing, answer {"topics": []}.
-
+${existing}
 Answer with JSON only, no prose:
 {"topics": [{"topic": "<topic>", "category": "<category>", "facts": ["<fact>"], "evidence": "<evidence>"}]}
 
@@ -185,7 +191,7 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
     if (chunk.next === offset && !chunk.digest) break; // nothing new
     if (chunk.digest) {
       const categories = listEntries().map((e) => e.category);
-      const topics = parseTopics(await run(promptFor(chunk.digest, categories)))
+      const topics = parseTopics(await run(promptFor(chunk.digest, categories, knownTopics())))
         .map((t) => ({ ...t, category: canonicalCategory(t.category, categories) }));
       const merged = mergeTopics(topics, { sessionId: target.sessionId, date: new Date().toISOString().slice(0, 10) });
       result.added += merged.added;
@@ -198,7 +204,7 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
   return result;
 }
 
-// Queues a session; a second call while it waits shares the first. force: the Library's "Add from this session".
+// Queues a session; a second call while it waits shares the first. force: an explicit click (Add to Library, Read past sessions).
 export function queueSession(target: SessionTarget, { force = false }: { force?: boolean } = {}): Promise<LibraryRunResult> {
   const waiting = queued.get(target.sessionId);
   if (waiting) return waiting;

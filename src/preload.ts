@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels } from './shared/ipc';
 import type { FlowTarget, TabId, TermSize } from './shared/types';
 import type { PromptAnswer } from './shared/prompt-answer';
+import type { BackfillDays, BackfillState } from './shared/library';
 
 // Typed against the contract in shared/ipc.ts; ipcRenderer itself is untyped.
 const invoke = <C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>> => ipcRenderer.invoke(channel, ...args);
@@ -125,6 +126,18 @@ const api = {
     read: (slug: string) => invoke('library:read', { slug }),
     addSession: (tabId: TabId) => invoke('library:add-session', { tabId }),
     onChanged: (callback: () => void) => subscribe('library:changed', callback),
+    backfillPlan: (days: BackfillDays) => invoke('library:backfill-plan', { days }),
+    backfillStart: (days: BackfillDays) => invoke('library:backfill-start', { days }),
+    backfillStop: () => invoke('library:backfill-stop'),
+    backfillState: () => invoke('library:backfill-state'),
+    onBackfill: (callback: (state: BackfillState) => void) => subscribe('library:backfill', callback),
+    rename: (slug: string, title: string) => invoke('library:rename', { slug, title }),
+    recategorize: (slug: string, category: string) => invoke('library:recategorize', { slug, category }),
+    remove: (slug: string) => invoke('library:delete', { slug }),
+    restore: (trashId: string) => invoke('library:restore', { trashId }),
+    merge: (from: string, into: string) => invoke('library:merge', { from, into }),
+    duplicates: () => invoke('library:duplicates'),
+    keepBoth: (a: string, b: string) => invoke('library:keep-both', { a, b }),
   },
   testing: {
     detect: (tabId: TabId) => invoke('testing:detect', { tabId }),

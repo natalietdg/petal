@@ -23,7 +23,8 @@ import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
-import type { LibraryDoc, LibraryList, LibraryRunResult } from './library';
+import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
+import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
 
@@ -191,6 +192,19 @@ export interface InvokeChannels {
   'library:list': { args: []; result: Guarded<LibraryList> };
   'library:read': { args: [request: { slug: string }]; result: Guarded<LibraryDoc> };
   'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
+  // Reading past sessions: count first, then run in the background until done or stopped.
+  'library:backfill-plan': { args: [request: { days: BackfillDays }]; result: Guarded<BackfillPlan | { skipped: string }> };
+  'library:backfill-start': { args: [request: { days: BackfillDays }]; result: Guarded<BackfillState | { skipped: string }> };
+  'library:backfill-stop': { args: []; result: Guarded<BackfillState> };
+  'library:backfill-state': { args: []; result: Guarded<BackfillState> };
+  // Her edits to notes; the folded or deleted note goes to the Library's .trash.
+  'library:rename': { args: [request: { slug: string; title: string }]; result: Guarded<LibraryEditResult> };
+  'library:recategorize': { args: [request: { slug: string; category: string }]; result: Guarded<LibraryEditResult> };
+  'library:delete': { args: [request: { slug: string }]; result: Guarded<LibraryEditResult> };
+  'library:restore': { args: [request: { trashId: string }]; result: Guarded<LibraryEditResult> };
+  'library:merge': { args: [request: { from: string; into: string }]; result: Guarded<LibraryEditResult> };
+  'library:duplicates': { args: []; result: Guarded<DuplicatePair[]> };
+  'library:keep-both': { args: [request: { a: string; b: string }]; result: Guarded<{ ok: true } | { error: string }> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
@@ -288,6 +302,7 @@ export interface EventChannels {
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
   'library:changed': void; // a run added or updated notes
+  'library:backfill': BackfillState; // reading past sessions moved on
   'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished
   'update:ready': { version: string };
   'update:note': UpdateNote;
