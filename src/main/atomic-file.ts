@@ -1,10 +1,63 @@
 // Writes go to a temp file renamed over the target: a reader never sees half a file.
+// A symlinked path (dotfiles, stow) is written at the file it points to, so the link itself stays a link.
 import fs from 'node:fs';
 import path from 'node:path';
 
+// within: the folder the write must land in, after following links; a write outside it is refused.
+export interface WriteGuard {
+  within?: string;
+}
+
+const MAX_LINK_HOPS = 32;
+
+// The path through every link in the chain; a dangling link still names where its file would be.
+function followLinks(file: string): string {
+  let target = file;
+  for (let hop = 0; hop <= MAX_LINK_HOPS; hop += 1) {
+    let link: string;
+    try {
+      link = fs.readlinkSync(target);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EINVAL' || code === 'ENOENT') return target; // not a link, or nothing there yet
+      throw error;
+    }
+    target = path.resolve(path.dirname(target), link);
+  }
+  throw new Error(`Petal didn’t write ${file}: it is a loop of symlinks.`);
+}
+
+// The real path of a file that may not exist yet: its nearest existing folder resolved, the rest appended.
+function realPathOf(file: string): string {
+  const rest: string[] = [];
+  for (let dir = file; ; dir = path.dirname(dir)) {
+    try {
+      return path.join(fs.realpathSync(dir), ...rest.reverse());
+    } catch {
+      if (path.dirname(dir) === dir) return file;
+      rest.push(path.basename(dir));
+    }
+  }
+}
+
+const isInside = (child: string, root: string): boolean => {
+  const relative = path.relative(root, child);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+// Where a write to `file` lands: the end of its symlink chain, checked against `within` when given.
+export function writeTarget(file: string, { within }: WriteGuard = {}): string {
+  const target = followLinks(file);
+  if (within && !isInside(realPathOf(target), realPathOf(within))) {
+    throw new Error(`Petal didn’t write ${file}: it leads to ${realPathOf(target)}, outside ${within}.`);
+  }
+  return target;
+}
+
 export function writeFileAtomic(file: string, contents: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
+  const target = writeTarget(file);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${process.pid}.tmp`;
   const fd = fs.openSync(tmp, 'w');
   try {
     fs.writeFileSync(fd, contents);
@@ -12,7 +65,7 @@ export function writeFileAtomic(file: string, contents: string): void {
   } finally {
     fs.closeSync(fd);
   }
-  fs.renameSync(tmp, file);
+  fs.renameSync(tmp, target);
 }
 
 // a.json -> a.broken-<timestamp>.json, beside it.
@@ -49,8 +102,10 @@ export const writeJsonAtomic = (file: string, data: unknown, indent?: number): v
   writeFileAtomic(file, JSON.stringify(data, null, indent));
 
 // For a file that isn't Petal's: fsync before the rename, keep `mode`, and leave no temp file if a step fails.
-export function writeFileDurable(file: string, contents: string, mode?: number): void {
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+// A file in someone's repo passes `within: repo`, so a link in a cloned repo can't aim the write elsewhere.
+export function writeFileDurable(file: string, contents: string, mode?: number, guard: WriteGuard = {}): void {
+  const target = writeTarget(file, guard);
+  const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
   let fd: number | null = null;
   try {
     fd = fs.openSync(tmp, 'wx', mode ?? 0o666);
@@ -59,7 +114,7 @@ export function writeFileDurable(file: string, contents: string, mode?: number):
     fs.fsyncSync(fd);
     fs.closeSync(fd);
     fd = null;
-    fs.renameSync(tmp, file);
+    fs.renameSync(tmp, target);
   } catch (error) {
     if (fd !== null) try { fs.closeSync(fd); } catch { /* the first error is the one to report */ }
     fs.rmSync(tmp, { force: true });

@@ -8,7 +8,7 @@
 // Every write is atomic; a file Petal didn't generate, or a JSON file that doesn't parse, is never replaced.
 import fs from 'node:fs';
 import path from 'node:path';
-import { writeFileDurable } from './atomic-file';
+import { writeFileDurable, type WriteGuard } from './atomic-file';
 import { defaultFactory, isGenerated, renderSkill, validateFactory, type Factory } from '../shared/factory';
 
 export type FactoryScope = 'global' | 'project';
@@ -91,11 +91,11 @@ export function loadFactoryState({ claudeDir, repo }: FactoryPaths): FactoryStat
 }
 
 // Replaces only a file Petal generated (or creates it); anything else is hers and stays.
-function writeGenerated(file: string, text: string, foreignMessage: string): void {
+function writeGenerated(file: string, text: string, foreignMessage: string, guard: WriteGuard = {}): void {
   const state = generatedState(file);
   if (state === 'foreign') throw new Error(foreignMessage);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  writeFileDurable(file, text);
+  writeFileDurable(file, text, undefined, guard);
 }
 
 // A JSON file that is there but doesn't parse is hers to fix; saving over it would lose it.
@@ -123,9 +123,9 @@ function saveGlobal(claudeDir: string, factory: Factory): void {
 }
 
 // Keeps a folder Petal writes in a repo out of git; a .gitignore she put there stays as it is.
-export function ensureSelfIgnore(dir: string): void {
+export function ensureSelfIgnore(dir: string, repo: string): void {
   const file = path.join(dir, '.gitignore');
-  if (!fs.existsSync(file)) writeFileDurable(file, SELF_IGNORE);
+  if (!fs.existsSync(file)) writeFileDurable(file, SELF_IGNORE, undefined, { within: repo });
 }
 
 function removeOwnIgnore(dir: string): void {
@@ -152,14 +152,15 @@ function saveProject(paths: FactoryPaths & { repo: string }, factory: Factory): 
   if (paths.claudeDir && generatedState(projectSkill) === 'foreign') throw new Error(foreignSkill(projectSkill));
   refuseBrokenJson(projectJson(paths.repo));
   const name = path.basename(paths.repo);
+  const inRepo = { within: paths.repo };
   fs.mkdirSync(path.dirname(md), { recursive: true });
-  ensureSelfIgnore(path.dirname(md));
-  writeFileDurable(projectJson(paths.repo), `${JSON.stringify(factory, null, 2)}\n`);
-  writeGenerated(md, renderSkill(factory, 'project', name), foreignProjectMd(md));
+  ensureSelfIgnore(path.dirname(md), paths.repo);
+  writeFileDurable(projectJson(paths.repo), `${JSON.stringify(factory, null, 2)}\n`, undefined, inRepo);
+  writeGenerated(md, renderSkill(factory, 'project', name), foreignProjectMd(md), inRepo);
   if (!paths.claudeDir) return;
   fs.mkdirSync(path.dirname(projectSkill), { recursive: true });
-  ensureSelfIgnore(path.dirname(projectSkill));
-  writeGenerated(projectSkill, renderSkill(factory, 'project-skill', name), foreignSkill(projectSkill));
+  ensureSelfIgnore(path.dirname(projectSkill), paths.repo);
+  writeGenerated(projectSkill, renderSkill(factory, 'project-skill', name), foreignSkill(projectSkill), inRepo);
 }
 
 export function saveFactory(paths: FactoryPaths, scope: FactoryScope, raw: unknown): FactoryState {

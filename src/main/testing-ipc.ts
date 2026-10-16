@@ -229,8 +229,8 @@ const criteriaFile = (root: string): string => path.join(root, ...CRITERIA_PATH.
 export function prepareLoop(root: string): void {
   const file = criteriaFile(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  ensureSelfIgnore(path.dirname(file));
-  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON);
+  ensureSelfIgnore(path.dirname(file), root);
+  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON, undefined, { within: root });
 }
 
 // Read only, the first CRITERIA_CAP bytes; null when there is no file yet.
