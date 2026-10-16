@@ -5,11 +5,18 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { MIN_CONTRAST, toXterm } from './theme';
 import { noteTerminalRows } from './layout';
 import { pathsFromUriList, quotePaths } from '../shared/quote-path';
+import { TERMINAL_FONT } from '../shared/text-size';
 import type { TabId, Theme } from '../shared/types';
 
 export const MONO_FONT = 'Atkinson Hyperlegible Mono';
 
 export type RendererKind = 'webgl' | 'dom';
+
+let fontSize = TERMINAL_FONT.initial; // new tabs open at the saved size (renderer/text-size.ts)
+
+// ⌘= ⌘+ ⌘- ⌘0 belong to View › Bigger / Smaller Text / Actual Size, never to the shell.
+const TEXT_SIZE_KEYS = new Set(['=', '+', '-', '0']);
+const isTextSizeKey = (event: KeyboardEvent): boolean => event.metaKey && !event.ctrlKey && !event.altKey && TEXT_SIZE_KEYS.has(event.key);
 
 export interface TermView {
   term: Terminal;
@@ -76,7 +83,7 @@ function wireFiles(container: HTMLElement, term: Terminal, tabId: TabId): void {
 export function create(container: HTMLElement, theme: Theme, tabId: TabId): TermView {
   const term = new Terminal({
     fontFamily: `"${MONO_FONT}", monospace`,
-    fontSize: 16,
+    fontSize,
     lineHeight: 1.5,
     letterSpacing: 1,
     fontWeight: 400,
@@ -103,9 +110,22 @@ export function create(container: HTMLElement, theme: Theme, tabId: TabId): Term
   new ResizeObserver(refit).observe(container);
   refit();
 
+  term.attachCustomKeyEventHandler((event) => !isTextSizeKey(event));
   term.onResize(({ cols, rows }) => window.pastel.resize(tabId, { cols, rows }));
   term.onData((data) => window.pastel.write(tabId, data));
   wireFiles(container, term, tabId);
 
   return { term, renderer, refit };
+}
+
+export const setNewTabFontSize = (px: number): void => { fontSize = px; };
+
+// The new size refits the grid, so the pty resizes and Claude Code redraws; a view at the bottom stays there.
+export function setFontSize({ term, refit }: Pick<TermView, 'term' | 'refit'>, px: number): void {
+  if (term.options.fontSize === px) return;
+  const buffer = term.buffer.active;
+  const atBottom = buffer.viewportY >= buffer.baseY;
+  term.options.fontSize = px;
+  refit(); // a hidden tab refits when it is activated
+  if (atBottom) term.scrollToBottom();
 }

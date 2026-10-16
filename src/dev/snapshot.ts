@@ -59,6 +59,7 @@ import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
+import { textSizeCheck } from './snapshot-text-size';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
 import { firstRunCheck } from './snapshot-first-run';
@@ -719,6 +720,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'customize-styles' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await customizeStylesCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'text-size' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await textSizeCheck(kit, win, { activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

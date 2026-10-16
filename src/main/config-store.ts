@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, update versions seen. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, update versions seen, text sizes. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -9,6 +9,7 @@ import { MAX_FAVORITES } from '../shared/favorites';
 import { SESSION_ID } from './session-id';
 import { cleanDone, type StepId } from '../shared/get-started';
 import { isFolderChoice, type FolderChoice } from '../shared/claude-folder';
+import { READER_PERCENT, TERMINAL_FONT, clampSize, type SizeRange } from '../shared/text-size';
 
 // Organizer schedule bounds; Customize shows the same ranges.
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -47,6 +48,8 @@ export interface Config {
   library: { autoBuild: boolean };
   // Versions already announced: the update notification, and the "Updated to" note after a restart. '' before the first.
   updates: { lastNotifiedVersion: string; lastSeenVersion: string };
+  // View › Bigger / Smaller Text: the terminal font in px and the reader's text as a percent of today's size.
+  text: { terminalFontSize: number; readerPercent: number };
 }
 
 type Section = keyof Config;
@@ -83,6 +86,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   claudeFolder: { choice: 'unasked' as FolderChoice },
   library: { autoBuild: false },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
+  text: { terminalFontSize: TERMINAL_FONT.initial, readerPercent: READER_PERCENT.initial },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -117,6 +121,9 @@ const favoritesOr = (value: unknown, fallback: string[]): string[] => {
 };
 // A version like 1.0.7 (or a prerelease of one), or '' for none; anything else keeps the saved one.
 const versionOr = (value: unknown, fallback: string): string => (typeof value === 'string' && /^(\d+\.\d+\.\d+[\w.+-]*)?$/.test(value) ? value : fallback);
+// A number snapped onto the range's steps and clamped; anything else keeps the saved one.
+const sizeOr = (value: unknown, range: SizeRange, fallback: number): number =>
+  (typeof value === 'number' && Number.isFinite(value) ? clampSize(range, value) : fallback);
 const boolOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 // '' clears it; anything but a real calendar date keeps the saved one.
 const birthdateOr = (value: unknown, fallback: string): string => {
@@ -146,6 +153,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const cf = raw.claudeFolder ?? {};
   const lb = raw.library ?? {};
   const up = raw.updates ?? {};
+  const tx = raw.text ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -179,6 +187,10 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     updates: {
       lastNotifiedVersion: versionOr(up.lastNotifiedVersion, b.updates.lastNotifiedVersion),
       lastSeenVersion: versionOr(up.lastSeenVersion, b.updates.lastSeenVersion),
+    },
+    text: {
+      terminalFontSize: sizeOr(tx.terminalFontSize, TERMINAL_FONT, b.text.terminalFontSize),
+      readerPercent: sizeOr(tx.readerPercent, READER_PERCENT, b.text.readerPercent),
     },
   };
 }

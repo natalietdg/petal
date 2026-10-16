@@ -9,6 +9,8 @@
   --reading-measure: 750px; /* 68ch of 20px Newsreader */
   --reading-pad-start: 56px;
   --reading-pad-end: 56px;
+  /* Reader text size (renderer/text-size.ts): 1 is today's size. Every reading surface's px sizes multiply by it; the dock and chrome don't. */
+  --reader-scale: 1;
 }
 
 .reader-column {
@@ -17,7 +19,7 @@
   padding: 24px var(--reading-pad-end) 120px var(--reading-pad-start);
   font-family: var(--body-font);
   font-optical-sizing: auto;
-  font-size: 20px;
+  font-size: calc(20px * var(--reader-scale));
   line-height: 1.6;
   font-variant-numeric: oldstyle-nums proportional-nums;
   color: var(--reader-fg);
@@ -83,7 +85,7 @@
   padding-bottom: 8px;
   border-bottom: 3px double var(--rule);
   font-family: var(--ui-font);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--reader-scale));
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -289,7 +291,7 @@ h2.foldable:hover .fold-toggle { color: var(--reader-fg); }
   line-height: 1.55;
   margin: 0.2em 0 1.25em;
 }
-.prose pre code { background: none; padding: 0; font-size: 14px; }
+.prose pre code { background: none; padding: 0; font-size: calc(14px * var(--reader-scale)); }
 /* Wrap long lines (audit logs, traces) rather than hide them behind a sideways scroll. */
 .prose pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -477,7 +479,7 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 /* Earlier turns sit above the newest reply, a touch smaller, each under a hairline. */
 #older { margin-bottom: 2.4em; }
 .older-turn { border-top: 1px solid var(--rule); padding: 1.1em 0 0.4em; font-size: 0.92em; }
-.older-time { margin: 0 0 0.6em; font: 600 11px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.older-time { margin: 0 0 0.6em; font: 600 calc(11px * var(--reader-scale)) var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 /* In earlier turns, headlines and heroes stay modest so the newest reply stands out. */
 #reader #older .headline { font-size: 1.3em; line-height: 1.25; }
 #reader #older .story-head { background: none; padding: 0; margin: 0 0 0.8em; border: 0; text-align: left; }

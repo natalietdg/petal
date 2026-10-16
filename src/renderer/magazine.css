@@ -38,7 +38,7 @@
   border-bottom: 0;
   font-variant-caps: all-small-caps;
   letter-spacing: 0.18em;
-  font-size: 14px;
+  font-size: calc(14px * var(--reader-scale));
 }
 [data-reading="editorial"] .status::before,
 [data-reading="editorial"] .status::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
@@ -68,7 +68,7 @@
   display: block;
   margin-top: 1em;
   font-family: var(--ui-font);
-  font-size: 11px;
+  font-size: calc(11px * var(--reader-scale));
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -102,7 +102,7 @@
   margin-bottom: 0.5em;
   font-family: var(--ui-font);
   font-style: normal;
-  font-size: 11px;
+  font-size: calc(11px * var(--reader-scale));
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -145,7 +145,7 @@
 [data-reading="lifestyle"] .reader-column {
   --display-font: "Bricolage Grotesque Variable", var(--ui-font);
   --body-font: "Atkinson Hyperlegible Next", system-ui, sans-serif;
-  font-size: 18.5px;
+  font-size: calc(18.5px * var(--reader-scale));
   line-height: 1.62;
   font-variant-numeric: normal;
 }

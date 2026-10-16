@@ -46,6 +46,15 @@ configStore.onChange((config) => {
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'claude-folder:changed', now);
 });
 
+// Text sizes saved in one window (keys, menu or Customize) apply in every window.
+let textSizes = JSON.stringify(configStore.load().text);
+configStore.onChange((config) => {
+  const now = JSON.stringify(config.text);
+  if (now === textSizes) return;
+  textSizes = now;
+  for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'text-size:changed', config.text);
+});
+
 const focusedContents = () => BrowserWindow.getFocusedWindow()?.webContents;
 
 function createWindow(): BrowserWindow {
@@ -137,6 +146,7 @@ function refreshMenu(): void {
     onToggleBoard: () => sendToFocused('board:toggle'),
     onToggleFocus: () => sendToFocused('focus:toggle'),
     onToggleHeaders: () => sendToFocused('headers:toggle'),
+    onTextSize: (step) => sendToFocused('text-size:step', step),
     onStopClaude: () => sendToFocused('claude:stop'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,

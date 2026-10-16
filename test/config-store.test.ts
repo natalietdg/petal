@@ -18,12 +18,13 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has fifteen sections with the documented defaults', () => {
+  it('has sixteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates', 'text']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
+    expect(d.text).toEqual({ terminalFontSize: 16, readerPercent: 100 }); // today's look
     expect(d.reader).toEqual({ bannersCollapsed: false, headersMinimised: false });
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
@@ -155,7 +156,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates', 'text']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -370,6 +371,40 @@ describe('config-store history favorites', () => {
     expect(kept).toHaveLength(MAX_FAVORITES);
     expect(kept[0]).toBe(many[3]);
     expect(kept.at(-1)).toBe(many.at(-1));
+  });
+});
+
+describe('config-store text sizes', () => {
+  it('clamps the terminal font to 10-28 px and rounds to whole px', () => {
+    expect(config.save({ text: { terminalFontSize: 22 } }).text.terminalFontSize).toBe(22);
+    expect(config.save({ text: { terminalFontSize: 40 } }).text.terminalFontSize).toBe(28);
+    expect(config.save({ text: { terminalFontSize: 4 } }).text.terminalFontSize).toBe(10);
+    expect(config.save({ text: { terminalFontSize: 17.6 } }).text.terminalFontSize).toBe(18);
+  });
+
+  it('snaps the reader text to 10% steps inside 80-160%', () => {
+    expect(config.save({ text: { readerPercent: 140 } }).text.readerPercent).toBe(140);
+    expect(config.save({ text: { readerPercent: 133 } }).text.readerPercent).toBe(130);
+    expect(config.save({ text: { readerPercent: 300 } }).text.readerPercent).toBe(160);
+    expect(config.save({ text: { readerPercent: 50 } }).text.readerPercent).toBe(80);
+  });
+
+  it('a non-number keeps the saved size, and one size saves without touching the other', () => {
+    config.save({ text: { terminalFontSize: 20, readerPercent: 120 } });
+    for (const junk of ['22', null, true, NaN, Infinity, {}]) {
+      expect(config.save({ text: { terminalFontSize: junk, readerPercent: junk } }).text).toEqual({ terminalFontSize: 20, readerPercent: 120 });
+    }
+    expect(config.save({ text: { readerPercent: 150 } }).text).toEqual({ terminalFontSize: 20, readerPercent: 150 });
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8')).text).toEqual({ terminalFontSize: 20, readerPercent: 150 });
+  });
+
+  it('an older config.json without the section opens at today\'s sizes, and reset goes back to them', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ pet: { size: 'small' } }));
+    expect(config.load().text).toEqual({ terminalFontSize: 16, readerPercent: 100 });
+    config.save({ text: { terminalFontSize: 24, readerPercent: 160 } });
+    expect(config.reset('text.terminalFontSize').text).toEqual({ terminalFontSize: 16, readerPercent: 160 });
+    expect(config.reset('text').text).toEqual({ terminalFontSize: 16, readerPercent: 100 });
+    expect(config.load().pet.size).toBe('small');
   });
 });
 

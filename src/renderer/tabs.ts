@@ -191,6 +191,12 @@ export function removePending(tab: Tab, key: number): void {
   tab.pending = pendingEcho.remove(tab.pending, key);
 }
 
+// Every tab's xterm, and tabs opened later, at this font size.
+export function setFontSize(px: number): void {
+  terminal.setNewTabFontSize(px);
+  for (const tab of tabs.values()) terminal.setFontSize(tab, px);
+}
+
 export const active = (): Tab | null => (activeId === null ? null : tabs.get(activeId) ?? null);
 export const get = (id: TabId): Tab | null => tabs.get(id) ?? null;
 export const ids = (): TabId[] => [...tabs.keys()];

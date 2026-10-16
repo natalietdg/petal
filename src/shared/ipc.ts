@@ -27,6 +27,7 @@ import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEdit
 import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
+import type { TextStep } from './text-size';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -292,6 +293,8 @@ export interface EventChannels {
   'board:toggle': void; // ⌘⇧O: the Sessions board
   'focus:toggle': void; // ⌘⇧F: only the reply, full window
   'headers:toggle': void; // ⌘⇧H: the dock and reader header folded to a thin strip
+  'text-size:step': TextStep; // ⌘= bigger, ⌘- smaller, ⌘0 actual size
+  'text-size:changed': Config['text']; // saved in any window; every window follows
   'claude:stop': void; // ⌘.: Esc to the active tab's working Claude
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;

@@ -74,6 +74,8 @@ const api = {
   onToggleBoard: (callback: () => void) => subscribe('board:toggle', callback),
   onToggleFocus: (callback: () => void) => subscribe('focus:toggle', callback),
   onToggleHeaders: (callback: () => void) => subscribe('headers:toggle', callback),
+  onTextSizeStep: (callback: (step: EventChannels['text-size:step']) => void) => subscribe('text-size:step', callback),
+  onTextSizeChanged: (callback: (sizes: EventChannels['text-size:changed']) => void) => subscribe('text-size:changed', callback),
   onStopClaude: (callback: () => void) => subscribe('claude:stop', callback),
   onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
