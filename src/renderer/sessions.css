@@ -243,22 +243,21 @@
 .update-pill[hidden] { display: none; }
 .update-pill.noting { background: var(--reader-bg); cursor: default; }
 
-/* Narrow windows: the same buttons, tighter, so the dock stays one row. */
-@media (max-width: 1100px) {
-  #sessions-dock { gap: 6px; padding: 14px 12px 0; }
-  .dock-button, .sessions-pill, .update-pill { padding: 7px 12px; font-size: 13px; }
-  .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
-  #sessions-dock .headers-min-button { padding: 3px; font-size: 13px; }
-}
-@media (max-width: 900px) {
-  #sessions-dock { gap: 3px; padding: 12px 6px 0; }
-  .dock-button, .sessions-pill, .update-pill { padding: 5px 7px; font-size: 12px; }
-  .dock-button { gap: 3px; padding-inline: 5px; }
-  .sessions-pill { gap: 3px; }
-  #sessions-dock .headers-min-button { padding: 2px; font-size: 12px; }
-  .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
-  .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
-}
+/* Narrow docks (dock-fit.ts measures; no breakpoints): tighter, then tightest, then icon-only dock buttons. */
+#sessions-dock.fit-snug { gap: 6px; padding: 14px 12px 0; }
+:where(.fit-snug) :is(.dock-button, .sessions-pill, .update-pill) { padding: 7px 12px; font-size: 13px; }
+:where(.fit-snug) .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
+#sessions-dock.fit-snug .headers-min-button { padding: 3px; font-size: 13px; }
+#sessions-dock.fit-tight { gap: 3px; padding: 12px 6px 0; }
+:where(.fit-tight) :is(.dock-button, .sessions-pill, .update-pill) { padding: 5px 7px; font-size: 12px; }
+:where(.fit-tight) .dock-button { gap: 3px; padding-inline: 5px; }
+:where(.fit-tight) .sessions-pill { gap: 3px; }
+#sessions-dock.fit-tight .headers-min-button { padding: 2px; font-size: 12px; }
+:where(.fit-tight) .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
+:where(.fit-tight) .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
+:where(.fit-icons) :is(.dock-button, .dock-button.dock-mini) { position: relative; gap: 0; padding: 5px; font-size: 13px; }
+/* The label stays the accessible name; the tooltip shows it. */
+:where(.fit-icons) .dock-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Minimise headers (headers-min.ts): a small arrow at the dock's end. */
 .headers-min-button { display: inline-flex; align-items: center; padding: 5px 6px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }

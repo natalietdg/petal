@@ -1,12 +1,11 @@
 // The update pill in the dock band: "Petal X ready · Restart", the one-time "Updated to X · What's new",
 // and what Petal › Check for Updates… found. Main refuses the restart while Claude runs.
 import { byId, isIpcError } from './dom';
+import * as dockFit from './dock-fit';
 import { updateNoteText, updatePillForms, whatsNewForms, type UpdateNote, type WhatsNew } from '../shared/ipc';
 
 const NOTE_MS = 6000;
-const ROW_TOLERANCE_PX = 4; // same as the snapshot's dock check
 const pill = byId<HTMLButtonElement>('update-pill');
-const dock = byId('sessions-dock');
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
 let readyVersion: string | null = null;
 let whatsNew: WhatsNew | null = null;
@@ -15,24 +14,20 @@ let forms: string[] = []; // longest first; forms[0] is the full text
 // What the pill offers when no note is showing; empty hides it.
 const offerForms = (): string[] => (readyVersion ? updatePillForms(readyVersion) : whatsNew ? whatsNewForms(whatsNew) : []);
 
-function dockIsOneRow(): boolean {
-  const mids = [...dock.children].filter((e) => e.tagName === 'BUTTON' && e.getClientRects().length).map((e) => {
-    const r = e.getBoundingClientRect();
-    return (r.top + r.bottom) / 2;
-  });
-  return mids.every((mid) => Math.abs(mid - mids[0]) < ROW_TOLERANCE_PX);
-}
-
 // The longest form that keeps the dock one row; past the shortest, the minimised-headers dot. Title and label keep the full text.
-function fit(): void {
-  pill.classList.remove('as-dot');
-  if (pill.hidden || !forms.length) return;
-  for (const form of forms) {
-    pill.textContent = form;
-    if (dockIsOneRow()) return;
-  }
-  if (!pill.classList.contains('noting')) pill.classList.add('as-dot');
-}
+dockFit.register({
+  tryForms(fits) {
+    pill.classList.remove('as-dot');
+    if (pill.hidden || !forms.length) return fits();
+    return forms.some((form) => {
+      pill.textContent = form;
+      return fits();
+    });
+  },
+  squeeze() {
+    if (!pill.hidden && !pill.classList.contains('noting')) pill.classList.add('as-dot');
+  },
+});
 
 function setForms(next: string[]): void {
   forms = next;
@@ -41,7 +36,7 @@ function setForms(next: string[]): void {
   if (next.length) pill.setAttribute('aria-label', next[0]);
   else pill.removeAttribute('aria-label');
   pill.textContent = next[0] ?? '';
-  fit();
+  dockFit.fit();
 }
 
 function showOffer(): void {
@@ -94,7 +89,6 @@ function onClick(): void {
 
 export async function init(): Promise<void> {
   pill.addEventListener('click', onClick);
-  new ResizeObserver(() => requestAnimationFrame(fit)).observe(dock); // a resize or a longer Sessions pill can wrap the dock; next frame, so no observer loop
   window.pastel.update.onReady(({ version }) => show(version));
   window.pastel.update.onNote(note);
   const status = await window.pastel.update.status();
