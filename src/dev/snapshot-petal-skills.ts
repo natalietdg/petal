@@ -140,6 +140,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
 
     // A saved pipeline from before the file: offered, Use it replaces the stages and keeps her settings.
     store.savePipeline(project, { stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], keepGoing: true, autoRun: false, confirmed: ['npm test'], savedAt: Date.now() - 60_000 });
+    fs.utimesSync(pipelineFile, new Date(), new Date()); // newer than the save however long the run took to get here
     const offered: Page = await openTesting((p) => p.use);
     check(offered && JSON.stringify(offered.state.stages) === '["Unit"]' && /^Claude drew up a new pipeline ·\s*Use it$/.test(offered.note.trim()), `a newer file is offered over the saved one: ${offered?.note}`);
     check(offered && offered.worst[0] >= MIN_RATIO, `offer text contrast ${offered?.worst[0]}:1 ${JSON.stringify(offered?.worst)}`);
