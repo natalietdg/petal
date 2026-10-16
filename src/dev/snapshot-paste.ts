@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import { ptyWrites } from '../main/snapshot-mode';
+import { claudeStarts, ptyWrites } from '../main/snapshot-mode';
 import { PASTE_DIR_NAME } from '../main/paste-files';
 import type { Kit, TabsDeps } from './snapshot';
 
@@ -89,11 +89,9 @@ export async function pasteCheck(kit: Kit, { win, activeSession, openTab }: Tabs
   const one = await chips();
   check(one.length === 1, `the remove button takes a chip away: ${JSON.stringify(one)}`);
 
-  let freshOutput = '';
-  const listener = fresh.pty.onData((data) => { freshOutput += data; });
+  const startsBefore = claudeStarts.length; // snapshot runs record the Claude start, never type it
   await js("document.getElementById('composer-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))");
-  const sent = await waitFor(() => freshOutput.match(/claude-start echo petal-image-sent (\S+\.png)/)?.[1] ?? null, 8000);
-  listener.dispose();
+  const sent = await waitFor(() => claudeStarts.slice(startsBefore).find((s) => s.tabId === fresh.tabId)?.prompt?.match(/^echo petal-image-sent (\S+\.png)$/)?.[1] ?? null, 8000);
   const after = await js("({ chips: document.querySelectorAll('#composer-attachments .composer-chip').length, hidden: document.getElementById('composer-attachments').hidden, value: document.getElementById('composer-input').value })");
   check(sent && fs.existsSync(sent) && path.dirname(sent) === pasteFolder, `the sent message carries the saved image path: ${sent}`);
   check(after.chips === 0 && after.hidden && after.value === '', `sending clears the chips and the box: ${JSON.stringify(after)}`);

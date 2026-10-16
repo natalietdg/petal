@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { ReaderFeed } from '../main/reader-feed';
 import { send } from '../main/ipc';
+import { harnessLine } from '../main/snapshot-shell';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import type { Kit, TabsDeps } from './snapshot';
 import type { ReaderUpdate } from '../shared/types';
@@ -236,7 +237,7 @@ export async function replyLatencyCheck(kit: Kit, { win, feed, file, sessions, o
       }, BIG_APPEND_MS);
     }
     await wait(2500); // login shell rc files
-    await js(`window.pastel.write(PastelTerm.tabs.ids()[0], ${JSON.stringify("for i in $(seq 1 1500); do printf '\\033[2K\\r\\033[36m* streaming %s\\033[0m %s\\n' $i $(printf '%.0sx' $(seq 1 100)); sleep 0.03; done\r")})`);
+    ownTabs()[0]?.pty.write(harnessLine("for i in $(seq 1 1500); do printf '\\033[2K\\r\\033[36m* streaming %s\\033[0m %s\\n' $i $(printf '%.0sx' $(seq 1 100)); sleep 0.03; done"));
     await wait(1500);
     const loaded = await runAll('loaded');
     log(`${loaded ? 'ok' : 'FAIL'} reply latency: every scenario under load within ${BOUND_MS}ms`);
@@ -245,7 +246,7 @@ export async function replyLatencyCheck(kit: Kit, { win, feed, file, sessions, o
     clearInterval(beat);
     if (feed.fixture) feed.fixture.status = 'idle';
     Reflect.set(feed, 'send', original);
-    await js(`window.pastel.write(PastelTerm.tabs.ids()[0], '\\x03')`);
+    ownTabs()[0]?.pty.write('\x03');
     bgFeed?.stop();
     if (bg) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(bg.tabId)})`);
     await waitFor(() => (ownTabs().length === 1 ? true : null), 8000);

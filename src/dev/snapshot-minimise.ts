@@ -3,6 +3,7 @@
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
 import * as configStore from '../main/config-store';
+import { pasteWrites } from '../main/snapshot-mode';
 
 const PX = 2; // layout tolerance
 
@@ -80,11 +81,9 @@ async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: Ta
   // The reply box still sends to the active tab.
   const session = activeSession(win.webContents.id);
   if (!session) throw new Error('minimise check: no active tab');
-  let output = '';
-  const listener = session.pty.onData((data) => { output += data; });
+  const pastesBefore = pasteWrites.length; // snapshot runs record the paste, never type it
   await js("(() => { const box = document.getElementById('composer-input'); box.value = 'echo minimised-ok-' + (6 * 7); box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()");
-  check(await waitFor(() => (/minimised-ok-42/.test(output) ? true : null), 8000), 'reply box sends to the active tab');
-  listener.dispose();
+  check(await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.tabId === session.tabId && w.data.includes('minimised-ok-42')) ?? null, 8000), 'reply box sends to the active tab');
 
   // Focus over a minimised terminal returns to minimised.
   await js('PastelTerm.focusMode.set(true)');

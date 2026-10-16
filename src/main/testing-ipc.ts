@@ -9,6 +9,7 @@ import { BrowserWindow, webContents, type WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { allowedClaudeHome, claudeFolderAllowed, projectClaudeDir } from './claude-folder';
 import { isSnapshotRun, slashFixture, testingFixture } from './snapshot-mode';
+import { harnessLine } from './snapshot-shell';
 import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
@@ -30,7 +31,7 @@ const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
 const MAX_STAGES = 20;
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
-const LOOP_STAND_IN = ': petal-loop-start\r'; // typed in snapshot runs instead of starting claude
+const LOOP_STAND_IN = ': petal-loop-start'; // typed in snapshot runs instead of starting claude
 const BRIEF_CAP = 12000;
 
 interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
@@ -205,7 +206,7 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   if (isSnapshotRun()) {
     testingFixture.runs.push({ runId: id, dir, typed, script, stages: planned.map(({ config, plan, files }) => ({ name: config.name, command: config.command, exec: plan.exec, report: plan.report?.file ?? null, exit: files.exit, log: files.log })) });
   }
-  const tabId = openTab(contents, { command: isSnapshotRun() ? `${SNAPSHOT_STAND_IN} ${id}\r` : typed });
+  const tabId = openTab(contents, { command: isSnapshotRun() ? harnessLine(`${SNAPSHOT_STAND_IN} ${id}`) : typed });
   if (tabId) runTabs.set(`${contents.id}:${tabId}`, root);
   return { started: id, typed };
 }
@@ -288,7 +289,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (newTab !== true) return { tabId: null };
     const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief)}`;
     if (isSnapshotRun()) testingFixture.loopStarts.push({ command });
-    const opened = openTab(event.sender, { command: isSnapshotRun() ? LOOP_STAND_IN : command, background: true });
+    const opened = openTab(event.sender, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
     if (opened) runTabs.set(`${event.sender.id}:${opened}`, root);
     return { tabId: opened ?? null };
   });

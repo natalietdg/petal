@@ -10,8 +10,9 @@ import * as notesStore from './notes-store';
 import * as conclusions from './conclusions-store';
 import { load as loadConfig } from './config-store';
 import { handle, send } from './ipc';
-import { buildResumeCommand, resumeArgs } from './resume-command';
+import { buildResumeCommand } from './resume-command';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
+import { guardsShell, harnessLine } from './snapshot-shell';
 import { pageOfTurns, turnsFor } from './history-turns';
 import { registerTagsIpc } from './tags-ipc';
 import { registerFlowIpc } from './flow-ipc';
@@ -98,14 +99,14 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     if (history.isLive(sessionId) && !confirmFork) {
       return { confirm: 'This session is still running in another terminal. Opening it here as well forks it.' };
     }
-    const command = buildResumeCommand(record.cwd, record.sessionId); // the id from disk, not the renderer's string
     links.addLink({ from: session.feed.session?.sessionId ?? null, to: sessionId, kind: confirmFork ? 'fork' : 'resume' });
+    // Snapshot runs type a no-op instead, so no real session is ever resumed; only the live-Claude runs resume for real.
+    const standIn = isSnapshotRun() && (background || guardsShell());
+    const command = standIn ? harnessLine(': petal-resume') : buildResumeCommand(record.cwd, record.sessionId); // the id from disk, not the renderer's string
+    if (standIn) (background ? historyFixture.resumes : historyFixture.resumedHere).push(record.sessionId);
     if (background) {
-      // Snapshot runs echo the resume instead of starting claude, so no real session is ever resumed.
-      const typed = isSnapshotRun() ? `echo petal-resume ${resumeArgs(record.sessionId)}\r` : command;
-      if (isSnapshotRun()) historyFixture.resumes.push(record.sessionId);
-      openTab(event.sender, { command: typed, background: true });
-      return { ok: true, newTab: true, command: typed };
+      openTab(event.sender, { command, background: true });
+      return { ok: true, newTab: true, command };
     }
     if (session.feed.claudePid) {
       openTab(event.sender, { command });

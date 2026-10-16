@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, type BrowserWindow } from 'electron';
 import { stopWrites } from '../main/snapshot-mode';
+import { harnessLine } from '../main/snapshot-shell';
 import { resizeOffscreen } from '../main/snapshot-window';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { Kit, TabsDeps } from './snapshot';
@@ -74,10 +75,10 @@ export async function stopButtonCheck(kit: Kit, { win, feed, activeSession }: Pi
   const shellScreen = async (lines: string[] | null) => {
     session.pty.write('\x03');
     await wait(200);
-    if (!lines) { session.pty.write('clear\r'); return; }
+    if (!lines) { session.pty.write(harnessLine('clear')); return; }
     const target = path.join(outDir, 'screen-stop-permission.txt');
     fs.writeFileSync(target, `${lines.join('\n')}\n`);
-    session.pty.write(`clear; cat '${target}'; read -r _\r`);
+    session.pty.write(harnessLine(`clear; cat '${target}'; read -r _`));
   };
   const tabId = session.tabId;
   kit.applyTheme('paleSky', { persist: false });
