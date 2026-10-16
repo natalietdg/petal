@@ -1,10 +1,21 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <testsuites>
-  <testsuite name="Test Suite" device="Pixel_7_API_34" tests="3" failures="1" time="44.981" timestamp="2026-10-16T10:12:03">
-    <testcase id="login" name="login" classname="login" file=".maestro/login.yaml" time="12.408" timestamp="2026-10-16T10:12:03" status="SUCCESS"/>
-    <testcase id="checkout" name="checkout" classname="checkout" file=".maestro/checkout.yaml" time="21.736" timestamp="2026-10-16T10:12:16" status="ERROR">
-      <failure>Element not found: "Place order"</failure>
+  <testsuite name="Test Suite" device="Medium_Phone_API_35" tests="3" failures="1" time="59.803" timestamp="2026-10-16T15:07:01">
+    <testcase id="android-advanced-flow" name="android-advanced-flow" classname="android-advanced-flow" file=".maestro/android-advanced-flow.yaml" time="40.163" timestamp="2026-10-16T15:07:01" status="SUCCESS">
+      <properties>
+        <property name="tags" value="android, passing, advanced"/>
+      </properties>
     </testcase>
-    <testcase id="onboarding" name="onboarding" classname="onboarding" file=".maestro/onboarding.yaml" time="10.802" timestamp="2026-10-16T10:12:37" status="SUCCESS"/>
+    <testcase id="android-flow" name="android-flow" classname="android-flow" file=".maestro/android-flow.yaml" time="0.994" timestamp="2026-10-16T15:07:41" status="SUCCESS">
+      <properties>
+        <property name="tags" value="android, passing"/>
+      </properties>
+    </testcase>
+    <testcase id="android-flow-broken" name="android-flow-broken" classname="android-flow-broken" file=".maestro/android-flow-broken.yaml" time="18.635" timestamp="2026-10-16T15:07:42" status="ERROR">
+      <properties>
+        <property name="tags" value="android"/>
+      </properties>
+      <failure>Assertion is false: "This text is not on screen" is visible</failure>
+    </testcase>
   </testsuite>
 </testsuites>
