@@ -87,6 +87,21 @@ export const clampRounds = (n: unknown): number => {
 // eslint-disable-next-line no-control-regex -- stripping controls is the point
 export const cleanFocus = (focus: string): string => focus.replace(/[\x00-\x1F\x7F\s\u2014\u2013]+/g, ' ').trim().slice(0, FOCUS_CAP);
 
+// Each round's self-review; Petal reads the section and the Course line (shared/distillation.ts).
+export const DISTILL_BRIEF = [
+  '6. Distillation: before you end the round, review it yourself. From round 2 on, start by revisiting every open thread from your previous round: settle it with evidence, carry it forward (and list it again under Open threads), or drop it with a reason, as a Q/A whose answer starts with settled, carried or dropped. Then ask yourself 3 to 6 pointed questions, such as: what changed this round, what is still untested for the focus, why did a test fail, is that failure flaky or real, does the fix cover the cause or only the symptom, what would a user hit next. Answer each one yourself from evidence (test output, the code, the criteria file), never from memory.',
+  '   Any question you could not settle from evidence goes under Open threads instead, with the check that would settle it. A thread only I can settle has a check that starts with "needs you · " and says what you need from me.',
+  '   Write it in your reply, before the Loop line, exactly like this:',
+  '   ## Distillation',
+  '   - Q: an open thread from last round · A: settled · the evidence that settled it',
+  '   - Q: the question · A: your answer',
+  '   **Course:** retest · one clause saying why',
+  '   ## Open threads',
+  '   - A question you could not settle? *Check: the command or file that would settle it*',
+  '   - A question only I can settle? *Check: needs you · what you need from me*',
+  '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
+];
+
 export function buildLoopBrief({ focus, rounds, stages, stack }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
@@ -107,6 +122,7 @@ export function buildLoopBrief({ focus, rounds, stages, stack }: BriefInput): st
     '3. Before calling a failure a bug, run that test once more. If it passes, record it as flaky, not a bug.',
     '4. For each real bug: add it under Bugs, write or keep a regression test that reproduces it and fails first, fix the code, then run the pipeline again.',
     '5. A stage that fails for an environment reason (missing dependency, wrong command, port in use) is not a product bug: diagnose it, repair the environment or command, and say what you changed. Never weaken, skip or delete a test to get green. Never edit snapshot baselines without saying why.',
+    ...DISTILL_BRIEF,
     '',
     'Criteria file format: a "## Scenarios" section and a "## Bugs" section, one line per item:',
     '- [status] name · test: path::test name · round n',

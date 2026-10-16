@@ -30,8 +30,10 @@ import {
   type ClaudePipelineState, type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type StageResult, type TestingState,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
+import type { Reply } from '../shared/types';
 import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
+import { captureReplies, readDistillation } from './distillation-store';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
@@ -39,6 +41,8 @@ const MAX_STAGES = 20;
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
 const LOOP_STAND_IN = ': petal-loop-start'; // typed in snapshot runs instead of starting claude
 const BRIEF_CAP = 12000;
+const CHANGED_DAYS = 7; // Suite health's core stage counts files changed this recently
+const CHANGED_CAP = 300;
 
 interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
 const watching = new Map<string, Watched>(); // run id -> its watch
@@ -235,6 +239,38 @@ async function sessionTabFor(root: string, sessions: TabSessions, asking: TabSes
   return null;
 }
 
+// Files changed in the last week's commits plus uncommitted ones, repo-relative; none when git can't say.
+function gitLines(root: string, args: string[]): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile('git', ['-C', root, ...args], { timeout: 3000, maxBuffer: 1 << 20 }, (error, out) => resolve(error ? [] : out.split('\n')));
+  });
+}
+
+export async function recentlyChanged(root: string): Promise<string[]> {
+  if (isSnapshotRun()) return testingFixture.changed ?? [];
+  const [logged, status] = await Promise.all([
+    gitLines(root, ['log', `--since=${CHANGED_DAYS}.days`, '--name-only', '--pretty=format:']),
+    gitLines(root, ['status', '--porcelain']),
+  ]);
+  const files = [...logged, ...status.map((line) => line.slice(3).split(' -> ').pop() ?? '')].map((f) => f.trim()).filter(Boolean);
+  return [...new Set(files)].slice(0, CHANGED_CAP);
+}
+
+// The loop's distillations from every open session on this project, stored before they are read back.
+async function captureOpenDistillations(root: string, sessions: TabSessions): Promise<void> {
+  for (const session of sessions.values()) {
+    const replies = session.feed.shownReplies;
+    if (!replies.length || (await projectOf(session)) !== root) continue;
+    captureReplies(root, replies, session.feed.session?.sessionId ?? null);
+  }
+}
+
+// After any Claude turn: its distillation, stored when the turn ran in a project with a test loop.
+export function captureFinishedReply(reply: Reply, sessionId: string, cwd: string | null): void {
+  if (!claudeFolderAllowed()) return;
+  captureReplies(projectRootOf(isSnapshotRun() && testingFixture.project ? testingFixture.project : cwd), [reply], sessionId);
+}
+
 async function stateFor(root: string, sessions: TabSessions, sessionTab: string | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
   const proposed = proposalFor(root, stack);
@@ -243,7 +279,7 @@ async function stateFor(root: string, sessions: TabSessions, sessionTab: string 
   await mergeClaudeRuns(root, sessions, pipeline.stages);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
-  return { allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running, sessionTab, claudePipeline: claudePipelineState(root, saved) };
+  return { allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running, sessionTab, claudePipeline: claudePipelineState(root, saved), changed: await recentlyChanged(root) };
 }
 
 // ---- Watching a run: each stage's exit file, then its report or log.
@@ -378,7 +414,7 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null });
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null, changed: [] });
 
   handle('testing:detect', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return blank(false);
@@ -389,14 +425,19 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    if (!claudeFolderAllowed()) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
+    const none = { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null, distillation: [] };
+    if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
-    if (!root) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
+    if (!root) return none;
     // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
     await mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
+    await captureOpenDistillations(root, sessions);
     const data = store.load(root);
-    return { runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline) };
+    return {
+      runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking),
+      criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline), distillation: readDistillation(root),
+    };
   });
 
   // Prepares .petal/, then either leaves the paste to the reply box's path or starts claude with the brief in a new tab.

@@ -7,11 +7,15 @@ import * as composer from './composer';
 import { byId, el, isIpcError } from './dom';
 import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
 import { historyList, pipelineStrip, stackList, stageResults, trend } from './testing-view';
-import { historyDays, stagesFromRuns } from '../shared/testing-history';
+import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineConfig, type PipelineRun, type StackItem, type StageConfig, type StageResult, type TestCase, type TestingState, type Elsewhere } from '../shared/testing';
 import { latestLoop } from '../shared/loop-line';
 import { buildLoopBrief, isActive, loopStatus, loopTarget, stopLoop, type Criteria } from '../shared/test-loop';
+import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
+import { suiteHealth, withCoreStage } from '../shared/suite-health';
+import { distillSection } from './testing-distill-view';
+import { healthPanel } from './testing-health-view';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
 const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh faster
@@ -43,11 +47,13 @@ results.setAttribute('aria-label', 'Results');
 const side = el('aside', 'tst-side');
 const historyBox = el('section', 'tst-history');
 historyBox.setAttribute('aria-label', 'History');
+const healthBox = el('section', 'tst-healthbox');
+healthBox.setAttribute('aria-label', 'Suite health');
 const stackBox = el('section', 'tst-stackbox');
 stackBox.setAttribute('aria-label', 'What this project tests with');
-side.append(historyBox, stackBox);
+side.append(historyBox, healthBox, stackBox);
 body.append(results, side);
-const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop() });
+const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop(), askThread: (prompt) => void askThread(loopTabId(), prompt, 'loop') });
 view.append(head, note, confirmBox, loopPanel.element, strip, editor, body);
 
 // ---- State, per window.
@@ -63,6 +69,7 @@ let poll: ReturnType<typeof setInterval> | null = null;
 const pickedFor = new Map<string, string>(); // tab id -> the project she picked there, when the tab is in ~ or outside a repo
 const expanded = new Set<string>(); // history rows opened to their repeats or other commands
 let criteria: Criteria | null = null;
+let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
 let loopNote = '';
 // A loop Petal started or stopped this run, per project root; Claude's Loop lines carry the rest.
 interface LoopRecord { tabId: string | null; startedAt: number; stoppedAt: number | null; stopping: boolean }
@@ -331,13 +338,46 @@ function projectPicker(elsewhere: Elsewhere): HTMLElement {
   return box;
 }
 
+// Each Claude session's distillation goes under that session's newest row in History, once.
+function historyExtras(): (row: RunRow) => HTMLElement | null {
+  const groups = new Map(bySession(distillation).map((g) => [g.sessionId, g.records]));
+  const placed = new Set<string>();
+  return (row) => {
+    const sessionId = row.run.by === 'claude' ? row.run.sessionId ?? null : null;
+    const records = sessionId ? groups.get(sessionId) : undefined;
+    if (!sessionId || !records || placed.has(sessionId)) return null;
+    placed.add(sessionId);
+    return distillSection(records, `history:${sessionId}`, (prompt) => void askThread(tabOfSession(sessionId), prompt, 'history'));
+  };
+}
+
+const tabOfSession = (sessionId: string): string | null => tabs.ids().find((id) => tabs.get(id)?.update?.sessionId === sessionId) ?? null;
+
+// An open thread's card in Testing: asked in the tab that runs that session, through the reply box's paste path.
+async function askThread(tabId: string | null, prompt: string, where: 'loop' | 'history'): Promise<void> {
+  const tab = tabId ? tabs.get(tabId) : null;
+  const say = (text: string) => { if (where === 'loop') { loopNote = text; drawLoop(); } else { message = text; drawNote(); } };
+  if (!tab || tab.update?.state !== 'live') { say('That session isn’t running in a tab here. Resume it from History, then ask again.'); return; }
+  const sent = await composer.pasteToClaude(tab, composer.stripControls(prompt).trim());
+  say(sent ? `Asked Claude in ${tab.update?.label || 'its tab'}: ${prompt.length > 80 ? `${prompt.slice(0, 79)}…` : prompt}` : 'Couldn’t reach Claude in that tab. Try again.');
+}
+
+function drawHealth(): void {
+  healthBox.replaceChildren();
+  if (!data?.project) return;
+  const health = suiteHealth({ runs: data.runs, changed: data.changed });
+  healthBox.append(el('h3', 'tst-section-title', 'Suite health'), healthPanel(health, data.pipeline.stages, { addCore: (command) => void addCoreStage(command) }, draft !== null));
+}
+
 function drawSide(): void {
   historyBox.replaceChildren();
   stackBox.replaceChildren();
+  drawHealth();
   if (!data?.project) return;
   historyBox.append(el('h3', 'tst-section-title', 'History'));
   if (data.runs.length) {
     historyBox.append(trend(data.runs, data.pipeline.stages.map((s) => s.id), data.pipeline.stages.map((s) => s.name)), historyList(historyDays(data.runs), selectedRun, expanded, {
+      extra: historyExtras(),
       choose: (id) => {
         selectedRun = selectedRun === id ? null : id;
         selectedStage = runById(id)?.stages.find((s) => s.status === 'failed')?.stageId ?? runById(id)?.stages[0]?.stageId ?? null;
@@ -371,7 +411,16 @@ function loopFacts() {
   const update = id ? tabs.get(id)?.update ?? null : null;
   const progress = latestLoop(update?.replies ?? [], record?.startedAt ?? 0);
   const status = loopStatus({ progress, live: id ? isLive(id) : false, startedAt: record?.startedAt ?? null, stoppedAt: record?.stoppedAt ?? null, now: Date.now() });
-  return { record, id, progress, status };
+  return { record, id, progress, status, ...loopDistillation(update, record?.startedAt ?? 0) };
+}
+
+// The loop session's rounds: stored ones plus any its tab shows since the loop started; with no loop tab, the newest stored session's.
+function loopDistillation(update: tabs.Tab['update'], since: number): { distill: DistillRecord[]; distillKey: string } {
+  const sessionId = update?.sessionId ?? null;
+  const live = update ? recordsFromReplies(update.replies, sessionId, since) : [];
+  const groups = bySession(distillation);
+  const stored = sessionId ? groups.find((g) => g.sessionId === sessionId) : groups[0];
+  return { distill: mergeRecords(stored?.records ?? [], live), distillKey: (sessionId ?? stored?.sessionId) || 'none' };
 }
 
 // Claude's newest result per stage since the loop started.
@@ -386,7 +435,7 @@ function claudeStages(since: number): LoopModel['stages'] {
 function drawLoop(): void {
   loopPanel.element.hidden = !folderAllowed || !data?.project;
   if (loopPanel.element.hidden) return;
-  const { record, progress, status } = loopFacts();
+  const { record, progress, status, distill, distillKey } = loopFacts();
   const stages = pipeline()?.stages ?? [];
   const target = loopTarget(data?.sessionTab ?? null, isLive);
   const why = !stages.length ? 'Add pipeline stages first. The loop runs them each round.'
@@ -398,6 +447,8 @@ function drawLoop(): void {
     stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
     stopping: record?.stopping ?? false,
     note: loopNote,
+    distillation: distill,
+    distillKey,
   });
   // A live loop refreshes faster than the general poll.
   const wantTick = isOpen() && isActive(status);
@@ -510,6 +561,19 @@ async function savePipeline(): Promise<void> {
   editButton.focus();
 }
 
+// Suite health's core stage, first in the pipeline; its new command still asks before its first run.
+async function addCoreStage(command: string): Promise<void> {
+  const id = tabId();
+  const p = pipeline();
+  if (!id || !p || draft) return;
+  const next: PipelineConfig = { ...p, stages: withCoreStage(p.stages, command) };
+  const reply = await window.pastel.testing.savePipeline({ tabId: id, root: picked(), pipeline: next });
+  if (isIpcError(reply) || 'note' in reply) { message = isIpcError(reply) ? reply.error : reply.note; drawNote(); return; }
+  message = 'Core stage added first. It asks before its first run.';
+  selectedStage = null;
+  await load();
+}
+
 async function useClaudePipeline(): Promise<void> {
   const id = tabId();
   if (!id) return;
@@ -539,6 +603,7 @@ async function refresh(): Promise<void> {
   if (isIpcError(result) || !data) return;
   data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, claudePipeline: result.claudePipeline };
   criteria = result.criteria;
+  distillation = result.distillation;
   if (draft) { drawHead(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
 }
@@ -554,6 +619,7 @@ export async function open(): Promise<void> {
   loopNote = '';
   data = null;
   criteria = null;
+  distillation = [];
   drawAll();
   await load();
   await refresh();
@@ -604,4 +670,4 @@ export async function openRun(runId: string): Promise<void> {
 }
 
 // For the snapshot harness.
-export const state = () => ({ elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, distillation: loopFacts().distill.length, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
