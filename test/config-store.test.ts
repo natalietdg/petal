@@ -18,10 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has fifteen sections with the documented defaults', () => {
+  it('has fourteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates', 'highTech']);
-    expect(d.highTech).toEqual({ on: false, palette: 'cyan' });
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -40,12 +39,13 @@ describe('config-store defaults and load', () => {
     expect(config.MODELS).toEqual(['haiku', 'sonnet', 'opus']);
   });
 
-  it('high tech mode saves on/off and a palette, survives a reload, and refuses unknown values', () => {
-    expect(config.save({ highTech: { on: true, palette: 'amber' } }).highTech).toEqual({ on: true, palette: 'amber' });
-    expect(config.load().highTech).toEqual({ on: true, palette: 'amber' });
-    expect(config.save({ highTech: { on: 'yes', palette: 'magenta' } }).highTech).toEqual({ on: true, palette: 'amber' });
-    expect(config.save({ highTech: { on: false } }).highTech).toEqual({ on: false, palette: 'amber' }); // off keeps the palette for next time
-    expect(config.reset('highTech').highTech).toEqual({ on: false, palette: 'cyan' });
+  it('a leftover highTech section from a dev build loads fine and is dropped on the next save', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ highTech: { on: true, palette: 'amber' }, pet: { size: 'small' } }));
+    const loaded = config.load();
+    expect(loaded).not.toHaveProperty('highTech');
+    expect(loaded.pet.size).toBe('small');
+    config.save({});
+    expect(JSON.parse(fs.readFileSync(configFile(), 'utf8'))).not.toHaveProperty('highTech');
   });
 
   it('defaults() returns a fresh copy each time', () => {
@@ -154,7 +154,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates', 'highTech']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 

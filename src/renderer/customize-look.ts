@@ -5,14 +5,13 @@ import { portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import { outputStylesCard } from './customize-styles';
-import { highTechCard } from './customize-high-tech';
 import { shapeGuide } from './shape-guide';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
 
 // picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her.
-export function chips(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
+function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
   const group = el('div', 'cz-chips');
   group.setAttribute('role', 'radiogroup');
   group.setAttribute('aria-label', label);
@@ -23,7 +22,6 @@ export function chips(label: string, choices: readonly Choice[], current: string
     }, 'cz-chip');
     chip.setAttribute('role', 'radio');
     chip.setAttribute('aria-checked', String(id === current));
-    chip.dataset.choice = id;
     if (picture) {
       const portraitBox = el('span', 'cat-portrait');
       portraitBox.dataset.cat = id;
@@ -32,10 +30,8 @@ export function chips(label: string, choices: readonly Choice[], current: string
     }
     group.append(chip);
   }
-  return group;
+  return card(label, group);
 }
-
-const chipGroup = (...args: Parameters<typeof chips>): HTMLDivElement => card(args[0], chips(...args));
 
 // Saved in config.json only; the Tarot Room popover picks it up at once.
 function birthdayCard(): HTMLDivElement {
@@ -62,10 +58,9 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); }, portrait),
     chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
-    highTechCard(),
     birthdayCard(),
     note('Pet size is the biggest she gets. She shrinks on her own when a line of text would sit under her.'),
-    note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4) and High Tech Mode, Pet and Pet › Scene.'),
+    note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
   ];
 }
 

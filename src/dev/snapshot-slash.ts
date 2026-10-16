@@ -9,7 +9,6 @@ import * as configStore from '../main/config-store';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { claudeStarts, pasteWrites, slashFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
-import { HIGH_TECH_PALETTES } from '../shared/high-tech';
 
 const MIN_RATIO = 4.5;
 const WIDTHS = [800, 1280, 1600];
@@ -93,13 +92,7 @@ export async function slashMenuCheck(kit: Kit, win: BrowserWindow): Promise<void
     await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
   };
-  const setHighTech = async (palette: string | null) => {
-    configStore.save({ highTech: palette ? { on: true, palette: palette as 'cyan' } : { on: false } });
-    await waitFor(async () => (await js('document.documentElement.dataset.hightech ?? null')) === palette, 5000);
-    await wait(300);
-  };
 
-  const savedHighTech = configStore.load().highTech;
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
@@ -173,21 +166,17 @@ export async function slashMenuCheck(kit: Kit, win: BrowserWindow): Promise<void
     await closed();
     check((await probe())?.value === `${browse?.names[0]} check the auth flow`, `browse pick goes in front: ${JSON.stringify((await probe())?.value)}`);
 
-    // Every theme and reading style, High tech included.
-    for (const theme of ['paleSky', 'blush', 'nightPastel', ...HIGH_TECH_PALETTES]) {
-      const hud = (HIGH_TECH_PALETTES as readonly string[]).includes(theme);
-      if (hud) await setHighTech(theme);
-      else { await setHighTech(null); applyTheme(theme, { persist: false }); }
+    // Every theme and reading style.
+    for (const theme of ['paleSky', 'blush', 'nightPastel']) {
+      applyTheme(theme, { persist: false });
       for (const [look] of READING_CHOICES) {
         await setReading(look);
         const p = await openWith('/');
         check(p && p.minRatio >= MIN_RATIO && p.onScreen && p.overflowX <= 0, `${theme} ${look}: ${p?.minRatio}:1, on screen ${p?.onScreen}`);
-        if (look === 'newspaper' && theme === 'cyan') await capture('slash-hightech');
         if (look === 'newspaper' && theme === 'nightPastel') await capture('slash-dark');
         await key('Escape');
       }
     }
-    await setHighTech(null);
     applyTheme('paleSky', { persist: false });
     await setReading('newspaper');
 
@@ -208,7 +197,7 @@ export async function slashMenuCheck(kit: Kit, win: BrowserWindow): Promise<void
     check(off && off.groups.join() === 'Claude Code' && off.allow && off.names.every((n: string) => n.startsWith('/')), `consent off: built-ins and Allow only: ${JSON.stringify(off?.groups)}`);
     await key('Escape');
   } finally {
-    configStore.save({ claudeFolder: { choice: 'allowed' }, highTech: savedHighTech });
+    configStore.save({ claudeFolder: { choice: 'allowed' } });
     slashFixture.claudeDir = null;
     await js("(() => { const box = document.getElementById('composer-input'); box.value = ''; box.dispatchEvent(new Event('input', { bubbles: true })); })()");
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
