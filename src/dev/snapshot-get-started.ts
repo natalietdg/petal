@@ -5,7 +5,8 @@ import path from 'node:path';
 import { app, type BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
 import * as organizer from '../main/session-organizer';
-import { claudeFixture, claudeStarts, folderFixture, historyFixture } from '../main/snapshot-mode';
+import { claudeFixture, claudeStarts, folderFixture, historyFixture, ptyWrites } from '../main/snapshot-mode';
+import { harnessLine } from '../main/snapshot-shell';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { send } from '../main/ipc';
 import { READING_CHOICES } from '../main/menu';
@@ -183,10 +184,14 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(probe.seen.length === 0, `Not now: no reader opened anything in the stand-in ~/.claude: ${JSON.stringify(probe.seen.slice(0, 6))}`);
   check(!historyRows && !readers.setup?.hasClaudeMd && !(readers.styles?.styles?.length) && /isn’t reading your Claude folder/.test(readers.styles?.problem ?? ''),
     `Not now: History, Setup and output styles come back empty: ${JSON.stringify({ historyRows, setup: readers.setup?.hasClaudeMd, styles: readers.styles })}`);
-  await js("window.pastel.write(PastelTerm.tabs.active().id, 'echo gs-term-ok\\r')");
+  // Her keys still reach main (recorded, never typed in snapshot runs), and the shell still runs the harness's own line.
+  const writesBefore = ptyWrites.length;
+  await js("window.pastel.write(PastelTerm.tabs.active().id, 'petal-gs-keys')");
+  const keysIn = await waitFor(() => ptyWrites.slice(writesBefore).find((w) => w.data === 'petal-gs-keys') ?? null, 5000);
+  activeSession(win.webContents.id)?.pty.write(harnessLine('echo gs-term-ok'));
   const firstId = (await js(STATE)).tabs[0];
   const echoed = await waitFor(async () => (/^gs-term-ok\s*$/m.test(await js(bufferText(firstId))) || null), 8000);
-  check(echoed, 'Not now: the terminal still runs commands');
+  check(keysIn && echoed, `Not now: the terminal still takes keys and runs commands: keys=${Boolean(keysIn)} ran=${Boolean(echoed)}`);
   const blocked = await js(STATE);
   check(/isn’t reading your Claude folder/.test(blocked.status) && blocked.statusAction === 'Allow reading your Claude folder',
     `Not now: the reader says so and offers Allow: ${JSON.stringify([blocked.status, blocked.statusAction])}`);

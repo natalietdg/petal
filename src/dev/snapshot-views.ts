@@ -8,9 +8,10 @@ import * as flowStore from '../main/flow-store';
 import * as responseHook from '../main/response-hook';
 import * as closedStore from '../main/closed-store';
 import * as configStore from '../main/config-store';
-import { counters, fixtureFile, panelFixture, userDataDir } from '../main/snapshot-mode';
+import { claudeStarts, counters, fixtureFile, panelFixture, pasteWrites, ptyWrites, userDataDir } from '../main/snapshot-mode';
+import { harnessLine } from '../main/snapshot-shell';
 import { send } from '../main/ipc';
-import { buildResumeCommand, resumeArgs } from '../main/resume-command';
+import { buildResumeCommand, buildStartCommand, resumeArgs } from '../main/resume-command';
 import type { ReaderFeed } from '../main/reader-feed';
 import { setFixtureStatus, type Kit, type TabsDeps } from './snapshot';
 import type { TabSession, TabSessions } from '../main/tab-session';
@@ -316,7 +317,12 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
     `⌘T opened a second tab with its own pty, shown alone, reader on its empty feed: ${JSON.stringify(opened)} mainActive=${mainActive()}`);
 
   await wait(2500); // login shell rc files
-  await js(`window.pastel.write(${JSON.stringify(second)}, 'echo tab2\\r')`);
+  // Keys typed in tab 2 are recorded for tab 2 (snapshot runs never type them); the harness's own line proves its output lands there only.
+  const writesBefore = ptyWrites.length;
+  await js(`window.pastel.write(${JSON.stringify(second)}, 'petal-tab2-keys')`);
+  const routed = await waitFor(() => ptyWrites.slice(writesBefore).find((w) => w.data === 'petal-tab2-keys') ?? null, 5000);
+  check(routed?.tabId === second, `keys typed in tab 2 go to tab 2: ${JSON.stringify(routed)}`);
+  sessions.get(`${contents.id}:${second}`)?.pty.write(harnessLine('echo tab2'));
   const echoed = await waitFor(async () => (/^tab2\s*$/m.test(await bufferText(second)) || null), 10000);
   const firstText = await bufferText(first);
   check(echoed && !firstText.includes('echo tab2') && firstText.includes('Petal render check'),
@@ -343,28 +349,28 @@ export async function tabsCheck(kit: Kit, { win, feed, sessions, activeSession, 
 }
 
 
-// Reply box: Enter pastes into the active tab's pty; here the shell runs it, so its output proves delivery.
+// Reply box: Enter pastes into the active tab's pty; snapshot runs record the paste instead of typing it, which proves delivery.
 // Only a tab whose Claude is live accepts a reply; ESC and other control characters never reach the pty.
 export async function composerCheck(kit: Kit, { win, activeSession, openTab }: TabsDeps & { win: BrowserWindow }): Promise<void> {
   const { js, wait, waitFor, log } = kit;
   const session = activeSession(win.webContents.id);
   if (!session) throw new Error('composer check: no active tab');
-  let output = '';
-  const listener = session.pty.onData((data) => { output += data; });
+  const pastedHere = (from: number) => pasteWrites.slice(from).filter((w) => w.tabId === session.tabId).map((w) => w.data).join('');
   const type = (text: string) => js(`(() => { const box = document.getElementById('composer-input'); box.value = ${text}; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return [...document.querySelectorAll('#latest .reader-you.pending')].map((b) => b.textContent); })()`);
+  let from = pasteWrites.length;
   const echoedAtOnce: string[] = await type("'echo composer-ok-' + (6 * 7)");
-  const delivered = await waitFor(() => (/composer-ok-42/.test(output) ? true : null), 8000);
+  const delivered = await waitFor(() => (/composer-ok-42/.test(pastedHere(from)) ? true : null), 8000);
   const cleared = await js("document.getElementById('composer-input').value === ''");
   log(`${delivered && cleared ? 'ok' : 'FAIL'} reply box sends to the active tab: delivered=${Boolean(delivered)} cleared=${cleared}`);
 
-  // With ESC kept, the shell would print "strip-" in red; stripped, it prints the literal "[31m".
+  // Kept, ESC would make the paste carry "strip-\x1b[31m"; stripped, it carries the literal "[31m" and no BEL.
+  from = pasteWrites.length;
   await type("'echo strip-' + String.fromCharCode(27) + '[31mok' + String.fromCharCode(7)");
-  const stripped = await waitFor(() => (/strip-\[31mok/.test(output) ? true : null), 8000);
-  log(`${stripped && !output.includes('strip-\x1b') ? 'ok' : 'FAIL'} reply box strips ESC and control characters before pasting: ${Boolean(stripped)}`);
-  listener.dispose();
+  const stripped = await waitFor(() => (/strip-\[31mok/.test(pastedHere(from)) ? pastedHere(from) : null), 8000);
+  log(`${stripped && !stripped.includes('strip-\x1b') && !stripped.includes('\x07') ? 'ok' : 'FAIL'} reply box strips ESC and control characters before pasting: ${JSON.stringify(stripped)}`);
   await echoCheck(kit, session, echoedAtOnce);
 
-  // A fresh tab has no Claude: sending starts one with the message (snapshot runs echo instead of launching).
+  // A fresh tab has no Claude: sending starts one with the message (snapshot runs record the start instead of launching).
   openTab(win.webContents);
   const fresh = await waitFor(() => {
     const next = activeSession(win.webContents.id);
@@ -375,8 +381,6 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
     const page = await js('({ ids: PastelTerm.tabs.ids(), active: PastelTerm.tabs.active()?.id })').catch((error: Error) => `unreadable: ${error.message}`);
     throw new Error(`composer check: second tab never opened: renderer=${JSON.stringify(page)} mainActive=${activeSession(win.webContents.id)?.tabId}`);
   }
-  let freshOutput = '';
-  const freshListener = fresh.pty.onData((data) => { freshOutput += data; });
   await wait(2500); // login shell rc files
   // Empty reader in each look: plain message, no stray kicker pill.
   for (const look of ['newspaper', 'editorial', 'lifestyle', 'print']) {
@@ -387,10 +391,10 @@ export async function composerCheck(kit: Kit, { win, activeSession, openTab }: T
     await kit.capture(`empty-${look}`);
   }
   await js("document.documentElement.dataset.reading = 'newspaper'");
+  const startsBefore = claudeStarts.length;
   await type("'-start it\\'s fine'");
-  const started = await waitFor(() => (/claude-start -start it's fine/.test(freshOutput) ? true : null), 8000);
+  const started = await waitFor(() => claudeStarts.slice(startsBefore).find((s) => s.tabId === fresh.tabId && s.command === buildStartCommand("-start it's fine")) ?? null, 8000);
   const emptied = await js("document.getElementById('composer-input').value === ''");
-  freshListener.dispose();
   log(`${started && emptied ? 'ok' : 'FAIL'} reply box starts Claude in a tab without one: started=${Boolean(started)} emptied=${emptied}`);
   await js("document.getElementById('composer-input').value = ''");
   await js(`document.querySelector('#tab-strip .tab[data-tab-id="${fresh.tabId}"] .tab-close').click()`);

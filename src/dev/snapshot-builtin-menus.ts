@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import { promptWrites } from '../main/snapshot-mode';
+import { harnessLine } from '../main/snapshot-shell';
 import type { Kit, TabsDeps } from './snapshot';
 import { unclippedCheck } from './snapshot-divider';
 
@@ -79,12 +80,12 @@ export async function builtinMenusCheck(kit: Kit, { win, activeSession }: Pick<T
     fs.writeFileSync(target, `${lines.join('\n')}\n`);
     session.pty.write('\x03');
     await wait(200);
-    session.pty.write(`clear; cat '${target}'; read -r _\r`);
+    session.pty.write(harnessLine(`clear; cat '${target}'; read -r _`));
   };
   const clearScreen = async () => {
     session.pty.write('\x03');
     await wait(300);
-    session.pty.write('clear\r');
+    session.pty.write(harnessLine('clear'));
   };
   const shot = (name: string) => kit.verifiedCapture({ ...kit, theme: kit.themes.paleSky, panelOpen: false, name, scrollTo: '#prompt-dock' });
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -128,7 +129,7 @@ export async function builtinMenusCheck(kit: Kit, { win, activeSession }: Pick<T
     const before = promptWrites.length;
     const target = path.join(outDir, `screen-${name}.txt`);
     fs.writeFileSync(target, `${memoryScreen(cursor).join('\n')}\n`);
-    session.pty.write(`\rclear; cat '${target}'; read -r _\r`);
+    session.pty.write(`\r${harnessLine(`clear; cat '${target}'; read -r _`)}`);
     return writesAfter(before);
   };
   const step2 = await redrawn('menu-memory-1', 1);

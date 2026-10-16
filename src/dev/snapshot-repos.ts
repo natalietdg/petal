@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import * as repoIndex from '../main/repo-index';
 import { send } from '../main/ipc';
-import { repoWrites } from '../main/snapshot-mode';
+import { claudeStarts, repoWrites } from '../main/snapshot-mode';
 import { shellQuote } from '../main/resume-command';
 import type { Kit, TabsDeps } from './snapshot';
 
@@ -102,21 +102,19 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
   const fresh = await waitFor(() => { const next = activeSession(contents.id); return next && next !== fixtureTab ? next : null; }, 8000);
   if (!fresh) throw new Error('repos check: second tab never opened');
   await wait(2500); // login shell rc files
-  let freshOutput = '';
-  const listener = fresh.pty.onData((data) => { freshOutput += data; });
+  const startsHere = (from: number) => claudeStarts.slice(from).filter((s) => s.tabId === fresh.tabId); // recorded, never typed
+  let startsBefore = claudeStarts.length;
   await js("(() => { const box = document.getElementById('composer-input'); box.value = 'Checkout sweep'; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()");
   const prefilled = await waitFor(async () => { const s = await state(); return s.open ? s : null; }, 5000);
   await wait(500);
-  listener.dispose();
-  check(prefilled?.query === 'sweep' && prefilled.rows[0] === 'sweep' && !freshOutput.includes('claude-start'),
-    `reply box "Checkout sweep" opens the palette pre-filled, nothing sent: ${JSON.stringify({ query: prefilled?.query, rows: prefilled?.rows, typed: freshOutput.includes('claude-start') })}`);
+  check(prefilled?.query === 'sweep' && prefilled.rows[0] === 'sweep' && !startsHere(startsBefore).length,
+    `reply box "Checkout sweep" opens the palette pre-filled, nothing sent: ${JSON.stringify({ query: prefilled?.query, rows: prefilled?.rows, starts: startsHere(startsBefore).length })}`);
   await key('Escape');
 
-  // A name nothing matches stays a normal message (snapshot runs echo instead of launching claude).
-  const fallbackListener = fresh.pty.onData((data) => { freshOutput += data; });
+  // A name nothing matches stays a normal message (snapshot runs record the Claude start instead of launching claude).
+  startsBefore = claudeStarts.length;
   await js("(() => { const box = document.getElementById('composer-input'); box.value = 'cd zzqqxx'; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); })()");
-  const fellBack = await waitFor(() => (/claude-start cd zzqqxx/.test(freshOutput) ? true : null), 8000);
-  fallbackListener.dispose();
+  const fellBack = await waitFor(() => startsHere(startsBefore).find((s) => s.prompt === 'cd zzqqxx') ?? null, 8000);
   check(fellBack && !(await state()).open, 'reply box "cd <no match>" goes to Claude as before, no palette');
 
   await js(`document.querySelector('#tab-strip .tab[data-tab-id="${fresh.tabId}"] .tab-close').click()`);

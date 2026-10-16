@@ -65,6 +65,8 @@ import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
 import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
 import { onAnyDisplay } from '../main/snapshot-window';
+import { harnessLine } from '../main/snapshot-shell';
+import { shellGuardCheck } from './snapshot-shell-guard';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -461,7 +463,7 @@ async function fixtureReply({ js, log, pty }: Pick<StepDeps, 'js' | 'log'> & { p
   const samplePath = path.join(outDir(), 'terminal-sample.txt');
   fs.writeFileSync(samplePath, terminalSample());
   await wait(2500); // login shell rc files
-  pty.write(`clear; cat '${samplePath}'; claude --version\r`);
+  pty.write(harnessLine(`clear; cat '${samplePath}'; command -v claude >/dev/null && claude --version`));
   const reply = await waitFor(async () => (await js("document.getElementById('latest').innerText")).trim(), 10000);
   log(`reader headline: ${JSON.stringify(await js("document.querySelector('#latest .headline')?.innerText ?? 'none'"))}`);
   log(`standfirst: ${Boolean(await js("document.querySelector('#latest .headline + p')"))}; callouts: ${JSON.stringify(await js("[...document.querySelectorAll('#latest .callout')].map((el) => el.className)"))}`);
@@ -510,7 +512,8 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   };
   const stopWatch = watchWindow(win, log);
   // Every finished run ends on this line; a log without it was cut short and counts as failed.
-  const finish = (steps?: StepCount): void => {
+  const finish = async (steps?: StepCount): Promise<void> => {
+    await shellGuardCheck(js, log).catch((error: Error) => log(`FAIL shell guard: ${error.stack}`));
     stopWatch();
     const short = steps && steps.done < steps.total;
     log(`SNAPSHOT ${short ? 'INCOMPLETE' : 'COMPLETE'} ok=${ok} fail=${fail}${steps ? ` steps=${steps.done}/${steps.total}` : ''}`);
@@ -836,6 +839,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   log(`ended state shown: ${Boolean(ended)}; reply still visible: ${(await js("document.getElementById('latest').innerText")).trim() === replyText}`);
   await capture('ended');
   fs.writeFileSync(path.join(outDir(), 'pty-transcript.log'), transcript);
-  finish();
+  await finish();
 }
 

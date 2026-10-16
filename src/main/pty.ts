@@ -2,6 +2,7 @@ import os from 'node:os';
 import * as pty from 'node-pty';
 import type { IPty } from 'node-pty';
 import { dropFromChildEnv } from './claude-cli';
+import { guardedShell, guardsShell } from './snapshot-shell';
 import type { TermSize } from '../shared/types';
 
 function shellEnv(): Record<string, string> {
@@ -17,13 +18,14 @@ function shellEnv(): Record<string, string> {
   return Object.fromEntries(Object.entries(env).filter((pair): pair is [string, string] => pair[1] !== undefined));
 }
 
+// Snapshot runs (bar the live-Claude ones) get the stand-in shell, never her login shell.
 export function spawnShell({ cols, rows }: TermSize): IPty {
-  const shell = process.env.SHELL || '/bin/zsh';
-  return pty.spawn(shell, ['-l'], {
+  const standIn = guardsShell() ? guardedShell() : null;
+  return pty.spawn(standIn?.file ?? (process.env.SHELL || '/bin/zsh'), standIn?.args ?? ['-l'], {
     name: 'xterm-256color',
     cols,
     rows,
-    cwd: os.homedir(),
-    env: shellEnv(),
+    cwd: standIn?.cwd ?? os.homedir(),
+    env: { ...shellEnv(), ...standIn?.env },
   });
 }

@@ -60,8 +60,9 @@ export const stylesFixture: { claudeDir: string | null; opened: string[] } = { c
 export const factoryFixture: { claudeDir: string | null; repo: string | null } = { claudeDir: null, repo: null };
 
 // Fake History sessions the harness adds to the list; their logs live in the snapshot folder, never ~/.claude.
-// `live` marks some as running in another terminal; `resumes` records the resume a background tab echoed instead.
-export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[] } = { records: [], live: [], resumes: [] };
+// `live` marks some as running in another terminal; `resumes` records the resume a background tab typed a no-op for instead.
+// `resumedHere` records a resume in this tab or a foreground one, which snapshot runs also replace with a no-op.
+export const historyFixture: { records: SessionRecord[]; live: string[]; resumes: string[]; resumedHere: string[] } = { records: [], live: [], resumes: [], resumedHere: [] };
 
 // Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
 // sessions: null means none live, so her limit counts only these and never her real Claudes.
@@ -75,8 +76,12 @@ export const folderFixture: { home: string | null; choice: FolderChoice } = { ho
 // Claude Code installed or not, for Get started and Add Session's auto-start; null asks this Mac.
 export const claudeFixture: { installed: boolean | null } = { installed: null };
 
-// What Add Session's auto-start typed; snapshot runs type a shell no-op in its place, never a real claude.
-export const claudeStarts: { tabId: string; command: string }[] = [];
+// What Add Session's auto-start or the reply box's Claude start would have typed; snapshot runs never launch claude.
+// `prompt` is her message, for the reply box's start only.
+export const claudeStarts: { tabId: string; command: string; prompt?: string }[] = [];
+
+// What "Send to Claude" would have typed into a tab's claude; snapshot runs type nothing.
+export const handoffWrites: { tabId: string; data: string }[] = [];
 
 // Every close a "conclude" set off, with how it ended; snapshot runs stop before the signal.
 export const concludeCloses: { sessionId: string; outcome: string }[] = [];

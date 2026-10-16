@@ -5,6 +5,7 @@ import * as links from './links-store';
 import { writeHandoff } from './handoff';
 import { handle } from './ipc';
 import { sessionTitleFor } from './session-title';
+import { handoffWrites, isSnapshotRun } from './snapshot-mode';
 import type { ActiveSession } from './tab-session';
 
 export function registerHandoffIpc({ activeSession }: { activeSession: ActiveSession }): void {
@@ -20,7 +21,9 @@ export function registerHandoffIpc({ activeSession }: { activeSession: ActiveSes
     const title = sessionTitleFor(record.sessionId, { cwd: record.cwd });
     const { file, turns } = await writeHandoff({ ...record, title });
     clipboard.writeText(file);
-    session.pty.write(`Read "${file}", my earlier session "${title}" (${turns} turns). `);
+    const line = `Read "${file}", my earlier session "${title}" (${turns} turns). `;
+    if (isSnapshotRun()) handoffWrites.push({ tabId: session.tabId, data: line }); // recorded, never typed
+    else session.pty.write(line);
     links.addLink({ from: sessionId, to: session.feed.session?.sessionId ?? null, kind: 'send' });
     return { ok: true, file };
   });

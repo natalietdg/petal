@@ -11,9 +11,10 @@ import { harvest } from './library-extract';
 import { onTurnFinished } from './testing-ipc';
 import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites, stopWrites } from './snapshot-mode';
+import { guardsShell, harnessLine, recordShellOutput } from './snapshot-shell';
 import { claudePath } from './claude-cli';
 import { keysFor } from './prompt-keys';
-import { buildStartCommand, typedQuote } from './resume-command';
+import { buildStartCommand } from './resume-command';
 import { handle, on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { PromptAnswer } from '../shared/prompt-answer';
@@ -24,8 +25,6 @@ import type { ReaderUpdate, TabId, TermSize } from '../shared/types';
 // A tab opened from History waits this long after its shell's first output before typing the resume command.
 const PENDING_COMMAND_DELAY_MS = 150;
 const START_CLAUDE = 'claude\r';
-// Snapshot runs type a shell no-op in its place, so no real claude ever starts there.
-const START_CLAUDE_STAND_IN = ': petal-start-claude\r';
 // The picker reads one keypress per chunk; 30ms measured fine, 120ms leaves room for a busy machine.
 const PROMPT_KEY_GAP_MS = 120;
 // Time for the shell to reap claude and take its terminal back before the foreground check.
@@ -87,7 +86,8 @@ const claudeInstalled = async (): Promise<boolean> =>
 async function typeStartClaude(session: TabSession): Promise<void> {
   if (!(await claudeInstalled()) || !sessions.has(tabKey(session.contentsId, session.tabId))) return;
   if (isSnapshotRun()) claudeStarts.push({ tabId: session.tabId, command: START_CLAUDE });
-  session.pty.write(isSnapshotRun() ? START_CLAUDE_STAND_IN : START_CLAUDE);
+  // Snapshot runs type a shell no-op in its place, so no real claude ever starts there.
+  session.pty.write(isSnapshotRun() ? harnessLine(': petal-start-claude') : START_CLAUDE);
 }
 
 function startSession(sender: WebContents, { tabId, cols, rows, startClaude = false }: { tabId: TabId; startClaude?: boolean } & TermSize): void {
@@ -116,7 +116,9 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   pendingCommands.delete(tabKey(contentsId, tabId));
   const typeFirst = pending ? () => pty.write(pending) : startClaude ? () => void typeStartClaude(session) : null;
   let typed = !typeFirst;
+  const guarded = guardsShell();
   pty.onData((data) => {
+    if (guarded) recordShellOutput(tabKey(contentsId, tabId), data); // the harness's end check scans it for leaks
     if (!sender.isDestroyed()) send(sender, 'pty:data', { tabId, data });
     if (!typed && typeFirst) { typed = true; setTimeout(typeFirst, PENDING_COMMAND_DELAY_MS); }
   });
@@ -188,15 +190,16 @@ export function registerTabIpc(): void {
     if (!tabFor(event, tabId)) startSession(event.sender, { tabId, cols, rows, startClaude: startClaude === true });
   });
 
+  // Snapshot runs record what the renderer would type and write none of it, so no step's text reaches a shell.
   on('pty:write', (event, { tabId, data }) => {
-    if (isSnapshotRun()) ptyWrites.push({ tabId, data });
+    if (isSnapshotRun()) { ptyWrites.push({ tabId, data }); return; }
     tabFor(event, tabId)?.pty.write(data);
   });
 
   handle('pty:paste', (event, { tabId, data }) => {
     const session = tabFor(event, tabId);
     if (isSnapshotRun()) pasteWrites.push({ tabId, data });
-    session?.pty.write(data);
+    else session?.pty.write(data);
     return { sent: Boolean(session) };
   });
 
@@ -217,10 +220,11 @@ export function registerTabIpc(): void {
     if (session && ANSWER_KINDS.includes(answer?.kind)) answerPrompt(session, answer);
   });
 
-  // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.
+  // The reply box in a tab without Claude starts one with her message; snapshot runs record the line, never type it.
   on('tab:start-claude', (event, { tabId, prompt }) => {
     const session = tabFor(event, tabId);
     if (!session || typeof prompt !== 'string' || !prompt.trim()) return;
-    session.pty.write(isSnapshotRun() ? `echo claude-start ${typedQuote(prompt)}\r` : buildStartCommand(prompt));
+    if (isSnapshotRun()) { claudeStarts.push({ tabId, command: buildStartCommand(prompt), prompt }); return; }
+    session.pty.write(buildStartCommand(prompt));
   });
 }
