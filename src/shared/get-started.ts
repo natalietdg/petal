@@ -66,6 +66,9 @@ export function stepStates(saved: readonly string[], facts: LiveFacts): StepStat
   });
 }
 
+// Until sign-in is behind her, Claude Code is still on its first-run screens, so the terminal needs room for them.
+export const needsSetupRoom = (states: readonly StepState[]): boolean => states.some((s) => s.id === 'sign-in' && !s.done);
+
 export const allDone = (states: readonly StepState[]): boolean => states.every((s) => s.done);
 
 // Launch reopens Get started only for a step Petal could tick itself; an unseen one waits for her.

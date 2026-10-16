@@ -146,6 +146,7 @@ async function start(): Promise<void> {
   window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); sessionsBoard.setFolderAllowed(allowed); library.setFolderAllowed(allowed); libraryAdd.setFolderAllowed(allowed); testing.setFolderAllowed(allowed); history.rerender(); });
   window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
   window.addEventListener('petal:get-started', () => void getStarted.open());
+  window.addEventListener('petal:show-terminal', () => { layout.setTerminalMinimised(false); tabs.active()?.term.focus(); });
   window.pastel.onReading(setReading);
   cat.setCat(orDefault(await window.pastel.getCat(), 'mika', 'the pet'));
   window.pastel.onCat((id) => cat.setCat(id));

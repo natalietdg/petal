@@ -61,6 +61,7 @@ import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
+import { firstRunCheck } from './snapshot-first-run';
 import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
 import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
@@ -590,6 +591,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'first-run') {
+    await wait(2500); // the stand-in shell's rc files
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await firstRunCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
