@@ -6,6 +6,7 @@ import { Menu, type BrowserWindow, type MenuItem } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
 import { extraTabFixtures, folderFixture, historyFixture, panelFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
+import { harnessLine } from '../main/snapshot-shell';
 import { transcriptPath, type SessionFile } from '../main/claude-session';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
@@ -197,7 +198,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const waitTab = await tabOf(WAIT);
     const screen = path.join(dir, 'permission-screen.txt');
     fs.writeFileSync(screen, `${PERMISSION_SCREEN.join('\n')}\n`);
-    ptyOf(waitTab ?? '')?.write(`clear; cat '${screen}'; read -r _\r`);
+    ptyOf(waitTab ?? '')?.write(harnessLine(`clear; cat '${screen}'; read -r _`));
 
     // 1 The Sessions chip's panel has Board at the top, beside Add Session; it opens the board and closes the panel.
     await js("document.getElementById('sessions-pill').click()");
