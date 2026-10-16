@@ -9,7 +9,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { send } from '../main/ipc';
 import type { Kit } from './snapshot';
 
-const TAGLINE = 'A terminal for Claude Code, with a reader for its replies and a cat who keeps you company.';
+const TAGLINE = 'A terminal for Claude Code, with a reader for its replies and a pet who keeps you company.';
 const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
 const FIRST_PASS_DELAY_S = 20; // session-organizer's FIRST_RUN_DELAY_MS
 
