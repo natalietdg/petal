@@ -3,6 +3,7 @@ import { marked, type Token, type TokenizerAndRendererExtension } from 'marked';
 import { linkLabel } from '../shared/link-label';
 import { parseStationLine, stationBarHtml, type StationProgress } from '../shared/station-line';
 import { loopBarHtml, parseLoopLine, type LoopProgress } from '../shared/loop-line';
+import { parseTaskLine, TASK_STATE_WORDS, type TaskLine } from '../shared/task-line';
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
 import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
@@ -26,9 +27,9 @@ const highlight: TokenizerAndRendererExtension = {
   },
 };
 
-// A run of Doing / Recommend / Next (and a factory Station or test Loop) lines becomes one block of labelled rows.
-const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next|station|loop)(?:\*\*|__)?\s*:/i;
-type StatusRow = { key: StatusKey; tokens: Token[] } | { key: 'station'; station: StationProgress } | { key: 'loop'; loop: LoopProgress };
+// A run of Doing / Recommend / Next (and a factory Station, test Loop or Task) lines becomes one block of labelled rows.
+const STATUS_START = /\n[ \t]*(?:\*\*|__)?(?:doing|recommend|next|station|loop|task)(?:\*\*|__)?\s*:/i;
+type StatusRow = { key: StatusKey; tokens: Token[] } | { key: 'station'; station: StationProgress } | { key: 'loop'; loop: LoopProgress } | { key: 'task'; task: TaskLine };
 const statusBlock: TokenizerAndRendererExtension = {
   name: 'statusBlock',
   level: 'block',
@@ -44,9 +45,11 @@ const statusBlock: TokenizerAndRendererExtension = {
       const status = parseStatusLine(line);
       const station = status ? null : parseStationLine(line);
       const loop = status || station ? null : parseLoopLine(line);
+      const task = status || station || loop ? null : parseTaskLine(line);
       if (status) rows.push({ key: status.key, tokens: this.lexer.inlineTokens(status.text) });
       else if (station) rows.push({ key: 'station', station });
       else if (loop) rows.push({ key: 'loop', loop });
+      else if (task) rows.push({ key: 'task', task });
       else break;
       length += line.length + 1;
     }
@@ -58,6 +61,8 @@ const statusBlock: TokenizerAndRendererExtension = {
       ? `<div class="status-row status-station"><span class="status-chip">Station</span>${stationBarHtml(row.station)}</div>`
       : row.key === 'loop'
       ? `<div class="status-row status-station status-loop"><span class="status-chip">Loop</span>${loopBarHtml(row.loop)}</div>`
+      : row.key === 'task'
+      ? `<div class="status-row status-task"><span class="status-chip">Task</span><span class="status-text">${escapeHtml(row.task.title)} · ${TASK_STATE_WORDS[row.task.state]}</span></div>`
       : `<div class="status-row status-${row.key}"><span class="status-chip">${STATUS_TITLES[row.key]}</span><span class="status-text">${this.parser.parseInline(row.tokens)}</span></div>`);
     return `<div class="status-block">${rows.join('')}</div>`;
   },

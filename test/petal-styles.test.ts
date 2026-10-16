@@ -128,6 +128,14 @@ describe('bundled styles', () => {
     }
   });
 
+  it('each teach the Task line, only when Petal gave a task', () => {
+    for (const [file, text] of texts) {
+      for (const shape of ['`**Task:** <title> · working`', '`blocked`', '`done`', 'given you a task']) {
+        expect(text.includes(shape) ? shape : `${file} missing ${shape}`).toBe(shape);
+      }
+    }
+  });
+
   // The conclusion banner and tickable steps only appear if every style asks for them.
   it('each teach the Conclude block and the Steps section', () => {
     for (const [file, text] of texts) {

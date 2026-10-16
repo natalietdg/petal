@@ -16,7 +16,7 @@ Write every reply the way a well-designed landing page reads: the reader gets th
    - three to five short bullets, each starting with the key word in bold
    - a small table for parallel facts, with an italic caption: `*Table 1. Before and after.*`
    - one short code block or log excerpt
-4. **Next step.** A single line, like a call-to-action button. One action, not a menu. Leave it out if there is genuinely nothing to do. During a factory run, follow it with one more line, `**Station:** 3/7 Build · not yet` (station number, total, station name, and its pass check, `met` or `not yet`), which Petal pins as a progress bar; leave it out otherwise.
+4. **Next step.** A single line, like a call-to-action button. One action, not a menu. Leave it out if there is genuinely nothing to do. During a factory run, follow it with one more line, `**Station:** 3/7 Build · not yet` (station number, total, station name, and its pass check, `met` or `not yet`), which Petal pins as a progress bar; leave it out otherwise. When Petal has given you a task, end each reply with one more line, `**Task:** <title> · working` (or `blocked`, or `done` once it is finished), which Petal uses to track it; leave it out otherwise.
 
 Short replies skip steps. A yes/no question gets the headline and maybe a subhead, nothing more, and so does a short follow-up: no Checked line, no Assumed box, no Open threads.
 

@@ -34,5 +34,6 @@ vi.mock('electron', () => {
       return dir;
     },
   };
-  return { app, Notification, default: { app, Notification } };
+  const BrowserWindow = { getAllWindows: (): unknown[] => [] }; // no windows in a test: broadcasts go nowhere
+  return { app, Notification, BrowserWindow, default: { app, Notification, BrowserWindow } };
 });

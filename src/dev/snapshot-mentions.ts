@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
 import { extraTabFixtures, pasteWrites, slashFixture } from '../main/snapshot-mode';
-import { recordedActivity } from '../main/activity-feed';
+import { listActivity } from '../main/activity-feed';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { seedSlashFixture } from './snapshot-slash';
 import { pasted } from '../main/mentions';
@@ -132,7 +132,7 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
 
     // 5 Send: exactly the wrapped paste for each running target, nothing for the sender or the ended tab.
     const before = pasteWrites.length;
-    const activityBefore = recordedActivity().length;
+    const activityBefore = new Set(listActivity().map((e) => e.id));
     await js("document.getElementById('composer-send').click()");
     const sent = await waitFor(() => (pastesSince(before).length >= 2 ? pastesSince(before) : null), 5000);
     await wait(400);
@@ -143,9 +143,10 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
     const result = (await toLine()).result;
     check(result.includes(`Sent to ${prices}`) && result.includes(`Queued for ${email}`) && result.includes(`Not running, not sent: ${docs}`), `the result line says who got it: ${JSON.stringify(result)}`);
     check((await js(`${input}.value`)) === '' && !(await toLine()).shown, 'the box clears and the To line goes');
-    const activity = recordedActivity().slice(activityBefore);
-    check(activity.length === 1 && activity[0]?.kind === 'message' && JSON.stringify(activity[0]?.to) === JSON.stringify([prices, email]) && JSON.stringify(activity[0]?.skipped) === JSON.stringify([docs]) && activity[0]?.text === body,
-      `one message event in the activity feed: ${JSON.stringify(activity)}`);
+    const activity = listActivity().filter((e) => !activityBefore.has(e.id));
+    const reached = activity.map((e) => e.toSessionName).sort();
+    check(activity.length === 2 && activity.every((e) => e.kind === 'message' && e.text === body && e.sessionName === me) && JSON.stringify(reached) === JSON.stringify([prices, email].sort()),
+      `one Activity message per session reached, none for the ended one: ${JSON.stringify(activity)}`);
 
     // 6 Also send to this session: the sender gets her plain message too; mentions alone send nothing.
     const before2 = pasteWrites.length;

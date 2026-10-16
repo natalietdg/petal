@@ -3,6 +3,7 @@
 import { el } from './dom';
 import { parseStation, stationBarHtml, type StationProgress } from '../shared/station-line';
 import { loopBarHtml, parseLoop, type LoopProgress } from '../shared/loop-line';
+import { parseTask, TASK_STATE_WORDS, type TaskLine } from '../shared/task-line';
 import { hasStatus, parseStatus, STATUS_KEYS, STATUS_TITLES, type StatusLines } from '../shared/status-lines';
 
 export function createStrip(): HTMLDivElement {
@@ -38,7 +39,15 @@ function loopRow(loop: LoopProgress): HTMLElement {
   return row;
 }
 
-type Found = { lines: StatusLines; station: StationProgress | null; loop: LoopProgress | null };
+function taskRow(task: TaskLine): HTMLElement {
+  const row = el('div', 'status-row status-task');
+  const text = el('span', 'status-text', `${task.title} · ${TASK_STATE_WORDS[task.state]}`);
+  text.title = text.textContent ?? '';
+  row.append(el('span', 'status-chip', 'Task'), text);
+  return row;
+}
+
+type Found = { lines: StatusLines; station: StationProgress | null; loop: LoopProgress | null; task: TaskLine | null };
 
 // Replies newest first: the newest one carrying any status, Station or Loop line drives the whole strip.
 function newestLines(newestFirst: readonly string[]): Found | null {
@@ -46,7 +55,8 @@ function newestLines(newestFirst: readonly string[]): Found | null {
     const lines = parseStatus(markdown);
     const station = parseStation(markdown);
     const loop = parseLoop(markdown);
-    if (hasStatus(lines) || station || loop) return { lines, station, loop };
+    const task = parseTask(markdown);
+    if (hasStatus(lines) || station || loop || task) return { lines, station, loop, task };
   }
   return null;
 }
@@ -58,5 +68,5 @@ const barRow = (found: Found): HTMLElement[] => (found.loop ? [loopRow(found.loo
 export function paintStrip(strip: HTMLElement, newestFirst: readonly string[]): void {
   const found = newestLines(newestFirst);
   strip.hidden = !found;
-  strip.replaceChildren(...(found ? [...rows(found.lines), ...barRow(found)] : []));
+  strip.replaceChildren(...(found ? [...rows(found.lines), ...barRow(found), ...(found.task ? [taskRow(found.task)] : [])] : []));
 }

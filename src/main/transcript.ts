@@ -36,6 +36,14 @@ export interface JsonlTailHandlers {
   caughtUp?: () => void; // a read reached the end of the file
 }
 
+const startNearEnd = (file: string, lastBytes: number): number => {
+  try {
+    return Math.max(0, fs.statSync(file).size - lastBytes);
+  } catch {
+    return 0; // no log yet: read it from the top once it appears
+  }
+};
+
 // Follows one append-only jsonl: fs.watch reads new lines as they land, poll() is the tick fallback.
 // Reads are async and one at a time; a change during a read gets one more pass, so no line is missed or read twice.
 export class JsonlTail {
@@ -50,9 +58,11 @@ export class JsonlTail {
   private stopped = false;
   readonly firstRead: Promise<void>;
 
-  constructor(file: string, handlers: JsonlTailHandlers) {
+  // lastBytes: start that far from the end instead of the top (its first, cut line is the handler's to skip).
+  constructor(file: string, handlers: JsonlTailHandlers, { lastBytes }: { lastBytes?: number } = {}) {
     this.file = file;
     this.handlers = handlers;
+    if (lastBytes !== undefined) this.offset = startNearEnd(file, lastBytes);
     this.firstRead = this.poll();
   }
 

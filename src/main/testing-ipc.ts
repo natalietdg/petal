@@ -26,6 +26,9 @@ import {
   type ClaudePipelineState, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type StageResult, type TestingState,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
+import { recordActivity } from './activity-feed';
+import { repoBranch } from './repo-label';
+import { sessionTitleFor } from './session-title';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
@@ -92,6 +95,20 @@ function claudePipelineState(root: string, saved: PipelineConfig | null): Claude
 }
 
 // Claude's runs in every open session on this project, added to its history once each.
+const RUN_WORDS: Record<PipelineRun['state'], string> = { running: 'Tests running', passed: 'Tests passed', failed: 'Tests failed', stopped: 'Test run stopped' };
+
+// The activity feed's line for a run; the same id as it moves from running to its result.
+function recordRun(root: string, run: PipelineRun): void {
+  const { passed, failed } = run.totals;
+  const counts = run.state === 'running' ? '' : `: ${passed} passed${failed ? `, ${failed} failed` : ''}`;
+  recordActivity({
+    id: `test:${run.id}`, kind: 'test', at: run.finishedAt ?? run.startedAt,
+    sessionId: run.sessionId ?? null, sessionName: run.sessionId ? sessionTitleFor(run.sessionId) : null, branch: repoBranch(root), repo: path.basename(root),
+    text: `${RUN_WORDS[run.state]} in ${path.basename(root)}${counts}`, detail: run.stages.map((stage) => `${stage.name}: ${stage.status}`),
+    target: { runId: run.id },
+  });
+}
+
 // The store is loaded after the logs are read, so a run saved meanwhile is never lost.
 async function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): Promise<void> {
   const logs: SessionLog[] = [];
@@ -118,6 +135,7 @@ export async function mergeLogRuns(root: string, logs: readonly SessionLog[], st
   const scripts = scriptsOf(root);
   const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => claudeRun(call, stages, scripts, root));
   if (fresh.length) store.save({ ...data, runs: [...fresh, ...data.runs] });
+  for (const run of fresh) recordRun(root, run);
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.
@@ -190,6 +208,7 @@ function tick(w: Watched): void {
     watching.delete(w.run.id);
   }
   store.putRun(w.root, w.run);
+  recordRun(w.root, w.run);
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'testing:run-update', { root: w.root, run: w.run });
 }
 
@@ -212,6 +231,7 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
     stages: planned.map(({ config, plan }) => ({ stageId: config.id, name: config.name, command: config.command, status: 'waiting', exitCode: null, durationMs: null, counts: emptyCounts(), tests: [], output: '', runner: plan.runner })),
   };
   store.putRun(root, run);
+  recordRun(root, run);
   const w: Watched = { root, run, stages: planned, done, started: Date.now(), timer: setInterval(() => tick(w), POLL_MS) };
   watching.set(id, w);
   if (isSnapshotRun()) {

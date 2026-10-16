@@ -94,7 +94,8 @@ describe('deliverMentions (main)', () => {
   const ports = (): Record<string, MentionPort & { written: string[] }> => {
     const port = (name: string, place: string | null, running: boolean, busy = false) => {
       const written: string[] = [];
-      return { name, place, running, busy, written, write: (data: string) => { written.push(data); } };
+      const sessionId = running ? `sid-${name}` : null;
+      return { name, place, sessionId, branch: running ? 'main' : null, repo: place, running, busy, written, write: (data: string) => { written.push(data); } };
     };
     return {
       me: port('Sessions board', 'petal · mentions', true),
@@ -106,27 +107,32 @@ describe('deliverMentions (main)', () => {
 
   it('pastes the same wrapped message into every mentioned tab, and none into the sender', () => {
     const p = ports();
-    const { deliveries, activity } = deliverMentions({ from: 'me', to: ['a', 'b', 'a'], text: 'which table?' }, (id) => p[id], new Date('2026-10-16T10:00:00Z'));
+    const at = new Date('2026-10-16T10:00:00Z');
+    const { deliveries, messages } = deliverMentions({ from: 'me', to: ['a', 'b', 'a'], text: 'which table?' }, (id) => p[id], at);
     const want = pasted('Message from session "Sessions board" (petal · mentions): which table?');
     expect(want).toBe('\x1b[200~Message from session "Sessions board" (petal · mentions): which table?\x1b[201~\r');
     expect(p.a?.written).toEqual([want]);
     expect(p.b?.written).toEqual([want]);
     expect(p.me?.written).toEqual([]);
     expect(deliveries).toEqual([{ tabId: 'a', name: 'Fix stale prices', outcome: 'sent' }, { tabId: 'b', name: 'Welcome email', outcome: 'queued' }]);
-    expect(activity).toEqual({ kind: 'message', at: '2026-10-16T10:00:00.000Z', from: 'Sessions board', to: ['Fix stale prices', 'Welcome email'], skipped: [], text: 'which table?' });
+    const from = { sessionId: 'sid-Sessions board', name: 'Sessions board', branch: 'main', repo: 'petal · mentions' };
+    expect(messages).toEqual([
+      { from, to: { sessionId: 'sid-Fix stale prices', name: 'Fix stale prices' }, text: 'which table?', at: at.getTime() },
+      { from, to: { sessionId: 'sid-Welcome email', name: 'Welcome email' }, text: 'which table?', at: at.getTime() },
+    ]);
   });
 
   it('skips a tab with no Claude running and a tab that closed, writing nothing to either', () => {
     const p = ports();
-    const { deliveries, activity } = deliverMentions({ from: 'me', to: ['off', 'gone', 'a'], text: 'hi' }, (id) => p[id]);
+    const { deliveries, messages } = deliverMentions({ from: 'me', to: ['off', 'gone', 'a'], text: 'hi' }, (id) => p[id]);
     expect(deliveries.map((d) => d.outcome)).toEqual(['not-running', 'closed', 'sent']);
     expect(p.off?.written).toEqual([]);
-    expect(activity?.skipped).toEqual(['Docs site', 'gone']);
+    expect(messages.map((m) => m.to.name)).toEqual(['Fix stale prices']); // skipped tabs are not recorded
   });
 
   it('records nothing when no one was reached, and sends nothing to itself or with empty text', () => {
     const p = ports();
-    expect(deliverMentions({ from: 'me', to: ['off'], text: 'hi' }, (id) => p[id]).activity).toBeNull();
+    expect(deliverMentions({ from: 'me', to: ['off'], text: 'hi' }, (id) => p[id]).messages).toEqual([]);
     expect(deliverMentions({ from: 'me', to: ['me'], text: 'hi' }, (id) => p[id]).deliveries).toEqual([]);
     expect(deliverMentions({ from: 'me', to: ['a'], text: '  \x1b ' }, (id) => p[id]).deliveries).toEqual([]);
     expect(p.me?.written).toEqual([]);

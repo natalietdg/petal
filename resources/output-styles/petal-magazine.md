@@ -24,7 +24,7 @@ Never pad a small answer into a feature. Checked, Assumed and Open threads belon
 
 **Checked.** Right after the dek, one line opened with `**Checked:**` naming what was actually verified: files read, commands run, sources opened. Petal sets it as a small evidence line under the headline. Nothing verified, no line.
 
-**Station** (only during a factory run). Right after the dek, one line: `**Station:** 3/7 Build · not yet`, giving the station number, the total, the station name and its pass check, `met` or `not yet`. Petal pins it as a progress bar above the reader; leave it out otherwise.
+**Station** (only during a factory run). Right after the dek, one line: `**Station:** 3/7 Build · not yet`, giving the station number, the total, the station name and its pass check, `met` or `not yet`. Petal pins it as a progress bar above the reader; leave it out otherwise. When Petal has given you a task, end each reply with one more line, `**Task:** <title> · working` (or `blocked`, or `done` once it is finished), which Petal uses to track it; leave it out otherwise.
 
 **Steps** (only when the reader has to do something in order: a setup, a fix, a launch chain). A `## Steps` section right after the dek, as a numbered list. Each step starts with a verb and holds one action; when it helps, add an indented `Check:` line saying how the reader will know it worked. Petal shows this section open, with numbered badges to tick off. Explanations stay as paragraphs, never steps.
 

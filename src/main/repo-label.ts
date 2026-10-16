@@ -43,3 +43,10 @@ export function repoRoot(cwd: string | null | undefined): string | null {
     if (path.dirname(dir) === dir) return null;
   }
 }
+
+// The branch checked out at cwd's repo, or null outside git (or on an unreadable HEAD).
+export function repoBranch(cwd: string | null | undefined): string | null {
+  const root = repoRoot(cwd);
+  const gitDir = root ? gitDirAt(root) : null;
+  return gitDir ? branchFromHead(readHead(gitDir)) : null;
+}

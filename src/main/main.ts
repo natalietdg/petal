@@ -20,6 +20,9 @@ import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
 import { registerMentionsIpc } from './mentions-ipc';
+import { registerTasksIpc } from './tasks-ipc';
+import * as coord from './coord';
+import { flush as flushActivity } from './activity-feed';
 import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
@@ -27,7 +30,7 @@ import { claudePath } from './claude-cli';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
-import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions } from './tabs';
+import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions, tabLabelOf } from './tabs';
 import { applyCat, applyReading, applyScene, applyTheme, currentTheme, onLookChanged, registerLookIpc, settings, themes } from './look';
 import type { EventArgs, EventChannel } from '../shared/ipc';
 
@@ -185,6 +188,7 @@ function registerIpc(): void {
   registerReposIpc({ sessions, openTab });
   registerPasteIpc();
   registerMentionsIpc();
+  registerTasksIpc({ sessions });
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
   handle('update:restart', () => restartToUpdate(liveEnv()));
@@ -203,12 +207,13 @@ app.whenReady().then(() => {
   repoIndex.refreshIfStale(); // in the background, so ⌘O opens on a fresh list
   // The organizer starts the same way in snapshot runs, so they prove the default; its passes never call Claude there.
   organizer.start({ openSessionIds });
+  coord.start(sessions, { tabLabel: tabLabelOf }); // tasks, file clashes and the activity feed across live sessions
   // The dev harness is a separate chunk, loaded only in snapshot runs; release builds compile it out.
   if (__PASTEL_DEV_HARNESS__ && isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   void startUpdater(liveEnv()); // off in snapshot, dev and non-Developer ID builds
 });
 
 app.on('before-quit', () => responseHook.stopAllHooks()); // hooks run detached, so they would outlive Petal
-app.on('will-quit', () => organizer.stop());
+app.on('will-quit', () => { organizer.stop(); coord.stop(); flushActivity(); });
 
 app.on('window-all-closed', () => app.quit());

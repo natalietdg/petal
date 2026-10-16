@@ -58,6 +58,7 @@ import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { mentionsCheck } from './snapshot-mentions';
+import { tasksCheck } from './snapshot-tasks';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
@@ -409,6 +410,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
     ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],
+    ['tasks', () => tasksCheck(kit, { win, openTab: tabs.openTab })],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['factory', () => factoryCheck(kit, win)],
@@ -712,6 +714,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await mentionsCheck(kit, { win, openTab, sessions, fixtureFile: fakeTranscript() ?? '' }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'tasks' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await tasksCheck(kit, { win, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
