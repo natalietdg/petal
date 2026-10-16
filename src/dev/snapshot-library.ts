@@ -82,6 +82,14 @@ const PROBE = `(() => {
     atThree: sb && pb ? Math.abs((sb.top + sb.bottom) / 2 - (pb.top + pb.bottom) / 2) < 3 && sb.left >= pb.right - 2 : false,
     threeGap: sb && pb ? [Math.round((sb.top + sb.bottom) / 2 - (pb.top + pb.bottom) / 2), Math.round(sb.left - pb.right)] : null,
     dialLeft: dial ? Math.round(dial.getBoundingClientRect().left) : null,
+    // the notes drawn above and below the selected one, nearest first
+    around: sb ? (() => {
+      const mid = (b) => (b.top + b.bottom) / 2;
+      const others = options.filter((o) => o !== sel).map((o) => ({ name: o.querySelector('.lib-tab-name')?.textContent, dy: mid(o.getBoundingClientRect()) - mid(sb) }));
+      const above = others.filter((o) => o.dy < 0).sort((a, b) => b.dy - a.dy).map((o) => o.name);
+      const below = others.filter((o) => o.dy > 0).sort((a, b) => a.dy - b.dy).map((o) => o.name);
+      return { above, below };
+    })() : null,
     preview: view.querySelector('.lib-preview-title')?.textContent ?? null,
     letters: [...view.querySelectorAll('.lib-letter')].map((l) => l.textContent),
     reading: !view.querySelector('.lib-reading').hidden,
@@ -126,12 +134,14 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const opened = await settle((p) => p.state.shown.length === az.length);
     check(opened && JSON.stringify(opened.state.shown) === JSON.stringify(az), `A to Z by default: ${JSON.stringify(opened?.state.shown.slice(0, 4))}…`);
     check(opened && opened.role === 'listbox' && opened.activeId === opened.selectedId && opened.selected === az[0] && opened.preview === az[0], `listbox, ${az[0]} selected and previewed`);
-    await wait(400); // the first layout settles
-    const three = await probe();
+    const three = await settle((p) => Boolean(p.atThree)) ?? await probe(); // the first layout settles onto the pointer
     check(three?.atThree, `the selected note sits at 3 o'clock, right of the pointer: ${JSON.stringify(three?.threeGap)}`);
     check(opened && opened.dialLeft === 0, `the dial's flat side is on the window's left edge: ${opened?.dialLeft}`);
     check(opened && (opened.letters as string[]).includes('A') && (opened.letters as string[]).includes('C'), `rim letters: ${JSON.stringify(opened?.letters)}`);
-    check(three && (three.options as number) < az.length && (three.options as number) >= 8, `a full dial wraps, notes above and below 3 o'clock: ${three?.options}`);
+    // How many fit is the window's height (7 at this size); wrapping puts Z's last note straight above A.
+    const around = three?.around as { above: string[]; below: string[] } | null;
+    check(three && (three.options as number) < az.length && around && around.above[0] === az.at(-1) && around.below[0] === az[1] && around.above.length >= 3 && around.below.length >= 3,
+      `a full dial wraps, notes above and below 3 o'clock: ${three?.options} ${JSON.stringify(around && { above: around.above.slice(0, 2), below: around.below.slice(0, 2) })}`);
     check(await js("document.getElementById('library-button').getAttribute('aria-pressed')") === 'true', 'the Library button shows pressed');
     await capture('library-dial');
 
