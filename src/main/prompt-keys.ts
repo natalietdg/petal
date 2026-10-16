@@ -51,6 +51,7 @@ export function menuKeys(step: unknown): string[] | null {
 }
 
 export function keysFor(answer: PromptAnswer): string[] | null {
+  if (answer.kind === 'interrupt') return [ESC];
   if (answer.kind === 'permission') return permissionKeys(answer.option);
   return answer.kind === 'menu' ? menuKeys(answer.step) : pickerKeys(answer.step);
 }

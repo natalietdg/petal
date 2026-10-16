@@ -4,6 +4,7 @@ import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as sessionsPanel from './sessions-panel';
 import * as favorites from './favorites';
+import * as stopClaude from './stop-claude';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
@@ -131,6 +132,9 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (card.conclusion) button.append(labelled('board-conclusion', 'Conclusion', card.conclusion));
   button.addEventListener('click', () => void choose(card, false));
   item.append(button);
+  // A working session in this window: Stop sits on the card's corner, outside the card's own button.
+  const stop = card.tabId ? stopClaude.control(card.tabId, 'board') : null;
+  if (stop) { item.classList.add('has-stop'); item.append(stop); }
 
   const confirm = confirms.get(card.sessionId);
   if (confirm) {
@@ -213,7 +217,8 @@ function render(force = false): void {
   }
   const cards = sortCards(sources(lastView?.rows).map(toCard));
   const shown = filterCards(cards, filter);
-  const key = JSON.stringify([filter, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms]]);
+  const stops = cards.map((c) => (c.tabId ? stopClaude.phaseOf(c.tabId) : 'hidden'));
+  const key = JSON.stringify([filter, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -276,5 +281,6 @@ new MutationObserver(() => {
 })
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });
 window.addEventListener('petal:open-board', open);
+window.addEventListener(stopClaude.CHANGED_EVENT, () => render(true));
 window.pastel.onToggleBoard(toggle);
 byId('board-button').addEventListener('click', toggle);

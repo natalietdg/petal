@@ -137,6 +137,7 @@ function refreshMenu(): void {
     onToggleBoard: () => sendToFocused('board:toggle'),
     onToggleFocus: () => sendToFocused('focus:toggle'),
     onToggleHeaders: () => sendToFocused('headers:toggle'),
+    onStopClaude: () => sendToFocused('claude:stop'),
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,
     onOpenGetStarted: openGetStarted,

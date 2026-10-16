@@ -9,6 +9,7 @@ import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
 import { builtinMenusCheck } from './snapshot-builtin-menus';
+import { stopButtonCheck } from './snapshot-stop';
 import { printLookCheck } from './snapshot-print';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
@@ -719,6 +720,15 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     await fixtureReply({ js, log, pty });
     await js('PastelTerm.welcome.close()');
     await builtinMenusCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // Stop: reply box, streaming reply and Board card on a busy fixture; ⌘.; hidden when idle, waiting or asking.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'stop-button' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await js('PastelTerm.welcome.close()');
+    await stopButtonCheck(kit, { win, feed, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

@@ -73,6 +73,7 @@ const api = {
   onToggleBoard: (callback: () => void) => subscribe('board:toggle', callback),
   onToggleFocus: (callback: () => void) => subscribe('focus:toggle', callback),
   onToggleHeaders: (callback: () => void) => subscribe('headers:toggle', callback),
+  onStopClaude: (callback: () => void) => subscribe('claude:stop', callback),
   onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
