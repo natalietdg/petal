@@ -147,7 +147,7 @@ export class ReaderFeed implements ProcessListener {
     const repo = repoLabel(found.cwd);
     const repoChanged = repo !== this.repo; // a branch switch shows on the next tick
     this.repo = repo;
-    this.tail?.poll();
+    void this.tail?.poll();
     if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;

@@ -7,7 +7,7 @@ import { portrait } from './cat';
 import { byId, el, isIpcError } from './dom';
 import type { CustomizeState } from '../shared/ipc';
 
-export const TAGLINE = 'A terminal for Claude Code, with a reader for its replies and a cat who keeps you company.';
+export const TAGLINE = 'A terminal for Claude Code, with a reader for its replies and a pet who keeps you company.';
 const WELCOME_CATS = ['mika', 'miki', 'kira', 'hoshi'];
 
 const view = byId('welcome');

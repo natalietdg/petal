@@ -262,3 +262,25 @@ describe('the IPC asks the folder gate', () => {
     expect(read(projectMd(repo))).toContain('## 1. P');
   });
 });
+
+describe('symlinks in a repo', () => {
+  it('a cloned repo whose .petal/factory.json links outside it is refused, and nothing lands outside', () => {
+    const outsideDir = tempDir('petal-factory-outside-');
+    fs.mkdirSync(path.join(repo, '.petal'));
+    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), '*\n');
+    fs.symlinkSync(path.join(outsideDir, 'planted.json'), projectJson(repo)); // dangling, so it isn't refused as broken JSON
+    expect(() => saveFactory(paths, 'project', edited('P'))).toThrow(/^Petal didn’t write .*factory\.json: it leads to .*planted\.json, outside /);
+    expect(fs.readdirSync(outsideDir)).toEqual([]);
+  });
+
+  it('a symlinked global skill stays a link and its target gets the update', () => {
+    saveFactory(paths, 'global', edited('First'));
+    const dotfiles = tempDir('petal-factory-dotfiles-');
+    const real = path.join(dotfiles, 'SKILL.md');
+    fs.renameSync(skillFile(claudeDir), real);
+    fs.symlinkSync(real, skillFile(claudeDir));
+    saveFactory(paths, 'global', edited('Second'));
+    expect(fs.lstatSync(skillFile(claudeDir)).isSymbolicLink()).toBe(true);
+    expect(read(real)).toContain('Second');
+  });
+});

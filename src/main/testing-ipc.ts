@@ -13,7 +13,7 @@ import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
-import { claudeRun, scanLog } from './testing-claude';
+import { claudeRun, scanLog, type ClaudeCall } from './testing-claude';
 import { adoptClaudePipeline, offersClaudePipeline, readClaudePipeline, type ClaudePipeline } from './testing-claude-pipeline';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
@@ -91,18 +91,20 @@ function claudePipelineState(root: string, saved: PipelineConfig | null): Claude
 }
 
 // Claude's runs in every open session on this project, added to its history once each.
-function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): void {
+// The store is loaded after the logs are read, so a run saved meanwhile is never lost.
+async function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): Promise<void> {
   if (!claudeFolderAllowed()) return;
-  const data = store.load(root);
-  const known = new Set(data.runs.map((r) => r.id));
-  const fresh: PipelineRun[] = [];
-  const scripts = scriptsOf(root);
+  const calls: ClaudeCall[] = [];
   for (const { feed } of sessions.values()) {
     const s = feed.session;
     const cwd = (isSnapshotRun() && testingFixture.project) || s?.cwd;
     if (!s?.transcript || !cwd || repoRoot(cwd) !== root) continue;
-    for (const call of scanLog(s.transcript, s.sessionId).calls) if (!known.has(`claude-${call.id}`)) fresh.push(claudeRun(call, stages, scripts, root));
+    calls.push(...(await scanLog(s.transcript, s.sessionId)).calls);
   }
+  const data = store.load(root);
+  const known = new Set(data.runs.map((r) => r.id));
+  const scripts = scriptsOf(root);
+  const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => claudeRun(call, stages, scripts, root));
   if (fresh.length) store.save({ ...data, runs: [...fresh, ...data.runs] });
 }
 
@@ -114,12 +116,12 @@ async function sessionTabFor(root: string, sessions: TabSessions, asking: TabSes
   return null;
 }
 
-function stateFor(root: string, sessions: TabSessions, sessionTab: string | null): TestingState {
+async function stateFor(root: string, sessions: TabSessions, sessionTab: string | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
   const proposed = proposalFor(root, stack);
   const saved = store.load(root).pipeline;
   const pipeline = saved ?? defaultPipeline(proposed);
-  mergeClaudeRuns(root, sessions, pipeline.stages);
+  await mergeClaudeRuns(root, sessions, pipeline.stages);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
   return { allowed: true, project: { root, name: path.basename(root) }, stack, proposed, pipeline, saved: Boolean(saved), runs: data.runs, running, sessionTab, claudePipeline: claudePipelineState(root, saved) };
@@ -229,8 +231,8 @@ const criteriaFile = (root: string): string => path.join(root, ...CRITERIA_PATH.
 export function prepareLoop(root: string): void {
   const file = criteriaFile(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  ensureSelfIgnore(path.dirname(file));
-  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON);
+  ensureSelfIgnore(path.dirname(file), root);
+  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON, undefined, { within: root });
 }
 
 // Read only, the first CRITERIA_CAP bytes; null when there is no file yet.
@@ -271,7 +273,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const root = await projectOf(asking);
     if (!root) return { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null };
     // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
-    mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
+    await mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
     const data = store.load(root);
     return { runs: data.runs, running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking), criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline) };
   });
@@ -346,7 +348,7 @@ export async function onTurnFinished(session: TabSession): Promise<void> {
   if (!s?.transcript) return;
   const root = await projectOf(session);
   if (!root) return;
-  const { edits } = scanLog(s.transcript, s.sessionId);
+  const { edits } = await scanLog(s.transcript, s.sessionId);
   const before = editsSeen.get(s.transcript) ?? edits; // the first turn seen only sets the baseline, so a restart never runs it
   editsSeen.set(s.transcript, edits);
   const pipeline = store.load(root).pipeline;

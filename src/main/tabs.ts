@@ -13,7 +13,7 @@ import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites, stopWrites } from './snapshot-mode';
 import { claudePath } from './claude-cli';
 import { keysFor } from './prompt-keys';
-import { buildStartCommand, shellQuote } from './resume-command';
+import { buildStartCommand, typedQuote } from './resume-command';
 import { handle, on, send } from './ipc';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { PromptAnswer } from '../shared/prompt-answer';
@@ -221,6 +221,6 @@ export function registerTabIpc(): void {
   on('tab:start-claude', (event, { tabId, prompt }) => {
     const session = tabFor(event, tabId);
     if (!session || typeof prompt !== 'string' || !prompt.trim()) return;
-    session.pty.write(isSnapshotRun() ? `echo claude-start ${shellQuote(prompt)}\r` : buildStartCommand(prompt));
+    session.pty.write(isSnapshotRun() ? `echo claude-start ${typedQuote(prompt)}\r` : buildStartCommand(prompt));
   });
 }

@@ -233,26 +233,26 @@ describe('Claude’s test runs from the session log', () => {
   const use = (id: string, name: string, input: object) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } });
   const result = (id: string, content: unknown, is_error = false) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content, is_error }] } });
 
-  it('picks test commands, pairs results, counts edits, reads only what was appended', () => {
+  it('picks test commands, pairs results, counts edits, reads only what was appended', async () => {
     const file = path.join(tempDir(), 's.jsonl');
     fs.writeFileSync(file, entry(use('t1', 'Bash', { command: 'git status' }), '2026-10-16T01:00:00Z')
       + entry(result('t1', 'clean'), '2026-10-16T01:00:01Z')
       + entry(use('e1', 'Edit', { file_path: '/x.ts' }), '2026-10-16T01:00:02Z')
       + entry(use('t2', 'Bash', { command: 'npx vitest run src/auth.test.js' }), '2026-10-16T01:00:03Z')
       + entry(result('t2', `Exit code 1\n${fixture('vitest-output.txt')}`, true), '2026-10-16T01:00:09Z'));
-    const first = scanLog(file, 'sess-1');
+    const first = await scanLog(file, 'sess-1');
     expect(first.calls.map((c) => c.command)).toEqual(['npx vitest run src/auth.test.js']);
     expect(first.edits).toBe(1);
     fs.appendFileSync(file, entry(use('t3', 'Bash', { command: 'pytest -q' }), '2026-10-16T01:01:00Z')
       + entry(result('t3', [{ type: 'text', text: fixture('pytest-output.txt') }], true), '2026-10-16T01:01:05Z'));
-    expect(scanLog(file, 'sess-1').calls.map((c) => c.id)).toEqual(['t2', 't3']);
+    expect((await scanLog(file, 'sess-1')).calls.map((c) => c.id)).toEqual(['t2', 't3']);
 
     const stages = [{ id: 'unit', name: 'Unit', command: 'npm test' }, { id: 'vitest', name: 'Vitest', command: 'npx vitest run' }];
     const run = claudeRun(first.calls[0], stages);
     expect(run).toMatchObject({ id: 'claude-t2', by: 'claude', state: 'failed', totals: { passed: 4, failed: 1, skipped: 1 }, sessionId: 'sess-1' });
     expect(run.stages[0]).toMatchObject({ stageId: 'vitest', exitCode: 1, runner: 'vitest' });
     expect(failingNames(run.stages[0].tests)).toEqual(['auth > tokens > rejects an expired token']);
-    expect(claudeRun(scanLog(file, 'sess-1').calls[1], stages).stages[0]).toMatchObject({ stageId: null, name: 'Claude’s run' });
+    expect(claudeRun((await scanLog(file, 'sess-1')).calls[1], stages).stages[0]).toMatchObject({ stageId: null, name: 'Claude’s run' });
     // "npm test" running vitest is the stage for Claude's "npx vitest run".
     expect(claudeRun(first.calls[0], [stages[0]], { test: 'vitest run' }).stages[0].stageId).toBe('unit');
   });

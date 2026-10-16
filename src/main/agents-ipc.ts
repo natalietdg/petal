@@ -31,7 +31,7 @@ export function agentsDir(sessionId: string, own: FollowedSession | null | undef
 const NONE: AgentsList = { agents: [], running: 0 };
 
 // The reader's session agents, for the header chip and the list.
-export function ownAgents(own: FollowedSession | null | undefined): AgentsList {
+export async function ownAgents(own: FollowedSession | null | undefined): Promise<AgentsList> {
   const dir = own ? agentsDir(own.sessionId, own) : null;
   return dir ? listAgents(dir) : NONE;
 }
@@ -44,15 +44,15 @@ function stopTimeline(contents: WebContents): void {
 }
 
 export function registerAgentsIpc({ activeSession }: { activeSession: ActiveSession }): void {
-  handle('agents:list', (event, { sessionId }) => {
+  handle('agents:list', async (event, { sessionId }) => {
     const own = activeSession(event.sender.id)?.feed.session;
     const id = typeof sessionId === 'string' && sessionId ? sessionId : own?.sessionId ?? null;
     const dir = id ? agentsDir(id, own) : null;
     const sessionLabel = id ? sessionTitleFor(id, { cwd: id === own?.sessionId ? own.cwd : null }) : null;
-    return { sessionId: id, sessionLabel, ...(dir ? listAgents(dir) : NONE) };
+    return { sessionId: id, sessionLabel, ...(dir ? await listAgents(dir) : NONE) };
   });
 
-  handle('agents:open', (event, { sessionId, agentId }) => {
+  handle('agents:open', async (event, { sessionId, agentId }) => {
     const contents = event.sender;
     stopTimeline(contents);
     const dir = typeof sessionId === 'string' ? agentsDir(sessionId, activeSession(contents.id)?.feed.session) : null;
@@ -62,12 +62,12 @@ export function registerAgentsIpc({ activeSession }: { activeSession: ActiveSess
     });
     timelines.set(contents.id, timeline);
     contents.once('destroyed', () => stopTimeline(contents));
-    return { agentId, ...timeline.start() };
+    return { agentId, ...(await timeline.start()) };
   });
 
   // The sessions tick's fallback, like TranscriptTail.poll: re-attaches a watcher a rename dropped.
   handle('agents:poll', (event) => {
-    timelines.get(event.sender.id)?.poll();
+    void timelines.get(event.sender.id)?.poll();
     return { ok: true as const };
   });
 
