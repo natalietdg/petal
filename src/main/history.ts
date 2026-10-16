@@ -35,8 +35,7 @@ export interface ListedSession extends SessionRecord {
 const cache = new Map<string, { mtimeMs: number; size: number; record: SessionRecord }>();
 
 // Top-level session logs only; subagent logs live in <session>/subagents/.
-function sessionFiles(): string[] {
-  const home = allowedClaudeHome();
+function sessionFiles(home: string | null = allowedClaudeHome()): string[] {
   if (!home) return [];
   const projectsDir = path.join(home, 'projects');
   let projects: string[];
@@ -100,13 +99,14 @@ const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cw
 
 // The past week, plus any older session she starred (kept) that is still on disk.
 // Empty until she allows reading her Claude folder, fixtures included, so History matches the reader.
-export function listSessions(kept: ReadonlySet<string> = new Set()): ListedSession[] {
-  if (!claudeFolderAllowed()) return [];
+// `home` is the Claude folder to list; a caller with its own resolved folder (Testing in snapshot runs) passes it.
+export function listSessions(kept: ReadonlySet<string> = new Set(), home: string | null = allowedClaudeHome()): ListedSession[] {
+  if (!claudeFolderAllowed() || !home) return [];
   const since = Date.now() - WINDOW_DAYS * DAY_MS;
   const wanted = (file: string, mtime: number) => mtime >= since || kept.has(path.basename(file, '.jsonl'));
   const live = new Set(liveSessions().map((s) => s.sessionId));
   if (isSnapshotRun()) historyFixture.live.forEach((id) => live.add(id));
-  const records = sessionFiles()
+  const records = sessionFiles(home)
     .map((file) => { try { return { file, mtime: fs.statSync(file).mtimeMs }; } catch { return null; } }) // deleted mid-scan
     .filter((entry): entry is { file: string; mtime: number } => Boolean(entry && wanted(entry.file, entry.mtime)))
     .map(({ file }) => recordFor(file))

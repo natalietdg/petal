@@ -71,10 +71,16 @@ async function rootFor(session: TabSession | undefined, picked: unknown): Promis
 }
 
 // ---- Reading the project: stack, skills, proposal.
-function skillsFor(root: string) {
+// The Claude folder Testing reads (skills, recent sessions): the allowed one, or the run's stand-in in snapshot runs.
+function testingClaudeDir(): string | null {
   const home = allowedClaudeHome();
-  if (!home) return [];
-  const claudeDir = (isSnapshotRun() && (testingFixture.claudeDir || slashFixture.claudeDir)) || home;
+  if (!home) return null;
+  return (isSnapshotRun() && (testingFixture.claudeDir || slashFixture.claudeDir)) || home;
+}
+
+function skillsFor(root: string) {
+  const claudeDir = testingClaudeDir();
+  if (!claudeDir) return [];
   return testingSkills(slashCatalog({ claudeDir, projectDir: projectClaudeDir(root) }));
 }
 
@@ -210,7 +216,7 @@ async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
   for (const s of sessions.values()) note(await projectOf(s), Date.now());
   for (const { call, project } of await openCalls(sessions)) note(project, call.at);
   for (const run of homeRuns()) note(runProject(run), run.startedAt);
-  for (const record of history.listSessions().slice(0, 40)) note(projectRootOf(record.cwd), record.lastAt);
+  for (const record of history.listSessions(new Set(), testingClaudeDir()).slice(0, 40)) note(projectRootOf(record.cwd), record.lastAt);
   return [...seen].sort((a, b) => b[1] - a[1]).slice(0, PICK_MAX).map(([root]) => ({ root, name: path.basename(root) }));
 }
 

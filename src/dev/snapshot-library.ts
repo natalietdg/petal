@@ -184,6 +184,9 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} library: ${what}`);
   const dir = path.join(app.getPath('userData'), 'library');
   seedLibrary(dir);
+  // Add to Library records notes under the fixture session; put the record back so a later conclude starts clean.
+  const sessionsFile = path.join(app.getPath('userData'), 'library-sessions.json');
+  const sessionsBefore = fs.existsSync(sessionsFile) ? fs.readFileSync(sessionsFile, 'utf8') : null;
   type Probe = { state: { sort: string; category: string | null; text: string; selected: number; shown: string[] }; [k: string]: unknown };
   const probe = (): Promise<Probe | null> => js(PROBE);
   const settle = async (want: (p: Probe) => boolean = () => true) => waitFor(async () => { const p = await probe(); return p && want(p) ? p : null; }, 5000);
@@ -571,6 +574,7 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     libraryFixture.extract = null;
     configStore.save({ claudeFolder: { choice: 'allowed' }, library: { autoBuild: false } });
     if (fs.existsSync(`${dir}-aside`)) fs.renameSync(`${dir}-aside`, dir);
+    if (sessionsBefore === null) fs.rmSync(sessionsFile, { force: true }); else fs.writeFileSync(sessionsFile, sessionsBefore);
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }

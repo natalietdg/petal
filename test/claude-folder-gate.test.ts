@@ -145,6 +145,19 @@ describe('the ~/.claude gate, by behaviour', () => {
     expect(seen).toEqual([]);
   });
 
+  it('History lists only the folder it is given, and only once she allowed reading', async () => {
+    const other = tempDir('petal-other-claude-');
+    fs.mkdirSync(path.join(other, 'projects', '-tmp-y'), { recursive: true });
+    fs.writeFileSync(path.join(other, 'projects', '-tmp-y', 'bbbbbbbb-0000-4000-8000-000000000002.jsonl'), `${JSON.stringify({ type: 'user', message: { role: 'user', content: 'other' } })}\n`);
+    choose('allowed');
+    const history = await import('../src/main/history');
+    expect(history.listSessions(new Set(), other).map((s) => s.sessionId)).toEqual(['bbbbbbbb-0000-4000-8000-000000000002']);
+    expect(history.listSessions().map((s) => s.sessionId)).toEqual(['aaaaaaaa-0000-4000-8000-000000000001']);
+    const config = await import('../src/main/config-store');
+    config.save({ claudeFolder: { choice: 'declined' } });
+    expect(history.listSessions(new Set(), other)).toEqual([]);
+  });
+
   it('an unreadable config counts as not allowed', async () => {
     globalThis.__electronStub.userData = null; // app.getPath throws
     const gate = await import('../src/main/claude-folder');

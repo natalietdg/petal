@@ -10,6 +10,7 @@ import { harnessLine } from '../main/snapshot-shell';
 import { transcriptPath, type SessionFile } from '../main/claude-session';
 import { READING_CHOICES } from '../main/menu';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { keepActivity } from './snapshot-activity';
 import { PERMISSION_SCREEN } from './snapshot-prompts';
 import { WIDTHS } from './snapshot-window-fit';
 
@@ -151,6 +152,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
   };
   const dir = path.join(outDir, 'sessions-board');
   const saved = { panel: { ...panelFixture }, home: folderFixture.home, live: [...historyFixture.live] };
+  const restoreActivity = keepActivity();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
   const cards = async (): Promise<{ id: string; tab: string | null; status: string; word: string | null; name: string | null; place: string | null; headline: string | null; doing: string | null; recommend: string | null; next: string | null; conclusion: string | null; agents: string | null; star: boolean; since: string | null }[]> => js(CARDS);
@@ -452,6 +454,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     panelFixture.subagentsRoot = saved.panel.subagentsRoot;
     folderFixture.home = saved.home;
     historyFixture.live = saved.live;
+    restoreActivity();
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

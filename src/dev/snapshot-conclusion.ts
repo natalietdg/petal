@@ -381,6 +381,8 @@ async function bannersAndFocusCheck(kit: Kit, win: BrowserWindow, fixture: strin
   await js("PastelTerm.readerBanners.setCollapsed(false)");
   // A "conclude: note" turn keeps the conclusion newest (a later reply unpins it) without closing the session.
   appendTurns(fixture, turn('conclude: banners', `Banner work.\n\n**Doing:** folding the banners.\n**Recommend:** keep one bar.\n**Next:** check focus.\n\n${block(SECOND)}`));
+  // Wait for this turn itself: before it lands, an older reply's strip (and its Loop bar) is still the newest.
+  await waitFor(async () => (await js("document.getElementById('latest').innerText")).includes('Banner work.'), 8000);
   const open = await waitFor(async () => { const b = await banners(); return b.bar && b.stripRows === 3 && b.pin ? b : null; }, 8000);
   check(open && open.text === 'Doing · Recommend · Next · Conclusion▾' && open.expanded === 'true' && open.controls === 'reader-status-strip reader-conclusion-pin',
     `expanded: bar names what it folds, strip and pin shown: ${JSON.stringify(open)}`);

@@ -10,6 +10,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { recordActivity, flush as flushActivity } from '../main/activity-feed';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { keepActivity } from './snapshot-activity';
 
 interface Fixture {
   id: string;
@@ -109,6 +110,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
   };
   const dir = path.join(outDir, 'tasks');
   const saved = { panel: panelFixture.sessions, home: folderFixture.home };
+  const restoreActivity = keepActivity();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const transcript = (f: Fixture) => path.join(dir, 'tabs', `${f.id}.jsonl`);
   const repoOf = (f: Fixture) => path.join(dir, 'repos', f.folder);
@@ -259,7 +261,8 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     await openBoard();
     await js("document.querySelector('#board .board-view[data-view=\"activity\"]').click()");
     const kinds = ['task', 'edits', 'test', 'conclusion', 'library', 'clash', 'message'];
-    const listed = await waitFor(async () => { const items: { kind: string }[] = await js(ACTIVITY); return kinds.every((k) => items.some((i) => i.kind === k)) ? items : null; }, 8000);
+    const concluded = `${nameOf(DOCS)} concluded: The cart API is documented.`; // the coord tick records it a moment later
+    const listed = await waitFor(async () => { const items: { kind: string; text: string }[] = await js(ACTIVITY); return kinds.every((k) => items.some((i) => i.kind === k)) && items.some((i) => i.text === concluded) ? items : null; }, 8000);
     const items: { id: string; kind: string; text: string; who: string; at: number }[] = listed ?? await js(ACTIVITY);
     check(listed, `Activity lists every kind: ${JSON.stringify(kinds.map((k) => [k, items.filter((i) => i.kind === k).length]))}`);
     check(items.every((i, n) => n === 0 || (items[n - 1]?.at ?? 0) >= i.at), `newest first: ${JSON.stringify(items.map((i) => `${i.kind}@${new Date(i.at).toISOString().slice(11, 19)}`))}`);
@@ -369,6 +372,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     for (const t of opened) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
     panelFixture.sessions = saved.panel;
     folderFixture.home = saved.home;
+    restoreActivity();
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

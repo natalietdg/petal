@@ -143,8 +143,8 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     // Claude's own unit run lands as the live pipeline result.
     if (transcript) {
       const at = new Date().toISOString();
-      fs.appendFileSync(transcript, line({ type: 'assistant', uuid: 'loop-a-bash', timestamp: at, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_loop_1', name: 'Bash', input: { command: 'npm test', description: 'Run the unit tests' } }] } })
-        + line({ type: 'user', uuid: 'loop-u-bash', timestamp: at, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_loop_1', is_error: true, content: 'Exit code 1\n Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 14 passed (16)\n' }] } }));
+      fs.appendFileSync(transcript, line({ type: 'assistant', uuid: 'loop-a-bash', timestamp: at, cwd: project, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_loop_1', name: 'Bash', input: { command: 'npm test', description: 'Run the unit tests' } }] } })
+        + line({ type: 'user', uuid: 'loop-u-bash', timestamp: at, cwd: project, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_loop_1', is_error: true, content: 'Exit code 1\n Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 14 passed (16)\n' }] } }));
     }
     const grouped = await settle((p) => (p.columns as unknown[]).length === 2 && (p.live as string[][]).some(([name, status]) => name === 'Unit' && status === 'failed'));
     const columns = (grouped?.columns ?? []) as [string, number, string][];
