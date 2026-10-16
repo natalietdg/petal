@@ -130,12 +130,53 @@ export function detectStack(root: string): StackItem[] {
   return [...nodeStack(root), ...pythonStack(root), ...goStack(root), ...nativeStack(root), ...maestroStack(root), ...k6Stack(root), ...ciStack(root)];
 }
 
-// Skills, agents and commands about testing, from the "/" menu's catalog.
-const TESTING_WORDS = /\b(test|tests|testing|tested|qa|e2e|end-to-end|prove|proof|verify|verifies|verification|regression|coverage|tdd|spec|specs|playwright|maestro|cypress|smoke)\b/i;
+// Skills, agents and commands about testing software, from the "/" menu's catalog. Only the description is scored.
+
+// Count on their own.
+const STRONG_SIGNALS: RegExp[] = [
+  /\b(qa|e2e|tdd|regressions?|flaky)\b/,
+  /\bend-to-end (tests?|testing|suite)\b/,
+  /\b(test|code) coverage\b/,
+  /\b(unit|integration|smoke|snapshot)[- ](tests?|testing)\b/,
+  /\btest (suites?|runners?)\b/,
+  /\bfailing tests?\b/,
+  /\b(playwright|maestro|cypress|vitest|jest|pytest|detox)\b/,
+  /\b(prove|proves|proof)\b(\W+\w+){0,4}?\W+(works|landed)\b/,
+];
+
+// Count only with a software word close by.
+const WEAK_WORDS = new Set(['test', 'tests', 'testing', 'tested', 'verify', 'verifies', 'verification', 'spec', 'specs', 'check', 'checks', 'checking']);
+const SOFTWARE_WORDS = new Set([
+  'code', 'app', 'apps', 'build', 'builds', 'ui', 'api', 'apis', 'endpoint', 'endpoints', 'diff',
+  'deploy', 'deployed', 'staging', 'component', 'components', 'function', 'functions', 'bug', 'bugs', 'fix', 'fixes',
+  'landed', 'browser', 'mobile', 'ci',
+]);
+const NEARBY_WORDS = 6;
+
+// Without any software word, these mean a piece of writing is being checked.
+const WRITING_WORDS = new Set(['piece', 'reader', 'readers', 'audience', 'hook', 'hooks', 'headline', 'headlines', 'copy', 'copywriting', 'cta', 'post', 'brand']);
+
+// Idioms that say "test" without meaning software; removed before scoring. unit-test and friends stay.
+const SOFTWARE_TEST_KINDS = ['unit', 'integration', 'e2e', 'smoke', 'snapshot', 'regression', 'load'];
+const NOT_SOFTWARE_TESTING: RegExp[] = [
+  new RegExp(`\\b(?!(?:${SOFTWARE_TEST_KINDS.join('|')})-)[\\w/]+-test(s|ed|ing)?\\b`, 'g'), // mom-test, stress-test, a/b-test
+  /\ba\/?b (tests?|testing)\b/g,
+  /\btest (the |a |an |your )?(hook|idea|headline|audience|copy|message|pitch|offer)s?\b/g,
+  /\btest(s|ed|ing)? (it )?against (a |the )?(non-expert )?readers?\b/g,
+];
+
+export function isAboutTestingSoftware(description: string): boolean {
+  const text = NOT_SOFTWARE_TESTING.reduce((t, idiom) => t.replace(idiom, ' '), description.toLowerCase());
+  const words = text.split(/[^a-z0-9]+/).filter(Boolean);
+  const isSoftware = (w: string) => SOFTWARE_WORDS.has(w);
+  if (!words.some(isSoftware) && words.some((w) => WRITING_WORDS.has(w))) return false;
+  if (STRONG_SIGNALS.some((signal) => signal.test(text))) return true;
+  return words.some((w, i) => WEAK_WORDS.has(w) && words.slice(Math.max(0, i - NEARBY_WORDS), i + NEARBY_WORDS + 1).some(isSoftware));
+}
 
 export function testingSkills(items: SlashItem[]): StackItem[] {
   return items
-    .filter((i) => i.kind !== 'builtin' && TESTING_WORDS.test(`${i.name.replace(/[-_:]/g, ' ')} ${i.description}`))
+    .filter((i) => i.kind !== 'builtin' && isAboutTestingSoftware(i.description))
     .map((i) => ({ id: `${i.kind}:${i.source}:${i.name}`, label: i.name, kind: i.kind as StackItem['kind'], foundIn: `${i.source} ${i.kind}s`, detail: i.description, insert: i.insert }));
 }
 
