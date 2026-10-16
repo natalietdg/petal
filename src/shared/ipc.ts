@@ -262,6 +262,7 @@ export interface SendChannels {
   'pty:close': [request: { tabId: TabId }];
   'tab:activate': [request: { tabId: TabId }];
   'tab:start-claude': [request: { tabId: TabId; prompt: string }];
+  'reader:pick-session': [request: { tabId: TabId; sessionId: string }]; // her answer to "which log is this tab's"
   // A structured choice; main turns it into keystrokes, so the renderer never sends raw keys here.
   'prompt:answer': [request: PromptAnswerRequest];
   'link:open': [url: string];

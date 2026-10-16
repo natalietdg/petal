@@ -1,6 +1,7 @@
 // Pins the reader to the claude running inside one pty; never any other session.
 import { repoLabel } from './repo-label';
-import { findClaudeSession, type ClaudeSession, type ProcessRow } from './claude-session';
+import { findClaudeSession, processCommand, type ClaudeSession, type ProcessRow } from './claude-session';
+import { findFallbackSession } from './claude-fallback';
 import { subscribe, unsubscribe, type ProcessListener } from './process-poll';
 import { TranscriptTail, type TranscriptView } from './transcript';
 import * as conclusions from './conclusions-store';
@@ -8,7 +9,7 @@ import { claudeFolderAllowed } from './claude-folder';
 import { isClosingConcludePrompt, sameConclusion, type Conclusion } from '../shared/conclusion';
 import { ConcludeWatch } from './conclude-close';
 import type { FixtureSession } from './snapshot-mode';
-import type { ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
+import type { ReaderNotice, ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
 // The session the reader follows; a fixture replay only fills sessionId, status and transcript.
 export type FollowedSession = Pick<ClaudeSession, 'sessionId' | 'transcript'> & Partial<ClaudeSession>;
@@ -24,6 +25,11 @@ export interface ConcludedSession {
   sessionId: string;
   pid: number | null; // null only for a snapshot fixture, which has no process
 }
+
+// claude pid -> the log she said is its own; shared so another tab's claude never takes it.
+const picks = new Map<number, string>();
+
+interface Located { pid: number | null; session: FollowedSession | null; notice: ReaderNotice | null }
 
 interface FeedOptions {
   fixture?: FixtureSession | null;
@@ -51,6 +57,8 @@ export class ReaderFeed implements ProcessListener {
   private conclusion: Conclusion | null = null; // kept after claude exits, like the replies
   private repo: string | null = null; // kept after claude exits, so an ended reader still names its repo
   private ticking = false;
+  private notice: ReaderNotice | null = null; // old Claude Code, or two claudes in one folder
+  private claudeArgs: { pid: number; args: string } | null = null;
 
   constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null, onEnded = null }: FeedOptions = {}) {
     this.shellPid = shellPid;
@@ -74,16 +82,39 @@ export class ReaderFeed implements ProcessListener {
     try {
       const allowed = claudeFolderAllowed();
       if (!allowed && this.session) this.forget();
-      const { pid, session: found }: { pid: number | null; session: FollowedSession | null } = this.fixture
-        ? { pid: null, session: allowed ? { ...this.fixture } : null }
-        : findClaudeSession(this.shellPid, processes); // no session file is read while reading is off
+      const { pid, session: found, notice }: Located = this.fixture
+        ? { pid: null, session: allowed ? { ...this.fixture } : null, notice: null }
+        : await this.locate(processes); // no session file is read while reading is off
+      const noticeChanged = JSON.stringify(notice) !== JSON.stringify(this.notice);
+      this.notice = notice;
       this.setClaudePid(pid);
       if (found && found.sessionId !== this.session?.sessionId) this.follow(found);
       else if (found) this.refresh(found);
       else if (this.session) this.end();
+      if (noticeChanged && pid) this.emit('live');
     } finally {
       this.ticking = false;
     }
+  }
+
+  // The session file names the log; a claude too old to write one is matched by folder and start time.
+  private async locate(processes: readonly ProcessRow[]): Promise<Located> {
+    const found = findClaudeSession(this.shellPid, processes);
+    if (found.session || !found.pid) return { ...found, notice: null };
+    for (const pid of picks.keys()) if (!processes.some((p) => p.pid === pid)) picks.delete(pid);
+    const fallback = await findFallbackSession(found.pid, await this.argsOf(found.pid), processes, picks);
+    return { pid: found.pid, ...fallback };
+  }
+
+  // A claude's command line never changes, so it's read once per process.
+  private async argsOf(pid: number): Promise<string> {
+    if (this.claudeArgs?.pid !== pid) this.claudeArgs = { pid, args: (await processCommand(pid))?.args ?? '' };
+    return this.claudeArgs.args;
+  }
+
+  // Her answer to "which log is this tab's"; the next tick follows it.
+  pick(sessionId: string): void {
+    if (this.claudePid) picks.set(this.claudePid, sessionId);
   }
 
   // Tracks the claude process itself, which can run briefly before its session file is readable.
@@ -218,6 +249,7 @@ export class ReaderFeed implements ProcessListener {
     this.send('reader:replies', {
       state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, repo: state === 'none' ? null : this.repo,
       conclusion: state === 'none' ? null : this.conclusion,
+      notice: live ? this.notice : null,
     });
   }
 

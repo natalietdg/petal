@@ -44,6 +44,7 @@ const api = {
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
   paste: (tabId: TabId, data: string) => invoke('pty:paste', { tabId, data }),
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
+  pickSession: (tabId: TabId, sessionId: string) => send('reader:pick-session', { tabId, sessionId }),
   savePastedImage: (bytes: Uint8Array) => invoke('paste:save-image', { bytes }),
   promptImage: (file: string, prompt: string) => invoke('paste:image', { file, prompt }),
   // A dropped file's absolute path; '' for a file made in the page.

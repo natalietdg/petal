@@ -33,7 +33,7 @@ export interface ClaudeSession extends SessionFile {
 }
 
 // Claude Code names project folders after the cwd with every non-alphanumeric as '-'.
-const projectSlug = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, '-');
+export const projectSlug = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, '-');
 
 const run = (args: string[]): Promise<string | null> =>
   new Promise((resolve) => execFile('/bin/ps', args, (error, stdout) => resolve(error ? null : stdout)));
@@ -102,14 +102,28 @@ function descendants(rootPid: number, processes: readonly ProcessRow[]): Process
 export const claudeRunsUnder = (rootPid: number, processes: readonly ProcessRow[]): boolean =>
   descendants(rootPid, processes).some((proc) => isClaudeCli(proc.comm, proc.args));
 
+function parseSessionFile(text: string, pid: number): SessionFile | null {
+  const session = JSON.parse(text) as Partial<SessionFile>;
+  if (typeof session.sessionId !== 'string' || typeof session.cwd !== 'string') return null;
+  return { ...session, sessionId: session.sessionId, cwd: session.cwd, pid };
+}
+
 // Parsed ~/.claude/sessions/<pid>.json, or null when missing or malformed.
 export function readSessionFile(pid: number): SessionFile | null {
   const dir = sessionsDir();
   if (!dir) return null;
   try {
-    const session = JSON.parse(fs.readFileSync(path.join(dir, `${pid}.json`), 'utf8')) as Partial<SessionFile>;
-    if (typeof session.sessionId !== 'string' || typeof session.cwd !== 'string') return null;
-    return { ...session, sessionId: session.sessionId, cwd: session.cwd, pid };
+    return parseSessionFile(fs.readFileSync(path.join(dir, `${pid}.json`), 'utf8'), pid);
+  } catch {
+    return null;
+  }
+}
+
+export async function readSessionFileAsync(pid: number): Promise<SessionFile | null> {
+  const dir = sessionsDir();
+  if (!dir) return null;
+  try {
+    return parseSessionFile(await fs.promises.readFile(path.join(dir, `${pid}.json`), 'utf8'), pid);
   } catch {
     return null;
   }

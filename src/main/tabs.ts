@@ -215,6 +215,10 @@ export function registerTabIpc(): void {
 
   on('tab:activate', (event, { tabId }) => activeTabs.set(event.sender.id, tabId));
 
+  on('reader:pick-session', (event, { tabId, sessionId }) => {
+    if (typeof sessionId === 'string') tabFor(event, tabId)?.feed.pick(sessionId);
+  });
+
   on('prompt:answer', (event, { tabId, answer }) => {
     const session = tabFor(event, tabId);
     if (session && ANSWER_KINDS.includes(answer?.kind)) answerPrompt(session, answer);

@@ -20,6 +20,7 @@ import { bubbleImagesCheck } from './snapshot-bubble-images';
 import { addSessionCheck } from './snapshot-add-session';
 import { tabLimitCheck } from './snapshot-tab-limit';
 import { updatePillCheck } from './snapshot-update-pill';
+import { oldClaudeCheck } from './snapshot-old-claude';
 import { headerCheck } from './snapshot-header';
 import { dividerCheck } from './snapshot-divider';
 import { termContrastCheck } from './snapshot-term-contrast';
@@ -397,6 +398,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['add session', () => addSessionCheck(kit)],
     ['tab limit', () => tabLimitCheck(kit)],
     ['update pill', () => updatePillCheck(kit)],
+    ['old claude', () => oldClaudeCheck(kit)],
     ['fixture flow', () => views.fixtureFlow(kit)],
     ['real session flow', () => views.realSessionFlow(kit, process.env.PETAL_SNAPSHOT_REAL_SESSION)],
     ['history', () => views.historyScreens(kit)],

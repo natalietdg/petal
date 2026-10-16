@@ -11,12 +11,13 @@ import { paintConclusion } from './conclusion-banner';
 import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
+import { noticeLines } from './reader-notice';
 import type { PendingEcho } from './pending-echo';
-import type { ReaderState, Reply, WaitingPrompt } from '../shared/types';
+import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -172,7 +173,7 @@ export function update(shown: ShownUpdate): void {
     return;
   }
   if (!newest) {
-    if (state === 'live') showMessage('Claude is running. Its replies will appear here.');
+    if (state === 'live') showLive(noticeLines(shown.notice, shown.tabId));
     else if (claudeMissing) showMessage('Claude Code isn’t installed yet. Install it, then click Add Session.', GET_STARTED);
     else showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
     return;
@@ -189,6 +190,13 @@ export function update(shown: ShownUpdate): void {
   diagrams.render(latest);
   bringIntoView(newest.id);
   if (view === 'flow') scheduleFlowRefresh();
+}
+
+// An older Claude Code may add an update hint, or ask which log is this tab's (then the running line goes).
+function showLive(notice: HTMLElement[] | null): void {
+  const choosing = notice?.some((line) => line.classList.contains('notice-choices'));
+  showMessage(choosing ? '' : 'Claude is running. Its replies will appear here.');
+  if (notice) status.append(...notice);
 }
 
 // She has spoken since Claude's newest reply: every reply moves up, and her message leads the page.

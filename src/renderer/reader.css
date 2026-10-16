@@ -618,3 +618,8 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 /* Ask sits at the right of the last row, so a card stays two lines tall. */
 .thread-ask { grid-column: 2; grid-row: 1 / span 2; align-self: end; white-space: nowrap; color: var(--link); }
 .thread-ask::after { content: " →"; }
+
+/* Older Claude Code: the update hint and the "which log is this tab's" choice, under the empty line. */
+.status.empty .notice-update { margin-top: 18px; font-size: 16px; color: var(--muted); }
+.status.empty .notice-update .notice-copy { margin: 0 0 0 6px; font-size: 13px; vertical-align: middle; }
+.status.empty .notice-choices .notice-choice { display: block; margin-top: 10px; font-size: 14px; text-align: left; }
