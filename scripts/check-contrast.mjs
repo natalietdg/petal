@@ -49,6 +49,9 @@ function readerChecks(theme) {
     ['muted on code', r.muted, r.codeBackground, TEXT_MIN],
     ['link on code', r.link, r.codeBackground, TEXT_MIN],
     ['highlight', r.highlightInk, r.highlight, TEXT_MIN],
+    // A conclusion's This session line: its label and dots in done ink, its links in body colour, on the done wash.
+    ['conclusion session label', r.labels.done.ink, r.labels.done.wash, TEXT_MIN],
+    ['muted on done wash', r.muted, r.labels.done.wash, TEXT_MIN],
     ...labelChecks,
   ];
 }

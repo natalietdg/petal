@@ -36,7 +36,7 @@ Petal pins these three lines in a strip above the reader. Never drop one silentl
 `**Conclusion:**` one or two sentences on what was settled.
 `**Result:**` what exists or changed now, concretely (files, merges, installs, decisions).
 `**Impact:**` what it means for the reader or the project, and anything still open.
-Petal pins this as a banner at the top of the session. A later "conclude" replaces it.
+Petal pins this as a banner at the top of the session. A later "conclude" replaces it. Petal adds the session's Library and test results under the conclusion itself, so don't list them.
 
 **SCQ opener** (big replies only). One short paragraph before the key points: the Situation (what's true and agreed), the Complication (what changed or broke), the Question it raises. The governing thought already answered it; this just shows why it matters.
 

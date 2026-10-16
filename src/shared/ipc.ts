@@ -27,6 +27,7 @@ import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEdit
 import type { DuplicatePair } from './library-titles';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
+import type { SessionInfo } from './session-info';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -206,6 +207,8 @@ export interface InvokeChannels {
   'library:duplicates': { args: []; result: Guarded<DuplicatePair[]> };
   'library:keep-both': { args: [request: { a: string; b: string }]; result: Guarded<{ ok: true } | { error: string }> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
+  // A concluded session's This session line: its Library notes, test runs and test loop; null when its log can't be read.
+  'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   'testing:detect': { args: [request: { tabId: TabId }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
   'testing:loop-start': { args: [request: { tabId: TabId; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
@@ -302,6 +305,7 @@ export interface EventChannels {
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
   'library:changed': void; // a run added or updated notes
+  'conclusion:info-changed': { sessionId: string }; // the Library started or finished reading that session
   'library:backfill': BackfillState; // reading past sessions moved on
   'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished
   'update:ready': { version: string };

@@ -8,6 +8,7 @@ import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
 import { paintConclusion } from './conclusion-banner';
+import { infoFor, onInfo } from './conclusion-info';
 import * as banners from './reader-banners';
 import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
@@ -38,6 +39,13 @@ const conclusionSlot = Object.assign(document.createElement('div'), { id: 'reade
 older.before(conclusionPin);
 latest.after(conclusionSlot);
 banners.attach(strip, conclusionPin);
+
+// The conclusion shown, and its session, so a This session line that lands later repaints only the banners.
+let pinned: { sessionId: string; conclusion: Conclusion } | null = null;
+function paintPinned(): void {
+  paintConclusion(conclusionPin, conclusionSlot, pinned?.conclusion, pinned ? infoFor(pinned.sessionId, pinned.conclusion.at ?? '') : null);
+}
+onInfo((sessionId) => { if (pinned?.sessionId === sessionId) paintPinned(); });
 
 const timeOfReply = (iso: string | undefined): string => (iso ? timeOf(iso) : '');
 
@@ -144,7 +152,8 @@ export function update(shown: ShownUpdate): void {
   followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
   const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
-  paintConclusion(conclusionPin, conclusionSlot, notesSession && replies.length && stillLatest ? conclusion : null); // notesSession outlives an ended claude
+  pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
+  paintPinned();
   paintStrip(strip, replies.map((r) => r.markdown));
   banners.paint();
   repoLine.textContent = repo ?? '';

@@ -212,6 +212,7 @@ export interface MergeResult {
   added: number;
   updated: number;
   slugs: string[]; // every note written
+  notes: { slug: string; title: string; added: boolean }[]; // the same notes, named, for the conclusion's This session line
 }
 
 // New topics become notes; a topic already there gains only facts it lacks. "Already there" is the same title once
@@ -224,7 +225,7 @@ export function mergeTopics(topics: readonly TopicInput[], source: NoteSource, {
   const taken = new Set(notes.map((n) => n.slug));
   const categories = notes.map((n) => n.category);
   const sourceLine = `${source.sessionId} ${source.date}`;
-  const result: MergeResult = { added: 0, updated: 0, slugs: [] };
+  const result: MergeResult = { added: 0, updated: 0, slugs: [], notes: [] };
   const added = new Set<string>(); // made this run, so a repeat topic isn't counted as an update
   for (const topic of topics) {
     const title = squash(topic.topic, TITLE_CHARS);
@@ -262,7 +263,10 @@ export function mergeTopics(topics: readonly TopicInput[], source: NoteSource, {
       taken.add(note.slug);
       categories.push(note.category);
     }
-    if (!result.slugs.includes(note.slug)) result.slugs.push(note.slug);
+    if (!result.slugs.includes(note.slug)) {
+      result.slugs.push(note.slug);
+      result.notes.push({ slug: note.slug, title: note.title, added: !existing });
+    }
   }
   return result;
 }

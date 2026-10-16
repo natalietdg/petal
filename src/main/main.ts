@@ -14,6 +14,7 @@ import { registerWorkflowIpc } from './workflow-ipc';
 import { registerSlashIpc } from './slash-ipc';
 import { registerLibraryIpc } from './library-ipc';
 import { registerTestingIpc } from './testing-ipc';
+import { registerSessionInfoIpc } from './session-info';
 import { registerFactoryIpc } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
@@ -155,6 +156,7 @@ function registerIpc(): void {
   registerSlashIpc();
   registerLibraryIpc({ sessions });
   registerTestingIpc({ sessions, openTab });
+  registerSessionInfoIpc({ sessions });
   registerFactoryIpc({ activeSession });
   registerLookIpc();
   registerTabIpc();

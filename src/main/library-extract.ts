@@ -13,7 +13,9 @@ import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
 import { canonicalCategory, cleanFact, knownTopics, listEntries, mergeTopics, squash, STARTER_CATEGORIES, type TopicInput } from './library-store';
 import { counters, isSnapshotRun, libraryFixture } from './snapshot-mode';
+import * as librarySessions from './library-sessions';
 import type { LibraryRunResult } from '../shared/library';
+import type { NoteRef } from '../shared/session-info';
 
 export const CHUNK_BYTES = 1024 * 1024; // of raw log per Claude call; tool output makes logs bulky
 export const DIGEST_CHARS = 30_000; // of prompts and replies sent per call
@@ -152,13 +154,22 @@ type Extractor = (prompt: string) => Promise<string>;
 let chain: Promise<unknown> = Promise.resolve();
 const queued = new Map<string, Promise<LibraryRunResult>>();
 let active = 0;
+const reading = new Set<string>(); // sessions queued or being read now
 const changeListeners = new Set<() => void>();
+const sessionListeners = new Set<(sessionId: string) => void>();
 
 export const isRunning = (): boolean => active > 0 || queued.size > 0;
+export const isReadingSession = (sessionId: string): boolean => reading.has(sessionId);
 export function onChange(listener: () => void): () => void {
   changeListeners.add(listener);
   return () => { changeListeners.delete(listener); };
 }
+// A session started or finished being read, so its conclusion's This session line can redraw.
+export function onSessionChange(listener: (sessionId: string) => void): () => void {
+  sessionListeners.add(listener);
+  return () => { sessionListeners.delete(listener); };
+}
+const sessionChanged = (sessionId: string): void => { for (const listener of sessionListeners) listener(sessionId); };
 
 // In a snapshot run only the harness's stub answers; a real claude never runs there.
 async function extractor(): Promise<Extractor | null> {
@@ -186,6 +197,7 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
     return { ...result, skipped: isSnapshotRun() ? 'snapshot run' : 'Claude Code isn’t installed' };
   }
   let offset = loadOffsets()[target.sessionId]?.offset ?? 0;
+  const notes = { added: [] as NoteRef[], updated: [] as NoteRef[] };
   for (let i = 0; i < MAX_CHUNKS_PER_RUN; i += 1) {
     const chunk = readChunk(target.transcript, offset);
     if (chunk.next === offset && !chunk.digest) break; // nothing new
@@ -196,11 +208,13 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
       const merged = mergeTopics(topics, { sessionId: target.sessionId, date: new Date().toISOString().slice(0, 10) });
       result.added += merged.added;
       result.updated += merged.updated;
+      for (const { slug, title, added } of merged.notes) (added ? notes.added : notes.updated).push({ slug, title });
     }
     offset = chunk.next;
     saveOffset(target.sessionId, offset); // after the merge, so a failed call is retried next time
     if (chunk.atEnd) break;
   }
+  librarySessions.record(target.sessionId, notes);
   return result;
 }
 
@@ -208,6 +222,11 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
 export function queueSession(target: SessionTarget, { force = false }: { force?: boolean } = {}): Promise<LibraryRunResult> {
   const waiting = queued.get(target.sessionId);
   if (waiting) return waiting;
+  const willRead = force || configStore.load().library.autoBuild; // a run that skips at once never shows as reading
+  if (willRead) {
+    reading.add(target.sessionId);
+    sessionChanged(target.sessionId);
+  }
   const job = chain.then(async () => {
     queued.delete(target.sessionId);
     active += 1;
@@ -220,6 +239,8 @@ export function queueSession(target: SessionTarget, { force = false }: { force?:
       return { added: 0, updated: 0, skipped: `couldn’t read Claude’s answer (${String((error as Error).message ?? error).split('\n')[0]})` };
     } finally {
       active -= 1;
+      if (!queued.has(target.sessionId)) reading.delete(target.sessionId); // queued again meanwhile: still reading
+      if (willRead) sessionChanged(target.sessionId);
     }
   });
   queued.set(target.sessionId, job);

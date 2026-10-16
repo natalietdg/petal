@@ -5,6 +5,7 @@ import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as composer from './composer';
 import { byId, el, isIpcError } from './dom';
+import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
 import { pipelineStrip, runList, stackList, stageResults, trend } from './testing-view';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineConfig, type PipelineRun, type StackItem, type StageConfig, type StageResult, type TestCase, type TestingState } from '../shared/testing';
@@ -532,6 +533,15 @@ window.pastel.testing.onRunUpdate(({ run: updated }) => {
 // A Loop line or a busy flip in the loop's tab shows at once, not on the next poll.
 window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === loopTabId()) queueMicrotask(drawLoop); });
 byId('testing-button').addEventListener('click', toggle);
+// A run named in a conclusion's This session line: open Testing on it, when it is this project's.
+window.addEventListener(OPEN_TEST_RUN_EVENT, (event) => void openRun(String((event as CustomEvent<string>).detail ?? '')));
+export async function openRun(runId: string): Promise<void> {
+  await open();
+  if (!isOpen() || !runById(runId)) return;
+  selectedRun = runId;
+  selectedStage = null;
+  drawAll();
+}
 
 // For the snapshot harness.
 export const state = () => ({ sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
