@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.8] · 2026-10-16
+- New to Claude Code? The terminal now makes room for its first-run setup, the reader says what to do, and the theme and login choices show as cards you can click.
+- Petal finds Claude Code even when its install folder isn't on your shell's PATH, so Add Session no longer says "command not found".
+
 ## [1.0.7] · 2026-10-16
 - Up to 20 open sessions by default (was 8); change it under Customize › Sessions.
 - Factory starts with stations that fit any project, and the approval step is yours: "You approve".
