@@ -1,18 +1,27 @@
+/// <reference types="vite/client" />
 // Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and a proposed pipeline;
 // Run pipeline confirms the exact commands, then records the line a new tab would run (never executed);
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
 // records the paste; a Claude run in the fixture log lands in history; editing saves; every theme, style and width fits.
 import fs from 'node:fs';
 import path from 'node:path';
-import { app, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
+import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
+import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
 
 const MIN_RATIO = 4.5;
 const WIDTHS = [800, 1280, 1600];
-const fixtureOutput = (name: string) => fs.readFileSync(path.join(app.getAppPath(), 'test', 'fixtures', 'testing', name), 'utf8');
+// Bundled at build time: the packaged app has no test/ folder.
+const FIXTURES: Record<string, string> = { 'vitest-output.txt': vitestOutput, 'vitest-report.json': vitestReport };
+const fixtureOutput = (name: string): string => {
+  const text = FIXTURES[name];
+  if (text === undefined) throw new Error(`no bundled testing fixture ${name}`);
+  return text;
+};
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
 // A fake project and Claude folder under the snapshot folder; nothing of hers.
