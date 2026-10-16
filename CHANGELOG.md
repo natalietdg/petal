@@ -2,6 +2,18 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.0.9] · 2026-10-16
+- Text size: make the terminal and the reader bigger or smaller with ⌘= and ⌘-, ⌘0 to reset, or set each one in Customize.
+- Works with older Claude Code versions, and the reader suggests updating when yours is out of date.
+- Concluded sessions get a "This session" line under the conclusion: its Library notes, test runs and test loop.
+- Message another open session with @ in the reply box, from the Board's Message…, or from a reply's To line.
+- Tasks on the Board: give each project task to one session, and see who is working on what.
+- A warning when two sessions edit the same file.
+- The Board's Activity feed lists tasks, edits, test runs, conclusions, Library notes, clashes and messages, with a branch filter.
+- Images a reply names on your Mac show inline in the reply.
+- Say "conclude" in any session once the Petal skills are installed, and it wraps up into Petal's banner.
+- Testing history says what ran, why and what changed; a tab in your home folder picks a project, Claude's runs are filed by repo, and "Make a pipeline from these commands" turns them into your pipeline.
+
 ## [1.0.8] · 2026-10-16
 - New to Claude Code? The terminal now makes room for its first-run setup, the reader says what to do, and the theme and login choices show as cards you can click.
 - Petal finds Claude Code even when its install folder isn't on your shell's PATH, so Add Session no longer says "command not found".
