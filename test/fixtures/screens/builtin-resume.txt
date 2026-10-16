@@ -1,0 +1,39 @@
+▗ ▗   ▖ ▖  Claude Code v2.1.301
+           Haiku 5.5 · API Usage Billing
+ ▘▘   ▝▝   /private/tmp/demo/cwd
+
+
+❯ /resume                                                                                           
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Resume session
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ⌕ Search…                                                                                    │
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯
+    cwd
+
+  ❯ /model
+    18 seconds ago · HEAD · 6KB
+
+    /exit
+    55 seconds ago · HEAD · 3.9KB
+
+    Ctrl+A to show all projects · Ctrl+B to only show current branch · Space to preview · Ctrl+R 
+    to rename · Type to search · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

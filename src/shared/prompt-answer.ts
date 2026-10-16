@@ -23,14 +23,37 @@
 //   "────" rule / " Bash command" / details between "╌╌╌" rules / " Do you want to proceed?" /
 //   " ❯ 1. Yes" / "   2. Yes, allow reading from <dir> from this project" (wraps, indented) / "   3. No" /
 //   " Esc to cancel · Tab to amend". Digit k picks option k at once ("1" ran the command, "3" -> "Interrupted").
+// Claude Code's own menus, measured on 2.1.301 (haiku, real pty, 100x40), 2026-10-16. Esc closes each one.
+//   While one is open the session file says status "waiting", as for permission prompts.
+// /model: border row ("────", or "▔▔▔" when her usage notice sits on it) / " Select model" / two wrapped lines of
+//   explanation / "❯ 5. Haiku ✔   Fastest for quick answers" rows (✔ marks the current model, the cursor starts
+//   on it, descriptions wrap deeper) / " ◐ Medium effort (default) ←/→ to adjust" /
+//   " Enter to set as default · s to use this session only · Esc to cancel".
+//   Her Team account lists 13 models: numbers pad to "1.  ", the gutter shows "↓ 10." and "… +3 models" follows.
+//   Digit k (1-9) picks model k and saves it at once; ↑/↓ then Enter does the same. 10+ only by arrows.
+// /memory: " Memory" / " ❯ Auto-memory  true" (its own ❯, always drawn) / blank / an unnumbered cursor list
+//   ("User instructions   Saved in ~/.claude/CLAUDE.md" ...) / " Learn more: ..." / " Enter to confirm · Esc to cancel".
+//   Digits do nothing; ↑/↓ moves the list's ❯, Enter opens the row.
+// /mcp: " Manage MCP servers" / " 30 servers" / an unnumbered list split by blank rows, with section labels
+//   ("claude.ai") the cursor skips / " ※ Run claude --debug ..." / " ↑/↓ to navigate · Enter to confirm · Esc to cancel".
+// /resume: a "⌕ Search…" box over a two-row-per-session list; its footer wraps:
+//   "Ctrl+A to show all projects · ... · Type to search · Esc to" / "cancel". Typed keys go to the search.
+// /config: a "Settings  Status  Config  Usage  Stats" tab row, a search box and a value list;
+//   footer "Type to filter · Enter/↓ to select · ↑ to tabs · Esc to clear" (or "... · Esc to close").
+// /output-style prints its list as text, and /agents prints that its wizard was removed: neither opens a menu.
+// The folder trust prompt is the same shape: " ❯ No, exit" / "   Yes, I trust this folder" / " Enter to confirm · Esc to cancel".
 import type { TabId } from './types';
 
 // One move on the picker as it stands on screen: press option k, type into the free-text slot k, or change tab.
 export type PickerStep = { pick: number } | { other: number; text: string } | { move: 'next' | 'back' };
 
+// One move on a Claude Code menu: a digit, arrows (then Enter when picking), or Esc.
+export type MenuStep = { digit: number } | { arrows: number; enter: boolean } | { cancel: true };
+
 export type PromptAnswer =
   | { kind: 'picker'; step: PickerStep }
-  | { kind: 'permission'; option: number };
+  | { kind: 'permission'; option: number }
+  | { kind: 'menu'; step: MenuStep };
 
 export interface PromptAnswerRequest {
   tabId: TabId;
@@ -282,3 +305,122 @@ export function parseQuestionPicker(screen: readonly string[]): QuestionPicker |
   if (end < 0) return null;
   return QUESTION_FOOTER.test(lines[end] ?? '') ? parseQuestionPage(lines, end) : parseReviewPage(lines, end);
 }
+
+export interface MenuOption {
+  number: number | null; // null on unnumbered lists
+  label: string;
+  description: string;
+  current: boolean; // drawn with a trailing ✔
+  focused: boolean; // the menu's ❯ cursor is on it
+}
+
+// One of Claude Code's own menus (/model, /memory, /mcp, ...), read off the terminal.
+export interface BuiltinMenu {
+  title: string;
+  subtitle: string;
+  options: MenuOption[];
+  numbered: boolean;
+  scrolled: boolean; // rows above or below are out of view
+}
+
+const MENU_FOOTER_ENTER = /(?:^|· )Enter to (?!select\b)[a-z]/;
+const MENU_FOOTER_ESC = /· Esc to (?:cancel|exit|close)$/;
+const MENU_BORDER = /^\s*[─▔]{10,}|▔\s*$/;
+const MENU_MARK = /^[❯↓↑] /;
+const MENU_MORE = /^… \+\d+/;
+const MENU_NUMBER = /^(\d+)\.\s+(\S.*)$/;
+const MENU_SEARCH = /[╭⌕]/;
+const MENU_CURRENT = / ✔$/;
+const MAX_SUBTITLE = 240;
+// Any footer offering Esc: a menu the parsers may not know, so the reader must not stay silent.
+const ESC_FOOTER = /\bEsc to (?:cancel|exit|close|clear|go back)\b/;
+
+type MenuRow = 'blank' | 'flat' | 'start' | 'deep';
+const indentOf = (line: string): number => line.length - line.trimStart().length;
+
+function menuRow(line: string, gutter: number): MenuRow | null {
+  if (!line.trim()) return 'blank';
+  const indent = indentOf(line);
+  if (indent < gutter) return null;
+  if (indent === gutter) return MENU_MARK.test(line.slice(gutter)) ? 'start' : 'flat';
+  return indent === gutter + 2 ? 'start' : 'deep';
+}
+
+// Label and description sit in two columns, two or more spaces apart.
+function menuOption(text: string, focused: boolean): MenuOption {
+  const numbered = MENU_NUMBER.exec(text);
+  const [label = '', ...rest] = (numbered?.[2] ?? text).split(/\s{2,}/);
+  return {
+    number: numbered ? Number(numbered[1]) : null,
+    label: label.replace(MENU_CURRENT, ''), description: rest.join(' '),
+    current: MENU_CURRENT.test(label), focused,
+  };
+}
+
+// A Claude Code menu at the bottom of the visible screen, or null unless every part matches.
+export function parseBuiltinMenu(screen: readonly string[]): BuiltinMenu | null {
+  const lines = screen.map((line) => line.trimEnd());
+  const footerAt = lastFilled(lines);
+  const footer = (lines[footerAt] ?? '').trim();
+  if (footerAt < 0 || !MENU_FOOTER_ENTER.test(footer) || !MENU_FOOTER_ESC.test(footer)) return null;
+  let borderAt = footerAt - 1;
+  while (borderAt >= 0 && !MENU_BORDER.test(lines[borderAt] ?? '')) borderAt -= 1;
+  if (borderAt < 0) return null;
+  const body = lines.slice(borderAt + 1, footerAt);
+  if (body.some((line) => MENU_SEARCH.test(line))) return null;
+
+  const cursors = body.flatMap((line, i) => (line.trimStart().startsWith('❯ ') ? [i] : []));
+  const cursorAt = cursors.at(-1);
+  if (cursorAt === undefined) return null;
+  const gutter = indentOf(body[cursorAt] ?? '');
+  const kinds = body.map((line) => menuRow(line, gutter));
+  if (kinds.includes(null)) return null;
+
+  // The list runs out from the cursor until a flat row; another ❯ above (/memory's toggle) ends it too.
+  const inList = (i: number) => kinds[i] !== 'flat' && !(cursors.includes(i) && i !== cursorAt);
+  let first = cursorAt;
+  while (first > 0 && inList(first - 1)) first -= 1;
+  let last = cursorAt;
+  while (last < body.length - 1 && inList(last + 1)) last += 1;
+  while (kinds[first] === 'blank') first += 1;
+  while (kinds[last] === 'blank') last -= 1;
+  if (kinds.slice(last + 1).some((kind) => kind !== 'flat' && kind !== 'blank')) return null; // only hint rows below the list
+
+  const options: MenuOption[] = [];
+  let scrolled = false;
+  for (let i = first; i <= last; i += 1) {
+    const line = body[i] ?? '';
+    const text = line.trim();
+    if (kinds[i] === 'blank') continue;
+    if (kinds[i] === 'deep') {
+      const previous = options.at(-1);
+      if (MENU_MORE.test(text)) { scrolled = true; continue; }
+      if (!previous) return null;
+      previous.description = [previous.description, text].filter(Boolean).join(' ');
+      continue;
+    }
+    const mark = line.slice(gutter, gutter + 2);
+    if (mark === '↓ ' || mark === '↑ ') scrolled = true;
+    options.push(menuOption(line.slice(gutter + 2).trim(), i === cursorAt));
+  }
+  const numbered = options.every((option) => option.number !== null);
+  if (options.length < 2 || (!numbered && options.some((option) => option.number !== null))) return null;
+  const firstNumber = options[0]?.number ?? 0;
+  if (numbered && !options.every((option, i) => option.number === firstNumber + i)) return null;
+
+  const head = body.slice(0, first).filter((line, i) => line.trim() && !cursors.includes(i)).map((line) => line.trim());
+  const [title = '', ...rest] = head;
+  return { title, subtitle: rest.join(' ').slice(0, MAX_SUBTITLE), options, numbered, scrolled };
+}
+
+// The bottom rows offer Esc (a footer may wrap onto a second row): some menu or prompt is waiting on her.
+export function screenOffersEsc(screen: readonly string[]): boolean {
+  const lines = screen.map((line) => line.trim());
+  const end = lastFilled(lines);
+  if (end < 0) return false;
+  return ESC_FOOTER.test(lines[end] ?? '') || ESC_FOOTER.test(`${lines[end - 1] ?? ''} ${lines[end]}`);
+}
+
+// Claude has stopped on screen for her: any parsed prompt, or an Esc footer the parsers don't know.
+export const screenIsAsking = (screen: readonly string[]): boolean =>
+  Boolean(parseQuestionPicker(screen) ?? parsePermissionPrompt(screen) ?? parseBuiltinMenu(screen)) || screenOffersEsc(screen);

@@ -125,7 +125,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
 
 // A double click must not type a second answer into whatever comes after the prompt.
 const ANSWER_SETTLE_MS = 1000;
-const PICKER_SETTLE_MS = 250; // picker steps come one per screen change, e.g. ticking several boxes
+const PICKER_SETTLE_MS = 250; // picker and menu steps come one per screen change, e.g. ticking several boxes
 const answeringUntil = new WeakMap<TabSession, number>();
 
 // Types an answer into the tab's claude: the renderer only offers one while the prompt is on its screen.
@@ -133,8 +133,10 @@ function answerPrompt(session: TabSession, answer: PromptAnswer): void {
   if (Date.now() < (answeringUntil.get(session) ?? 0)) return;
   const keys = keysFor(answer);
   if (!keys) return;
-  const settle = answer.kind === 'picker' ? PICKER_SETTLE_MS : ANSWER_SETTLE_MS;
-  answeringUntil.set(session, Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle);
+  // A steering arrow is one key the next redraw answers, so it holds nothing back.
+  const steering = answer.kind === 'menu' && 'arrows' in answer.step && !answer.step.enter;
+  const settle = answer.kind === 'permission' ? ANSWER_SETTLE_MS : PICKER_SETTLE_MS;
+  answeringUntil.set(session, steering ? Date.now() : Date.now() + keys.length * PROMPT_KEY_GAP_MS + settle);
   if (isSnapshotRun()) { promptWrites.push(keys); return; }
   keys.forEach((key, i) => setTimeout(() => {
     if (sessions.has(tabKey(session.contentsId, session.tabId))) session.pty.write(key);
@@ -199,7 +201,7 @@ export function registerTabIpc(): void {
 
   on('prompt:answer', (event, { tabId, answer }) => {
     const session = tabFor(event, tabId);
-    if (session && (answer?.kind === 'picker' || answer?.kind === 'permission')) answerPrompt(session, answer);
+    if (session && (answer?.kind === 'picker' || answer?.kind === 'permission' || answer?.kind === 'menu')) answerPrompt(session, answer);
   });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs only echo, never launch claude.

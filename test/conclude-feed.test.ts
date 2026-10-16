@@ -87,7 +87,7 @@ describe('ReaderFeed close on conclude', () => {
     return made;
   }
 
-  it('bug 1: a "waiting" status (permission prompt / question open) never closes; idle afterwards does', async () => {
+  it('bug 1: a "waiting" status (permission prompt, question or Claude Code menu open) never closes; idle afterwards does', async () => {
     const { feed, fixture, closed } = await concludeAnswered();
     fixture.status = 'waiting';
     await ticks(feed, 5);

@@ -148,7 +148,7 @@ export class ReaderFeed implements ProcessListener {
     if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
-    this.reportConcluded(found.status !== 'idle'); // 'waiting' (a permission prompt or question on screen) is not done
+    this.reportConcluded(found.status !== 'idle'); // 'waiting' (a permission prompt, question or /model-style menu on screen) is not done
   }
 
   private reportConcluded(busy: boolean): void {

@@ -60,10 +60,15 @@ function pendingBubble(echo: PendingEcho): HTMLDivElement {
 const writingLine = (): HTMLParagraphElement => Object.assign(document.createElement('p'), { className: 'reader-writing', textContent: 'Claude is writing…' });
 
 // A picker on the terminal: Claude has stopped to wait on her, which the log won't show until she answers.
-type Asking = 'question' | 'permission' | null;
-const ASKING_TEXT = { question: 'Claude is asking you something · answer below', permission: 'Claude needs your permission · answer below' };
+type Asking = 'question' | 'permission' | 'menu' | 'terminal' | null;
+const ASKING_TEXT = {
+  question: 'Claude is asking you something · answer below',
+  permission: 'Claude needs your permission · answer below',
+  menu: 'Claude Code is showing a menu · pick below',
+  terminal: 'Claude is asking in the terminal',
+};
 let asking: Asking = null;
-const askingLine = (kind: 'question' | 'permission'): HTMLParagraphElement =>
+const askingLine = (kind: NonNullable<Asking>): HTMLParagraphElement =>
   Object.assign(document.createElement('p'), { className: 'reader-writing reader-asking', textContent: ASKING_TEXT[kind] });
 
 export function setAsking(next: Asking): void {
