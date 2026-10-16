@@ -29,12 +29,14 @@ interface FeedOptions {
   fixture?: FixtureSession | null;
   onReplyFinished?: ((finished: ReplyFinished) => void) | null;
   onConcluded?: ((concluded: ConcludedSession) => void) | null; // her "conclude" was answered and the turn is over
+  onEnded?: ((ended: FollowedSession) => void) | null; // the followed claude exited
 }
 
 export class ReaderFeed implements ProcessListener {
   private readonly shellPid: number;
   private readonly onReplyFinished: ((finished: ReplyFinished) => void) | null;
   private readonly onConcluded: ((concluded: ConcludedSession) => void) | null;
+  private readonly onEnded: ((ended: FollowedSession) => void) | null;
   private readonly concludeWatch = new ConcludeWatch();
   private finishingId: string | null = null; // reply whose turn just went busy -> idle, reported on the next tick
   // Dev-only: a snapshot run replays a fixture jsonl instead of a live claude.
@@ -50,8 +52,9 @@ export class ReaderFeed implements ProcessListener {
   private repo: string | null = null; // kept after claude exits, so an ended reader still names its repo
   private ticking = false;
 
-  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null }: FeedOptions = {}) {
+  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null, onEnded = null }: FeedOptions = {}) {
     this.shellPid = shellPid;
+    this.onEnded = onEnded;
     this.onReplyFinished = onReplyFinished;
     this.onConcluded = onConcluded;
     this.fixture = fixture;
@@ -193,6 +196,12 @@ export class ReaderFeed implements ProcessListener {
 
   // Claude exited: keep its last replies on screen, marked as ended.
   private end(): void {
+    const ended = this.session;
+    try {
+      if (ended) this.onEnded?.(ended);
+    } catch (error) {
+      console.error('[petal] session-ended handler failed:', error); // never stops the reader ticking
+    }
     this.finishingId = null;
     this.tail?.stop();
     this.tail = null;

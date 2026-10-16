@@ -39,6 +39,7 @@ import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
 import { openThreadsCheck } from './snapshot-open-threads';
 import { slashMenuCheck } from './snapshot-slash';
+import { libraryCheck } from './snapshot-library';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -422,6 +423,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
+    ['library', () => libraryCheck(kit, win)], // a stubbed extractor only; never a real claude
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
@@ -608,6 +610,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'slash-menu') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await slashMenuCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'library') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await libraryCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

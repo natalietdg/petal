@@ -43,6 +43,17 @@ function lastPassText(organizer: OrganizerStatus | null): string {
   return `Last pass ${timeOf(last.at, true)} · ${last.titled} titled · ${last.failed} failed · ${last.due} due`;
 }
 
+// The Library's switch: one headless Claude run per finished session, on the model above.
+function libraryCard(): HTMLDivElement {
+  const autoBuild = el('input');
+  Object.assign(autoBuild, { type: 'checkbox', checked: page.state.config.library.autoBuild });
+  autoBuild.addEventListener('change', () => save({ library: { autoBuild: autoBuild.checked } }));
+  const fields = el('div', 'cz-fields');
+  fields.append(field('Build my Library from sessions · uses your Claude plan', autoBuild,
+    'When a session ends, Claude reads what was new in it and adds domain knowledge (how systems, rules and terms work) to the Library. Off unless you turn it on.'));
+  return card('Library', fields);
+}
+
 export function renderOrganizer(): HTMLElement[] {
   const o = page.state.config.organizer;
   const enabled = el('input');
@@ -75,6 +86,7 @@ export function renderOrganizer(): HTMLElement[] {
   );
   return [
     card('Schedule', settings, actions),
+    libraryCard(),
     promptEditor({
       section: 'organizer',
       label: 'Organizer prompt',

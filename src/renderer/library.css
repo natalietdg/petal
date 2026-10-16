@@ -1,0 +1,251 @@
+/* Library: replaces the reader below the dock, like the Sessions board. A half dial on the left edge, the selected note's preview beside it. */
+#reader-area > #library { order: 1; flex: 1; min-height: 0; }
+#reader-area:has(> #library:not([hidden])) #sessions-dock { background: none; }
+
+#library {
+  contain: inline-size; /* the dial's width never widens the window's column */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 24px 20px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+}
+#library[hidden] { display: none; }
+#library:focus { outline: none; }
+#library [hidden] { display: none !important; }
+
+.lib-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 0 0 12px; }
+.lib-title { margin: 0; font: 600 1.6em/1.1 var(--display-font); letter-spacing: -0.015em; }
+.lib-summary { margin: 0; font-size: 14px; color: var(--muted); }
+.lib-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+
+.lib-sort { display: inline-flex; padding: 2px; border: 1px solid var(--rule); border-radius: 999px; }
+.lib-sort-button,
+.lib-filter {
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: 600 13px var(--ui-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lib-filter { border-color: var(--rule); }
+.lib-sort-button:hover,
+.lib-filter:hover { color: var(--reader-fg); }
+.lib-sort-button[aria-pressed="true"],
+.lib-filter[aria-pressed="true"] { border-color: var(--reader-fg); background: var(--code-bg); color: var(--reader-fg); }
+
+.lib-search {
+  width: 160px;
+  padding: 5px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 14px var(--ui-font);
+}
+.lib-search::placeholder { color: var(--muted); opacity: 1; }
+.lib-add {
+  padding: 5px 13px;
+  border: 1px solid var(--reader-fg);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.lib-add:hover { background: var(--code-bg); }
+.lib-add:disabled { border-color: var(--rule); color: var(--muted); cursor: default; background: var(--reader-bg); }
+
+.lib-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.lib-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 2px 0 6px; font-size: 14px; color: var(--muted); }
+.lib-link { padding: 0; border: 0; background: none; color: var(--link); font: 600 14px var(--ui-font); text-decoration: underline; cursor: pointer; }
+
+:is(.lib-sort-button, .lib-filter, .lib-search, .lib-add, .lib-link, .lib-read, .lib-back):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+
+/* ---- The stage: dial column sized from its radius (library.ts sets --dial-r, --dial-w, --label-w). */
+.lib-stage {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-columns: var(--dial-w, 440px) minmax(0, 1fr);
+  min-height: 320px;
+  margin: 0 -24px; /* the dial's flat side sits on the window's left edge */
+  overflow: hidden;
+}
+.lib-stage.is-empty { grid-template-columns: minmax(0, 1fr); }
+.lib-stage.is-empty > :is(.lib-dial, .lib-preview) { display: none; }
+
+.lib-dial { position: relative; min-width: 0; height: 100%; touch-action: none; user-select: none; cursor: grab; }
+.lib-dial.dragging { cursor: grabbing; }
+
+/* The half disc: flat on the left, its rim at --dial-r; a dashed inner track carries the letters. */
+.lib-disc {
+  position: absolute;
+  top: calc(50% - var(--dial-r));
+  left: 0;
+  width: var(--dial-r);
+  height: calc(var(--dial-r) * 2);
+  border: 1px solid var(--rule);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  background: radial-gradient(circle at 0 50%, var(--reader-bg) 0 calc(var(--dial-r) * 0.34), var(--code-bg) calc(var(--dial-r) * 0.34 + 1px));
+}
+.lib-disc::before {
+  content: "";
+  position: absolute;
+  top: 46px;
+  bottom: 46px;
+  left: 0;
+  width: calc(var(--dial-r) - 46px);
+  border: 1px dashed var(--rule);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+}
+.lib-disc::after { /* the hub */
+  content: "";
+  position: absolute;
+  top: calc(50% - 22px);
+  left: 0;
+  width: 22px;
+  height: 44px;
+  border: 1px solid var(--rule);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  background: var(--reader-bg);
+}
+
+.lib-rim,
+.lib-list { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; }
+.lib-rim { pointer-events: none; }
+.lib-list:focus { outline: none; }
+.lib-list:focus-visible .lib-tab.selected { outline: 2px solid var(--next-ink); outline-offset: 3px; }
+
+.lib-tick,
+.lib-letter,
+.lib-tab { position: absolute; top: 0; left: 0; will-change: transform; }
+.lib-tick { width: 9px; height: 1.5px; margin-top: -0.75px; background: var(--rule); transform-origin: 0 50%; }
+.lib-letter {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--muted);
+  font: 650 12px/1 var(--ui-font);
+}
+.lib-letter.current { background: var(--reader-fg); color: var(--reader-bg); }
+
+/* The 3 o'clock pointer, just inside the rim. */
+.lib-pointer {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--dial-r) + 2px);
+  width: 0;
+  height: 0;
+  margin-top: -6px;
+  border-block: 6px solid transparent;
+  border-left: 9px solid var(--reader-fg);
+}
+
+/* Each note is a file tab on the arc; the selected one is solid and a little larger. */
+.lib-tab {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: var(--label-w, 220px);
+  padding: 5px 12px 5px 10px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font-size: 14px;
+  line-height: 1.25;
+  transform-origin: 0 50%;
+  cursor: pointer;
+}
+.lib-tab:hover { background: var(--code-bg); }
+.lib-tab.far { color: var(--muted); }
+.lib-tab-name { min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.lib-tab-cat { display: none; flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.lib-tab.selected { border-color: var(--reader-fg); background: var(--reader-fg); color: var(--reader-bg); box-shadow: 0 6px 18px -10px var(--reader-fg); z-index: 2; }
+.lib-tab.selected .lib-tab-cat { display: inline; }
+
+/* Turning glides; new marks appear in place; dragging follows the pointer. */
+.lib-tab, .lib-tick, .lib-letter { transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 160ms, color 160ms; }
+.lib-dial.dragging :is(.lib-tab, .lib-tick, .lib-letter),
+.lib-enter { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .lib-tab, .lib-tick, .lib-letter { transition: none !important; }
+}
+
+/* ---- Preview of the selected note. */
+.lib-preview {
+  align-self: center;
+  max-width: 560px;
+  margin: 0 28px 0 8px;
+  padding: 24px 26px;
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  background: var(--reader-bg);
+}
+.lib-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--reader-fg);
+  font: 650 11px/1.6 var(--ui-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lib-preview-title { margin: 10px 0 4px; font: 600 1.6em/1.15 var(--display-font); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.lib-preview-meta { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.lib-preview-facts { margin: 0 0 18px; padding-left: 1.1em; font-size: 15px; line-height: 1.5; }
+.lib-preview-facts li + li { margin-top: 6px; }
+.lib-read {
+  padding: 8px 18px;
+  border: 1px solid var(--reader-fg);
+  border-radius: 999px;
+  background: var(--reader-fg);
+  color: var(--reader-bg);
+  font: 600 14px var(--ui-font);
+  cursor: pointer;
+}
+
+.lib-empty { align-self: center; justify-self: center; max-width: 460px; padding: 24px; text-align: center; }
+.lib-empty-title { margin: 0 0 8px; font: 600 1.4em/1.2 var(--display-font); }
+.lib-empty-text { margin: 0 0 16px; font-size: 15px; line-height: 1.5; color: var(--muted); }
+
+/* ---- Reading a note: the reply's own prose styles, read-only. */
+.lib-reading { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+.lib-reading:focus { outline: none; }
+.lib-back {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.lib-back:hover { background: var(--code-bg); }
+.lib-reading-column { padding-top: 0; padding-bottom: 48px; }
+.lib-reading-head { margin: 8px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+.lib-reading-title { margin: 10px 0 4px; font: 600 2em/1.12 var(--display-font); letter-spacing: -0.015em; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .lib-search { width: 120px; }
+  .lib-preview { margin-right: 16px; padding: 18px 18px; }
+  .lib-preview-title { font-size: 1.35em; }
+}

@@ -36,6 +36,7 @@ import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
 import * as headersMin from './headers-min';
 import * as shortcuts from './shortcuts';
+import * as library from './library';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -43,7 +44,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -132,7 +133,8 @@ async function start(): Promise<void> {
   reader.setFolderAllowed(folderAllowed);
   history.setFolderAllowed(folderAllowed);
   sessionsBoard.setFolderAllowed(folderAllowed);
-  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); sessionsBoard.setFolderAllowed(allowed); history.rerender(); });
+  library.setFolderAllowed(folderAllowed);
+  window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); sessionsBoard.setFolderAllowed(allowed); library.setFolderAllowed(allowed); history.rerender(); });
   window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
   window.addEventListener('petal:get-started', () => void getStarted.open());
   window.pastel.onReading(setReading);

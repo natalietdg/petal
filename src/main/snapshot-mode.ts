@@ -32,7 +32,7 @@ const takeExtraFixture = (): FixtureSession | null => (isSnapshotRun() ? extraTa
 export const tabFixture = (isFirstTab: boolean): FixtureSession | null => (isFirstTab ? fixtureSession() : takeExtraFixture());
 
 // What the app did or skipped, so the harness can prove it (a stored flow skips the jsonl, the hook never runs).
-export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0, organizerPassesSkipped: 0 };
+export const counters = { flowExtractions: 0, hookSkippedInSnapshot: 0, organizerPassesSkipped: 0, libraryRunsSkipped: 0 };
 
 // Snapshot runs record the keys a prompt answer would type instead of sending them to the fixture tab's shell.
 export const promptWrites: string[][] = [];
@@ -80,3 +80,6 @@ export const concludeCloses: { sessionId: string; outcome: string }[] = [];
 
 // A stand-in ~/.claude for the reply box's "/" menu (read only); null reads the real one.
 export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
+
+// The Library's extractor in snapshot runs: the harness's stub, given the prompt; null skips the run. Never a real claude.
+export const libraryFixture: { extract: ((prompt: string) => Promise<string>) | null } = { extract: null };

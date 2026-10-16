@@ -7,6 +7,7 @@ import { shouldCloseConcludedTab } from './conclude-tab';
 import { foregroundJobIn } from './updater';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
+import { harvest } from './library-extract';
 import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
 import { claudePath } from './claude-cli';
@@ -100,7 +101,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
-  }, { fixture, onReplyFinished, onConcluded: (target) => void concludeTab(session, target) });
+  }, { fixture, onReplyFinished, onConcluded: (target) => void concludeTab(session, target), onEnded: harvest });
   const session: TabSession = { pty, feed, contentsId, tabId };
   sessions.set(tabKey(contentsId, tabId), session);
   if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
@@ -116,6 +117,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   });
   // Closing the last tab closes the window, as the shell exiting always has.
   pty.onExit(() => {
+    harvest(feed.session); // the Library reads what this session added; a no-op unless she turned it on
     feed.stop();
     sessions.delete(tabKey(contentsId, tabId));
     if (!sender.isDestroyed()) send(sender, 'tab:closed', { tabId });
@@ -144,12 +146,14 @@ function answerPrompt(session: TabSession, answer: PromptAnswer): void {
 }
 
 function closeSession({ pty, feed }: TabSession): void {
+  harvest(feed.session);
   feed.stop();
   try { pty.kill(); } catch { /* already exited */ }
 }
 
 // Her "conclude" closes that tab's claude, then the tab itself once its shell is idle; pty exit removes it as usual.
 async function concludeTab(session: TabSession, target: ConcludedSession): Promise<void> {
+  harvest(session.feed.session);
   if (!(await closeConcluded(target))) return;
   await new Promise((resolve) => setTimeout(resolve, SHELL_SETTLE_MS));
   if (!sessions.has(tabKey(session.contentsId, session.tabId))) return;
