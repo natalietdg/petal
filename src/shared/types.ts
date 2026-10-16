@@ -63,6 +63,19 @@ export interface ReaderUpdate {
   cwd: string | null;
   repo: string | null; // "<repo> · <branch>" for cwd, or its folder name outside git
   conclusion: Conclusion | null; // Claude's answer to her latest "conclude"
+  notice?: ReaderNotice | null; // only for a claude with no session file (Claude Code before 2.1.75)
+}
+
+// A log this tab's claude could be writing, when two claudes share a folder.
+export interface SessionChoice {
+  sessionId: string;
+  startedAt: string | null; // ISO time of its first entry
+  prompt: string | null; // her first message in it
+}
+
+export interface ReaderNotice {
+  oldVersion: string | null; // set when the tab's Claude Code is older than Petal's fast tracking needs
+  choices: SessionChoice[]; // non-empty when Petal can't tell which log is this tab's
 }
 
 export interface TabReaderUpdate extends ReaderUpdate {
