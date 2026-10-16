@@ -8,6 +8,7 @@ import { acceptFileDrags, droppedPaths } from './terminal';
 import { quotePaths } from '../shared/quote-path';
 import { OPEN_THREAD_EVENT } from './open-threads';
 import * as slashMenu from './slash-menu';
+import { applySlash } from '../shared/slash';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -160,3 +161,16 @@ new ResizeObserver(fit).observe(form);
 fit();
 
 export const focus = (): void => input.focus();
+
+// Sends a message from another view (Testing's Ask Claude to fix) the way the box sends; her draft stays.
+export async function askClaude(text: string): Promise<void> {
+  await deliver(stripControls(text).trim(), () => {});
+}
+
+// Puts a skill, agent or command in front of her draft, as picking it from the "/" menu does.
+export function insertCommand(insert: string): void {
+  input.value = applySlash(input.value, insert);
+  input.setSelectionRange(insert.length, insert.length);
+  input.focus();
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}

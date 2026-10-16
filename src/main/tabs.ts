@@ -8,6 +8,7 @@ import { foregroundJobIn } from './updater';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
 import { harvest } from './library-extract';
+import { onTurnFinished } from './testing-ipc';
 import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites } from './snapshot-mode';
 import { claudePath } from './claude-cli';
@@ -43,10 +44,11 @@ export const openSessionIds = (): string[] => [...sessions.values()].flatMap((s)
 // The renderer creates the tab and starts its shell; a pending command is typed into it.
 // A background tab starts without being shown.
 export const openTab: OpenTab = (contents, { command, background = false } = {}) => {
-  if (!contents || contents.isDestroyed()) return;
+  if (!contents || contents.isDestroyed()) return undefined;
   const tabId: TabId = `m${++openedTabs}`;
   if (command) pendingCommands.set(tabKey(contents.id, tabId), command);
   send(contents, 'tabs:new', { background, tabId });
+  return tabId;
 };
 
 // What each tab was last called, so a title that lands later (organizer, Claude Code's ai-title) is pushed once.
@@ -96,7 +98,10 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   const fixture = tabFixture(!tabsOf(contentsId).length);
   const pty = spawnShell({ cols, rows });
   // Fire and forget: the hook never holds up the reader.
-  const onReplyFinished = ({ reply, sessionId, cwd }: ReplyFinished) => responseHook.onReplyFinished({ reply, sessionId, cwd, title: labelFor({ sessionId, cwd }) });
+  const onReplyFinished = ({ reply, sessionId, cwd }: ReplyFinished) => {
+    responseHook.onReplyFinished({ reply, sessionId, cwd, title: labelFor({ sessionId, cwd }) });
+    void onTurnFinished(session).catch((error: Error) => console.error('[petal] testing auto-run failed:', error)); // off unless she turned it on
+  };
   const feed = new ReaderFeed(pty.pid, (channel, update) => {
     const label = labelFor(update);
     shownLabels.set(tabKey(contentsId, tabId), { label, update });

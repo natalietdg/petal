@@ -1,0 +1,24 @@
+FAIL src/auth.test.js
+  ● auth › tokens › rejects an expired token
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1800000000
+    Received:   1700000000
+
+       9 |     it('rejects an expired token', () => {
+      10 |       const expiresAt = 1700000000;
+    > 11 |       expect(expiresAt).toBeGreaterThan(1800000000);
+         |                         ^
+      12 |     });
+      13 |     it.skip('rotates signing keys', () => {
+      14 |       expect(true).toBe(true);
+
+      at Object.toBeGreaterThan (src/auth.test.js:11:25)
+
+
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       1 failed, 1 skipped, 4 passed, 6 total
+Snapshots:   0 total
+Time:        0.107 s, estimated 1 s
+Ran all test suites.

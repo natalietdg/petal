@@ -1,0 +1,24 @@
+================================================= test session starts ==================================================
+platform darwin -- Python 3.13.7, pytest-9.1.1, pluggy-1.7.0
+rootdir: /Users/demo/acme
+collected 6 items
+
+tests/test_auth.py ..Fs                                                                                          [ 66%]
+tests/test_math.py ..                                                                                            [100%]
+
+======================================================= FAILURES =======================================================
+__________________________________ TestAuth.TestTokens.test_rejects_an_expired_token ___________________________________
+
+self = <test_auth.TestAuth.TestTokens object at 0x109efad70>
+
+    def test_rejects_an_expired_token(self):
+        expires_at = 1700000000
+>       assert expires_at > 1800000000
+E       assert 1700000000 > 1800000000
+
+tests/test_auth.py:14: AssertionError
+- generated xml file: /Users/demo/acme/pytest-junit.xml -
+=============================================== short test summary info ================================================
+SKIPPED [1] tests/test_auth.py:16: key rotation not implemented
+FAILED tests/test_auth.py::TestAuth::TestTokens::test_rejects_an_expired_token - assert 1700000000 > 1800000000
+======================================== 1 failed, 4 passed, 1 skipped in 0.01s ========================================

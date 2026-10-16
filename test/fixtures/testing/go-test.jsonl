@@ -1,0 +1,38 @@
+{"Time":"2026-10-16T10:55:04.715744+08:00","Action":"start","Package":"example.com/acme/auth"}
+{"Time":"2026-10-16T10:55:04.715915+08:00","Action":"start","Package":"example.com/acme/mathx"}
+{"Time":"2026-10-16T10:55:05.175827+08:00","Action":"run","Package":"example.com/acme/mathx","Test":"TestAddsTwoNumbers"}
+{"Time":"2026-10-16T10:55:05.176021+08:00","Action":"output","Package":"example.com/acme/mathx","Test":"TestAddsTwoNumbers","Output":"=== RUN   TestAddsTwoNumbers\n"}
+{"Time":"2026-10-16T10:55:05.176135+08:00","Action":"output","Package":"example.com/acme/mathx","Test":"TestAddsTwoNumbers","Output":"--- PASS: TestAddsTwoNumbers (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.176145+08:00","Action":"pass","Package":"example.com/acme/mathx","Test":"TestAddsTwoNumbers","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.176161+08:00","Action":"run","Package":"example.com/acme/mathx","Test":"TestMultipliesTwoNumbers"}
+{"Time":"2026-10-16T10:55:05.17617+08:00","Action":"output","Package":"example.com/acme/mathx","Test":"TestMultipliesTwoNumbers","Output":"=== RUN   TestMultipliesTwoNumbers\n"}
+{"Time":"2026-10-16T10:55:05.176195+08:00","Action":"output","Package":"example.com/acme/mathx","Test":"TestMultipliesTwoNumbers","Output":"--- PASS: TestMultipliesTwoNumbers (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.176202+08:00","Action":"pass","Package":"example.com/acme/mathx","Test":"TestMultipliesTwoNumbers","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.176209+08:00","Action":"output","Package":"example.com/acme/mathx","Output":"PASS\n"}
+{"Time":"2026-10-16T10:55:05.176891+08:00","Action":"output","Package":"example.com/acme/mathx","Output":"ok  \texample.com/acme/mathx\t0.461s\n"}
+{"Time":"2026-10-16T10:55:05.176938+08:00","Action":"pass","Package":"example.com/acme/mathx","Elapsed":0.461}
+{"Time":"2026-10-16T10:55:05.541141+08:00","Action":"run","Package":"example.com/acme/auth","Test":"TestTokens"}
+{"Time":"2026-10-16T10:55:05.541211+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens","Output":"=== RUN   TestTokens\n"}
+{"Time":"2026-10-16T10:55:05.541223+08:00","Action":"run","Package":"example.com/acme/auth","Test":"TestTokens/issues_a_token_for_a_valid_user"}
+{"Time":"2026-10-16T10:55:05.54124+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/issues_a_token_for_a_valid_user","Output":"=== RUN   TestTokens/issues_a_token_for_a_valid_user\n"}
+{"Time":"2026-10-16T10:55:05.54126+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/issues_a_token_for_a_valid_user","Output":"--- PASS: TestTokens/issues_a_token_for_a_valid_user (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.541279+08:00","Action":"pass","Package":"example.com/acme/auth","Test":"TestTokens/issues_a_token_for_a_valid_user","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.54129+08:00","Action":"run","Package":"example.com/acme/auth","Test":"TestTokens/refreshes_a_token_before_expiry"}
+{"Time":"2026-10-16T10:55:05.541297+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/refreshes_a_token_before_expiry","Output":"=== RUN   TestTokens/refreshes_a_token_before_expiry\n"}
+{"Time":"2026-10-16T10:55:05.541307+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/refreshes_a_token_before_expiry","Output":"--- PASS: TestTokens/refreshes_a_token_before_expiry (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.541317+08:00","Action":"pass","Package":"example.com/acme/auth","Test":"TestTokens/refreshes_a_token_before_expiry","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.541323+08:00","Action":"run","Package":"example.com/acme/auth","Test":"TestTokens/rejects_an_expired_token"}
+{"Time":"2026-10-16T10:55:05.541328+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rejects_an_expired_token","Output":"=== RUN   TestTokens/rejects_an_expired_token\n"}
+{"Time":"2026-10-16T10:55:05.541349+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rejects_an_expired_token","Output":"    auth_test.go:22: IsExpired(1700000000) = false, want true\n"}
+{"Time":"2026-10-16T10:55:05.541357+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rejects_an_expired_token","Output":"--- FAIL: TestTokens/rejects_an_expired_token (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.541423+08:00","Action":"fail","Package":"example.com/acme/auth","Test":"TestTokens/rejects_an_expired_token","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.541428+08:00","Action":"run","Package":"example.com/acme/auth","Test":"TestTokens/rotates_signing_keys"}
+{"Time":"2026-10-16T10:55:05.541432+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rotates_signing_keys","Output":"=== RUN   TestTokens/rotates_signing_keys\n"}
+{"Time":"2026-10-16T10:55:05.541436+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rotates_signing_keys","Output":"    auth_test.go:26: key rotation not implemented\n"}
+{"Time":"2026-10-16T10:55:05.541452+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens/rotates_signing_keys","Output":"--- SKIP: TestTokens/rotates_signing_keys (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.541457+08:00","Action":"skip","Package":"example.com/acme/auth","Test":"TestTokens/rotates_signing_keys","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.541462+08:00","Action":"output","Package":"example.com/acme/auth","Test":"TestTokens","Output":"--- FAIL: TestTokens (0.00s)\n"}
+{"Time":"2026-10-16T10:55:05.541468+08:00","Action":"fail","Package":"example.com/acme/auth","Test":"TestTokens","Elapsed":0}
+{"Time":"2026-10-16T10:55:05.541473+08:00","Action":"output","Package":"example.com/acme/auth","Output":"FAIL\n"}
+{"Time":"2026-10-16T10:55:05.542088+08:00","Action":"output","Package":"example.com/acme/auth","Output":"FAIL\texample.com/acme/auth\t0.826s\n"}
+{"Time":"2026-10-16T10:55:05.542102+08:00","Action":"fail","Package":"example.com/acme/auth","Elapsed":0.826}

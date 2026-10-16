@@ -1,0 +1,20 @@
+
+ RUN  v5.0.5 /Users/demo/acme
+
+ ❯ src/auth.test.js (4 tests | 1 failed | 1 skipped) 2ms
+   ❯ auth (4)
+     ❯ tokens (4)
+       × rejects an expired token 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/auth.test.js > auth > tokens > rejects an expired token
+AssertionError: expected 1700000000 to be greater than 1800000000
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 4 passed | 1 skipped (6)
+   Start at  10:54:28
+   Duration  62ms (import 43%, tests 21%, transform 19%, worker 17%, environment 1%)
+

@@ -1,0 +1,33 @@
+
+Running 6 tests using 1 worker
+
+  ✓  1 tests/auth.spec.js:5:5 › auth › tokens › issues a token for a valid user (2ms)
+  ✓  2 tests/auth.spec.js:8:5 › auth › tokens › refreshes a token before expiry (0ms)
+  ✘  3 tests/auth.spec.js:11:5 › auth › tokens › rejects an expired token (1ms)
+  -  4 tests/auth.spec.js:15:10 › auth › tokens › rotates signing keys
+  ✓  5 tests/math.spec.js:4:3 › math › adds two numbers (2ms)
+  ✓  6 tests/math.spec.js:7:3 › math › multiplies two numbers (0ms)
+
+
+  1) tests/auth.spec.js:11:5 › auth › tokens › rejects an expired token ────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1800000000
+    Received:   1700000000
+
+      11 |     test('rejects an expired token', () => {
+      12 |       const expiresAt = 1700000000;
+    > 13 |       expect(expiresAt).toBeGreaterThan(1800000000);
+         |                         ^
+      14 |     });
+      15 |     test.skip('rotates signing keys', () => {
+      16 |       expect(true).toBe(true);
+        at /Users/demo/acme/tests/auth.spec.js:13:25
+
+    Error Context: test-results/auth-auth-tokens-rejects-an-expired-token/error-context.md
+
+  1 failed
+    tests/auth.spec.js:11:5 › auth › tokens › rejects an expired token ─────────────────────────────
+  1 skipped
+  4 passed (399ms)
