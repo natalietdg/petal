@@ -118,6 +118,12 @@ const api = {
   slash: {
     list: (cwd: string | null) => invoke('slash:list', { cwd }),
   },
+  library: {
+    list: () => invoke('library:list'),
+    read: (slug: string) => invoke('library:read', { slug }),
+    addSession: (tabId: TabId) => invoke('library:add-session', { tabId }),
+    onChanged: (callback: () => void) => subscribe('library:changed', callback),
+  },
   factory: {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),

@@ -18,9 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has fourteen sections with the documented defaults', () => {
+  it('has fifteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -28,6 +28,7 @@ describe('config-store defaults and load', () => {
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
+    expect(d.library).toEqual({ autoBuild: false }); // it spends her Claude plan, so she opts in
     expect(d.updates).toEqual({ lastNotifiedVersion: '', lastSeenVersion: '' });
     expect(d.notesPanel).toEqual({ open: 'auto', width: 320 });
     expect(d.sessions).toEqual({ maxOpen: 20 });
@@ -154,7 +155,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'updates']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'updates']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -273,6 +274,7 @@ describe('first launch and the organizer migration', () => {
     const c = config.load();
     expect(c.organizer.enabled).toBe(true);
     expect(c.welcome.seen).toBe(true);
+    expect(c.library.autoBuild).toBe(false); // returning users opt in too
   });
 
   it('a saved choice wins over organizer.json', () => {

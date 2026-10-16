@@ -22,6 +22,7 @@ import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
 import type { Conclusion } from './conclusion';
 import type { PromptImage } from '../main/paste-image';
 import type { SlashList } from './slash';
+import type { LibraryDoc, LibraryList, LibraryRunResult } from './library';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -181,6 +182,10 @@ export interface InvokeChannels {
   'workflow:handoffs': { args: []; result: Guarded<HandoffData> };
   // The reply box's "/" menu; cwd is the session's folder, for its project skills, commands and agents.
   'slash:list': { args: [request: { cwd: string | null }]; result: Guarded<SlashList> };
+  // The Library: its notes, one note's Markdown, and gathering from a tab's session now (read-only but for Petal's own notes).
+  'library:list': { args: []; result: Guarded<LibraryList> };
+  'library:read': { args: [request: { slug: string }]; result: Guarded<LibraryDoc> };
+  'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };
   'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };
@@ -268,6 +273,7 @@ export interface EventChannels {
   'colour-key:open': void;
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
+  'library:changed': void; // a run added or updated notes
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };

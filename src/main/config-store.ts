@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, update versions seen. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, update versions seen. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -43,6 +43,8 @@ export interface Config {
   getStarted: { done: StepId[] };
   // Whether Petal may read ~/.claude; nothing there is read until 'allowed'.
   claudeFolder: { choice: FolderChoice };
+  // Build my Library from sessions: a headless Claude run per finished session (library-extract.ts). Off until she opts in.
+  library: { autoBuild: boolean };
   // Versions already announced: the update notification, and the "Updated to" note after a restart. '' before the first.
   updates: { lastNotifiedVersion: string; lastSeenVersion: string };
 }
@@ -79,6 +81,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   pet: { size: 'normal' as const },
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
+  library: { autoBuild: false },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
 });
 
@@ -141,6 +144,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const pe = raw.pet ?? {};
   const gs = raw.getStarted ?? {};
   const cf = raw.claudeFolder ?? {};
+  const lb = raw.library ?? {};
   const up = raw.updates ?? {};
   return {
     organizer: {
@@ -171,6 +175,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },
+    library: { autoBuild: boolOr(lb.autoBuild, b.library.autoBuild) },
     updates: {
       lastNotifiedVersion: versionOr(up.lastNotifiedVersion, b.updates.lastNotifiedVersion),
       lastSeenVersion: versionOr(up.lastSeenVersion, b.updates.lastSeenVersion),
