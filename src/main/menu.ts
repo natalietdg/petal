@@ -3,6 +3,7 @@ import themesJson from '../themes.json';
 import { LOCAL_CATS } from '../shared/local-cats';
 import { READING_CHOICES } from '../shared/reading-choices';
 import { ACCEL, readingAccelerator, themeAccelerator } from '../shared/shortcuts';
+import type { TextStep } from '../shared/text-size';
 import type { Choice, Themes } from '../shared/types';
 
 const themes: Themes = themesJson;
@@ -38,6 +39,7 @@ export interface MenuOptions {
   onToggleBoard: () => void;
   onToggleFocus: () => void;
   onToggleHeaders: () => void;
+  onTextSize: (step: TextStep) => void;
   onStopClaude: () => void;
   onOpenSettings: () => void;
   onOpenWelcome: () => void;
@@ -49,7 +51,7 @@ export interface MenuOptions {
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onStopClaude, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onTextSize, onStopClaude, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -126,6 +128,12 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
         { label: 'History', accelerator: ACCEL.history, click: onToggleHistory },
         { label: 'Sessions Board', accelerator: ACCEL.board, click: onToggleBoard },
         { label: 'Focus on Reply', accelerator: ACCEL.focus, click: onToggleFocus },
+        { type: 'separator' },
+        // Acts on the terminal when it has focus, otherwise the reader (renderer/text-size.ts).
+        { label: 'Bigger Text', accelerator: ACCEL.biggerText, click: () => onTextSize(1) },
+        { label: 'Bigger Text', accelerator: ACCEL.biggerTextPlus, click: () => onTextSize(1), visible: false, acceleratorWorksWhenHidden: true },
+        { label: 'Smaller Text', accelerator: ACCEL.smallerText, click: () => onTextSize(-1) },
+        { label: 'Actual Size', accelerator: ACCEL.actualSize, click: () => onTextSize(0) },
         { type: 'separator' },
         ...readingItems,
       ],

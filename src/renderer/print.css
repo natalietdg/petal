@@ -28,7 +28,7 @@
   --display-font: "Source Serif 4 Variable", "Newsreader Variable", Georgia, serif;
   padding-top: 28px;
   padding-bottom: 150px;
-  font-size: clamp(19px, 1.62vw, 23.5px);
+  font-size: calc(clamp(19px, 1.62vw, 23.5px) * var(--reader-scale));
   line-height: 1.55;
   font-variant-numeric: proportional-nums;
 }
@@ -39,7 +39,7 @@
   padding-bottom: 0.9em;
   border-bottom: 1px solid var(--print-ink);
   font-family: var(--print-mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--reader-scale));
   font-weight: 400;
   letter-spacing: 0.14em;
   color: var(--print-ink);
@@ -56,7 +56,7 @@
   border-bottom: 1px solid var(--print-ink);
   white-space: nowrap;
   font-family: var(--print-mono);
-  font-size: 14px;
+  font-size: calc(14px * var(--reader-scale));
   font-weight: 300;
   letter-spacing: 0.12em;
 }
@@ -224,7 +224,7 @@
 
 /* ---- Earlier turns: ink hairlines, modest heads (reader.css keeps them small). ---- */
 [data-reading="print"] .older-turn { border-top-color: var(--print-ink); }
-[data-reading="print"] .older-time { font-size: 11px; color: var(--print-ink); }
+[data-reading="print"] .older-time { font-size: calc(11px * var(--reader-scale)); color: var(--print-ink); }
 [data-reading="print"] #reader #older .story-head::before { content: none; }
 [data-reading="print"] #reader #older .headline + p { font-size: 1.1em; padding-top: 0.5em; }
 
@@ -267,6 +267,6 @@
 [data-reading="print"] .thread-card:hover { background: var(--print-tint); }
 [data-reading="print"] .thread-question { font-weight: 600; }
 [data-reading="print"] :is(.thread-check-label, .thread-ask) { font-family: var(--print-mono); font-weight: 400; letter-spacing: 0.12em; color: var(--print-ink); }
-[data-reading="print"] .prose .checked-line { font: 300 12.5px/1.6 var(--print-mono); letter-spacing: 0.04em; color: var(--print-ink); }
+[data-reading="print"] .prose .checked-line { font: 300 calc(12.5px * var(--reader-scale))/1.6 var(--print-mono); letter-spacing: 0.04em; color: var(--print-ink); }
 [data-reading="print"] .checked-label { font-weight: 400; letter-spacing: 0.12em; }
 [data-reading="print"] .prose blockquote.sidebar.assumed { border: 1px solid var(--print-ink); border-left: 5px solid var(--watch-ink); background: var(--watch-wash); }

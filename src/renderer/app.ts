@@ -42,6 +42,7 @@ import * as library from './library';
 import * as libraryAdd from './library-add';
 import * as testing from './testing';
 import * as stopClaude from './stop-claude';
+import * as textSize from './text-size';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import type { Tab } from './tabs';
@@ -49,7 +50,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -137,6 +138,7 @@ async function start(): Promise<void> {
   reader.setClaudeMissing(!claudeFound);
   const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
+  textSize.restore(startup?.config.text);
   reader.setFolderAllowed(folderAllowed);
   history.setFolderAllowed(folderAllowed);
   sessionsBoard.setFolderAllowed(folderAllowed);

@@ -21,6 +21,10 @@ export const ACCEL = {
   focus: 'CmdOrCtrl+Shift+F',
   shortcuts: 'CmdOrCtrl+/',
   stopClaude: 'CmdOrCtrl+.',
+  biggerText: 'CmdOrCtrl+=',
+  biggerTextPlus: 'CmdOrCtrl+Plus',
+  smallerText: 'CmdOrCtrl+-',
+  actualSize: 'CmdOrCtrl+0',
 } as const;
 
 export const themeAccelerator = (index: number): string => `CmdOrCtrl+${index + 1}`;
@@ -28,7 +32,7 @@ export const readingAccelerator = (index: number): string => `CmdOrCtrl+Alt+${in
 
 const GLYPHS: Record<string, string> = {
   CmdOrCtrl: '⌘', Cmd: '⌘', Command: '⌘', Ctrl: '⌃', Control: '⌃', Alt: '⌥', Option: '⌥', Shift: '⇧',
-  Tab: '⇥', Enter: '↩', Return: '↩', Escape: 'Esc', Up: '↑', Down: '↓', Left: '←', Right: '→', PageUp: 'PgUp', PageDown: 'PgDn',
+  Plus: '+', Tab: '⇥', Enter: '↩', Return: '↩', Escape: 'Esc', Up: '↑', Down: '↓', Left: '←', Right: '→', PageUp: 'PgUp', PageDown: 'PgDn',
 };
 const MODIFIER_ORDER = ['⌃', '⌥', '⇧', '⌘']; // the order the macOS menu bar draws them
 
@@ -98,6 +102,9 @@ export const GUIDE: readonly GuideGroup[] = [
     rows: [
       ...READING_CHOICES.map(([, label], index) => menuRow(label, readingAccelerator(index))),
       { keys: [[...keyChips(themeAccelerator(0)).slice(0, -1), `1–${THEME_LABELS.length}`]], does: `Theme: ${THEME_LABELS.join(', ')}`, accelerators: themeAccelerators },
+      menuRow('Bigger text: the terminal when it has focus, else the reader', ACCEL.biggerText, ACCEL.biggerTextPlus),
+      menuRow('Smaller text', ACCEL.smallerText),
+      menuRow('Actual size', ACCEL.actualSize),
       { gesture: 'Click the bar above the status lines', does: 'Folds the status lines and conclusion' },
     ],
   },

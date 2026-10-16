@@ -1,6 +1,7 @@
 // Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (shape guide, output styles, preview).
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
+import * as textSize from './text-size';
 import { petWords, portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
@@ -10,6 +11,7 @@ import { shapeGuide } from './shape-guide';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
+import { READER_PERCENT, TERMINAL_FONT, type SizeRange, type TextPane } from '../shared/text-size';
 
 // picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her.
 function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
@@ -50,6 +52,40 @@ function birthdayCard(): HTMLDivElement {
   return card('Birthday', field('Date of birth', control, "For your Tarot Room reading. Kept in Petal's settings on this Mac, never sent anywhere."));
 }
 
+// − value + and Reset for one pane; the value follows ⌘= ⌘- ⌘0 and other windows while the card is on screen.
+function sizeStepper(pane: TextPane, label: string, range: SizeRange, show: (n: number) => string, hint: string): HTMLDivElement {
+  const output = el('output', 'cz-size-value');
+  const smaller = actionButton('−', () => textSize.step(pane, -1), 'flow-button cz-size-step');
+  const bigger = actionButton('+', () => textSize.step(pane, 1), 'flow-button cz-size-step');
+  const resetButton = actionButton('Reset', () => textSize.reset(pane), 'flow-button cz-size-reset');
+  smaller.setAttribute('aria-label', `Smaller ${label.toLowerCase()}`);
+  bigger.setAttribute('aria-label', `Bigger ${label.toLowerCase()}`);
+  const row = el('div', 'cz-field cz-size');
+  row.dataset.pane = pane;
+  const paint = (): void => {
+    const n = textSize.value(pane);
+    output.textContent = show(n);
+    smaller.disabled = n <= range.min;
+    bigger.disabled = n >= range.max;
+    resetButton.disabled = n === range.initial;
+  };
+  const stop = textSize.onChange(() => { if (row.isConnected) paint(); else stop(); });
+  paint();
+  const control = el('span', 'cz-size-control');
+  control.append(smaller, output, bigger, resetButton);
+  row.append(el('span', 'cz-label', label), control, el('span', 'cz-hint', hint));
+  return row;
+}
+
+function textSizeCard(): HTMLDivElement {
+  const rows = el('div', 'cz-fields');
+  rows.append(
+    sizeStepper('terminal', 'Terminal font', TERMINAL_FONT, (n) => `${n} px`, `${TERMINAL_FONT.min} to ${TERMINAL_FONT.max} px; ${TERMINAL_FONT.initial} is the usual size.`),
+    sizeStepper('reader', 'Reader text', READER_PERCENT, (n) => `${n}%`, `${READER_PERCENT.min}% to ${READER_PERCENT.max}%. The live preview under Formatting follows it.`),
+  );
+  return card('Text size', rows, note('Also ⌘= bigger, ⌘- smaller and ⌘0 actual size, for the terminal when you last clicked or typed there, otherwise the reader.'));
+}
+
 // Pet size wording uses the chosen pet's name and pronoun.
 function sizeNoteText(id: string): string {
   const { name, they, their } = petWords(id);
@@ -64,6 +100,7 @@ export function renderLook(): HTMLElement[] {
   return [
     chipGroup('Theme', choices.themes, look.theme, (id) => { look.theme = id; set.setTheme(id); }),
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
+    textSizeCard(),
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); sizeNote.textContent = sizeNoteText(id); }, portrait),
     chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),

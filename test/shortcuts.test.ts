@@ -44,6 +44,16 @@ describe('Shortcuts guide', () => {
     expect(words).toContain('/factory');
   });
 
+  it('binds Bigger Text (⌘= and ⌘+), Smaller Text and Actual Size in the View menu', () => {
+    const view = menuTemplate(OPTIONS).find((item) => item.label === 'View');
+    const items = (view?.submenu as MenuItemConstructorOptions[]).filter((entry) => /Text|Actual Size/.test(String(entry.label)));
+    expect(items.map((entry) => [entry.label, entry.accelerator, entry.visible ?? true])).toEqual([
+      ['Bigger Text', 'CmdOrCtrl+=', true], ['Bigger Text', 'CmdOrCtrl+Plus', false], ['Smaller Text', 'CmdOrCtrl+-', true], ['Actual Size', 'CmdOrCtrl+0', true],
+    ]);
+    expect(keyChips(ACCEL.biggerTextPlus)).toEqual(['⌘', '+']);
+    expect(keyChips(ACCEL.smallerText)).toEqual(['⌘', '-']);
+  });
+
   it('draws mac glyphs in menu-bar order', () => {
     expect(keyChips('CmdOrCtrl+Shift+O')).toEqual(['⇧', '⌘', 'O']);
     expect(keyChips('CmdOrCtrl+Alt+2')).toEqual(['⌥', '⌘', '2']);
