@@ -234,6 +234,7 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   await panel('expandedIds.clear()');
   await panel('setOpen(false)');
   panelFixture.sessions = null;
+  applyTheme('paleSky', { persist: false });
 }
 
 const FIXTURE_REPLY = [

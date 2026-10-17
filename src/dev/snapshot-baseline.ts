@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import { flush as flushActivity, resetForTests as forgetActivity } from '../main/activity-feed';
+import { flush as flushActivity, listActivity, resetForTests as forgetActivity } from '../main/activity-feed';
 import { libraryDir } from '../main/library-store';
 import { applyReading, settings } from '../main/look';
 import * as fixtures from '../main/snapshot-mode';
@@ -122,6 +122,9 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
     if (fs.existsSync(at())) fs.cpSync(at(), path.join(copies, name), { recursive: true });
   }
   const restoreFixtures = fixtureRestorer();
+  const baselineEvents = new Set(listActivity().map((e) => e.id));
+  // What a step added to the Activity feed, so the FAIL names the event that leaked.
+  const newEvents = () => listActivity().filter((e) => !baselineEvents.has(e.id)).slice(0, 4).map((e) => `${e.kind}: ${String(e.text).slice(0, 60)}`);
   const baseline: Baseline = { page: await js(PAGE_STATE), look: lookState(), fixtures: JSON.stringify(fixtureState()), size: win.getContentSize(), stores };
   const tabsOk = sameJson(baseline.page.tabs, ['t1']) && baseline.page.active === 't1' && baseline.page.overlay === null;
   log(`${tabsOk ? 'ok' : 'FAIL'} step baseline: one tab t1, no overlay open: ${JSON.stringify({ ...baseline.page, look: baseline.look, size: baseline.size })}`);
@@ -207,7 +210,7 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
     flushActivity();
     for (const name of Object.keys(STORES) as StoreName[]) {
       if (fingerprint(STORES[name]()) === baseline.stores[name]) continue;
-      leaks.push(`${name} store changed`);
+      leaks.push(`${name} store changed${name === 'activity' ? ` ${JSON.stringify(newEvents())}` : ''}`);
       restoreStore(name);
     }
 

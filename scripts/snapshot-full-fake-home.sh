@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Full snapshot run under a scratch HOME and a stand-in claude; never reads her ~/.claude or runs the real CLI.
 # Usage: scripts/snapshot-full-fake-home.sh [scratch-dir]   (run before handing a branch over; exit 0 only on fail=0)
+# PASTEL_SNAPSHOT_MODE=<mode> runs one mode instead of the full sequence, under the same scratch HOME.
 set -u
 REPO=${0:A:h:h}
 SCRATCH=${1:-${TMPDIR:-/tmp}/petal-fake-home-run}
@@ -30,12 +31,12 @@ chmod +x $FAKE_HOME/.local/bin/claude
 env -i \
   HOME=$FAKE_HOME USER=${USER} LOGNAME=${USER} SHELL=/bin/zsh TERM=xterm-256color LANG=en_US.UTF-8 TMPDIR=${TMPDIR:-/tmp} \
   PATH=$FAKE_HOME/.local/bin:$NODE_BIN:/usr/bin:/bin:/usr/sbin:/sbin \
-  PASTEL_SNAPSHOT=1 PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
+  PASTEL_SNAPSHOT=1 ${PASTEL_SNAPSHOT_MODE:+PASTEL_SNAPSHOT_MODE=$PASTEL_SNAPSHOT_MODE} PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
   perl -e "alarm $TIMEOUT_S; exec @ARGV" $REPO/node_modules/.bin/electron . >$SNAP/stdout.log 2>&1
 
 line=$(grep -E '^SNAPSHOT (COMPLETE|INCOMPLETE)' $SNAP/snapshot.log 2>/dev/null | tail -1)
 echo "${line:-SNAPSHOT NO COMPLETE LINE (timed out or crashed; see $SNAP/stdout.log)}"
 grep -E '^FAIL' $SNAP/snapshot.log 2>/dev/null | cut -c1-400
 echo "log: $SNAP/snapshot.log"
-echo "$line" | awk '/^SNAPSHOT COMPLETE/ { split($0, a, "fail="); split(a[2], f, " "); split($0, b, "steps="); split(b[2], s, "/");
-  if (f[1] == 0 && s[1] == s[2] + 0) ok = 1 } END { exit ok ? 0 : 1 }'
+echo "$line" | awk '/^SNAPSHOT COMPLETE/ { split($0, a, "fail="); split(a[2], f, " "); n = split($0, b, "steps="); split(b[2], s, "/");
+  if (f[1] == 0 && (n < 2 || s[1] == s[2] + 0)) ok = 1 } END { exit ok ? 0 : 1 }'
