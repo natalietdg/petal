@@ -59,6 +59,8 @@ export function init(): void {
   sizes.observe(head); // window width, reading style padding, a Notes drawer's margin
   sizes.observe(end); // a theme's font, the docked cat's padding
   watcher.observe(end, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  // The pet docking into the header (cat.ts toggles cat-docked) widens its slot without resizing the row.
+  new MutationObserver(schedule).observe(byId('reader-area'), { attributes: true, attributeFilter: ['class'] });
   fit();
 }
 
