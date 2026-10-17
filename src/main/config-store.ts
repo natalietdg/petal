@@ -9,6 +9,7 @@ import { MAX_FAVORITES } from '../shared/favorites';
 import { SESSION_ID } from './session-id';
 import { cleanDone, type StepId } from '../shared/get-started';
 import { isFolderChoice, type FolderChoice } from '../shared/claude-folder';
+import { isGuideStage, type GuideStage } from '../shared/pet-guide';
 import { READER_PERCENT, TERMINAL_FONT, clampSize, type SizeRange } from '../shared/text-size';
 
 // Organizer schedule bounds; Customize shows the same ranges.
@@ -42,6 +43,8 @@ export interface Config {
   pet: { size: PetSize };
   // Get started steps done, by hand or seen by Petal.
   getStarted: { done: StepId[] };
+  // The pet's setup guide: the step to resume at, or how it ended ('existing' for installs from before it).
+  onboarding: { step: GuideStage };
   // Whether Petal may read ~/.claude; nothing there is read until 'allowed'.
   claudeFolder: { choice: FolderChoice };
   // Build my Library from sessions: a headless Claude run per finished session (library-extract.ts). Off until she opts in.
@@ -83,6 +86,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   reader: { bannersCollapsed: false, headersMinimised: false },
   pet: { size: 'normal' as const },
   getStarted: { done: [] as StepId[] },
+  onboarding: { step: 'welcome' as GuideStage },
   claudeFolder: { choice: 'unasked' as FolderChoice },
   library: { autoBuild: false },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
@@ -150,6 +154,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const rd = raw.reader ?? {};
   const pe = raw.pet ?? {};
   const gs = raw.getStarted ?? {};
+  const ob = raw.onboarding ?? {};
   const cf = raw.claudeFolder ?? {};
   const lb = raw.library ?? {};
   const up = raw.updates ?? {};
@@ -182,6 +187,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     },
     pet: { size: isPetSize(pe.size) ? pe.size : b.pet.size },
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
+    onboarding: { step: isGuideStage(ob.step) ? ob.step : b.onboarding.step },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },
     library: { autoBuild: boolOr(lb.autoBuild, b.library.autoBuild) },
     updates: {
@@ -195,13 +201,14 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   };
 }
 
-// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome.
+// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome and the pet guide.
 // The folder question and Get started are new to everyone, so they start unasked and open.
 function migratedBase(): Config {
   const base = defaults();
   const organized = fs.existsSync(userDataFile('organizer.json'));
   base.organizer.enabled = organized;
   base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name))) || hasSetAsideConfig();
+  if (base.welcome.seen) base.onboarding.step = 'existing'; // the pet guide is for new installs only
   return base;
 }
 

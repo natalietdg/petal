@@ -5,10 +5,9 @@ import * as tabs from './tabs';
 import * as reader from './reader';
 import * as layout from './layout';
 import { byId, el, isIpcError } from './dom';
-import { allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
+import { INSTALL_COMMAND, allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
 
-// From code.claude.com/docs/en/setup (native install, macOS and Linux).
-export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
+export { INSTALL_COMMAND };
 export const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
 const COPIED_MS = 1400;
 export const UNSEEN_NOTE = 'Petal can’t see this while your Claude folder is off.';
