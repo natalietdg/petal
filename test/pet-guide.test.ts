@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BUBBLE_STEPS, CARD_STEPS, GUIDE_PETS, INSTALL_COMMAND, blindToClaude, bubbleCopy, bubbleStep, cardCopy, isGuideStage, nextCard, personality,
-  previousCard, resumeAt, stageToSave, typeClaudeHelp, type GuideFacts, type PetWords,
+  BUBBLE_STEPS, CARD_STEPS, GUIDE_PETS, INSTALL_COMMAND, blindToClaude, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isGuideStage,
+  libraryConfirm, nextCard, personality, previousCard, resumeAt, showsImport, stageToSave, typeClaudeHelp, type GuideFacts, type PetWords,
 } from '../src/shared/pet-guide';
 import { CATS } from '../src/renderer/cat-art';
 
-const FRESH: GuideFacts = { folderChoice: 'unasked', addedSession: false, claudeRunning: false, sessionStarted: false, replied: false };
+const FRESH: GuideFacts = { folderChoice: 'unasked', addedSession: false, claudeRunning: false, sessionStarted: false, replied: false, pastSessions: 0 };
 const ALLOWED: GuideFacts = { ...FRESH, folderChoice: 'allowed' };
 const MIKI: PetWords = { name: 'Miki', they: 'he', their: 'his' };
 const MIKA: PetWords = { name: 'Mika', they: 'she', their: 'her' };
@@ -26,6 +26,48 @@ describe('the cards', () => {
   it('go back one at a time, and not before the welcome', () => {
     expect(previousCard('scene')).toBe('pet');
     expect(previousCard('welcome')).toBeNull();
+  });
+});
+
+describe('the import card', () => {
+  it('follows the folder card only when the folder was allowed and past sessions were found', () => {
+    expect(nextCard('consent', 'allowed', 5)).toBe('import');
+    expect(nextCard('consent', 'allowed', 0)).toBe('bubbles');
+    expect(nextCard('consent', 'declined', 5)).toBe('bubbles');
+    expect(nextCard('import', 'allowed', 5)).toBe('bubbles');
+    expect(showsImport('unasked', 5)).toBe(false);
+  });
+
+  it('a restart with the folder already allowed goes from the scene card straight to it', () => {
+    expect(nextCard('scene', 'allowed', 3)).toBe('import');
+    expect(nextCard('scene', 'unasked', 3)).toBe('consent');
+  });
+
+  it('has no Back: the folder question is answered', () => {
+    expect(previousCard('import')).toBeNull();
+    expect(previousCard('consent')).toBe('scene');
+  });
+
+  it('keeps Step N of M right: four cards, five once the import card shows', () => {
+    expect(cardCounter('welcome', 'unasked', 0)).toEqual({ number: 1, total: 4 });
+    expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 4, total: 4 });
+    expect(cardCounter('import', 'allowed', 5)).toEqual({ number: 5, total: 5 });
+    expect(cardCounter('pet', 'allowed', 5)).toEqual({ number: 2, total: 5 }); // a restart that knows it will show
+    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 3, total: 4 });
+  });
+
+  it('resumes there only while it still applies', () => {
+    expect(resumeAt('import', { ...ALLOWED, pastSessions: 4 })).toBe('import');
+    expect(resumeAt('import', ALLOWED)).toBe('add-session');
+    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4 })).toBe('import');
+  });
+
+  it('says what it found, in the pet’s words, with the Library cost before anything starts', () => {
+    expect(importSaid({ sessions: 5, projects: 2 })).toBe('You’ve used Claude Code before! I found 5 past sessions in 2 projects.');
+    expect(importSaid({ sessions: 1, projects: 1 })).toBe('You’ve used Claude Code before! I found 1 past session in 1 project.');
+    expect(cardCopy('import', MIKI).title).toBe('Import your past sessions');
+    expect(libraryConfirm({ days: 30, sessions: 5, calls: 7 })).toBe('Reads 5 sessions from the last 30 days: about 7 Claude calls, on your plan.');
+    expect(libraryConfirm({ days: 30, sessions: 0, calls: 0 })).toBe('Nothing new to read from the last 30 days.');
   });
 });
 

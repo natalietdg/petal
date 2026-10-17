@@ -112,6 +112,18 @@
 .pg-more .consent-reads { margin-top: 8px; }
 .pg-more .consent-line { margin-top: 6px; color: var(--muted); }
 
+/* The import card: the newest past sessions as History lists them, and the Library option with its cost. */
+.pg-past { list-style: none; margin: 0; padding: 0 0 0 104px; display: flex; flex-direction: column; gap: 6px; }
+.pg-past-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 10px; border-left: 3px solid var(--rule); }
+.pg-past-title { font: 600 14px/1.35 var(--body-font); overflow-wrap: anywhere; }
+.pg-past-project { font: 12px var(--ui-font); color: var(--muted); overflow-wrap: anywhere; }
+.pg-library { display: flex; align-items: center; gap: 10px; font: 600 14px var(--ui-font); cursor: pointer; }
+.pg-library input { width: 18px; height: 18px; margin: 0; accent-color: var(--link); }
+.pg-library input:focus-visible { outline: 3px dashed var(--link); outline-offset: 3px; }
+.pg-library-confirm { margin: -6px 0 0 28px; font-size: 14px; color: var(--muted); max-width: 34em; }
+#history-button.pg-hint { outline: 3px solid var(--link); outline-offset: 3px; animation: pg-ring 1.6s ease-in-out infinite; }
+@media (max-width: 760px) { .pg-past { padding-left: 0; } }
+
 /* Buttons: chunky pixel pills. */
 .pg-primary, .pg-secondary, .pg-skip, .pb-actions button, .pg-copy {
   font: 600 14px var(--ui-font); cursor: pointer; border-radius: 0;
@@ -210,7 +222,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pg-hello-pet, .pg-pet[aria-checked="true"] .pg-pet-picture, .pet-pointer, .pg-target { animation: none; }
+  .pg-hello-pet, .pg-pet[aria-checked="true"] .pg-pet-picture, .pet-pointer, .pg-target, #history-button.pg-hint { animation: none; }
   .pg-pet, .pg-scene { transition: none; }
   .pg-pet[aria-checked="true"], .pg-scene[aria-checked="true"] { transform: none; }
 }
