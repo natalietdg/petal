@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app, type BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
-import { claudeFixture, claudeStarts, folderFixture, historyFixture } from '../main/snapshot-mode';
+import { claudeFixture, claudeStarts, folderFixture, historyFixture, libraryFixture } from '../main/snapshot-mode';
 import { harnessLine } from '../main/snapshot-shell';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { transcriptPath } from '../main/claude-session';
@@ -22,6 +22,7 @@ const SESSION_ID = 'eeeeeeee-0000-4000-8000-0000000000aa';
 const SESSION_CWD = '/tmp/petal-onboard';
 const WIDTHS = [800, 1280, 1600];
 const HEIGHT = 900;
+const PAST_PROJECT = '/tmp/petal-acme'; // the import card's second project; the first is SESSION_CWD
 const DEFAULT_SHOTS = '/private/tmp/claude-501/-Users-natalieleong/091d078c-ab24-4c62-aeac-05a980d6184f/scratchpad/onboard';
 
 // Everything the guide shows, read off the page.
@@ -39,6 +40,10 @@ const STATE = `(() => {
     line: view.querySelector('.pg-line')?.textContent ?? null,
     said: view.querySelector('.pg-said-line')?.textContent ?? null,
     buttons: [...view.querySelectorAll('footer button')].map((b) => b.textContent),
+    counter: view.querySelector('.pg-dots-text')?.textContent ?? null,
+    past: [...view.querySelectorAll('.pg-past-row')].map((r) => [r.querySelector('.pg-past-title')?.textContent, r.querySelector('.pg-past-project')?.textContent]),
+    library: (() => { const box = view.querySelector('.pg-library input'); const c = view.querySelector('.pg-library-confirm'); return box ? { label: box.parentElement.textContent, checked: box.checked, confirm: c && !c.hidden ? c.textContent : null } : null; })(),
+    historyHint: document.getElementById('history-button').classList.contains('pg-hint'),
     hello: view.querySelectorAll('.pg-hello-pet svg rect').length > 0 ? view.querySelectorAll('.pg-hello-pet').length : 0,
     pets: [...view.querySelectorAll('.pg-pet')].map((b) => ({ id: b.dataset.pet, name: b.querySelector('.pg-pet-name')?.textContent, line: b.querySelector('.pg-pet-line')?.textContent, on: b.getAttribute('aria-checked') === 'true', picture: Boolean(b.querySelector('svg rect')) })),
     scenes: [...view.querySelectorAll('.pg-scene')].map((b) => ({ id: b.dataset.scene, on: b.getAttribute('aria-checked') === 'true', rects: b.querySelectorAll('.pg-thumb .scene rect').length, pet: Boolean(b.querySelector('.pg-thumb-pet svg rect')) })),
@@ -72,7 +77,7 @@ const CONTRAST = `(() => {
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
   const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length >= 3 && (c.length < 4 || c[3] > 0.5)) return c; } return rgb(getComputedStyle(document.body).backgroundColor); };
-  const sel = '#pet-guide:not([hidden]) :is(.pg-title, .pg-line, .pg-dots-text, .pg-pet-name, .pg-pet-line, .pg-scene-name, .pg-said-line, .pg-more summary, .consent-reads li, .consent-line, .pg-primary, .pg-secondary, .pg-skip), #pet-bubble:not([hidden]) :is(.pb-name span, .pb-say, .pb-note, .pg-chip code, .pg-copy, .pb-actions button)';
+  const sel = '#pet-guide:not([hidden]) :is(.pg-title, .pg-line, .pg-dots-text, .pg-pet-name, .pg-pet-line, .pg-scene-name, .pg-said-line, .pg-past-title, .pg-past-project, .pg-library span, .pg-library-confirm, .pg-more summary, .consent-reads li, .consent-line, .pg-primary, .pg-secondary, .pg-skip), #pet-bubble:not([hidden]) :is(.pb-name span, .pb-say, .pb-note, .pg-chip code, .pg-copy, .pb-actions button)';
   const rows = [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length).map((e) => ({ what: e.className || e.tagName, ratio: Math.round(ratio(rgb(getComputedStyle(e).color), bgOf(e)) * 100) / 100 }));
   return { checked: rows.length, worst: rows.sort((a, b) => a.ratio - b.ratio).slice(0, 3) };
 })()`;
@@ -220,6 +225,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
 
   // 5. The bubble: Add Session, pointed at and pulsing; focus on it; the bubble never covers it.
   const add = await until((s) => s.bubble?.step === 'add-session');
+  check(add && add.card === null && configStore.load().onboarding.step === 'add-session', 'no past sessions in the Claude folder: no import card, straight to the bubble');
   check(add && add.overlay === null && add.bubble.say === 'Click Add Session' && add.bubble.name === 'Miki' && add.targets.join() === 'add-session-button' && add.focus === 'add-session-button',
     `the bubble says Click Add Session, the button pulses in its ring and has focus: ${JSON.stringify(add && { bubble: add.bubble, targets: add.targets, pointer: add.pointer, focus: add.focus })}`);
   check(add && /Miki says: Click Add Session/.test(add.announced), `screen readers hear it: ${JSON.stringify(add?.announced)}`);
@@ -313,13 +319,76 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
     await until((s) => s.card === next);
   }
   await js("document.querySelector('#pet-guide .pg-next').click()");
+  // The first-reply session is now a past session: the import card, then Not now moves on without starting anything.
+  const one = await until((s) => s.card === 'import');
+  check(one && one.said === 'You’ve used Claude Code before! I found 1 past session in 1 project.' && one.counter === 'Step 5 of 5' && one.buttons.join() === 'Show them in History,Not now,Skip setup',
+    `with the folder answered, scene goes to the import card for the one past session: ${JSON.stringify(one && { said: one.said, counter: one.counter, past: one.past, buttons: one.buttons })}`);
+  const runsBefore = (await js('window.pastel.library.backfillState()')).total;
+  await js("document.querySelector('#pet-guide .pg-later').click()");
   const resumed = await until((s) => s.bubble?.step === 'ask');
-  check(resumed && resumed.card === null, `with the folder answered, the cards go straight to the bubble, which follows the live session: ${JSON.stringify(resumed?.bubble?.step)}`);
+  check(resumed && resumed.card === null && !resumed.historyHint, `Not now skips to the bubble, which follows the live session: ${JSON.stringify(resumed?.bubble?.step)}`);
+  await wait(500);
+  const notStarted = await js('window.pastel.library.backfillState()');
+  check(!notStarted.running && notStarted.total === runsBefore, `Not now starts no Library read: ${JSON.stringify(notStarted)}`);
   await shot('09-skip-from-bubble');
   await js("document.querySelector('#pet-bubble .pb-skip').click()");
   const skipped = await until((s) => s.step === null && s.bubble === null);
   check(skipped && configStore.load().onboarding.step === 'skipped', 'Skip setup in the bubble ends the guide');
   check((await js('PastelTerm.launchScreens.show()')) === false, 'skipped: the next launch shows nothing');
+
+  // 10b. Five past sessions in two projects: the import card with counts and the newest titles, Show them in History,
+  // and the Library checkbox showing Read past sessions' cost before it starts (Claude stubbed: no call leaves Petal).
+  const pastLog = (cwd: string, id: string, title: string, minutesAgo: number) => {
+    const file = transcriptPath({ cwd, sessionId: id });
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, userLine(title.toLowerCase()).replace('"isSidechain"', `"cwd":${JSON.stringify(cwd)},"isSidechain"`) + assistantLine('Done.')
+      + `${JSON.stringify({ type: 'ai-title', aiTitle: title })}\n`);
+    const at = new Date(Date.now() - minutesAgo * 60_000);
+    fs.utimesSync(file, at, at);
+  };
+  pastLog(PAST_PROJECT, 'eeeeeeee-0000-4000-8000-0000000000b1', 'Fix the payout cutoff', 1);
+  pastLog(SESSION_CWD, 'eeeeeeee-0000-4000-8000-0000000000b2', 'Draft the launch notes', 2);
+  pastLog(PAST_PROJECT, 'eeeeeeee-0000-4000-8000-0000000000b3', 'Why is the build slow', 3);
+  pastLog(PAST_PROJECT, 'eeeeeeee-0000-4000-8000-0000000000b4', 'Tidy the README', 4);
+  const firstAt = new Date(Date.now() - 60 * 60_000);
+  fs.utimesSync(log1, firstAt, firstAt);
+  const extracts: string[] = [];
+  libraryFixture.extract = async (prompt) => { extracts.push(prompt); return JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify({ topics: [] }) }); };
+  send(win.webContents, 'pet-guide:open');
+  const restarted = await until((s) => s.card === 'welcome');
+  check(restarted?.counter === 'Step 1 of 5', `a restart that knows about past sessions counts five cards from the start: ${restarted?.counter}`);
+  for (const next of ['pet', 'scene', 'import']) {
+    await js("document.querySelector('#pet-guide .pg-next').click()");
+    await until((s) => s.card === next);
+  }
+  const found = await until((s) => s.card === 'import' && s.past.length === 3);
+  const wantPast = [['Fix the payout cutoff', PAST_PROJECT], ['Draft the launch notes', SESSION_CWD], ['Why is the build slow', PAST_PROJECT]]; // /tmp paths show as themselves
+  check(found && found.title === 'Import your past sessions' && found.said === 'You’ve used Claude Code before! I found 5 past sessions in 2 projects.' && found.counter === 'Step 5 of 5'
+    && JSON.stringify(found.past) === JSON.stringify(wantPast) && found.library?.label === 'Also build my Library from them' && !found.library.checked && found.focus === 'pg-primary pg-show' && found.emDashes === 0,
+    `import card: 5 sessions in 2 projects, the 3 newest titles with projects, the Library box unticked, Show them in History focused: ${JSON.stringify(found && { said: found.said, counter: found.counter, past: found.past, library: found.library, focus: found.focus })}`);
+  const listedNow = await js('window.pastel.history.list()');
+  check(listedNow.sessions?.length === 5 && wantPast.every(([title]) => listedNow.sessions.some((x: { title: string }) => x.title === title)),
+    `History lists the same 5 sessions the card counted: ${JSON.stringify(listedNow.sessions?.map((x: { title: string; shortCwd: string }) => [x.title, x.shortCwd]))}`);
+  await shot('05-import');
+  await contrastOk('import card');
+  await fitsAtEveryWidth('import');
+  await js("document.querySelector('#pet-guide .pg-library input').click()");
+  const costed = await until((s) => Boolean(s.library?.confirm && s.library.confirm !== 'Counting…'));
+  check(costed && costed.library.checked && /^Reads 5 sessions from the last 30 days: about \d+ Claude calls?, on your plan\.$/.test(costed.library.confirm) && extracts.length === 0,
+    `ticking Also build my Library shows Read past sessions' count and Claude call estimate inline, nothing started yet: ${JSON.stringify(costed?.library)}`);
+  await shot('05b-import-library');
+  await contrastOk('import card with the Library cost');
+  await js("document.querySelector('#pet-guide .pg-show').click()");
+  const shownIn = await until((s) => s.bubble?.step === 'ask' && s.card === null);
+  check(shownIn && shownIn.historyHint, `Show them in History moves on to the bubble and lights up the History button: ${JSON.stringify(shownIn && { bubble: shownIn.bubble?.step, hint: shownIn.historyHint })}`);
+  const started = await waitFor(async () => { const b = await js('window.pastel.library.backfillState()'); return b.total === 5 && b.days === 30 ? b : null; }, 8000);
+  check(started, `the Library read started for the last 30 days over the 5 sessions (Claude stubbed): ${JSON.stringify(started)}`);
+  const ranStub = await waitFor(() => (extracts.length >= 5 ? extracts.length : null), 20000);
+  check(ranStub, `every session went through the stubbed Library read, no real Claude call: ${extracts.length} stub calls`);
+  libraryFixture.extract = null;
+  await shot('05c-import-shown');
+  await js("document.querySelector('#pet-bubble .pb-skip').click()");
+  await until((s) => s.step === null);
 
   // 11. Resume: a relaunch mid-cards comes back to the same card.
   configStore.save({ onboarding: { step: 'scene' } });
