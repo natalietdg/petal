@@ -207,7 +207,11 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     // Suite health from the fixture history.
     const health = await settle((p) => (p.flaky as string[]).length > 0);
     check(JSON.stringify(health?.flaky) === JSON.stringify(['client.test.ts › retries a 503 twice']), `Suite health names the flaky retry test: ${JSON.stringify(health?.flaky)}`);
-    check(health?.core === 'npx vitest run src/api/client.test.ts src/cart/totals.test.ts src/settings.test.ts', `core: recent failures plus the changed settings file: ${JSON.stringify(health?.core)}`);
+    // In the full run earlier steps' Claude runs share the fixture log, so their recent failures may join the core too.
+    const coreFiles = String(health?.core ?? '').replace(/^npx vitest run /, '').split(' ');
+    const mustHave = ['src/api/client.test.ts', 'src/cart/totals.test.ts', 'src/settings.test.ts'];
+    check(String(health?.core).startsWith('npx vitest run ') && mustHave.every((f) => coreFiles.includes(f)) && coreFiles.every((f) => f.endsWith('.test.ts') || f.endsWith('.test.js')),
+      `core: recent failures plus the changed settings file: ${JSON.stringify(health?.core)}`);
     await js("document.querySelector('#testing .tst-healthbox').scrollIntoView({ block: 'start' })");
     await wait(300);
     await capture('suite-health');
