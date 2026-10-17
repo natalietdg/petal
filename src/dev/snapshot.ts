@@ -67,6 +67,7 @@ import { textSizeCheck } from './snapshot-text-size';
 import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
 import { firstRunCheck } from './snapshot-first-run';
+import { petOnboardingCheck } from './snapshot-pet-onboarding';
 import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
 import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
@@ -605,6 +606,14 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     await wait(2500); // the stand-in shell's rc files
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await firstRunCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // The pet's setup guide on a brand-new install; needs a fresh PASTEL_SNAPSHOT_DIR and no fixture log.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'pet-onboarding') {
+    await wait(2500); // the stand-in shell's rc files
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await petOnboardingCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
