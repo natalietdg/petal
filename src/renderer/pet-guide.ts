@@ -381,6 +381,7 @@ function place(): void {
     { side: 'right', left: room.left - width - BUBBLE_GAP, top: Math.min(pet.top + pet.height * 0.6, floor) - height }, // left of her corner, above the reply box
     { side: 'bottom', left: room.right - width, top: room.top - height - BUBBLE_GAP }, // above her
     { side: 'top', left: room.right - width, top: room.bottom + BUBBLE_GAP }, // below her (docked in the header bar)
+    { side: 'none', left: window.innerWidth - width - 24, top: byId('terminal-pane').getBoundingClientRect().top + 56 }, // a short reader: the terminal's empty right side
   ].map((spot) => ({
     ...spot,
     left: Math.max(8, Math.min(spot.left, window.innerWidth - width - 8)),
@@ -388,7 +389,9 @@ function place(): void {
   }));
   const box = (s: { left: number; top: number }) => ({ left: s.left, top: s.top, right: s.left + width, bottom: s.top + height });
   const pointsInto = shownBubble === 'type-claude' || shownBubble === 'claude-setup'; // the terminal is too big to stay off
-  const clear = (s: { left: number; top: number }) => !overlaps(pet, box(s)) && !(goal && !pointsInto && overlaps(goal, box(s))) && !(replyBox && visible(replyBox) && overlaps(replyBox, box(s)));
+  // Claude's own cards in the reader stay readable: she needs them to pick a style and sign in.
+  const cards = [...document.querySelectorAll<HTMLElement>('.menu-card, #prompt-dock > *')].map((card) => card.getBoundingClientRect()).filter(visible);
+  const clear = (s: { left: number; top: number }) => !cards.some((card) => overlaps(card, box(s))) && !overlaps(pet, box(s)) && !(goal && !pointsInto && overlaps(goal, box(s))) && !(replyBox && visible(replyBox) && overlaps(replyBox, box(s)));
   const spot = spots.find(clear) ?? spots[0];
   bubble.dataset.tail = spot.side;
   bubble.style.left = `${Math.round(spot.left)}px`;

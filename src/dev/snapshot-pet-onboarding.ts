@@ -260,6 +260,8 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   check(setup && setup.bubble.say === 'Pick a style and sign in, I’ll wait' && setup.bubble.note === 'Miki is waiting for you.' && !setup.focusInBubble,
     `Claude's first-run screens: "Pick a style and sign in, I’ll wait", Miki is waiting, focus left with Claude: ${JSON.stringify(setup && { bubble: setup.bubble, focus: setup.focus })}`);
   check(card === 'Choose the text style that looks best with your terminal', `the reader shows Claude's style picker as a card: ${JSON.stringify(card)}`);
+  const cardClear = await js("(() => { const a = document.querySelector('.menu-card').getBoundingClientRect(); const b = document.getElementById('pet-bubble').getBoundingClientRect(); return !(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom); })()");
+  check(cardClear, 'the bubble keeps clear of Claude’s style card');
   await shot('07-claude-setup');
   await contrastOk('waiting bubble');
 

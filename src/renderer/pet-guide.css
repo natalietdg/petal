@@ -214,3 +214,4 @@
   .pg-pet, .pg-scene { transition: none; }
   .pg-pet[aria-checked="true"], .pg-scene[aria-checked="true"] { transform: none; }
 }
+.pet-bubble[data-tail="none"]::before, .pet-bubble[data-tail="none"]::after { display: none; } /* away from her, over the terminal */
