@@ -5,7 +5,7 @@ import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
 import { registerAgentsIpc } from './agents-ipc';
-import { claudeFixture, folderFixture, isSnapshotRun, userDataDir } from './snapshot-mode';
+import { claudeFixture, folderFixture, freshInstallRun, isSnapshotRun, userDataDir } from './snapshot-mode';
 import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
@@ -41,8 +41,9 @@ const WINDOW_HEIGHT = 900;
 
 // Snapshot runs keep their settings and stored flows in a scratch userData, never hers.
 if (isSnapshotRun()) app.setPath('userData', userDataDir());
-// Snapshot runs start with reading ~/.claude set by the fixture (on), so only the consent check sees the screen.
-if (isSnapshotRun()) configStore.save({ claudeFolder: { choice: folderFixture.choice } });
+// Snapshot runs start with reading ~/.claude set by the fixture (on), so only the consent check sees the screen,
+// and as an install from before the pet guide, so only the pet-onboarding run sees it.
+if (isSnapshotRun() && !freshInstallRun()) configStore.save({ claudeFolder: { choice: folderFixture.choice }, onboarding: { step: 'existing' } });
 
 // Every window's reader and Customize follow her folder choice.
 let folderAllowed = configStore.load().claudeFolder.choice === 'allowed';
@@ -125,6 +126,11 @@ function openGetStarted(): void {
   if (contents) send(contents, 'get-started:open');
 }
 
+function openPetGuide(): void {
+  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
+  if (contents) send(contents, 'pet-guide:open');
+}
+
 function openColourKey(): void {
   const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
   if (contents) send(contents, 'colour-key:open');
@@ -160,6 +166,7 @@ function refreshMenu(): void {
     onOpenSettings: openSettings,
     onOpenWelcome: openWelcome,
     onOpenGetStarted: openGetStarted,
+    onOpenPetGuide: openPetGuide,
     onOpenColourKey: openColourKey,
     onToggleShortcuts: toggleShortcuts,
     onOpenRepo: () => sendToFocused('repos:palette'),

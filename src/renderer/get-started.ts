@@ -1,14 +1,13 @@
 // Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
-// In the first-run welcome, and on launch until every step is done; Help › Get started and Customize › Get started reopen it.
+// In the welcome, and on launch for installs from before the pet guide until every step is done; Help › Setup checklist and Customize › Get started reopen it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
 import * as layout from './layout';
 import { byId, el, isIpcError } from './dom';
-import { allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
+import { INSTALL_COMMAND, allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
 
-// From code.claude.com/docs/en/setup (native install, macOS and Linux).
-export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
+export { INSTALL_COMMAND };
 export const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
 const COPIED_MS = 1400;
 export const UNSEEN_NOTE = 'Petal can’t see this while your Claude folder is off.';
@@ -175,10 +174,10 @@ export function checklist(): HTMLElement {
 export function refresh(): void {
   if (!loaded) return;
   const all = states();
-  const setup = needsSetupRoom(all);
+  const setup = needsSetupRoom(all) && facts().claudeRunning; // only Claude's own first-run screens need the room
   layout.makeRoomForClaudeSetup(setup);
   reader.setClaudeSetup(setup);
-  if (setup && facts().claudeRunning && layout.isTerminalMinimised()) layout.setTerminalMinimised(false, false); // its first-run screens are there
+  if (setup && layout.isTerminalMinimised()) layout.setTerminalMinimised(false, false); // its first-run screens are there
   const next = toSave(all, saved);
   if (!sameSteps(next, saved)) {
     saved = next;
@@ -218,7 +217,7 @@ function render(): void {
   const done = el('button', 'welcome-start gs-close', 'Close');
   done.type = 'button';
   done.addEventListener('click', close);
-  footer.append(done, para('Help › Get started brings this back.', 'welcome-note'));
+  footer.append(done, para('Help › Setup checklist brings this back.', 'welcome-note'));
   view.replaceChildren(pane, footer);
   done.focus({ preventScroll: true });
 }

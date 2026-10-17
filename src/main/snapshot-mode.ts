@@ -7,6 +7,8 @@ import type { SessionRecord } from './history';
 import type { FolderChoice } from '../shared/claude-folder';
 
 export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
+// The one run that starts as a brand-new install: no folder answer, the pet guide up. Every other run predates the guide.
+export const freshInstallRun = (): boolean => isSnapshotRun() && process.env.PASTEL_SNAPSHOT_MODE === 'pet-onboarding';
 export const snapshotOutDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
 export const userDataDir = (): string => path.join(snapshotOutDir(), 'userData');
 

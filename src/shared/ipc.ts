@@ -333,6 +333,7 @@ export interface EventChannels {
   'customize:open': void;
   'welcome:open': void;
   'get-started:open': void;
+  'pet-guide:open': void; // Help › Show setup again
   'claude-folder:changed': boolean; // reading ~/.claude allowed or not
   'colour-key:open': void;
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts

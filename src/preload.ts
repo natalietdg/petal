@@ -90,6 +90,7 @@ const api = {
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
   onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
   onOpenGetStarted: (callback: () => void) => subscribe('get-started:open', callback),
+  onOpenPetGuide: (callback: () => void) => subscribe('pet-guide:open', callback),
   onClaudeFolder: (callback: (allowed: boolean) => void) => subscribe('claude-folder:changed', callback),
   onOpenColourKey: (callback: () => void) => subscribe('colour-key:open', callback),
   onToggleShortcuts: (callback: () => void) => subscribe('shortcuts:toggle', callback),

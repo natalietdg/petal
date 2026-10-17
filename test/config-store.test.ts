@@ -18,9 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has eighteen sections with the documented defaults', () => {
+  it('has nineteen sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -29,6 +29,7 @@ describe('config-store defaults and load', () => {
     expect(d.welcome).toEqual({ seen: false });
     expect(d.getStarted).toEqual({ done: [] });
     expect(d.claudeFolder).toEqual({ choice: 'unasked' });
+    expect(d.onboarding).toEqual({ step: 'welcome' }); // a new install meets the pet guide
     expect(d.library).toEqual({ autoBuild: false }); // it spends her Claude plan, so she opts in
     expect(d.lessons).toEqual({ learn: false }); // same: opt in
     expect(d.background).toEqual({ model: 'haiku' }); // new installs; returning users get 'organizer' (migratedBase)
@@ -65,7 +66,7 @@ describe('config-store defaults and load', () => {
 
   it('corrupt file -> defaults', () => {
     fs.writeFileSync(configFile(), '{not json');
-    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, background: { model: 'organizer' } }); // a config file means a returning user
+    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, background: { model: 'organizer' }, onboarding: { step: 'existing' } }); // a config file means a returning user
   });
 
   it('a corrupt file is moved aside once and never overwritten by the next save', () => {
@@ -158,7 +159,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -291,6 +292,23 @@ describe('first launch and the organizer migration', () => {
     const c = config.load();
     expect(c.welcome.seen).toBe(true);
     expect(c.organizer.enabled).toBe(false);
+  });
+
+  it('a fresh userData starts the pet guide; any returning user never sees it', () => {
+    expect(config.load().onboarding.step).toBe('welcome');
+    fs.writeFileSync(path.join(dir, 'settings.json'), '{}');
+    expect(config.load().onboarding.step).toBe('existing');
+  });
+
+  it('an older config.json without onboarding counts as existing; a saved step sticks; junk keeps the saved one', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ welcome: { seen: true } }));
+    expect(config.load().onboarding.step).toBe('existing');
+    fs.writeFileSync(configFile(), JSON.stringify({ onboarding: { step: 'scene' } }));
+    expect(config.load().onboarding.step).toBe('scene');
+    config.save({ onboarding: { step: 'nonsense' } });
+    expect(config.load().onboarding.step).toBe('scene');
+    config.save({ onboarding: { step: 'skipped' } });
+    expect(config.load().onboarding.step).toBe('skipped');
   });
 
   it('saving welcome.seen sticks for the next launch', () => {

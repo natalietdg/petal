@@ -1,5 +1,8 @@
 // The Get started checklist's state: which steps are done, from what Petal can see plus what she ticked by hand.
 
+// The official native install line, from code.claude.com/docs/en/setup (macOS and Linux).
+export const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
+
 export const STEP_IDS = ['install', 'add-session', 'sign-in', 'ask'] as const;
 export type StepId = (typeof STEP_IDS)[number];
 
