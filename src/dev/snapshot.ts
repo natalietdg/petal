@@ -73,7 +73,7 @@ import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode
 import { onAnyDisplay } from '../main/snapshot-window';
 import { harnessLine } from '../main/snapshot-shell';
 import { shellGuardCheck } from './snapshot-shell-guard';
-import { captureBaseline, type StepIsolation } from './snapshot-baseline';
+import { captureBaseline, keepingStores, type StepIsolation } from './snapshot-baseline';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -441,14 +441,14 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
-    ['library', () => libraryCheck(kit, win)], // a stubbed extractor only; never a real claude
-    ['testing', () => testingCheck(kit, win)], // records the pipeline line, never runs it; appends a Claude run to the fixture
-    ['petal skills', () => petalSkillsCheck(kit, win)], // stand-in ~/.claude and project only; never runs a command
-    ['test loop', () => testLoopCheck(kit, win, feed)], // records the brief paste and Esc, never a real claude; appends Loop lines
+    ['library', keepingStores(['library'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
+    ['testing', keepingStores(['testing'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
+    ['petal skills', keepingStores(['testing'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
+    ['test loop', keepingStores(['testing'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
-    ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed)], // appends conclude turns; after the steps that measure the reader
+    ['conclusion', keepingStores(['library', 'testing'], () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed), kit.outDir)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back

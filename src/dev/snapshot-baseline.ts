@@ -89,6 +89,11 @@ function fingerprint(target: string): string {
   return hash.digest('hex').slice(0, 12);
 }
 
+// Activity by its events, not its file: a reload rewrites the file in its own order and shape.
+const storePrint = (name: StoreName): string => (name === 'activity'
+  ? crypto.createHash('sha256').update(JSON.stringify(listActivity().map((e) => [e.id, e.at, e.text]))).digest('hex').slice(0, 12)
+  : fingerprint(STORES[name]()));
+
 const lookState = () => ({ theme: settings().theme, reading: settings().reading, cat: settings().cat, scene: settings().scene });
 
 // any: the page probe's shape is built in PAGE_STATE.
@@ -118,7 +123,7 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
   fs.mkdirSync(copies, { recursive: true });
   const stores = {} as Record<StoreName, string>;
   for (const [name, at] of Object.entries(STORES) as [StoreName, () => string][]) {
-    stores[name] = fingerprint(at());
+    stores[name] = storePrint(name);
     if (fs.existsSync(at())) fs.cpSync(at(), path.join(copies, name), { recursive: true });
   }
   const restoreFixtures = fixtureRestorer();
@@ -209,7 +214,7 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
 
     flushActivity();
     for (const name of Object.keys(STORES) as StoreName[]) {
-      if (fingerprint(STORES[name]()) === baseline.stores[name]) continue;
+      if (storePrint(name) === baseline.stores[name]) continue;
       leaks.push(`${name} store changed${name === 'activity' ? ` ${JSON.stringify(newEvents())}` : ''}`);
       restoreStore(name);
     }
@@ -224,4 +229,23 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
     log(`${leaks.length ? 'FAIL' : 'ok'} step ${step} ends at the baseline${leaks.length ? `; it left (now restored): ${leaks.join('; ')}` : ''}`);
   };
   return { check };
+}
+
+// A step whose job is to write a store (the Library step, Testing) declares it here; the store goes back as it was after.
+export function keepingStores(names: readonly Exclude<StoreName, 'activity'>[], step: () => Promise<unknown>, outDir: string): () => Promise<void> {
+  return async () => {
+    const copies = names.map((name) => ({ at: STORES[name](), copy: path.join(outDir, `kept-${name}`) }));
+    for (const { at, copy } of copies) {
+      fs.rmSync(copy, { recursive: true, force: true });
+      if (fs.existsSync(at)) fs.cpSync(at, copy, { recursive: true });
+    }
+    try {
+      await step();
+    } finally {
+      for (const { at, copy } of copies) {
+        fs.rmSync(at, { recursive: true, force: true });
+        if (fs.existsSync(copy)) fs.renameSync(copy, at);
+      }
+    }
+  };
 }
