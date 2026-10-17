@@ -70,28 +70,33 @@ describe('ReaderFeed with no session-file status', () => {
     const closed: string[] = [];
     const finished: string[] = [];
     const busy: boolean[] = [];
-    const feed = new ReaderFeed(0, (_channel, update) => busy.push(update.busy), {
+    const replyCounts: number[] = [];
+    const feed = new ReaderFeed(0, (_channel, update) => { busy.push(update.busy); replyCounts.push(update.replies.length); }, {
       fixture,
       onConcluded: (target) => closed.push(target.sessionId),
       onReplyFinished: ({ reply }) => finished.push(reply.markdown),
     });
-    return { feed, transcript, closed, finished, busy };
+    return { feed, transcript, closed, finished, busy, replyCounts };
   }
 
   it('conclude closes the tab once Claude answers and goes quiet', async () => {
     const now = { t: Date.parse('2026-10-17T05:00:00Z') };
     vi.spyOn(Date, 'now').mockImplementation(() => now.t);
     const tick = async (feed: InstanceType<typeof ReaderFeed>, n = 1, stepMs = 1000) => { for (let i = 0; i < n; i++) { await feed.tick([]); await settle(); now.t += stepMs; } };
-    const { feed, transcript, closed, finished, busy } = statusLessFeed();
+    const { feed, transcript, closed, finished, busy, replyCounts } = statusLessFeed();
+    // Ticks in place (the clock holds) until the appended lines are read, however slow the machine.
+    const until = async (done: () => boolean) => { for (let i = 0; i < 100 && !done(); i++) await tick(feed, 1, 0); };
     await tick(feed, 2);
     expect(finished).toEqual([]); // following an old log never reports its last reply as new
     expect(busy.at(-1)).toBe(false);
 
     fs.appendFileSync(transcript, line({ type: 'user', timestamp: new Date(now.t).toISOString(), message: { role: 'user', content: 'conclude' } }));
-    await tick(feed, 2);
+    await until(() => busy.at(-1) === true);
     expect(busy.at(-1)).toBe(true); // the writing line shows while Claude works
+    await tick(feed, 2);
     stub.conclusion = { title: '', conclusion: 'Shipped.', result: '', impact: '', at: new Date(now.t).toISOString() };
     fs.appendFileSync(transcript, line({ type: 'assistant', uuid: 'a-conclude', timestamp: new Date(now.t).toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: '**Conclusion:** Shipped.' }], stop_reason: 'end_turn' } }));
+    await until(() => (replyCounts.at(-1) ?? 0) > 1);
     await tick(feed, 1);
     expect(closed).toEqual([]); // still inside the quiet period
     await tick(feed, 6);
