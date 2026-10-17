@@ -13,6 +13,7 @@ import { sessionTitleFor } from './session-title';
 import { claudeFixture, claudeStarts, isSnapshotRun, tabFixture, pasteWrites, promptWrites, ptyWrites, stopWrites } from './snapshot-mode';
 import { guardsShell, harnessLine, recordShellOutput } from './snapshot-shell';
 import { claudePath } from './claude-cli';
+import { claudeLaunch } from './claude-launch';
 import { keysFor } from './prompt-keys';
 import { buildStartCommand } from './resume-command';
 import { handle, on, send } from './ipc';
@@ -100,7 +101,7 @@ async function typeStartClaude(session: TabSession): Promise<void> {
   if (!(await claudeInstalled()) || !sessions.has(tabKey(session.contentsId, session.tabId))) return;
   if (isSnapshotRun()) claudeStarts.push({ tabId: session.tabId, command: START_CLAUDE });
   // Snapshot runs type a shell no-op in its place, so no real claude ever starts there.
-  session.pty.write(isSnapshotRun() ? harnessLine(': petal-start-claude') : START_CLAUDE);
+  session.pty.write(isSnapshotRun() ? harnessLine(': petal-start-claude') : `${(await claudeLaunch()).command}\r`);
 }
 
 function startSession(sender: WebContents, { tabId, cols, rows, startClaude = false }: { tabId: TabId; startClaude?: boolean } & TermSize): void {
@@ -239,10 +240,10 @@ export function registerTabIpc(): void {
   });
 
   // The reply box in a tab without Claude starts one with her message; snapshot runs record the line, never type it.
-  on('tab:start-claude', (event, { tabId, prompt }) => {
+  on('tab:start-claude', async (event, { tabId, prompt }) => {
     const session = tabFor(event, tabId);
     if (!session || typeof prompt !== 'string' || !prompt.trim()) return;
     if (isSnapshotRun()) { claudeStarts.push({ tabId, command: buildStartCommand(prompt), prompt }); return; }
-    session.pty.write(buildStartCommand(prompt));
+    session.pty.write(buildStartCommand(prompt, (await claudeLaunch()).command));
   });
 }

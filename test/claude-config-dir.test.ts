@@ -78,7 +78,7 @@ describe('child env', () => {
   });
 
   it('the pty env uses the same rule', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'pty.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'shell-env.ts'), 'utf8'); // the pty's env, shared with the claude probe
     expect(source).toMatch(/dropFromChildEnv\(key\)/);
     expect(source).not.toMatch(/\^\(ELECTRON_\|CLAUDE\)/);
   });

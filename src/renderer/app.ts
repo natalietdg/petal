@@ -140,6 +140,7 @@ async function start(): Promise<void> {
   setReading(orDefault(await window.pastel.getReading(), 'newspaper', 'the reading style'));
   const claudeFound = orDefault(await window.pastel.claudeInstalled(), true, 'whether Claude Code is installed');
   reader.setClaudeMissing(!claudeFound);
+  if (claudeFound) void window.pastel.claudePathTip().then((tip) => reader.setPathTip(isIpcError(tip) ? null : tip));
   const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
   textSize.restore(startup?.config.text);

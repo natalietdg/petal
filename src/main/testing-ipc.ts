@@ -24,6 +24,7 @@ import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
 import { writeFileDurable } from './atomic-file';
 import { buildStartCommand, shellQuote } from './resume-command';
+import { claudeLaunch } from './claude-launch';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
@@ -407,7 +408,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'The loop brief is empty or too long.' };
     prepareLoop(root);
     if (newTab !== true) return { tabId: null };
-    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief)}`;
+    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, (await claudeLaunch()).command)}`;
     if (isSnapshotRun()) testingFixture.loopStarts.push({ command });
     const opened = openTab(event.sender, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
     if (opened) runTabs.set(`${event.sender.id}:${opened}`, root);

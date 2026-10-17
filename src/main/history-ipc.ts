@@ -11,6 +11,7 @@ import * as conclusions from './conclusions-store';
 import { load as loadConfig } from './config-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand } from './resume-command';
+import { claudeLaunch } from './claude-launch';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
 import { guardsShell, harnessLine } from './snapshot-shell';
 import { pageOfTurns, turnsFor } from './history-turns';
@@ -77,7 +78,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   // Opening a past session: jump to its tab if open, resume here if this tab is free,
   // otherwise resume it in a new tab. Only ever types one `claude --resume` command.
   // A background resume (a reply from History) never switches tabs: it names the tab showing it, or opens one unshown.
-  handle('history:resume', (event, { sessionId, confirmFork, background = false }) => {
+  handle('history:resume', async (event, { sessionId, confirmFork, background = false }) => {
     const session = own(event);
     const record = history.findRecord(sessionId);
     if (!session || !record) return { note: 'That session is no longer on disk.' };
@@ -102,7 +103,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     links.addLink({ from: session.feed.session?.sessionId ?? null, to: sessionId, kind: confirmFork ? 'fork' : 'resume' });
     // Snapshot runs type a no-op instead, so no real session is ever resumed; only the live-Claude runs resume for real.
     const standIn = isSnapshotRun() && (background || guardsShell());
-    const command = standIn ? harnessLine(': petal-resume') : buildResumeCommand(record.cwd, record.sessionId); // the id from disk, not the renderer's string
+    const command = standIn ? harnessLine(': petal-resume') : buildResumeCommand(record.cwd, record.sessionId, (await claudeLaunch()).command); // the id from disk, not the renderer's string
     if (standIn) (background ? historyFixture.resumes : historyFixture.resumedHere).push(record.sessionId);
     if (background) {
       openTab(event.sender, { command, background: true });
