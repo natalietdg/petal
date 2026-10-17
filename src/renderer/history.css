@@ -60,7 +60,7 @@
 .history-title { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; }
 .history-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-live { flex-shrink: 0; padding: 0 8px; border-radius: 999px; background: var(--done-pill); color: var(--done-ink); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
-.history-meta { font-size: 12px; color: var(--muted); }
+.history-meta { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; } /* a deep folder path outside ~ has no spaces to wrap at */
 .history-empty { color: var(--muted); font-size: 14px; }
 .history-folder-off p { margin: 0 0 8px; }
 
