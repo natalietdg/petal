@@ -43,6 +43,7 @@ import './stop-claude.css';
 import './slash-menu.css';
 import './library.css';
 import './testing.css';
+import './distill.css';
 import './prompt-dock.css';
 import './workflow.css';
 import './workflow-factory.css';

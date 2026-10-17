@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, update versions seen, text sizes. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -17,6 +17,9 @@ const PER_PASS = { min: 1, max: 50 };
 export const MAX_OPEN = { min: 1, max: 50 };
 
 export const MODELS = ['haiku', 'sonnet', 'opus'];
+// Model for background work (Library and lessons runs): a CLI alias, or 'organizer' for whatever the organizer uses.
+export const BACKGROUND_MODELS = ['haiku', 'sonnet', 'organizer'] as const;
+export type BackgroundModel = (typeof BACKGROUND_MODELS)[number];
 
 // Notes side panel: 'auto' opens it for sessions that already have notes, until she toggles it herself.
 export const NOTES_OPEN = ['auto', 'open', 'closed'] as const;
@@ -46,6 +49,10 @@ export interface Config {
   claudeFolder: { choice: FolderChoice };
   // Build my Library from sessions: a headless Claude run per finished session (library-extract.ts). Off until she opts in.
   library: { autoBuild: boolean };
+  // Learn lessons from sessions: how-to-work rules, in the same headless run as the Library when both are on. Off until she opts in.
+  lessons: { learn: boolean };
+  // The CLI model for Library and lessons runs; the organizer keeps its own.
+  background: { model: BackgroundModel };
   // Versions already announced: the update notification, and the "Updated to" note after a restart. '' before the first.
   updates: { lastNotifiedVersion: string; lastSeenVersion: string };
   // View › Bigger / Smaller Text: the terminal font in px and the reader's text as a percent of today's size.
@@ -85,6 +92,8 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   getStarted: { done: [] as StepId[] },
   claudeFolder: { choice: 'unasked' as FolderChoice },
   library: { autoBuild: false },
+  lessons: { learn: false },
+  background: { model: 'haiku' as BackgroundModel },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
   text: { terminalFontSize: TERMINAL_FONT.initial, readerPercent: READER_PERCENT.initial },
 });
@@ -152,6 +161,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const gs = raw.getStarted ?? {};
   const cf = raw.claudeFolder ?? {};
   const lb = raw.library ?? {};
+  const ls = raw.lessons ?? {};
+  const bg = raw.background ?? {};
   const up = raw.updates ?? {};
   const tx = raw.text ?? {};
   return {
@@ -184,6 +195,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     getStarted: { done: Array.isArray(gs.done) ? cleanDone(gs.done) : b.getStarted.done },
     claudeFolder: { choice: isFolderChoice(cf.choice) ? cf.choice : b.claudeFolder.choice },
     library: { autoBuild: boolOr(lb.autoBuild, b.library.autoBuild) },
+    lessons: { learn: boolOr(ls.learn, b.lessons.learn) },
+    background: { model: BACKGROUND_MODELS.find((m) => m === bg.model) ?? b.background.model },
     updates: {
       lastNotifiedVersion: versionOr(up.lastNotifiedVersion, b.updates.lastNotifiedVersion),
       lastSeenVersion: versionOr(up.lastSeenVersion, b.updates.lastSeenVersion),
@@ -195,6 +208,9 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   };
 }
 
+// The CLI alias a background run passes to --model.
+export const backgroundModel = (config: Config): string => (config.background.model === 'organizer' ? config.organizer.model : config.background.model);
+
 // Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome.
 // The folder question and Get started are new to everyone, so they start unasked and open.
 function migratedBase(): Config {
@@ -202,6 +218,8 @@ function migratedBase(): Config {
   const organized = fs.existsSync(userDataFile('organizer.json'));
   base.organizer.enabled = organized;
   base.welcome.seen = organized || ['config.json', 'settings.json'].some((name) => fs.existsSync(userDataFile(name))) || hasSetAsideConfig();
+  // Haiku is for new installs; someone who used Petal before keeps background runs on the organizer's model until she picks.
+  if (base.welcome.seen) base.background.model = 'organizer';
   return base;
 }
 

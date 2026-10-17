@@ -1,6 +1,6 @@
 // An Open threads section's list items become cards; clicking one asks that question as her next message.
 import { el } from './dom';
-import { splitThread, threadCheckStart, threadPrompt } from '../shared/reply-threads';
+import { splitThread, threadCheckStart, threadPrompt, type Thread } from '../shared/reply-threads';
 
 // Fired on the card and bubbled; the reader and History each send it their own way.
 export const OPEN_THREAD_EVENT = 'petal:open-thread';
@@ -78,4 +78,21 @@ export function buildThreads(body: Element): void {
     for (const item of [...list.children]) cards.append(card(item));
     list.replaceWith(cards);
   }
+}
+
+// The same card built from plain text, for views that read threads from markdown (Testing's distillation).
+// ask gets what a reader card would send: the question, then its check.
+export function threadButton(thread: Thread, ask: (prompt: string) => void): HTMLButtonElement {
+  const button = el('button', 'thread-card');
+  button.type = 'button';
+  button.title = 'Ask Claude this next';
+  button.append(el('span', 'thread-question', thread.question));
+  if (thread.check) {
+    const line = el('span', 'thread-check');
+    line.append(el('span', 'thread-check-label', 'Check'), ' ', thread.check);
+    button.append(line);
+  }
+  button.append(el('span', 'thread-ask', 'Ask next'));
+  button.addEventListener('click', () => ask(threadPrompt(thread)));
+  return button;
 }

@@ -189,7 +189,7 @@ export function trend(allRuns: PipelineRun[], stageIds: string[], stageNames: st
   return box;
 }
 
-export interface HistoryHandlers { choose: (id: string) => void; toggle: (key: string) => void }
+export interface HistoryHandlers { choose: (id: string) => void; toggle: (key: string) => void; extra?: (row: RunRow) => HTMLElement | null }
 
 function runButton(row: RunRow, selectedId: string | null, choose: (id: string) => void): HTMLElement {
   const { run } = row;
@@ -239,6 +239,8 @@ export function historyList(days: HistoryDay[], selectedId: string | null, expan
         continue;
       }
       item.append(runButton(row, selectedId, handlers.choose));
+      const extra = handlers.extra?.(row); // a Claude session's distillation, under its newest row
+      if (extra) item.append(extra);
       if (row.repeats.length > 1) {
         const key = `repeat:${row.run.id}`;
         const open = expanded.has(key);

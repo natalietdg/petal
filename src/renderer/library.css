@@ -334,3 +334,31 @@
 .library-add-open { flex: none; padding: 0; border: 0; background: none; color: var(--link); font: 600 13px var(--ui-font); text-decoration: underline; cursor: pointer; }
 .library-add-open:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .library-add-status { transition: none; } }
+
+/* ---- Lessons: cards in one scrolling column, swapped in for the dial. Text sits on the reader or code background only. */
+.lib-lessons-button[aria-pressed="true"] { background: var(--reader-fg); color: var(--reader-bg); }
+.lsn { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; max-width: 760px; }
+.lsn-intro { margin: 0 0 12px; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.lsn-status { margin: 0 0 10px; font-size: 14px; color: var(--reader-fg); overflow-wrap: anywhere; }
+.lsn-status:empty { display: none; }
+.lsn-cards { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.lsn-card { padding: 16px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--reader-bg); }
+.lsn-rule { margin: 0 0 6px; font: 600 1.15em/1.35 var(--display-font); overflow-wrap: anywhere; }
+.lsn-why { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.lsn-evidence { margin: 0 0 10px; padding: 6px 12px; border-left: 3px solid var(--rule); background: var(--code-bg); color: var(--reader-fg); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.lsn-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.lsn-meta .lib-link { font-size: 13px; }
+.lsn-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lsn-actions .lib-read,
+.lsn-actions .lib-confirm-cancel { padding: 6px 14px; font-size: 13px; }
+.lsn-add { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 12px; background: var(--code-bg); }
+.lsn-targets { margin: 0 0 10px; background: var(--reader-bg); }
+.lsn-targets .lib-sort-button:disabled { opacity: 1; color: var(--muted); text-decoration: line-through; cursor: default; }
+.lsn-add-file { margin: 0 0 8px; font-size: 14px; line-height: 1.45; color: var(--reader-fg); overflow-wrap: anywhere; }
+.lsn-add-file code { font: 13px var(--mono-font, ui-monospace, monospace); }
+.lsn-diff { display: flex; flex-direction: column; margin: 0 0 10px; padding: 8px 10px; max-height: 220px; overflow: auto; border-radius: 8px; background: var(--reader-bg); color: var(--reader-fg); font: 13px/1.5 var(--mono-font, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
+.lsn-diff-same { color: var(--muted); }
+.lsn-diff-add { font-weight: 700; box-shadow: inset 3px 0 0 var(--next-ink, var(--reader-fg)); padding-left: 6px; }
+.lsn-error { margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--reader-fg); }
+.lsn-empty { margin: 24px auto; }
+:is(.lsn-actions button, .lsn-targets button):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }

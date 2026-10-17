@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { claudeHome } from './claude-folder';
+import { recordCall } from './background-calls';
 
 const TIMEOUT_MS = 90_000;
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -60,11 +61,15 @@ export function cleanEnv(claude: string | null): NodeJS.ProcessEnv {
   return env;
 }
 
+// model is a CLI alias (haiku, sonnet, opus) or a full model name, passed to --model as is.
+export const claudeArgs = (model: string): string[] => ['-p', '--model', model, '--no-session-persistence', '--output-format', 'json', '--tools', ''];
+
 export async function runClaude(input: string, { model = 'haiku' }: { model?: string } = {}): Promise<string> {
   const claude = await claudePath();
   if (!claude) throw new Error('Claude Code is not installed (no `claude` command found).');
+  recordCall(); // every call Petal makes on her plan, for Customize's daily count
   return new Promise((resolve, reject) => {
-    const args = ['-p', '--model', model, '--no-session-persistence', '--output-format', 'json', '--tools', ''];
+    const args = claudeArgs(model);
     const child = execFile(claude, args, { env: cleanEnv(claude), timeout: TIMEOUT_MS, maxBuffer: MAX_OUTPUT_BYTES, cwd: os.tmpdir() },
       (error, stdout) => (error ? reject(error) : resolve(stdout)));
     child.stdin?.end(input);

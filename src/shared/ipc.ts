@@ -28,6 +28,8 @@ import type { SlashList } from './slash';
 import type { Delivery } from './mentions';
 import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
 import type { DuplicatePair } from './library-titles';
+import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
+import type { DistillRecord } from './distillation';
 import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
 import type { Criteria } from './test-loop';
 import type { TextStep } from './text-size';
@@ -111,6 +113,8 @@ export interface CustomizeState {
   petalSkills: PetalSkills;
   magazinePath: string | null;
   organizer: OrganizerStatus;
+  backgroundCalls: number; // Petal's headless Claude calls today, all kinds
+  backgroundModels: readonly string[];
   hookRuns: HookRun[];
   hookDir: string;
   configFile: string;
@@ -213,11 +217,17 @@ export interface InvokeChannels {
   'library:merge': { args: [request: { from: string; into: string }]; result: Guarded<LibraryEditResult> };
   'library:duplicates': { args: []; result: Guarded<DuplicatePair[]> };
   'library:keep-both': { args: [request: { a: string; b: string }]; result: Guarded<{ ok: true } | { error: string }> };
+  // Lessons: how-to-work rules from sessions. A CLAUDE.md is written only by add, with a token from preview.
+  'lessons:list': { args: []; result: Guarded<LessonsList> };
+  'lessons:dismiss': { args: [request: { id: string }]; result: Guarded<LessonEditResult> };
+  'lessons:merge': { args: [request: { keep: string; fold: string }]; result: Guarded<LessonEditResult> };
+  'lessons:preview': { args: [request: { id: string; target: LessonTarget }]; result: Guarded<LessonPreviewResult> };
+  'lessons:add': { args: [request: { token: string }]; result: Guarded<LessonEditResult> };
   // A concluded session's This session line: its Library notes, test runs and test loop; null when its log can't be read.
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null; distillation: DistillRecord[] }> };
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
   'testing:save-pipeline': { args: [request: { tabId: TabId; root?: string | null; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:use-claude-pipeline': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
@@ -328,6 +338,7 @@ export interface EventChannels {
   'shortcuts:toggle': void; // ⌘/ and Help › Keyboard Shortcuts
   'repos:palette': void;
   'library:changed': void; // a run added or updated notes
+  'lessons:changed': void; // a run kept new lessons
   'conclusion:info-changed': { sessionId: string }; // the Library started or finished reading that session
   'library:backfill': BackfillState; // reading past sessions moved on
   'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished

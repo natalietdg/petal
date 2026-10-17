@@ -15,6 +15,7 @@ import * as stopClaude from './stop-claude';
 import { noticeLines } from './reader-notice';
 import * as mentions from './mentions';
 import * as setupHints from './reader-setup-hints';
+import * as distillCard from './distill-card';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
@@ -194,7 +195,8 @@ export function update(shown: ShownUpdate): void {
     : `Latest reply · ${timeOfReply(newest.timestamp)}`;
   appendStop();
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...replyBody(newest), ...writing);
+  const needsYou = live && !busy ? distillCard.card(shown.tabId ?? null, 'reader') : null; // a test-loop round waiting on her
+  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...replyBody(newest), ...(needsYou ? [needsYou] : []), ...writing);
   latest.dataset.replyId = newest.id;
   older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
   diagrams.render(latest);

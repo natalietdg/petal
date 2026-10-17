@@ -43,8 +43,10 @@ import { readerStepsCheck } from './snapshot-reader-steps';
 import { openThreadsCheck } from './snapshot-open-threads';
 import { slashMenuCheck } from './snapshot-slash';
 import { libraryCheck } from './snapshot-library';
+import { lessonsCheck } from './snapshot-lessons';
 import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
+import { distillationCheck } from './snapshot-distillation';
 import { petalSkillsCheck } from './snapshot-petal-skills';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
@@ -442,9 +444,11 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
     ['library', keepingStores(['library', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
+    ['lessons', keepingStores(['library', 'activity'], () => lessonsCheck(kit, win), kit.outDir)], // a stubbed extractor and a stand-in CLAUDE.md only; puts back what it changes
     ['testing', keepingStores(['testing', 'activity'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
     ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
+    ['distillation', keepingStores(['testing', 'activity'], () => distillationCheck(kit, win), kit.outDir)], // appends two loop rounds; records the thread, answer and brief pastes, never a real claude
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
@@ -661,6 +665,18 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'test-loop') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testLoopCheck(kit, win, feed).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'lessons') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await lessonsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'distillation') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await distillationCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

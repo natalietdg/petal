@@ -6,7 +6,9 @@ import { handle, send } from './ipc';
 import { claudeFolderAllowed } from './claude-folder';
 import * as configStore from './config-store';
 import { deleteNote, duplicates, keepBoth, listEntries, mergeNotes, readDoc, renameNote, restoreNote, setCategory } from './library-store';
-import { isRunning, onChange, queueSession } from './library-extract';
+import { isRunning, onChange, onLessons, queueSession } from './library-extract';
+import { confirmAdd, dismissLesson, listLessons, mergeLessons, previewAdd } from './lessons-store';
+import { isLessonScope } from '../shared/lessons';
 import { backfillState, onBackfill, planBackfill, startBackfill, stopBackfill } from './library-backfill';
 import { isBackfillDays } from '../shared/library';
 import type { TabSessions } from './tab-session';
@@ -45,6 +47,15 @@ export function registerLibraryIpc({ sessions }: { sessions: TabSessions }): voi
   handle('library:merge', (_event, { from, into }) => changed(mergeNotes(from, into)));
   handle('library:duplicates', () => duplicates());
   handle('library:keep-both', (_event, { a, b }) => keepBoth(a, b));
+
+  // Lessons: every edit tells the windows; the CLAUDE.md write needs the preview's token (lessons-store.ts).
+  const lessonsChanged = <T>(result: T): T => { for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'lessons:changed'); return result; };
+  handle('lessons:list', () => listLessons());
+  handle('lessons:dismiss', (_event, { id }) => lessonsChanged(dismissLesson(String(id))));
+  handle('lessons:merge', (_event, { keep, fold }) => lessonsChanged(mergeLessons(String(keep), String(fold))));
+  handle('lessons:preview', (_event, { id, target }) => (isLessonScope(target) ? previewAdd(String(id), target) : { error: 'unknown CLAUDE.md' }));
+  handle('lessons:add', (_event, { token }) => lessonsChanged(confirmAdd(String(token))));
+  onLessons(() => { for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'lessons:changed'); });
 
   onBackfill((state) => { for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'library:backfill', state); });
 
