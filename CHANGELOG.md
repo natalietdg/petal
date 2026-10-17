@@ -2,7 +2,11 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
-## [1.1.0] · 2026-10-16
+## [1.1.0] · 2026-10-17
+- A new setup for first-timers: pick your pet and a scene, then your pet walks you through Add Session, typing claude, and your first question.
+- New users no longer get stuck: Claude's setup screens have room, Petal finds Claude Code even when your shell's PATH doesn't, and it says plainly when Claude Code isn't installed yet.
+- Works with older Claude Code too: replies show and "conclude" closes the tab on versions back to 2.1.74.
+- A first reply that Claude Code saves before your question no longer goes missing.
 - Distillation in the test loop: each round Claude questions its own work from the evidence, picks a course (add scenarios, retest, fix the bug, or hand to you) and acts on it.
 - Questions Claude can't settle become Open threads, revisited every round, and anything only you can answer shows as a "Claude needs you" card.
 - Suite health in Testing: flaky tests, tests that never fail, the slowest ones, and a fast Core stage to run first.
