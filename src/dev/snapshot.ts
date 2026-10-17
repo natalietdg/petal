@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, powerSaveBlocker, screen } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
@@ -515,6 +515,7 @@ function watchWindow(win: BrowserWindow, log: Log): () => void {
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {
+  powerSaveBlocker.start('prevent-app-suspension'); // App Nap slows a windowless run's timers many times over; every wait then times out
   fs.mkdirSync(outDir(), { recursive: true });
   const logFile = path.join(outDir(), 'snapshot.log');
   fs.writeFileSync(logFile, '');
