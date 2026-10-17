@@ -39,6 +39,7 @@ const api = {
   onScene: (callback: (sceneId: string) => void) => subscribe('scene:changed', callback),
   getReading: () => invoke('reading:get'),
   claudeInstalled: (recheck = false) => invoke('claude:installed', { recheck }),
+  claudePathTip: () => invoke('claude:path-tip'),
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize, startClaude = false) => send('pty:start', { tabId, cols, rows, startClaude }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),

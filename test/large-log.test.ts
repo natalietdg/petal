@@ -106,7 +106,7 @@ describe('a large log', () => {
       tail.stop();
     });
     expect(views).toHaveLength(1);
-    expect(views[0]).toEqual({ replies: expected.newestFirst(), waiting: expected.waiting(), promptCount: expected.promptCount });
+    expect(views[0]).toMatchObject({ replies: expected.newestFirst(), waiting: expected.waiting(), promptCount: expected.promptCount });
     expect(turns).toBeGreaterThan(10);
   });
 

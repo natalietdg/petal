@@ -8,6 +8,7 @@ import * as conclusions from './conclusions-store';
 import { claudeFolderAllowed } from './claude-folder';
 import { isClosingConcludePrompt, sameConclusion, type Conclusion } from '../shared/conclusion';
 import { ConcludeWatch } from './conclude-close';
+import { derivedStatus } from './turn-state';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderNotice, ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
@@ -59,6 +60,10 @@ export class ReaderFeed implements ProcessListener {
   private ticking = false;
   private notice: ReaderNotice | null = null; // old Claude Code, or two claudes in one folder
   private claudeArgs: { pid: number; args: string } | null = null;
+  // Busy/idle from the log, for a Claude Code whose session file has no status (before 2.1.119).
+  private turnOpen = false;
+  private transcriptChangedAt = 0; // 0 until the first read is in, so following an old log never looks busy
+  private firstReadIn = false;
 
   constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null, onEnded = null }: FeedOptions = {}) {
     this.shellPid = shellPid;
@@ -134,6 +139,9 @@ export class ReaderFeed implements ProcessListener {
     this.concludeWatch.reset();
     this.tail?.stop();
     this.session = session;
+    this.turnOpen = false;
+    this.transcriptChangedAt = 0;
+    this.firstReadIn = false;
     this.repo = repoLabel(session.cwd);
     this.clearTranscript();
     this.emit('live');
@@ -141,7 +149,10 @@ export class ReaderFeed implements ProcessListener {
     void this.refreshConclusion();
   }
 
-  private show({ replies, waiting, promptCount }: TranscriptView): void {
+  private show({ replies, waiting, promptCount, turnOpen }: TranscriptView): void {
+    if (this.firstReadIn) this.transcriptChangedAt = Date.now();
+    this.firstReadIn = true;
+    this.turnOpen = turnOpen;
     this.replies = replies;
     this.waiting = waiting;
     this.promptCount = promptCount;
@@ -172,9 +183,10 @@ export class ReaderFeed implements ProcessListener {
   private refresh(found: FollowedSession): void {
     const current = this.session;
     if (!current) return; // refresh only runs while following
-    const statusChanged = found.status !== current.status;
-    const turnEnded = current.status === 'busy' && found.status === 'idle';
-    this.session = { ...current, status: found.status, cwd: found.cwd };
+    const status = derivedStatus(found.status, this.turnOpen, this.transcriptChangedAt, Date.now());
+    const statusChanged = status !== current.status;
+    const turnEnded = current.status === 'busy' && status === 'idle';
+    this.session = { ...current, status, cwd: found.cwd };
     const repo = repoLabel(found.cwd);
     const repoChanged = repo !== this.repo; // a branch switch shows on the next tick
     this.repo = repo;
@@ -182,7 +194,7 @@ export class ReaderFeed implements ProcessListener {
     if (statusChanged || repoChanged) this.emit('live');
     this.reportFinished();
     if (turnEnded) this.finishingId = this.replies[0]?.id ?? null;
-    this.reportConcluded(found.status !== 'idle'); // 'waiting' (a permission prompt, question or /model-style menu on screen) is not done
+    this.reportConcluded(status !== 'idle'); // 'waiting' (a permission prompt, question or /model-style menu on screen) is not done
   }
 
   private reportConcluded(busy: boolean): void {

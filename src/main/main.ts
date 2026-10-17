@@ -28,6 +28,7 @@ import { assignSlot, registerLayoutIpc, releaseSlot } from './layout-ipc';
 import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
+import { claudeLaunch } from './claude-launch';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
@@ -179,6 +180,8 @@ function registerIpc(): void {
   registerTabIpc();
 
   handle('claude:installed', async (_event, request) => (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath({ recheck: request?.recheck === true }))));
+
+  handle('claude:path-tip', async () => (await claudeLaunch()).tip);
 
   registerSessionsIpc({ activeSession });
   registerAgentsIpc({ activeSession });

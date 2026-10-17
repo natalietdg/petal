@@ -17,8 +17,8 @@ export const typedQuote = (text: unknown): string => {
 // What follows `claude` in the typed line; the snapshot harness matches on it.
 export const resumeArgs = (sessionId: string): string => `--resume ${shellQuote(sessionId)}`;
 
-// \r submits the line in the pty.
+// \r submits the line in the pty. `claude` is the command word: plain, or claude's quoted full path when her shell can't find it.
 // `--` ends claude's options, so a message starting with "-" is still the prompt.
-export const buildStartCommand = (prompt: string): string => `claude -- ${typedQuote(prompt)}\r`;
+export const buildStartCommand = (prompt: string, claude = 'claude'): string => `${claude} -- ${typedQuote(prompt)}\r`;
 
-export const buildResumeCommand = (cwd: string, sessionId: string): string => `cd ${shellQuote(cwd)} && claude ${resumeArgs(sessionId)}\r`;
+export const buildResumeCommand = (cwd: string, sessionId: string, claude = 'claude'): string => `cd ${shellQuote(cwd)} && ${claude} ${resumeArgs(sessionId)}\r`;

@@ -10,6 +10,7 @@ import type { HookRun, HookTestResult } from '../main/response-hook';
 import type { OutputStyles, StyleSwitch } from '../main/output-styles';
 import type { PetalStyles } from '../main/petal-styles';
 import type { PetalSkills } from '../main/petal-skills';
+import type { PathTip } from './claude-setup-hints';
 import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/session-organizer';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { FactoryScope, FactoryState } from '../main/factory-store';
@@ -163,6 +164,7 @@ export interface InvokeChannels {
   'scene:get': { args: []; result: Guarded<string> };
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: [request?: { recheck?: boolean }]; result: Guarded<boolean> };
+  'claude:path-tip': { args: []; result: Guarded<PathTip | null> }; // her shell's PATH lacks claude's folder
   'update:status': { args: []; result: Guarded<UpdateStatus> };
   'update:restart': { args: []; result: Guarded<RestartResult> };
   'update:whats-new': { args: []; result: Guarded<Ok> };
