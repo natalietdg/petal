@@ -12,6 +12,7 @@ import * as fixtures from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { testingDir } from '../main/testing-store';
 import type { Kit } from './snapshot';
+import { keepActivity } from './snapshot-activity';
 
 // The page's side of the baseline; every field here has a restore below.
 const PAGE_STATE = `(() => {
@@ -231,10 +232,11 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
   return { check };
 }
 
-// A step whose job is to write a store (the Library step, Testing) declares it here; the store goes back as it was after.
-export function keepingStores(names: readonly Exclude<StoreName, 'activity'>[], step: () => Promise<unknown>, outDir: string): () => Promise<void> {
+// A step whose job is to write a store (Library notes, test runs, their Activity events) declares it here; each goes back as it was after.
+export function keepingStores(names: readonly StoreName[], step: () => Promise<unknown>, outDir: string): () => Promise<void> {
   return async () => {
-    const copies = names.map((name) => ({ at: STORES[name](), copy: path.join(outDir, `kept-${name}`) }));
+    const restoreActivity = names.includes('activity') ? keepActivity() : () => {};
+    const copies = names.filter((name) => name !== 'activity').map((name) => ({ at: STORES[name](), copy: path.join(outDir, `kept-${name}`) }));
     for (const { at, copy } of copies) {
       fs.rmSync(copy, { recursive: true, force: true });
       if (fs.existsSync(at)) fs.cpSync(at, copy, { recursive: true });
@@ -246,6 +248,7 @@ export function keepingStores(names: readonly Exclude<StoreName, 'activity'>[], 
         fs.rmSync(at, { recursive: true, force: true });
         if (fs.existsSync(copy)) fs.renameSync(copy, at);
       }
+      restoreActivity();
     }
   };
 }
