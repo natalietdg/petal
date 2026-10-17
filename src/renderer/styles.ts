@@ -49,6 +49,7 @@ import './workflow-factory.css';
 import './customize.css';
 import './repos.css';
 import './welcome.css';
+import './pet-guide.css';
 import './get-started.css';
 import './agents.css';
 import './conclusion.css';

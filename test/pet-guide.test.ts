@@ -143,3 +143,19 @@ describe('copy', () => {
     for (const line of all) expect(line ?? '').not.toContain('—');
   });
 });
+
+describe('Help menu', () => {
+  it('has Show setup again and the old checklist as Setup checklist, each wired to its own handler', async () => {
+    const { menuTemplate } = await import('../src/main/menu');
+    const calls: string[] = [];
+    const options = new Proxy({ currentTheme: '', currentCat: '', currentScene: '', currentReading: '' } as Record<string, unknown>, {
+      get: (target, key) => (key in target ? target[key as string] : () => calls.push(String(key))),
+    });
+    const help = menuTemplate(options as never).find((item) => item.role === 'help');
+    const items = (help?.submenu ?? []) as { label?: string; click?: () => void }[];
+    expect(items.map((item) => item.label).filter(Boolean)).toEqual(['Welcome', 'Show setup again', 'Setup checklist', 'Colour key', 'Keyboard Shortcuts']);
+    items.find((item) => item.label === 'Show setup again')?.click?.();
+    items.find((item) => item.label === 'Setup checklist')?.click?.();
+    expect(calls).toEqual(['onOpenPetGuide', 'onOpenGetStarted']);
+  });
+});

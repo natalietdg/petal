@@ -26,6 +26,7 @@ import * as welcome from './welcome';
 import * as getStarted from './get-started';
 import * as consent from './consent';
 import * as launchScreens from './launch-screens';
+import * as petGuide from './pet-guide';
 import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import * as dockFit from './dock-fit';
@@ -54,7 +55,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardTasks, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardTasks, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -116,6 +117,7 @@ async function start(): Promise<void> {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
     else if (consent.isOpen()) void consent.decline(); // Esc there means Not now
+    else if (overlays.isOpen('pet-guide')) void petGuide.skip(); // a setup card; the bubble leaves Esc to the shell and Claude
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
     else if (colourKey.isOpen()) colourKey.close();
@@ -126,7 +128,7 @@ async function start(): Promise<void> {
 
   // ⌘T and + open a tab meant for Claude, so her session limit applies.
   const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create({ startClaude: true }); };
-  const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); };
+  const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); petGuide.refresh(); };
   tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
 
   window.pastel.onTheme((next) => {
@@ -165,6 +167,7 @@ async function start(): Promise<void> {
     if (active && update.tabId === active.id) showTab(active);
     history.tabUpdated(update.tabId);
     getStarted.refresh();
+    petGuide.refresh();
   });
   window.pastel.onTabLabel(({ tabId, label }) => {
     tabs.setLabel(tabId, label);
@@ -175,6 +178,7 @@ async function start(): Promise<void> {
     tabs.remove(tabId);
     history.tabClosed(tabId);
     getStarted.refresh();
+    petGuide.refresh();
   });
   window.pastel.onTabCommand((command) => {
     if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true, id: command.tabId }).id);
@@ -225,7 +229,7 @@ async function start(): Promise<void> {
   // The first tab starts Claude too, once she has allowed the reader to follow it (a new install answers that first).
   const { term, renderer } = tabs.create({ startClaude: claudeFound && folderAllowed });
   await getStarted.load();
-  const firstRun = await launchScreens.show(); // over the first tab: the folder question, the welcome, then Get started until done
+  const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, the welcome, then Get started
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
 }
 

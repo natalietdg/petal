@@ -1,0 +1,213 @@
+/* The pet's setup guide: cards over the reader, then a pixel speech bubble by the pet.
+   Colours come from the theme tokens only (body, muted and link on the reader and code backgrounds), so contrast follows the theme. */
+#pet-guide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--reader-bg);
+  background-image: radial-gradient(var(--rule) 1.2px, transparent 1.2px); /* soft polka dots */
+  background-size: 18px 18px;
+  color: var(--reader-fg);
+  font-family: var(--ui-font);
+  --pg-ink: var(--reader-fg);
+  --pg-wash: var(--code-bg, var(--rule));
+}
+#pet-guide[hidden] { display: none; }
+#pet-guide:focus { outline: none; } /* focused so Esc reaches it, not to be tabbed to */
+
+/* Centred at 720px; on narrow windows it keeps clear of the pet in the right corner (144px box + 28px). */
+.pg-card, .pg-footer {
+  box-sizing: border-box;
+  margin-left: max(32px, calc(50% - 360px));
+  margin-right: max(184px, calc(50% - 360px));
+}
+.pg-card {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 68px 4px 8px; /* clears the dock buttons */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pg-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 4px 18px;
+}
+.pg-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Step dots: little pixel squares. */
+.pg-dots { display: flex; align-items: center; gap: 6px; margin: 0; }
+.pg-dots > span:not(.pg-dots-text) { width: 9px; height: 9px; background: var(--rule); }
+.pg-dots > span.on { background: var(--link); }
+.pg-dots-text { margin-left: 6px; font-size: 12px; color: var(--muted); }
+
+.pg-title { margin: 0; font: 600 2em/1.1 var(--display-font); letter-spacing: -0.02em; }
+.pg-line { margin: 0; font: 500 1.08em/1.4 var(--body-font); max-width: 34em; }
+
+/* Pixel frames: a 3px ink line with notched corners, drawn with shadows so the box keeps its size. */
+.pg-pet, .pg-scene, .pet-bubble, .pg-said-line {
+  --pg-line: var(--pg-ink);
+  box-shadow: 0 -3px 0 0 var(--pg-line), 0 3px 0 0 var(--pg-line), -3px 0 0 0 var(--pg-line), 3px 0 0 0 var(--pg-line);
+}
+
+/* Hello: the five pets in a row, bobbing in turn. */
+.pg-hello { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; margin: 18px 0 6px; }
+.pg-hello-pet { display: block; width: 72px; height: 72px; animation: pg-bob 2.4s ease-in-out infinite; }
+.pg-hello-pet:nth-child(2) { animation-delay: 0.3s; }
+.pg-hello-pet:nth-child(3) { animation-delay: 0.6s; }
+.pg-hello-pet:nth-child(4) { animation-delay: 0.9s; }
+.pg-hello-pet:nth-child(5) { animation-delay: 1.2s; }
+:is(#pet-guide, .pet-bubble) .cat-portrait svg { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+
+/* Pet tiles: big portrait, name, one line. */
+.pg-pets { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 16px; margin: 10px 3px 3px; }
+.pg-pet, .pg-scene {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin: 3px; padding: 12px 8px 10px; border: none; border-radius: 0;
+  background: var(--reader-bg); color: inherit; font: inherit; text-align: center; cursor: pointer;
+  --pg-line: var(--rule);
+  transition: transform 0.12s ease-out;
+}
+.pg-pet:hover, .pg-scene:hover { --pg-line: var(--muted); }
+.pg-pet[aria-checked="true"], .pg-scene[aria-checked="true"] { --pg-line: var(--link); background: var(--pg-wash); transform: translateY(-3px); }
+.pg-pet:focus-visible, .pg-scene:focus-visible { outline: 3px dashed var(--link); outline-offset: 6px; }
+.pg-pet-picture { display: block; width: 80px; height: 80px; }
+.pg-pet[aria-checked="true"] .pg-pet-picture { animation: pg-hop 0.5s ease-out; }
+.pg-pet-name { font-weight: 700; font-size: 15px; }
+.pg-pet-line { font-size: 12.5px; line-height: 1.3; color: var(--muted); }
+.pg-pet[aria-checked="true"] .pg-pet-line { color: var(--reader-fg); }
+
+/* Scene thumbnails: the scene at 5/9 size, with her sitting in it. */
+.pg-scenes { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 14px; margin: 8px 3px 3px; }
+.pg-scene { padding: 8px 6px; }
+.pg-thumb { position: relative; display: block; width: 80px; height: 80px; overflow: hidden; background: var(--pg-wash); }
+.pg-thumb-stage { position: absolute; left: 0; top: 0; width: 144px; height: 144px; transform: scale(0.5556); transform-origin: top left; }
+.pg-thumb .scene { position: absolute; right: 0; bottom: 0; image-rendering: pixelated; }
+.pg-thumb * { animation: none !important; } /* still pictures: thirteen moving scenes would cost CPU */
+.pg-thumb-pet { position: absolute; right: 0; bottom: 0; width: 60px; height: 60px; }
+.pg-thumb-picture { display: block; width: 100%; height: 100%; }
+.pg-scene-name { font-size: 12.5px; line-height: 1.25; font-weight: 600; }
+
+/* The folder card: the pet says it in a bubble. */
+.pg-consent { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
+.pg-said { display: flex; align-items: center; gap: 20px; }
+.pg-said-pet { flex: none; display: block; width: 84px; height: 84px; }
+.pg-said-line { position: relative; margin: 3px; padding: 14px 16px; background: var(--reader-bg); font: 500 1.08em/1.45 var(--body-font); max-width: 30em; }
+.pg-said-line::before { /* tail toward the pet on the left */
+  content: ''; position: absolute; left: -15px; top: 18px; width: 12px; height: 12px; background: var(--pg-ink);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 75% 100%, 75% 75%, 50% 75%, 50% 50%, 25% 50%, 25% 25%, 0 25%);
+}
+.pg-more { font-size: 14px; }
+.pg-more summary { cursor: pointer; color: var(--link); font-weight: 600; }
+.pg-more .consent-reads { margin-top: 8px; }
+.pg-more .consent-line { margin-top: 6px; color: var(--muted); }
+
+/* Buttons: chunky pixel pills. */
+.pg-primary, .pg-secondary, .pg-skip, .pb-actions button, .pg-copy {
+  font: 600 14px var(--ui-font); cursor: pointer; border-radius: 0;
+}
+.pg-primary {
+  padding: 9px 26px; border: none; background: var(--link); color: var(--reader-bg); font-size: 15px;
+  box-shadow: 0 -3px 0 0 var(--link), 0 3px 0 0 var(--link), -3px 0 0 0 var(--link), 3px 0 0 0 var(--link);
+  margin: 3px;
+}
+.pg-primary:active { transform: translateY(2px); }
+.pg-secondary { padding: 8px 18px; border: 2px solid var(--rule); background: var(--reader-bg); color: var(--reader-fg); }
+.pg-skip { padding: 6px 4px; border: none; background: none; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.pg-primary:focus-visible, .pg-secondary:focus-visible, .pg-skip:focus-visible, .pb-actions button:focus-visible, .pg-copy:focus-visible { outline: 3px dashed var(--link); outline-offset: 4px; }
+
+/* ── The speech bubble by the pet ── */
+.pet-bubble {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  margin: 0;
+  padding: 12px 14px 12px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 14px/1.4 var(--ui-font);
+  --pg-ink: var(--reader-fg);
+  filter: drop-shadow(4px 4px 0 color-mix(in srgb, var(--reader-fg) 14%, transparent));
+}
+.pet-bubble[hidden], .pet-pointer[hidden], .pet-party[hidden] { display: none; }
+.pet-bubble > * { margin: 0; }
+.pb-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.pb-face { display: block; width: 22px; height: 22px; }
+.pb-say { margin-top: 4px; font: 700 17px/1.3 var(--ui-font); }
+.pb-note { margin-top: 3px; color: var(--muted); font-size: 13px; }
+.pb-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.pb-actions button { padding: 6px 12px; border: 2px solid var(--rule); background: var(--reader-bg); color: var(--reader-fg); }
+.pb-actions .pb-done, .pb-actions .pb-allow { border-color: var(--link); background: var(--link); color: var(--reader-bg); }
+.pb-actions .pb-skip { border: none; padding: 6px 2px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+
+/* claude, or the install line, with Copy beside it; the line scrolls inside its box, never the bubble. */
+.pg-chip { display: flex; align-items: center; gap: 6px; margin-top: 8px; min-width: 0; }
+.pg-chip code {
+  flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: nowrap;
+  padding: 6px 10px; background: var(--code-bg, var(--rule)); color: var(--reader-fg); font: 600 14px var(--mono-font);
+}
+.pg-copy { flex: none; padding: 6px 12px; border: 2px solid var(--link); background: var(--reader-bg); color: var(--link); }
+
+/* The tail: a pixel staircase toward the pet, from whichever side the bubble sits on. */
+.pet-bubble::before, .pet-bubble::after { content: ''; position: absolute; width: 15px; height: 15px; }
+.pet-bubble::before { background: var(--pg-ink); }
+.pet-bubble::after { background: var(--reader-bg); width: 9px; height: 9px; }
+.pet-bubble[data-tail="right"]::before { left: 100%; top: var(--tail, 24px); margin-left: 3px; clip-path: polygon(0 0, 100% 0, 100% 20%, 80% 20%, 80% 40%, 60% 40%, 60% 60%, 40% 60%, 40% 80%, 20% 80%, 20% 100%, 0 100%); }
+.pet-bubble[data-tail="right"]::after { left: 100%; top: calc(var(--tail, 24px) + 3px); margin-left: 0; clip-path: polygon(0 0, 100% 0, 100% 34%, 67% 34%, 67% 67%, 34% 67%, 34% 100%, 0 100%); }
+.pet-bubble[data-tail="bottom"]::before { top: 100%; left: var(--tail, 24px); margin-top: 3px; clip-path: polygon(0 0, 100% 0, 100% 20%, 80% 20%, 80% 40%, 60% 40%, 60% 60%, 40% 60%, 40% 80%, 20% 80%, 20% 100%, 0 100%); }
+.pet-bubble[data-tail="bottom"]::after { top: 100%; left: calc(var(--tail, 24px) + 3px); clip-path: polygon(0 0, 100% 0, 100% 34%, 67% 34%, 67% 67%, 34% 67%, 34% 100%, 0 100%); }
+.pet-bubble[data-tail="top"]::before { bottom: 100%; left: var(--tail, 24px); margin-bottom: 3px; clip-path: polygon(0 100%, 100% 100%, 100% 80%, 80% 80%, 80% 60%, 60% 60%, 60% 40%, 40% 40%, 40% 20%, 20% 20%, 20% 0, 0 0); }
+.pet-bubble[data-tail="top"]::after { bottom: 100%; left: calc(var(--tail, 24px) + 3px); clip-path: polygon(0 100%, 100% 100%, 100% 67%, 67% 67%, 67% 34%, 34% 34%, 34% 0, 0 0); }
+
+/* The thing it points at: a ring that breathes. */
+.pg-target { outline: 3px solid var(--link) !important; outline-offset: 3px; animation: pg-ring 1.6s ease-in-out infinite; }
+#terminal-pane.pg-target, #composer.pg-target { outline-offset: -3px; }
+
+/* A bobbing pixel arrow by the target. */
+.pet-pointer {
+  position: fixed; z-index: 59; width: 24px; height: 28px; pointer-events: none;
+  background: var(--link);
+  clip-path: polygon(50% 0, 100% 43%, 68% 43%, 68% 100%, 32% 100%, 32% 43%, 0 43%);
+  animation: pg-point 1s ease-in-out infinite;
+}
+.pet-pointer[data-dir="down"] { rotate: 180deg; }
+
+/* The party: hearts and stars flying out of the pet. */
+.pet-party { position: fixed; z-index: 61; width: 0; height: 0; pointer-events: none; }
+.pet-party > span {
+  position: absolute; left: -7px; top: -7px; width: 14px; height: 14px;
+  background: #F0508A;
+  clip-path: polygon(14% 0, 43% 0, 43% 14%, 57% 14%, 57% 0, 86% 0, 86% 14%, 100% 14%, 100% 57%, 86% 57%, 86% 71%, 71% 71%, 71% 86%, 57% 86%, 57% 100%, 43% 100%, 43% 86%, 29% 86%, 29% 71%, 14% 71%, 14% 57%, 0 57%, 0 14%, 14% 14%);
+  animation: pg-fly 1.6s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+  opacity: 0;
+}
+.pet-party > span.pp-star { background: #FFC93C; clip-path: polygon(40% 0, 60% 0, 60% 40%, 100% 40%, 100% 60%, 60% 60%, 60% 100%, 40% 100%, 40% 60%, 0 60%, 0 40%, 40% 40%); }
+.pet-party.still > span { animation: none; opacity: 1; transform: rotate(calc(var(--i) * 72deg - 70deg)) translateY(-70px); }
+
+.pet-announcer { position: fixed; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+@keyframes pg-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes pg-hop { 0% { transform: translateY(0); } 40% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+@keyframes pg-ring { 0%, 100% { outline-color: var(--link); } 50% { outline-color: color-mix(in srgb, var(--link) 35%, transparent); } }
+@keyframes pg-point { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes pg-fly {
+  0% { opacity: 0; transform: rotate(calc(var(--i) * 26deg)) translateY(0) scale(0.6); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(calc(var(--i) * 26deg)) translateY(-110px) scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-hello-pet, .pg-pet[aria-checked="true"] .pg-pet-picture, .pet-pointer, .pg-target { animation: none; }
+  .pg-pet, .pg-scene { transition: none; }
+  .pg-pet[aria-checked="true"], .pg-scene[aria-checked="true"] { transform: none; }
+}
