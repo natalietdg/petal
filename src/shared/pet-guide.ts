@@ -1,8 +1,10 @@
-// The pet's setup guide for a new install: four cards, then speech-bubble steps that follow what Petal sees until the first reply.
+// The pet's setup guide for a new install: four cards (five with past sessions to import), then speech-bubble steps that follow
+// what Petal sees until the first reply.
 import type { FolderChoice } from './claude-folder';
+import { rangeText, type BackfillPlan } from './library';
 export { INSTALL_COMMAND } from './get-started';
 
-export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent'] as const;
+export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent', 'import'] as const;
 export const BUBBLE_STEPS = ['add-session', 'type-claude', 'claude-setup', 'ask', 'celebrate'] as const;
 export type CardStep = (typeof CARD_STEPS)[number];
 export type BubbleStep = (typeof BUBBLE_STEPS)[number];
@@ -23,6 +25,7 @@ export interface GuideFacts {
   claudeRunning: boolean;
   sessionStarted: boolean; // past Claude Code's first-run screens
   replied: boolean;
+  pastSessions: number; // History's count of her earlier Claude Code sessions; 0 until the folder is allowed and read
 }
 
 // Which bubble shows: the furthest thing Petal has seen happen.
@@ -34,19 +37,30 @@ export function bubbleStep(facts: GuideFacts): BubbleStep {
   return 'add-session';
 }
 
+// The import card shows only when the folder was allowed and History found sessions from before Petal.
+export const showsImport = (folder: FolderChoice, pastSessions: number): boolean => folder === 'allowed' && pastSessions > 0;
+
 // The card after this one; the folder card only while the question is unanswered, then the bubbles take over.
-export function nextCard(step: CardStep, folder: FolderChoice): CardStep | 'bubbles' {
-  const next = CARD_STEPS[CARD_STEPS.indexOf(step) + 1];
-  if (next === 'consent' && folder !== 'unasked') return 'bubbles';
+export function nextCard(step: CardStep, folder: FolderChoice, pastSessions = 0): CardStep | 'bubbles' {
+  const after = CARD_STEPS.slice(CARD_STEPS.indexOf(step) + 1);
+  const next = after.find((card) => (card === 'consent' ? folder === 'unasked' : card === 'import' ? showsImport(folder, pastSessions) : true));
   return next ?? 'bubbles';
 }
 
-export const previousCard = (step: CardStep): CardStep | null => CARD_STEPS[CARD_STEPS.indexOf(step) - 1] ?? null;
+// The folder question has been answered by the import card, so there is no going back to it.
+export const previousCard = (step: CardStep): CardStep | null => (step === 'import' ? null : CARD_STEPS[CARD_STEPS.indexOf(step) - 1] ?? null);
+
+// "Step N of M": four cards, five once the import card is known to show.
+export function cardCounter(step: CardStep, folder: FolderChoice, pastSessions: number): { number: number; total: number } {
+  const counted = CARD_STEPS.filter((card) => card !== 'import' || step === 'import' || showsImport(folder, pastSessions));
+  return { number: counted.indexOf(step) + 1, total: counted.length };
+}
 
 // A launch with this saved stage: the step to show, or null when the guide is over or predates this install.
 export function resumeAt(stage: GuideStage, facts: GuideFacts): GuideStep | null {
   if (isEnded(stage)) return null;
-  if (stage === 'consent' && facts.folderChoice !== 'unasked') return bubbleStep(facts);
+  if (stage === 'consent' && facts.folderChoice !== 'unasked') return nextCard('consent', facts.folderChoice, facts.pastSessions) === 'import' ? 'import' : bubbleStep(facts);
+  if (stage === 'import' && !showsImport(facts.folderChoice, facts.pastSessions)) return bubbleStep(facts);
   return isCardStep(stage) ? stage : bubbleStep(facts);
 }
 
@@ -93,8 +107,23 @@ export function cardCopy(step: CardStep, pet: PetWords): CardCopy {
     case 'pet': return { title: 'Pick your pet', line: `${pet.name} will show you around. ${capital(pet.they)} sits in the corner while you work.` };
     case 'scene': return { title: 'Pick a scene', line: `Where should ${pet.name} hang out? ${capital(pet.they)} tries each one on in the corner.` };
     case 'consent': return { title: 'One quick question', line: 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' };
+    case 'import': return { title: 'Import your past sessions', line: 'They’re in History, up top. Press ⌘Y any time to open it.' };
   }
 }
+
+const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+// What the pet says on the import card.
+export const importSaid = ({ sessions, projects }: { sessions: number; projects: number }): string =>
+  `You’ve used Claude Code before! I found ${count(sessions, 'past session', 'past sessions')} in ${count(projects, 'project', 'projects')}.`;
+
+export const IMPORT_LIBRARY_DAYS = 30;
+// Read past sessions' own numbers, shown before it starts: what it reads and what it costs.
+export const libraryConfirm = (plan: BackfillPlan): string => plan.sessions
+  ? `Reads ${count(plan.sessions, 'session', 'sessions')} ${rangeText(plan.days)}: about ${count(plan.calls, 'Claude call', 'Claude calls')}, on your plan.`
+  : `Nothing new to read ${rangeText(plan.days)}.`;
+
+export const IMPORT_LABELS = { show: 'Show them in History', later: 'Not now', library: 'Also build my Library from them' } as const;
 
 export interface BubbleCopy {
   say: string; // what the pet says, first person

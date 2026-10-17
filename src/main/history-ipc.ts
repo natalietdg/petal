@@ -56,6 +56,8 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     };
   });
 
+  handle('history:past-summary', () => history.pastSessionsSummary());
+
   // Joins the pass already running, if any, and resolves when it ends.
   handle('history:tidy', () => organizer.runNow());
 

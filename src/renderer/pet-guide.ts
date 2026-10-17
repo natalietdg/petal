@@ -1,4 +1,4 @@
-// The pet's setup guide on a new install: four cards over the reader (hello, pet, scene, folder), then a speech
+// The pet's setup guide on a new install: cards over the reader (hello, pet, scene, folder, and past sessions when she has some), then a speech
 // bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Show setup again restarts it.
 import * as overlays from './overlays';
 import * as consent from './consent';
@@ -10,14 +10,16 @@ import { petWords, portrait } from './cat';
 import { byId, el, focusTerminal, isIpcError } from './dom';
 import type { FolderChoice } from '../shared/claude-folder';
 import type { Choice } from '../shared/types';
+import type { PastSessionsSummary } from '../main/history';
 import {
-  CARD_STEPS, EXAMPLE_ASK, GUIDE_PETS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, isCardStep, nextCard, personality, previousCard,
-  resumeAt, stageToSave, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
+  EXAMPLE_ASK, GUIDE_PETS, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
+  libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
 } from '../shared/pet-guide';
 
 const COPIED_MS = 1400;
 const CELEBRATE_MS = 12_000; // the party ends by itself if she doesn't click
 const BUBBLE_GAP = 14;
+const HISTORY_HINT_MS = 6000; // the History button glows this long after Show them in History
 
 const view = byId('pet-guide');
 const bubble = el('div', 'pet-bubble');
@@ -44,6 +46,8 @@ let sceneChoices: readonly Choice[] = [];
 let tabsAtAsk = 1; // tabs open when the bubble first said Add Session
 let repliesAtStart = 0; // replies already there when the bubbles began, so a restart waits for a new one
 let celebrateTimer: ReturnType<typeof setTimeout> | undefined;
+let past: PastSessionsSummary = { sessions: 0, projects: 0, newest: [] }; // History's count, read once the folder is allowed
+let buildLibrary = false; // the import card's checkbox
 
 const words = () => petWords(cat);
 const save = (stage: GuideStage) => window.pastel.config.save({ onboarding: { step: stage } });
@@ -57,6 +61,7 @@ function facts(): GuideFacts {
     claudeRunning: live.claudeRunning,
     sessionStarted: live.sessionStarted,
     replied: replyCount() > repliesAtStart,
+    pastSessions: past.sessions,
   };
 }
 
@@ -192,23 +197,62 @@ function consentBody(): HTMLElement {
   return box;
 }
 
-const BODIES: Record<CardStep, () => HTMLElement> = { welcome: welcomeBody, pet: petBody, scene: sceneBody, consent: consentBody };
+// Past sessions, as History lists them: what the pet found, the newest three, and the Library option with its cost up front.
+function importBody(): HTMLElement {
+  const box = el('div', 'pg-consent pg-import');
+  const said = el('div', 'pg-said');
+  said.append(petPicture(cat, 'pg-said-pet'), el('p', 'pg-said-line', importSaid(past)));
+  const newest = el('ul', 'pg-past');
+  newest.setAttribute('aria-label', 'Newest past sessions');
+  newest.append(...past.newest.map(({ title, project }) => {
+    const item = el('li', 'pg-past-row');
+    item.append(el('span', 'pg-past-title', title), el('span', 'pg-past-project', project));
+    return item;
+  }));
+  const library = el('label', 'pg-library');
+  const tick = el('input');
+  tick.type = 'checkbox';
+  tick.checked = buildLibrary;
+  const confirm = el('p', 'pg-library-confirm');
+  confirm.hidden = true;
+  confirm.setAttribute('aria-live', 'polite');
+  tick.addEventListener('change', () => void pickLibrary(tick.checked, confirm));
+  library.append(tick, el('span', null, IMPORT_LABELS.library));
+  box.append(said, newest, el('p', 'pg-line', cardCopy('import', words()).line), library, confirm);
+  if (buildLibrary) void pickLibrary(true, confirm);
+  return box;
+}
+
+// Read past sessions' own plan, shown before anything starts, so she sees the sessions and Claude calls first.
+async function pickLibrary(on: boolean, confirm: HTMLElement): Promise<void> {
+  buildLibrary = on;
+  confirm.hidden = !on;
+  if (!on) return;
+  confirm.textContent = 'Counting…';
+  const plan = await window.pastel.library.backfillPlan(IMPORT_LIBRARY_DAYS);
+  if (!buildLibrary) return;
+  confirm.textContent = isIpcError(plan) ? `Couldn’t count them: ${plan.error}` : 'skipped' in plan ? plan.skipped : libraryConfirm(plan);
+}
+
+const BODIES: Record<CardStep, () => HTMLElement> = { welcome: welcomeBody, pet: petBody, scene: sceneBody, consent: consentBody, import: importBody };
 
 function renderCard(card: CardStep): void {
   const copy = cardCopy(card, words());
   const pane = el('div', 'pg-card');
   pane.dataset.step = card;
-  const number = CARD_STEPS.indexOf(card) + 1;
+  const { number, total } = cardCounter(card, folder, past.sessions);
   const dots = el('p', 'pg-dots');
-  dots.append(...CARD_STEPS.map((_, i) => el('span', i < number ? 'on' : null)), el('span', 'pg-dots-text', `Step ${number} of ${CARD_STEPS.length}`));
+  dots.append(...Array.from({ length: total }, (_, i) => el('span', i < number ? 'on' : null)), el('span', 'pg-dots-text', `Step ${number} of ${total}`));
   pane.append(dots, el('h1', 'pg-title', copy.title));
-  if (card !== 'consent') pane.append(el('p', 'pg-line', copy.line));
+  if (card !== 'consent' && card !== 'import') pane.append(el('p', 'pg-line', copy.line));
   pane.append(BODIES[card]());
 
   const footer = el('footer', 'pg-footer');
   const actions = el('div', 'pg-actions');
   if (card === 'consent') {
     actions.append(button('Allow', 'pg-primary pg-allow', () => void answerFolder('allowed')), button('Not now', 'pg-secondary pg-later', () => void answerFolder('declined')));
+  } else if (card === 'import') {
+    actions.append(button(IMPORT_LABELS.show, 'pg-primary pg-show', () => void showInHistory()), button(IMPORT_LABELS.later, 'pg-secondary pg-later', () => void advance('import')));
   } else {
     actions.append(button(card === 'welcome' ? 'Start' : 'Next', 'pg-primary pg-next', () => void advance(card)));
     const back = previousCard(card);
@@ -219,9 +263,9 @@ function renderCard(card: CardStep): void {
   if (card === 'pet' || card === 'scene') { borrowSceneStyles(); view.append(cornerPreview()); }
   pane.scrollTop = 0;
   // The folder card focuses itself, not Allow, so a stray Enter can't answer for her (as the old question did).
-  const focus = card === 'consent' ? view : view.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], .pg-next');
+  const focus = card === 'consent' ? view : view.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], .pg-next, .pg-show');
   focus?.focus({ preventScroll: true });
-  announce(`${copy.title}. ${copy.line}`);
+  announce(card === 'import' ? `${copy.title}. ${importSaid(past)} ${copy.line}` : `${copy.title}. ${copy.line}`);
 }
 
 function repaintPicks(): void {
@@ -248,11 +292,29 @@ function pickScene(id: string): void {
 async function answerFolder(choice: FolderChoice): Promise<void> {
   folder = choice;
   await consent.setChoice(choice); // the same answer, saved in the same place, as the old question
+  await countPast();
   await advance('consent');
 }
 
+// History's own count of her past sessions; read only with the folder allowed, so a declined folder never shows the card.
+async function countPast(): Promise<void> {
+  past = { sessions: 0, projects: 0, newest: [] };
+  if (folder !== 'allowed') return;
+  const summary = await window.pastel.history.pastSummary();
+  if (!isIpcError(summary)) past = summary;
+}
+
+// History already lists them; this starts the Library read if she ticked it, and lights up where History lives.
+async function showInHistory(): Promise<void> {
+  if (buildLibrary) await window.pastel.library.backfillStart(IMPORT_LIBRARY_DAYS);
+  const history = byId('history-button');
+  history.classList.add('pg-hint');
+  setTimeout(() => history.classList.remove('pg-hint'), HISTORY_HINT_MS);
+  await advance('import');
+}
+
 async function advance(card: CardStep): Promise<void> {
-  const next = nextCard(card, folder);
+  const next = nextCard(card, folder, past.sessions);
   await show(next === 'bubbles' ? startBubbles() : next);
 }
 
@@ -518,7 +580,8 @@ async function loadState(): Promise<GuideStage | null> {
 // On launch: the guide's saved step on a new install, or false when it's over or predates this install.
 export async function resumeIfStarted(): Promise<boolean> {
   const stage = await loadState();
-  if (!stage) return false;
+  if (!stage || isEnded(stage)) return false;
+  await countPast();
   tabsAtAsk = tabs.ids().length;
   repliesAtStart = replyCount();
   const at = resumeAt(stage, facts());
@@ -531,6 +594,8 @@ export async function resumeIfStarted(): Promise<boolean> {
 // Help › Show setup again: from the hello card, whatever happened before.
 export async function restart(): Promise<void> {
   if (!(await loadState())) return;
+  await countPast();
+  buildLibrary = false;
   overlays.hideCurrent();
   await show('welcome');
 }

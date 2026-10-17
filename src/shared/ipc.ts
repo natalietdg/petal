@@ -3,7 +3,7 @@
 import type { Choice, FlowTarget, IpcError, TabId, TabReaderUpdate, Theme, TermSize } from './types';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
-import type { ListedSession } from '../main/history';
+import type { ListedSession, PastSessionsSummary } from '../main/history';
 import type { StoredFlow } from '../main/flow-store';
 import type { MermaidExport } from '../main/flow-mermaid';
 import type { HookRun, HookTestResult } from '../main/response-hook';
@@ -239,6 +239,7 @@ export interface InvokeChannels {
   'factory:use-global': { args: [request: { repo: string }]; result: Guarded<FactoryState> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
+  'history:past-summary': { args: []; result: Guarded<PastSessionsSummary> }; // the setup guide's import card
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
   // background: open it in a tab that isn't shown (a reply from History's preview).
   'history:resume': { args: [request: { sessionId: string; confirmFork: boolean; background?: boolean }]; result: Guarded<ResumeResult> };

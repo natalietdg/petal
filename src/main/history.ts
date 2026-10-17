@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readHead, readTail } from './jsonl-window';
+import { readHead, readTail, type JsonlSlice } from './jsonl-window';
 import { promptText, commandText, trimTo } from './prompts';
 import { liveSessions } from './sessions-monitor';
 import { SESSION_ID } from './session-id';
@@ -15,6 +15,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HEAD_BYTES = 32 * 1024;
 const TAIL_BYTES = 64 * 1024;
 const FIRST_PROMPT_CHARS = 160;
+const GROWN_BYTES_MAX = 8 * 1024 * 1024; // a window that holds no whole message grows up to this (pasted images make megabyte lines)
+const NEWEST_SHOWN = 3;
 
 export interface SessionRecord {
   sessionId: string;
@@ -59,9 +61,19 @@ function sessionFiles(home: string | null = allowedClaudeHome()): string[] {
 const isMessage = (e: TranscriptEntry) => (e.type === 'user' || e.type === 'assistant') && !e.isSidechain;
 const lastAiTitle = (entries: TranscriptEntry[]) => entries.filter((e) => e.type === 'ai-title' && e.aiTitle).at(-1)?.aiTitle;
 
+// A window cut inside one huge line parses to nothing, which once dropped the whole session; read more until a message shows.
+function readUntilMessage(read: typeof readHead, file: string, bytes: number): JsonlSlice {
+  let slice = read(file, bytes);
+  while (!slice.covered && !slice.entries.some(isMessage) && bytes < GROWN_BYTES_MAX) {
+    bytes = Math.min(bytes * 4, GROWN_BYTES_MAX);
+    slice = read(file, bytes);
+  }
+  return slice;
+}
+
 function buildRecord(file: string, stat: fs.Stats): SessionRecord {
-  const head = readHead(file, HEAD_BYTES);
-  const tail = head.covered ? head : readTail(file, TAIL_BYTES);
+  const head = readUntilMessage(readHead, file, HEAD_BYTES);
+  const tail = head.covered ? head : readUntilMessage(readTail, file, TAIL_BYTES);
   const firstPrompt = head.entries.map((e) => promptText(e) || commandText(e)).find(Boolean) ?? '';
   const messages = head.covered
     ? head.entries.filter(isMessage).length
@@ -102,18 +114,56 @@ const shortCwd = (cwd: string | null) => (cwd?.startsWith(os.homedir()) ? `~${cw
 // `home` is the Claude folder to list; a caller with its own resolved folder (Testing in snapshot runs) passes it.
 export function listSessions(kept: ReadonlySet<string> = new Set(), home: string | null = allowedClaudeHome()): ListedSession[] {
   if (!claudeFolderAllowed() || !home) return [];
+  return listed(wantedFiles(kept, home).map(recordFor), { addFixtures: true });
+}
+
+function wantedFiles(kept: ReadonlySet<string>, home: string): string[] {
   const since = Date.now() - WINDOW_DAYS * DAY_MS;
   const wanted = (file: string, mtime: number) => mtime >= since || kept.has(path.basename(file, '.jsonl'));
-  const live = new Set(liveSessions().map((s) => s.sessionId));
-  if (isSnapshotRun()) historyFixture.live.forEach((id) => live.add(id));
-  const records = sessionFiles(home)
+  return sessionFiles(home)
     .map((file) => { try { return { file, mtime: fs.statSync(file).mtimeMs }; } catch { return null; } }) // deleted mid-scan
     .filter((entry): entry is { file: string; mtime: number } => Boolean(entry && wanted(entry.file, entry.mtime)))
-    .map(({ file }) => recordFor(file))
-    .filter((record): record is SessionRecord => Boolean(record && (record.title || record.messages)));
-  return [...fixtures(), ...records]
+    .map(({ file }) => file);
+}
+
+// Records as History shows them: empty logs dropped, live ones marked, newest first.
+function listed(found: (SessionRecord | null)[], { addFixtures }: { addFixtures: boolean }): ListedSession[] {
+  const live = new Set(liveSessions().map((s) => s.sessionId));
+  if (isSnapshotRun()) historyFixture.live.forEach((id) => live.add(id));
+  const records = found.filter((record): record is SessionRecord => Boolean(record && (record.title || record.messages)));
+  return [...(addFixtures ? fixtures() : []), ...records]
     .map((record) => ({ ...record, shortCwd: shortCwd(record.cwd), live: live.has(record.sessionId) }))
     .sort((a, b) => b.lastAt - a.lastAt);
+}
+
+export interface PastSessionsSummary {
+  sessions: number;
+  projects: number;
+  newest: { title: string; project: string }[];
+}
+
+const yieldToEvents = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+const folderOf = (session: ListedSession): string => path.dirname(session.file);
+
+// The setup guide's "you've used Claude Code before" count: the same files and filter History lists, read off the
+// main thread's critical path one log at a time (it warms History's cache too). Fixtures are left out.
+export async function pastSessionsSummary(home: string | null = allowedClaudeHome()): Promise<PastSessionsSummary> {
+  if (!claudeFolderAllowed() || !home) return { sessions: 0, projects: 0, newest: [] };
+  const found: (SessionRecord | null)[] = [];
+  for (const file of wantedFiles(new Set(), home)) {
+    found.push(recordFor(file));
+    await yieldToEvents();
+  }
+  const sessions = listed(found, { addFixtures: false });
+  // A project is one projects/<folder>; a log with no cwd borrows its name from a sibling that has one.
+  const names = new Map<string, string>();
+  for (const s of sessions) if (s.shortCwd && !names.has(folderOf(s))) names.set(folderOf(s), s.shortCwd);
+  const projectOf = (s: ListedSession) => s.shortCwd || names.get(folderOf(s)) || path.basename(folderOf(s));
+  return {
+    sessions: sessions.length,
+    projects: new Set(sessions.map(folderOf)).size,
+    newest: sessions.slice(0, NEWEST_SHOWN).map((s) => ({ title: s.title, project: projectOf(s) })),
+  };
 }
 
 // A session's log stays in one folder, so a found path skips the scan of every project next time.
