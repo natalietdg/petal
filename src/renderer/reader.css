@@ -623,3 +623,9 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 .status.empty .notice-update { margin-top: 18px; font-size: 16px; color: var(--muted); }
 .status.empty .notice-update .notice-copy { margin: 0 0 0 6px; font-size: 13px; vertical-align: middle; }
 .status.empty .notice-choices .notice-choice { display: block; margin-top: 10px; font-size: 14px; text-align: left; }
+/* Setup help: the install command under "isn't installed yet", and the PATH line her shell is missing. */
+.status.empty .gs-command { margin-top: 14px; font-size: 14px; }
+.status.empty .reader-setup-hint { margin: 6px 0 0; font-size: 16px; color: var(--muted); }
+.reader-path-tip { margin: 0 0 16px; font: 14px/1.5 var(--body-font); color: var(--muted); }
+.reader-path-tip p { margin: 0 0 4px; }
+.reader-path-tip[hidden] { display: none; }

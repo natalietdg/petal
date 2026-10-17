@@ -14,9 +14,11 @@ import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
 import { noticeLines } from './reader-notice';
 import * as mentions from './mentions';
+import * as setupHints from './reader-setup-hints';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
+import { emptyLine } from '../shared/reader-empty';
 
 export type ReaderView = 'replies' | 'flow' | 'decisions';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
@@ -125,9 +127,10 @@ const column = query(byId('reader'), '.reader-column');
 
 // An empty reader's line, with one button under it when there's something to do.
 interface EmptyAction { label: string; event: string }
-function showMessage(html: string, action: EmptyAction | null = null): void {
+function showMessage(html: string, action: EmptyAction | null = null, extra: HTMLElement[] = []): void {
   status.classList.add('empty');
   status.innerHTML = html;
+  status.append(...extra);
   if (action) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -178,20 +181,13 @@ export function update(shown: ShownUpdate): void {
     return;
   }
   const [newest, ...rest] = replies;
-  if (!newest && live && claudeSetup) {
-    showMessage('Claude Code is setting up in the terminal below. Pick your options there (arrow keys and Enter).', SHOW_TERMINAL);
-    return;
-  }
-  if (!folderAllowed) {
-    showMessage('Petal isn’t reading your Claude folder, so replies won’t show here. The terminal below works as usual.', ALLOW_FOLDER);
-    return;
-  }
-  if (!newest) {
-    if (state === 'live') showLive(noticeLines(shown.notice, shown.tabId));
-    else if (claudeMissing) showMessage('Claude Code isn’t installed yet. Install it, then click Add Session.', GET_STARTED);
-    else showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
-    return;
-  }
+  const empty = emptyLine({ hasReply: Boolean(newest), live, claudeSetup, folderAllowed, claudeMissing });
+  if (empty === 'folder-off') showMessage('Petal isn’t reading your Claude folder, so replies won’t show here. The terminal below works as usual.', ALLOW_FOLDER);
+  else if (empty === 'setting-up') showMessage('Claude Code is setting up in the terminal below. Pick your options there (arrow keys and Enter).', SHOW_TERMINAL);
+  else if (empty === 'running') showLive(noticeLines(shown.notice, shown.tabId));
+  else if (empty === 'not-installed') showMessage('Claude Code isn’t installed yet. Install it with this command:', GET_STARTED, setupHints.installSteps());
+  else if (empty === 'start') showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
+  if (empty || !newest) return;
   status.classList.remove('empty');
   status.textContent = state === 'ended'
     ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
@@ -321,6 +317,8 @@ export const setFolderAllowed = (allowed: boolean): void => { folderAllowed = al
 const notice = Object.assign(document.createElement('p'), { className: 'status reader-notice', hidden: true });
 notice.setAttribute('role', 'alert');
 older.before(notice);
+notice.after(setupHints.pathTipLine);
+export const setPathTip = setupHints.setPathTip;
 export function showNotice(text: string): void {
   notice.textContent = text;
   notice.hidden = false;
