@@ -236,8 +236,7 @@ export async function historyLayoutCheck(kit: Kit, win: BrowserWindow): Promise<
       if (width === 1280) await capture('history-layout-collapsed-1280');
       await js('PastelTerm.history.close()');
       await openHistory(LONG);
-      await wait(300);
-      check(await js("document.querySelector('.history-list-pane').getBoundingClientRect().width <= 56"), `${width}px still collapsed after reopening History`);
+      check(await waitFor(async () => (await js("document.querySelector('.history-list-pane').getBoundingClientRect().width <= 56")) || null, 3000), `${width}px still collapsed after reopening History`);
       await js("document.getElementById('history').dispatchEvent(new KeyboardEvent('keydown', { key: '\\\\', code: 'Backslash', metaKey: true, bubbles: true }))");
       await wait(300);
       const back = await js(`(() => ({ list: document.querySelector('.history-list-pane').getBoundingClientRect().width, preview: document.querySelector('.history-preview-pane').getBoundingClientRect().width }))()`);

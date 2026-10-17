@@ -37,7 +37,9 @@ const LOOK = `(() => {
   const tabs = document.getElementById('history-tabs').getBoundingClientRect();
   const sideways = ['html', '#reader-area', '#history', '#history-preview', '.history-list-pane', '#history-list', '.history-preview-head']
     .map((s) => document.querySelector(s)).filter((e) => e && e.getClientRects().length)
-    .map((e) => ({ id: e.id || e.className || e.tagName, over: e.scrollWidth - e.clientWidth })).filter((x) => x.over > 1);
+    .map((e) => ({ e, id: e.id || e.className || e.tagName, over: e.scrollWidth - e.clientWidth })).filter((x) => x.over > 1)
+    // The innermost box whose text runs past it (a long unbroken path), to name the cause.
+    .map(({ e, id, over }) => ({ id, over, cause: [...e.querySelectorAll('*')].filter((d) => d.scrollWidth > d.clientWidth + 1 && getComputedStyle(d).overflowX === 'visible').map((d) => d.className).at(-1) ?? null }));
   return { stars, clash, tabsFit: tabs.right <= pane.right + 1 && tabs.width > 0, sideways };
 })()`;
 
@@ -211,8 +213,8 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
           check(m.sideways.length === 0, `${tag} nothing scrolls sideways: ${JSON.stringify(m.sideways)}`);
           if (look === 'newspaper') await capture(`favorites-${themeId}-${width}`);
           await js('PastelTerm.history.close()');
-          await wait(150);
-          const r = await js(READER_STAR);
+          // The header refits and the pet re-docks a frame or two after History closes.
+          const r = (await waitFor(async () => { const now = await js(READER_STAR); return now.reachable && now.overlaps === 0 && now.sideways <= 1 ? now : null; }, 3000)) ?? await js(READER_STAR);
           check(r.shown && r.reachable && r.overlaps === 0 && r.sideways <= 1, `${tag} reader star clickable, clear of the header controls: ${JSON.stringify(r)}`);
           if (look === 'newspaper' && themeId === 'paleSky') await capture(`favorites-reader-head-${width}`);
         }

@@ -248,8 +248,7 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
       }
       await capturePopover(kit, win, `colour-key-${look}-${theme}`);
       await js(escape);
-      await wait(200);
-      check(!(await js(STATE)).shown, `${look} ${theme}: Esc closes it`);
+      check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), `${look} ${theme}: Esc closes it`);
     }
   }
   applyTheme(light, { persist: false });
@@ -262,8 +261,7 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
   check(opened.buttonHeight <= opened.toggleHeight, `button (${opened.buttonHeight}px) is no taller than the view toggle (${opened.toggleHeight}px)`);
   check(opened.meanings.length === expectedKeys.length && !/[–—]/.test(opened.text), `every row has a meaning line and the copy has no em dashes: ${JSON.stringify(opened.meanings)}`);
   await js(clickOutside);
-  await wait(200);
-  check(!(await js(STATE)).shown, 'a click outside closes it');
+  check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), 'a click outside closes it');
 
   // Help > Colour key, from over an open overlay: the overlay gives way and the key opens.
   const item = Menu.getApplicationMenu()?.items.find((m) => m.role === 'help')?.submenu?.items.find((i: MenuItem) => i.label === 'Colour key');
@@ -277,8 +275,7 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
   }, 3000);
   check(fromMenu && !fromMenu.history && fromMenu.keys.length === expectedKeys.length, `Help > Colour key closes History and opens the key: ${JSON.stringify(fromMenu && { history: fromMenu.history, keys: fromMenu.keys.length })}`);
   await js(escape);
-  await wait(200);
-  check(!(await js(STATE)).shown, 'Esc closes the key opened from Help');
+  check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), 'Esc closes the key opened from Help');
 
   resizeOffscreen(win, startWidth, startHeight);
 }

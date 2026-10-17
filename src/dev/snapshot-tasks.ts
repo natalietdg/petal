@@ -370,6 +370,8 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     extraTabFixtures.length = 0;
     const opened: string[] = (await js('PastelTerm.tabs.ids()')).filter((t: string) => !startTabs.includes(t));
     for (const t of opened) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
+    await waitFor(async () => ((await js('PastelTerm.tabs.ids()')).length === startTabs.length ? true : null), 8000); // closing is async; the feed restore waits for it
+    await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     panelFixture.sessions = saved.panel;
     folderFixture.home = saved.home;
     restoreActivity();

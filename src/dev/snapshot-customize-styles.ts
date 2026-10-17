@@ -78,7 +78,7 @@ const hashDir = (dir: string): string => {
 };
 
 export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
-  const { js, log, wait, waitFor, capture, themes, applyTheme, outDir } = kit;
+  const { js, log, waitFor, capture, themes, applyTheme, outDir } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} customize styles: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
 
@@ -141,8 +141,7 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
       check(await waitFor(() => stylesFixture.opened.length === opened + 1, 3000) && stylesFixture.opened.at(-1) === path.join(stylesDir, 'plain-notes.md'), `${theme}: Open in editor asks main to open ${stylesFixture.opened.at(-1)}`);
 
       await js(clickHead('plain-notes'));
-      await wait(200);
-      check(!(await js("Boolean(document.querySelector('#customize .cz-style-text'))")), `${theme}: a second click collapses it`);
+      check(await waitFor(async () => !(await js("Boolean(document.querySelector('#customize .cz-style-text'))")) || null, 3000), `${theme}: a second click collapses it`);
       await js('PastelTerm.customize.close()');
     }
     applyTheme('paleSky', { persist: false });

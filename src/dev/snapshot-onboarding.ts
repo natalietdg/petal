@@ -176,9 +176,26 @@ export async function setupEmptyCheck(kit: Kit): Promise<void> {
   log(`${!some.empty && some.graphSvg && !some.routingNode && /^CLAUDE\.md has 2 sections\. 1 skill and 0 agents installed\./.test(String(some.summary)) ? 'ok' : 'FAIL'} Setup without routing: ${JSON.stringify(some)}`);
   await capture('setup-no-routing');
 
+  setupFixture.claudeDir = writeRoutedClaudeDir(path.join(outDir, 'fake-claude-routed'));
+  const routed = await showSetup(kit, "Boolean(document.querySelector('#workflow-body .wf-graph svg'))");
+  log(`${!routed.empty && routed.graphSvg && routed.routingNode && /route requests to 2 skills/.test(String(routed.summary)) ? 'ok' : 'FAIL'} Setup with a routing table, skills and agents: ${JSON.stringify(routed)}`);
+  await capture('setup-routed');
   setupFixture.claudeDir = null;
-  const real = await showSetup(kit, "Boolean(document.querySelector('#workflow-body .wf-graph svg'))");
-  log(`${!real.empty && real.graphSvg && real.routingNode && /route requests to/.test(String(real.summary)) ? 'ok' : 'FAIL'} Setup with her real ~/.claude unchanged: ${JSON.stringify(real)}`);
-  await capture('setup-real');
   await js('PastelTerm.workflow.close()');
+}
+
+// A full setup like a power user's: CLAUDE.md with a skills routing table, three skills (two routed) and an agent.
+function writeRoutedClaudeDir(dir: string): string {
+  const skill = (name: string) => {
+    fs.mkdirSync(path.join(dir, 'skills', name), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: The ${name} skill.\n---\n`);
+  };
+  ['deploy', 'triage', 'notes'].forEach(skill);
+  fs.mkdirSync(path.join(dir, 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'agents', 'reviewer.md'), '---\nname: reviewer\ndescription: Reviews diffs.\n---\n');
+  fs.writeFileSync(path.join(dir, 'CLAUDE.md'), [
+    '# Me', '## Style', '- short answers', '## Custom skills routing',
+    '- Shipping a build → **deploy**', '- A failing URL → **triage**', '',
+  ].join('\n'));
+  return dir;
 }

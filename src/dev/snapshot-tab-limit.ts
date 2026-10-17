@@ -65,7 +65,7 @@ export async function tabLimitCheck(kit: Kit): Promise<void> {
 
   panelFixture.sessions = null;
   for (const id of opened) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
-  const closed = await waitFor(async () => ((await state()).ids.length === start.ids.length ? true : null), 8000);
+  const closed = await waitFor(async () => ((await state()).ids.length === start.ids.length ? true : null), 20000); // a pty exit can take seconds on a loaded Mac
   check(closed, `test tabs closed again: ${JSON.stringify((await state()).ids)}`);
   if (start.active) await js(`PastelTerm.tabs.activate(${JSON.stringify(start.active)})`);
 }

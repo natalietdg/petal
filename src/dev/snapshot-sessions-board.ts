@@ -77,10 +77,14 @@ const REACH = `(async () => {
   const shown = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
   const layers = [...document.querySelectorAll('#cat, .scene-tip, .scene-popover')].filter(shown);
   const out = { cards: 0, scrolls: board.scrollHeight > board.clientHeight, clipped: [], covered: [] };
-  for (const card of board.querySelectorAll('.board-card')) {
+  // By id, looked up afresh: the 2s tick redraws the cards, and a card from before a redraw is detached (0x0).
+  for (const id of [...board.querySelectorAll('.board-card')].map((c) => c.dataset.sessionId)) {
     out.cards++;
-    card.scrollIntoView({ block: 'nearest' });
+    const find = () => board.querySelector('.board-card[data-session-id="' + id + '"]');
+    find()?.scrollIntoView({ block: 'nearest' });
     await new Promise(requestAnimationFrame);
+    const card = find();
+    if (!card) { out.clipped.push({ id, gone: true }); continue; }
     const r = card.getBoundingClientRect();
     if (r.top < view.top - 1 || r.bottom > view.bottom + 1) out.clipped.push({ id: card.dataset.sessionId, top: Math.round(r.top), bottom: Math.round(r.bottom), view: [Math.round(view.top), Math.round(view.bottom)] });
     // Sample the part inside the board: at 1x, scrollTop snaps to whole pixels and leaves a card up to 1px past the edge, under the divider's 5px reach.

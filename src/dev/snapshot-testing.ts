@@ -298,6 +298,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     testingFixture.project = null;
     testingFixture.claudeDir = null;
     await js('PastelTerm.overlays.hideCurrent()');
+    await js('PastelTerm.testing.resetLeftovers()'); // the history row it opened to its repeats
     // Run pipeline's tab: later steps (Get started) count tabs from a clean start.
     for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
     check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the pipeline tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);

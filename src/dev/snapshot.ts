@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, powerSaveBlocker, screen } from 'electron';
 import type { IPty } from 'node-pty';
 import * as views from './snapshot-views';
 import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
@@ -73,6 +73,7 @@ import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode
 import { onAnyDisplay } from '../main/snapshot-window';
 import { harnessLine } from '../main/snapshot-shell';
 import { shellGuardCheck } from './snapshot-shell-guard';
+import { captureBaseline, keepingStores, type StepIsolation } from './snapshot-baseline';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -233,6 +234,7 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   await panel('expandedIds.clear()');
   await panel('setOpen(false)');
   panelFixture.sessions = null;
+  applyTheme('paleSky', { persist: false });
 }
 
 const FIXTURE_REPLY = [
@@ -379,6 +381,8 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
   applyTheme('paleSky', { persist: false });
 }
 
+const BASELINE_AFTER = 'welcome'; // the first-run screen is up until this step closes it
+
 // Runs every fixture check in order; returns how many finished, so a cut-short run shows in the marker.
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
@@ -437,14 +441,14 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
-    ['library', () => libraryCheck(kit, win)], // a stubbed extractor only; never a real claude
-    ['testing', () => testingCheck(kit, win)], // records the pipeline line, never runs it; appends a Claude run to the fixture
-    ['petal skills', () => petalSkillsCheck(kit, win)], // stand-in ~/.claude and project only; never runs a command
-    ['test loop', () => testLoopCheck(kit, win, feed)], // records the brief paste and Esc, never a real claude; appends Loop lines
+    ['library', keepingStores(['library', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
+    ['testing', keepingStores(['testing', 'activity'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
+    ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
+    ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
-    ['conclusion', () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed)], // appends conclude turns; after the steps that measure the reader
+    ['conclusion', keepingStores(['library', 'testing', 'activity'], () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed), kit.outDir)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
@@ -452,10 +456,13 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   ];
   const count: StepCount = { done: 0, total: steps.length };
   log(`SNAPSHOT START steps=${count.total}`);
+  let isolation: StepIsolation | null = null; // set once the first-run screen is closed: the run's resting state
   for (const [name, step] of steps) {
     log(`step ${count.done + 1}/${count.total} ${name}`);
     try {
       await step();
+      if (isolation) await isolation.check(name);
+      else if (name === BASELINE_AFTER) isolation = await captureBaseline(kit, win);
     } catch (error) {
       log(`FAIL step ${name}: ${(error as Error).stack}`); // a failing step logs and stops instead of hanging
       return count;
@@ -508,6 +515,7 @@ function watchWindow(win: BrowserWindow, log: Log): () => void {
 }
 
 export async function run({ win, sessions, activeSession, openTab, themes, applyTheme }: RunDeps): Promise<void> {
+  powerSaveBlocker.start('prevent-app-suspension'); // App Nap slows a windowless run's timers many times over; every wait then times out
   fs.mkdirSync(outDir(), { recursive: true });
   const logFile = path.join(outDir(), 'snapshot.log');
   fs.writeFileSync(logFile, '');

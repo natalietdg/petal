@@ -30,3 +30,5 @@ npm run typecheck
 npm run lint
 npm test
 ```
+
+Before handing a branch over, run the whole snapshot sequence under a scratch HOME with a stand-in `claude` (exit 0 only on fail=0): `scripts/snapshot-full-fake-home.sh [scratch-dir]`.

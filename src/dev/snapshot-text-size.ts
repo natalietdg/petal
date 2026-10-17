@@ -188,8 +188,7 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
   await menu(1);
   await capture('customize');
   await js("document.querySelector('#customize .cz-size[data-pane=\"terminal\"] .cz-size-reset').click()");
-  await wait(300);
-  check((await shown()).terminal.value === '16 px' && (await measure()).termFont === 16, 'Reset puts the terminal back to 16 px');
+  check(await waitFor(async () => ((await shown()).terminal.value === '16 px' && (await measure()).termFont === 16) || null, 3000), 'Reset puts the terminal back to 16 px');
   await js('PastelTerm.customize.close()');
 
   // 160% and 28px at 800px wide: nothing runs off the page sideways.
