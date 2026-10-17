@@ -399,6 +399,17 @@ export function close(): void {
 
 export const toggle = (): void => (isOpen() ? close() : open());
 
+// Snapshot harness: what the Board shows, and back to its defaults between steps.
+export const filters = () => ({ filter, boardView, branchFilter, givingFor, activity: boardActivity.filterState() });
+export function resetFilters(): void {
+  filter = 'all';
+  boardView = 'sessions';
+  branchFilter = null;
+  givingFor = null;
+  shownKey = '';
+  boardActivity.resetFilters();
+}
+
 // Follows her folder choice; Allow fills an open board on the next tick.
 export function setFolderAllowed(allowed: boolean): void {
   folderAllowed = allowed;

@@ -73,6 +73,7 @@ import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode
 import { onAnyDisplay } from '../main/snapshot-window';
 import { harnessLine } from '../main/snapshot-shell';
 import { shellGuardCheck } from './snapshot-shell-guard';
+import { captureBaseline, type StepIsolation } from './snapshot-baseline';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -379,6 +380,8 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
   applyTheme('paleSky', { persist: false });
 }
 
+const BASELINE_AFTER = 'welcome'; // the first-run screen is up until this step closes it
+
 // Runs every fixture check in order; returns how many finished, so a cut-short run shows in the marker.
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
@@ -452,10 +455,13 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   ];
   const count: StepCount = { done: 0, total: steps.length };
   log(`SNAPSHOT START steps=${count.total}`);
+  let isolation: StepIsolation | null = null; // set once the first-run screen is closed: the run's resting state
   for (const [name, step] of steps) {
     log(`step ${count.done + 1}/${count.total} ${name}`);
     try {
       await step();
+      if (isolation) await isolation.check(name);
+      else if (name === BASELINE_AFTER) isolation = await captureBaseline(kit, win);
     } catch (error) {
       log(`FAIL step ${name}: ${(error as Error).stack}`); // a failing step logs and stops instead of hanging
       return count;

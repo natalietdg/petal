@@ -38,6 +38,14 @@ export function setBranch(next: string | null): void {
   render();
 }
 
+// Snapshot harness: the feed's filters, and back to none between steps.
+export const filterState = () => ({ sessionFilter, kindFilter, branch });
+export function resetFilters(): void {
+  sessionFilter = null;
+  kindFilter = null;
+  branch = null;
+}
+
 export const shown = (): ActivityEvent[] => filterEvents(events, { sessionId: sessionFilter, kind: kindFilter, branch });
 
 // Sessions named anywhere in the feed, for the session filter.

@@ -603,5 +603,12 @@ export async function openRun(runId: string): Promise<void> {
   drawAll();
 }
 
+// Snapshot harness: choices that outlive a close (picked projects, opened history rows), cleared between steps.
+export const leftovers = () => ({ picked: [...pickedFor.keys()], expanded: [...expanded] });
+export function resetLeftovers(): void {
+  pickedFor.clear();
+  expanded.clear();
+}
+
 // For the snapshot harness.
 export const state = () => ({ elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
