@@ -215,3 +215,6 @@
   .pg-pet[aria-checked="true"], .pg-scene[aria-checked="true"] { transform: none; }
 }
 .pet-bubble[data-tail="none"]::before, .pet-bubble[data-tail="none"]::after { display: none; } /* away from her, over the terminal */
+
+/* While the pet guides a new user, the reader's old empty-state line and its Get started button step aside. */
+body.pet-guide-on #reader-status.empty { visibility: hidden; }

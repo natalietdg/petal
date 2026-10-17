@@ -5,6 +5,7 @@ import * as consent from './consent';
 import * as getStarted from './get-started';
 import * as tabs from './tabs';
 import * as scenes from './scenes';
+import * as layout from './layout';
 import { petWords, portrait } from './cat';
 import { byId, el, focusTerminal, isIpcError } from './dom';
 import type { FolderChoice } from '../shared/claude-folder';
@@ -421,8 +422,19 @@ function placePointer(goal: DOMRect | null): void {
 
 // ── Steps ──
 
+// New users see the terminal only once the pet asks them to type in it; the guide never saves this as their layout.
+let terminalHidden = false;
+function terminalFor(next: GuideStep | null): void {
+  document.body.classList.toggle('pet-guide-on', next !== null); // the reader's old "No conversation yet" line steps aside
+  const hide = next !== null && isCardStep(next);
+  if (hide === terminalHidden) return;
+  terminalHidden = hide;
+  layout.setTerminalMinimised(hide, false);
+}
+
 async function show(next: GuideStep): Promise<void> {
   step = next;
+  terminalFor(next);
   clearTimeout(celebrateTimer);
   if (next !== 'celebrate') party.hidden = true;
   await save(stageToSave(next));
@@ -447,6 +459,7 @@ const clearTargets = (): void => { for (const old of document.querySelectorAll('
 
 function end(stage: 'done' | 'skipped'): void {
   step = null;
+  terminalFor(null);
   shownBubble = null;
   shownKey = '';
   clearTimeout(celebrateTimer);
