@@ -185,6 +185,7 @@ function place(): void {
 new ResizeObserver(place).observe(reader);
 new ResizeObserver(place).observe(column); // a look's measure or a rail changes the text's edge
 new ResizeObserver(place).observe(byId('reader-head'));
+new ResizeObserver(place).observe(headEnd); // a header refit (head-fit.ts) moves her slot without resizing the header
 // History opening, closing or redrawing its preview moves her row; one frame later, once laid out.
 let placeFrame = 0;
 const placeSoon = (): void => { cancelAnimationFrame(placeFrame); placeFrame = requestAnimationFrame(place); };

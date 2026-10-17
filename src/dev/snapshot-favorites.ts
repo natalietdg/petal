@@ -211,8 +211,8 @@ export async function favoritesCheck(kit: Kit, win: BrowserWindow): Promise<void
           check(m.sideways.length === 0, `${tag} nothing scrolls sideways: ${JSON.stringify(m.sideways)}`);
           if (look === 'newspaper') await capture(`favorites-${themeId}-${width}`);
           await js('PastelTerm.history.close()');
-          await wait(150);
-          const r = await js(READER_STAR);
+          // The header refits and the pet re-docks a frame or two after History closes.
+          const r = (await waitFor(async () => { const now = await js(READER_STAR); return now.reachable ? now : null; }, 3000)) ?? await js(READER_STAR);
           check(r.shown && r.reachable && r.overlaps === 0 && r.sideways <= 1, `${tag} reader star clickable, clear of the header controls: ${JSON.stringify(r)}`);
           if (look === 'newspaper' && themeId === 'paleSky') await capture(`favorites-reader-head-${width}`);
         }
