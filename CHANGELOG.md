@@ -4,6 +4,8 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 
 ## [1.1.0] · 2026-10-17
 - A new setup for first-timers: pick your pet and a scene, then your pet walks you through Add Session, typing claude, and your first question.
+- The setup guide offers to bring in your past Claude Code sessions, and can build your Library from them.
+- History no longer drops sessions made only of very long lines, like pasted images or big tool output.
 - New users no longer get stuck: Claude's setup screens have room, Petal finds Claude Code even when your shell's PATH doesn't, and it says plainly when Claude Code isn't installed yet.
 - Works with older Claude Code too: replies show and "conclude" closes the tab on versions back to 2.1.74.
 - A first reply that Claude Code saves before your question no longer goes missing.
