@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ReplyCollector } from './replies';
 import { parseEntry } from './transcript-entry';
+import { TurnTracker } from './turn-state';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
 export interface TranscriptView {
   replies: Reply[];
   waiting: WaitingPrompt[];
   promptCount: number;
+  turnOpen: boolean; // Claude still owes a turn, read from the log; used only when the session file has no status
 }
 
 export type OnTranscript = (view: TranscriptView) => void;
@@ -163,6 +165,7 @@ export class JsonlTail {
 export class TranscriptTail {
   private readonly onUpdate: OnTranscript;
   private collector = new ReplyCollector();
+  private turn = new TurnTracker();
   private changed = false;
   private readonly tail: JsonlTail;
 
@@ -174,6 +177,7 @@ export class TranscriptTail {
   // A rewritten log is re-read from the top; the old replies go first so none is counted twice.
   private restart(): void {
     this.collector = new ReplyCollector();
+    this.turn = new TurnTracker();
     this.changed = false;
     this.onUpdate(this.view());
   }
@@ -187,7 +191,9 @@ export class TranscriptTail {
     for (const line of lines) {
       try {
         const entry = parseEntry(line);
-        this.changed = this.collector.add(entry) || this.changed;
+        const repliesChanged = this.collector.add(entry);
+        const turnChanged = this.turn.add(entry);
+        this.changed = repliesChanged || turnChanged || this.changed;
       } catch {
         // Skip malformed lines.
       }
@@ -205,6 +211,7 @@ export class TranscriptTail {
       replies: this.collector.newestFirst(),
       waiting: this.collector.waiting(),
       promptCount: this.collector.promptCount,
+      turnOpen: this.turn.open,
     };
   }
 
