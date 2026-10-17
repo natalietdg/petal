@@ -31,6 +31,7 @@ export class ReplyCollector {
       this.turnOpen = false; // Claude's answer to a queued message is a new reply too
       const prompt = queued || rawPromptText(entry); // the bubble splits out pasted blocks
       if (!prompt) return false;
+      if (this.adoptLatePrompt(entry, prompt)) return true;
       this.waitingPrompts.push({ id: entry.uuid, timestamp: entry.timestamp, prompt });
       this.promptCount += 1;
       return true; // shown at once, before any reply
@@ -55,6 +56,19 @@ export class ReplyCollector {
       this.turnOpen = true;
       if (this.replies.length > this.maxReplies) this.replies.shift();
     }
+    return true;
+  }
+
+  // Claude Code can write a turn's first reply line before the prompt that started it (the prompt line carries the
+  // turn's attachments). A prompt timestamped no later than the newest reply, which has no prompt yet, belongs to it.
+  private adoptLatePrompt(entry: TranscriptEntry, prompt: string): boolean {
+    const newest = this.replies.at(-1);
+    if (!newest || newest.prompt || this.waitingPrompts.length) return false;
+    const promptAt = Date.parse(entry.timestamp ?? '');
+    const replyAt = Date.parse(newest.timestamp ?? '');
+    if (!Number.isFinite(promptAt) || !Number.isFinite(replyAt) || promptAt > replyAt) return false;
+    newest.prompt = prompt;
+    this.promptCount += 1;
     return true;
   }
 

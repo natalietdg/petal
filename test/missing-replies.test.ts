@@ -111,3 +111,27 @@ describe('a reply-box echo nothing replaced', () => {
     expect(untilStale([], 1_000)).toBeNull();
   });
 });
+
+describe('a first turn written reply-first', () => {
+  // Claude Code 2.1.301 can flush the reply line before the prompt line that carries the turn's attachments.
+  const OUT_OF_ORDER = [
+    assistantEntry('Here is the folder.', 'a1', { timestamp: '2026-10-17T05:37:56.090Z' }),
+    userEntry('what is in this folder?', { uuid: 'u1', timestamp: '2026-10-17T05:37:56.039Z' }),
+  ];
+
+  it('pairs the late prompt with its reply instead of leaving it waiting', () => {
+    const c = collect(OUT_OF_ORDER);
+    expect(c.newestFirst().map((r) => [r.id, r.prompt])).toEqual([['a1', 'what is in this folder?']]);
+    expect(c.waiting()).toEqual([]);
+    expect(c.promptCount).toBe(1);
+  });
+
+  it('a prompt written after the reply still starts a new turn', () => {
+    const c = collect([
+      assistantEntry('Hand-back with no prompt.', 'a0', { timestamp: '2026-10-17T05:00:00.000Z' }),
+      userEntry('next question', { uuid: 'u2', timestamp: '2026-10-17T05:01:00.000Z' }),
+    ]);
+    expect(c.newestFirst()[0].prompt).toBe('');
+    expect(c.waiting().map((w) => w.prompt)).toEqual(['next question']);
+  });
+});
