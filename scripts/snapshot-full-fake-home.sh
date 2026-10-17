@@ -29,12 +29,13 @@ esac
 EOF
 chmod +x $FAKE_HOME/.local/bin/claude
 
+# caffeinate keeps the display awake: with it asleep, frames stall and a 25-minute run takes hours.
 # A fixed environment: no inherited Claude folder, rc files or her PATH entries.
 env -i \
   HOME=$FAKE_HOME USER=${USER} LOGNAME=${USER} SHELL=/bin/zsh TERM=xterm-256color LANG=en_US.UTF-8 TMPDIR=${TMPDIR:-/tmp} \
   PATH=$FAKE_HOME/.local/bin:$NODE_BIN:/usr/bin:/bin:/usr/sbin:/sbin \
   PASTEL_SNAPSHOT=1 ${PASTEL_SNAPSHOT_MODE:+PASTEL_SNAPSHOT_MODE=$PASTEL_SNAPSHOT_MODE} PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
-  perl -e "alarm $TIMEOUT_S; exec @ARGV" $ELECTRON . >$SNAP/stdout.log 2>&1
+  perl -e "alarm $TIMEOUT_S; exec @ARGV" /usr/bin/caffeinate -d -i -u $ELECTRON . >$SNAP/stdout.log 2>&1
 
 line=$(grep -E '^SNAPSHOT (COMPLETE|INCOMPLETE)' $SNAP/snapshot.log 2>/dev/null | tail -1)
 echo "${line:-SNAPSHOT NO COMPLETE LINE (timed out or crashed; see $SNAP/stdout.log)}"
