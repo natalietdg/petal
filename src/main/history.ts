@@ -143,7 +143,7 @@ export interface PastSessionsSummary {
 }
 
 const yieldToEvents = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
-const projectOf = (session: ListedSession): string => session.shortCwd || path.basename(path.dirname(session.file));
+const folderOf = (session: ListedSession): string => path.dirname(session.file);
 
 // The setup guide's "you've used Claude Code before" count: the same files and filter History lists, read off the
 // main thread's critical path one log at a time (it warms History's cache too). Fixtures are left out.
@@ -155,9 +155,13 @@ export async function pastSessionsSummary(home: string | null = allowedClaudeHom
     await yieldToEvents();
   }
   const sessions = listed(found, { addFixtures: false });
+  // A project is one projects/<folder>; a log with no cwd borrows its name from a sibling that has one.
+  const names = new Map<string, string>();
+  for (const s of sessions) if (s.shortCwd && !names.has(folderOf(s))) names.set(folderOf(s), s.shortCwd);
+  const projectOf = (s: ListedSession) => s.shortCwd || names.get(folderOf(s)) || path.basename(folderOf(s));
   return {
     sessions: sessions.length,
-    projects: new Set(sessions.map(projectOf)).size,
+    projects: new Set(sessions.map(folderOf)).size,
     newest: sessions.slice(0, NEWEST_SHOWN).map((s) => ({ title: s.title, project: projectOf(s) })),
   };
 }

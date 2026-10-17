@@ -103,6 +103,19 @@ describe('the past-sessions summary for the setup guide', () => {
     expect(summary.sessions).toBe(history.listSessions(new Set(), home).length);
   });
 
+  it('a log with no cwd counts in its own project folder and borrows that project’s name', async () => {
+    const { home, log } = folder();
+    log('-tmp-acme', 1, [userEntry('no cwd here'), assistantEntry('ok')], 0);
+    log('-tmp-acme', 2, [userEntry('with cwd', { cwd: '/tmp/acme' })], 1);
+    log('-tmp-solo', 3, [userEntry('alone'), assistantEntry('ok')], 2);
+    const history = await import('../src/main/history');
+    expect(await history.pastSessionsSummary(home)).toEqual({
+      sessions: 3,
+      projects: 2,
+      newest: [{ title: 'no cwd here', project: '/tmp/acme' }, { title: 'with cwd', project: '/tmp/acme' }, { title: 'alone', project: '-tmp-solo' }],
+    });
+  });
+
   it('is empty with the folder declined, and with no projects folder', async () => {
     const { home, log } = folder();
     const history = await import('../src/main/history');
