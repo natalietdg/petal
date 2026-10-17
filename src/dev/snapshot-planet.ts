@@ -64,8 +64,7 @@ export async function planetCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   applyTheme('paleSky', { persist: false });
 
   await js(escape);
-  await wait(200);
-  check(!(await js(STATE)).popoverShown, 'Esc closes the card');
+  check(await waitFor(async () => !(await js(STATE)).popoverShown || null, 3000), 'Esc closes the card');
 
   await js(`PastelTerm.cat.setScene(${JSON.stringify(before ?? 'none')})`);
 }

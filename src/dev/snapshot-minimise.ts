@@ -97,8 +97,7 @@ async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: Ta
   // Re-read from config.
   await js('PastelTerm.layout.setTerminalMinimised(false, false)');
   await js('PastelTerm.layout.restoreTerminalMinimised()');
-  await wait(300);
-  check(await js('PastelTerm.layout.isTerminalMinimised()'), 'a config re-read brings it back minimised');
+  check(await waitFor(async () => (await js('PastelTerm.layout.isTerminalMinimised()')) || null, 3000), 'a config re-read brings it back minimised');
 
   await js("document.getElementById('term-min-toggle').click()");
   await wait(400);

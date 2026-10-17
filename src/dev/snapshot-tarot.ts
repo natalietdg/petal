@@ -151,15 +151,13 @@ export async function tarotCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   applyTheme('paleSky', { persist: false });
 
   await js(escape);
-  await wait(200);
-  check(!(await js(STATE)).popoverShown, 'Esc closes the reading');
+  check(await waitFor(async () => !(await js(STATE)).popoverShown || null, 3000), 'Esc closes the reading');
 
   await js(click);
   await wait(200);
   const reopened = (await js(STATE)).popoverShown;
   await js(clickOutside);
-  await wait(200);
-  check(reopened && !(await js(STATE)).popoverShown, 'a click outside closes the reading');
+  check(reopened && await waitFor(async () => !(await js(STATE)).popoverShown || null, 3000), 'a click outside closes the reading');
 
   await birthdayCheck(kit, win, check);
 

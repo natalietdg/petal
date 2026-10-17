@@ -239,8 +239,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
       check(bottom.shown && bottom.oneLine && bottom.atBottom && bottom.scrollTop > 0 && Math.abs(bottom.pinTop) <= 1 && bottom.fullLast && (bottom.fullInView || bottom.fullFills) && fullRows({ labels: bottom.fullLabels }),
         `${look}: summary one line and pinned at the top with the reader scrolled to the bottom; full banner is the last thing in the reader, wholly in view: ${JSON.stringify(bottom)}`);
       await scrollReader('top');
-      await wait(150);
-      check(!(await pinned()).fullInView, `${look}: full banner out of view at the top of the reader`);
+      check(await waitFor(async () => !(await pinned()).fullInView || null, 3000), `${look}: full banner out of view at the top of the reader`);
       await js("document.querySelector('#reader-conclusion-pin .conclusion-summary').click()");
       await wait(150);
       const jumped = await pinned();

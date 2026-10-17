@@ -149,8 +149,7 @@ export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<voi
       check(wrong.length === 0, `Copy copies the raw markdown, ${SHAPE_ENTRIES.length - wrong.length}/${SHAPE_ENTRIES.length} rows${wrong.length ? ` ${wrong.join('; ')}` : ''}`);
       await js("navigator.clipboard.writeText = () => Promise.reject(new Error('denied')); true");
       await js(`document.querySelector('${rowSel('code')} .sg-copy').click()`);
-      await wait(50);
-      check((await js(`document.querySelector('${rowSel('code')} .sg-copy').textContent`)) === 'Copy failed', 'a refused copy says so');
+      check(await waitFor(async () => (await js(`document.querySelector('${rowSel('code')} .sg-copy').textContent`)) === 'Copy failed' || null, 3000), 'a refused copy says so');
     } finally {
       await js('delete navigator.clipboard.writeText; delete window.__copied; true');
       await js('PastelTerm.customize.close()');
