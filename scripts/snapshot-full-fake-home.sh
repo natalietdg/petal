@@ -6,12 +6,14 @@ set -u
 REPO=${0:A:h:h}
 SCRATCH=${1:-${TMPDIR:-/tmp}/petal-fake-home-run}
 NODE_BIN=~/.nvm/versions/node/v22.23.1/bin
-TIMEOUT_S=1800
+TIMEOUT_S=3600 # a loaded Mac (several agents running) can take most of an hour
 
 [[ -x $NODE_BIN/node ]] && export PATH=$NODE_BIN:$PATH
 cd $REPO || exit 1
 npx electron-vite build >$SCRATCH.build.log 2>&1 || { echo "BUILD FAILED"; tail -20 $SCRATCH.build.log; exit 1; }
 
+# The Electron binary itself, so the alarm reaches it (the npm wrapper outlives a signal).
+ELECTRON=$(node -p "require('electron')") || { echo "NO ELECTRON BINARY"; exit 1; }
 FAKE_HOME=$SCRATCH/home
 SNAP=$SCRATCH/snap
 rm -rf $SCRATCH; mkdir -p $FAKE_HOME/.local/bin $SNAP
@@ -32,7 +34,7 @@ env -i \
   HOME=$FAKE_HOME USER=${USER} LOGNAME=${USER} SHELL=/bin/zsh TERM=xterm-256color LANG=en_US.UTF-8 TMPDIR=${TMPDIR:-/tmp} \
   PATH=$FAKE_HOME/.local/bin:$NODE_BIN:/usr/bin:/bin:/usr/sbin:/sbin \
   PASTEL_SNAPSHOT=1 ${PASTEL_SNAPSHOT_MODE:+PASTEL_SNAPSHOT_MODE=$PASTEL_SNAPSHOT_MODE} PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
-  perl -e "alarm $TIMEOUT_S; exec @ARGV" $REPO/node_modules/.bin/electron . >$SNAP/stdout.log 2>&1
+  perl -e "alarm $TIMEOUT_S; exec @ARGV" $ELECTRON . >$SNAP/stdout.log 2>&1
 
 line=$(grep -E '^SNAPSHOT (COMPLETE|INCOMPLETE)' $SNAP/snapshot.log 2>/dev/null | tail -1)
 echo "${line:-SNAPSHOT NO COMPLETE LINE (timed out or crashed; see $SNAP/stdout.log)}"
