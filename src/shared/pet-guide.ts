@@ -104,7 +104,7 @@ export interface BubbleCopy {
 export function bubbleCopy(step: BubbleStep, pet: PetWords, { claudeFound, folder }: { claudeFound: boolean; folder: FolderChoice }): BubbleCopy {
   const blind = blindToClaude(step, folder) ? `${pet.name} can’t see Claude’s replies while your Claude folder is off.` : null;
   switch (step) {
-    case 'add-session': return { say: 'Click Add Session', note: `${pet.name} will open a new tab for Claude.` };
+    case 'add-session': return { say: 'Click Add Session', note: `It’s up top, in the ring. ${pet.name} will open a new tab for Claude.` };
     case 'type-claude': return typeClaudeHelp(claudeFound) === 'type'
       ? { say: 'Now type claude and press Enter', note: 'In the terminal below.' }
       : { say: 'Claude Code isn’t installed yet', note: 'Paste this in the terminal below and press Enter, then click Check again.' };

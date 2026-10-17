@@ -58,6 +58,7 @@ const STATE = `(() => {
     cat: document.getElementById('cat').dataset.cat,
     scene: document.getElementById('cat').dataset.scene,
     catShown: document.getElementById('cat').getClientRects().length > 0,
+    preview: (() => { const p = document.querySelector('#pet-guide:not([hidden]) .pg-preview'); return p ? { cat: p.querySelector('.cat-portrait')?.dataset.cat, scene: Boolean(p.querySelector('.scene')), rects: p.querySelectorAll('rect').length } : null; })(),
     catRect: rect(document.querySelector('#cat .cat-sprite')),
     composer: document.getElementById('composer-input').value,
     tabs: PastelTerm.tabs.ids(),
@@ -80,15 +81,16 @@ const CONTRAST = `(() => {
 const FIT = `(() => {
   const view = document.getElementById('pet-guide');
   const pageScroll = document.documentElement.scrollWidth - document.documentElement.clientWidth;
-  const cat = document.getElementById('cat').getBoundingClientRect();
+  const preview = document.querySelector('#pet-guide:not([hidden]) .pg-preview');
+  const cat = (preview || document.getElementById('cat')).getBoundingClientRect();
   const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
   const out = { width: window.innerWidth, pageScroll, sticking: [], underPet: [], bubbleOut: false };
   if (!view.hidden) {
     const card = view.querySelector('.pg-card');
     const box = card.getBoundingClientRect();
     out.cardScrollX = card.scrollWidth - card.clientWidth;
-    out.sticking = [...view.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > box.right + 1 || r.left < box.left - 1) && !e.closest('.pg-footer'); }).slice(0, 4).map((e) => e.className || e.tagName);
-    const shown = document.getElementById('cat').getClientRects().length > 0;
+    out.sticking = [...view.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > box.right + 1 || r.left < box.left - 1) && !e.closest('.pg-footer, .pg-preview'); }).slice(0, 4).map((e) => e.className || e.tagName);
+    const shown = Boolean(preview) || document.getElementById('cat').getClientRects().length > 0;
     out.underPet = shown ? [...view.querySelectorAll('button, .pg-title, .pg-line, .pg-said-line')].filter((e) => overlaps(e.getBoundingClientRect(), cat)).slice(0, 4).map((e) => e.className || e.tagName) : [];
   }
   const bubble = document.getElementById('pet-bubble');
@@ -159,6 +161,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   folderFixture.home = home;
   historyFixture.records.splice(0);
   claudeFixture.installed = false; // the PATH-missing branch first
+  await js('PastelTerm.getStarted.recheckInstall()');
 
   // 1. A brand-new install opens on the hello card, and the old welcome never shows.
   const hello = await until((s) => s.card === 'welcome', 15000);
@@ -176,9 +179,9 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   const names = pets?.pets.map((p: { name: string }) => p.name).join();
   check(names === 'Mika,Miki,Kira,Hoshi,Corgi' && pets.pets.every((p: { picture: boolean; line: string }) => p.picture && p.line) && pets.pets.find((p: { on: boolean }) => p.on)?.id === 'mika',
     `pet card: five pets with portraits and lines, Mika picked: ${JSON.stringify(pets?.pets)}`);
-  check(pets?.catShown && pets.cat === 'mika', `the corner pet shows behind the card: ${JSON.stringify({ shown: pets?.catShown, cat: pets?.cat })}`);
+  check(pets?.preview?.cat === 'mika' && pets.preview.rects > 0, `the corner preview shows Mika while the card covers the reader: ${JSON.stringify(pets?.preview)}`);
   await js("document.querySelector('#pet-guide .pg-pet[data-pet=\"miki\"]').click()");
-  const miki = await until((s) => s.cat === 'miki' && s.pets.find((p: { on: boolean }) => p.on)?.id === 'miki');
+  const miki = await until((s) => s.cat === 'miki' && s.preview?.cat === 'miki' && s.pets.find((p: { on: boolean }) => p.on)?.id === 'miki');
   check(miki && miki.line === 'Miki will show you around. He sits in the corner while you work.' && miki.pets.find((p: { id: string }) => p.id === 'miki').line === 'Miki brings his red ball.',
     `picking Miki previews him in the corner and the copy says he/his: ${JSON.stringify(miki && { cat: miki.cat, line: miki.line })}`);
   await js("document.querySelector('#pet-guide .pg-pet[data-pet=\"miki\"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))");
@@ -198,7 +201,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   const borrowed = await js("getComputedStyle(document.querySelector('#pet-guide .pg-scene[data-scene=\"winter\"] .scene rect')).fill");
   check(borrowed && borrowed !== 'rgb(0, 0, 0)', `thumbnails borrow the scene colours: winter's first cell is ${borrowed}`);
   await js("document.querySelector('#pet-guide .pg-scene[data-scene=\"cherry\"]').click()");
-  const cherry = await until((s) => s.scene === 'cherry' && s.scenes.find((x: { on: boolean }) => x.on)?.id === 'cherry');
+  const cherry = await until((s) => s.scene === 'cherry' && s.preview?.scene && s.scenes.find((x: { on: boolean }) => x.on)?.id === 'cherry');
   check(cherry, `picking Cherry Blossom Picnic shows it behind the pet: ${JSON.stringify(cherry && cherry.scene)}`);
   await shot('03-scene');
   await fitsAtEveryWidth('scene');
@@ -217,10 +220,9 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
 
   // 5. The bubble: Add Session, pointed at and pulsing; focus on it; the bubble never covers it.
   const add = await until((s) => s.bubble?.step === 'add-session');
-  check(add && add.overlay === null && add.bubble.say === 'Click Add Session' && add.bubble.name === 'Miki' && add.targets.join() === 'add-session-button' && add.pointer?.dir === 'up' && add.focus === 'add-session-button',
-    `the bubble says Click Add Session, the button pulses with an arrow under it and has focus: ${JSON.stringify(add && { bubble: add.bubble, targets: add.targets, pointer: add.pointer, focus: add.focus })}`);
+  check(add && add.overlay === null && add.bubble.say === 'Click Add Session' && add.bubble.name === 'Miki' && add.targets.join() === 'add-session-button' && add.focus === 'add-session-button',
+    `the bubble says Click Add Session, the button pulses in its ring and has focus: ${JSON.stringify(add && { bubble: add.bubble, targets: add.targets, pointer: add.pointer, focus: add.focus })}`);
   check(add && /Miki says: Click Add Session/.test(add.announced), `screen readers hear it: ${JSON.stringify(add?.announced)}`);
-  check(add?.pointer?.animation === 'pg-point', `the arrow bobs when motion is allowed: ${add?.pointer?.animation}`);
   check(configStore.load().onboarding.step === 'add-session', `the bubble step is saved: ${configStore.load().onboarding.step}`);
   await shot('05-add-session');
   await contrastOk('Add Session bubble');
@@ -233,6 +235,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   const missing = await until((s) => s.bubble?.step === 'type-claude' && s.tabs.length === 2);
   check(missing && missing.bubble.say === 'Claude Code isn’t installed yet' && missing.bubble.chip === INSTALL_COMMAND && missing.bubble.copy === INSTALL_COMMAND && missing.bubble.buttons.includes('Check again') && claudeStarts.length === startsBefore,
     `claude not found: the official install line with Copy and Check again, nothing typed: ${JSON.stringify(missing?.bubble)}`);
+  check(missing?.pointer?.animation === 'pg-point', `the arrow bobs when motion is allowed: ${missing?.pointer?.animation}`);
   check(missing?.targets.join() === 'terminal-pane' && missing.pointer?.dir === 'down' && missing.focus === 'pg-copy', `it points at the terminal and focus is on Copy: ${JSON.stringify(missing && { targets: missing.targets, pointer: missing.pointer, focus: missing.focus })}`);
   await shot('06b-install');
   await contrastOk('install bubble');

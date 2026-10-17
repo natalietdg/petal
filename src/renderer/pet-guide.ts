@@ -97,7 +97,7 @@ function radioGroup(label: string, className: string, items: HTMLButtonElement[]
     const delta = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
     if (!delta) return;
     event.preventDefault();
-    const at = items.findIndex((item) => item === document.activeElement);
+    const at = items.findIndex((item) => item === (event.target as Element).closest('[role="radio"]'));
     const next = items[(at + delta + items.length) % items.length];
     next.focus();
     next.click();
@@ -160,6 +160,14 @@ function sceneThumb(id: string): HTMLElement {
   return thumb;
 }
 
+// The corner, as it will look: her pet in her scene, where the reader's pet sits (the reader is covered meanwhile).
+function cornerPreview(): HTMLElement {
+  const preview = sceneThumb(scene);
+  preview.classList.add('pg-preview');
+  preview.setAttribute('aria-hidden', 'true');
+  return preview;
+}
+
 function sceneBody(): HTMLElement {
   borrowSceneStyles();
   return radioGroup('Scene', 'pg-scenes', sceneChoices.map(([id, name]) => {
@@ -207,6 +215,7 @@ function renderCard(card: CardStep): void {
   }
   footer.append(actions, button('Skip setup', 'pg-skip', () => void skip()));
   view.replaceChildren(pane, footer);
+  if (card === 'pet' || card === 'scene') { borrowSceneStyles(); view.append(cornerPreview()); }
   pane.scrollTop = 0;
   // The folder card focuses itself, not Allow, so a stray Enter can't answer for her (as the old question did).
   const focus = card === 'consent' ? view : view.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], .pg-next');
@@ -293,6 +302,7 @@ function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null }
   } else actions.append(button('Skip setup', 'pb-skip', () => void skip()));
   nodes.push(actions);
   if (s === 'add-session') focus ??= target(s); // the button she's meant to press, so Enter does it
+  if (s === 'ask') focus ??= byId('composer-input'); // the example is there, so Enter sends it
   return { nodes, focus };
 }
 
@@ -305,7 +315,7 @@ function paintBubble(force = false): void {
   const s = step;
   const key = `${s}|${getStarted.currentFacts().claudeInstalled}|${folder}|${cat}`;
   if (!force && key === shownKey) { place(); return; }
-  const changedStep = s !== shownBubble;
+  const changedStep = s !== shownBubble || key.split('|')[1] !== shownKey.split('|')[1]; // a new step, or claude just found
   shownBubble = s;
   shownKey = key;
   for (const old of document.querySelectorAll('.pg-target')) old.classList.remove('pg-target');
@@ -356,29 +366,36 @@ function place(): void {
   }
   bubble.hidden = false;
   const sprite = document.querySelector('#cat .cat-sprite')?.getBoundingClientRect();
+  const corner = byId('cat').getBoundingClientRect(); // her whole corner, scene included
   const area = byId('reader-area').getBoundingClientRect();
-  const pet = sprite && visible(sprite) ? sprite : new DOMRect(area.right - 90, area.bottom - 90, 60, 60);
+  const shown = sprite && visible(sprite);
+  const pet = shown ? sprite : new DOMRect(area.right - 90, area.bottom - 90, 60, 60);
+  const room = shown && visible(corner) ? corner : pet;
   const width = bubble.offsetWidth;
   const height = bubble.offsetHeight;
   const goal = shownBubble ? target(shownBubble)?.getBoundingClientRect() ?? null : null;
+  const composer = byId('composer');
+  const replyBox = composer.hidden ? null : composer.getBoundingClientRect();
+  const floor = replyBox && visible(replyBox) ? replyBox.top - BUBBLE_GAP : window.innerHeight - 8;
   const spots = [
-    { side: 'right', left: pet.left - width - BUBBLE_GAP, top: pet.top + pet.height * 0.4 - height }, // left of her, tail right
-    { side: 'bottom', left: pet.right - width, top: pet.top - height - BUBBLE_GAP }, // above her, tail down
-    { side: 'top', left: pet.right - width, top: pet.bottom + BUBBLE_GAP }, // below her (docked in the header bar)
+    { side: 'right', left: room.left - width - BUBBLE_GAP, top: Math.min(pet.top + pet.height * 0.6, floor) - height }, // left of her corner, above the reply box
+    { side: 'bottom', left: room.right - width, top: room.top - height - BUBBLE_GAP }, // above her
+    { side: 'top', left: room.right - width, top: room.bottom + BUBBLE_GAP }, // below her (docked in the header bar)
   ].map((spot) => ({
     ...spot,
     left: Math.max(8, Math.min(spot.left, window.innerWidth - width - 8)),
     top: Math.max(8, Math.min(spot.top, window.innerHeight - height - 8)),
   }));
   const box = (s: { left: number; top: number }) => ({ left: s.left, top: s.top, right: s.left + width, bottom: s.top + height });
-  const spot = spots.find((s) => !overlaps(pet, box(s)) && !(goal && overlaps(goal, box(s)) && shownBubble !== 'type-claude' && shownBubble !== 'claude-setup'))
-    ?? spots[0];
+  const pointsInto = shownBubble === 'type-claude' || shownBubble === 'claude-setup'; // the terminal is too big to stay off
+  const clear = (s: { left: number; top: number }) => !overlaps(pet, box(s)) && !(goal && !pointsInto && overlaps(goal, box(s))) && !(replyBox && visible(replyBox) && overlaps(replyBox, box(s)));
+  const spot = spots.find(clear) ?? spots[0];
   bubble.dataset.tail = spot.side;
   bubble.style.left = `${Math.round(spot.left)}px`;
   bubble.style.top = `${Math.round(spot.top)}px`;
   // The tail points at her, wherever the bubble had to go.
-  const tailAt = spot.side === 'right' ? pet.top + pet.height * 0.25 - spot.top : pet.left + pet.width / 2 - spot.left;
-  bubble.style.setProperty('--tail', `${Math.round(Math.max(18, Math.min(tailAt, (spot.side === 'right' ? height : width) - 24)))}px`);
+  const tailAt = spot.side === 'right' ? pet.top + pet.height * 0.3 - spot.top : pet.left + pet.width / 2 - spot.left;
+  bubble.style.setProperty('--tail', `${Math.round(Math.max(14, Math.min(tailAt, (spot.side === 'right' ? height : width) - 24)))}px`);
   placePointer(goal);
   if (shownBubble === 'celebrate') {
     party.hidden = false;
@@ -387,18 +404,16 @@ function place(): void {
   }
 }
 
-// A bobbing pixel arrow just outside the target, pointing at it: below a dock button, above the terminal or reply box.
+// A bobbing pixel arrow just above the terminal or the reply box, pointing down into it.
 function placePointer(goal: DOMRect | null): void {
-  if (!goal || !visible(goal) || shownBubble === 'celebrate' || shownBubble === 'claude-setup') {
+  if (!goal || !visible(goal) || shownBubble !== 'type-claude' && shownBubble !== 'ask') { // a dock button has its ring; the arrow would cover the header
     pointer.hidden = true;
     return;
   }
   pointer.hidden = false;
-  const up = goal.top < window.innerHeight / 3; // a dock button: arrow below it, pointing up
-  pointer.dataset.dir = up ? 'up' : 'down';
-  const x = shownBubble === 'add-session' ? goal.left + goal.width / 2 - 12 : goal.left + 36;
-  pointer.style.left = `${Math.round(x)}px`;
-  pointer.style.top = `${Math.round(up ? goal.bottom + 6 : goal.top - 34)}px`;
+  pointer.dataset.dir = 'down';
+  pointer.style.left = `${Math.round(goal.left + 36)}px`;
+  pointer.style.top = `${Math.round(goal.top - 34)}px`;
 }
 
 // ── Steps ──
@@ -421,6 +436,8 @@ async function show(next: GuideStep): Promise<void> {
     overlays.hide('pet-guide');
   }
   paintBubble(true);
+  requestAnimationFrame(place); // the reader's pet settles back into her corner a frame after the cards close
+  if (next === 'type-claude') void getStarted.recheckInstall().then(() => paintBubble()); // she may have installed it since launch
 }
 
 const clearTargets = (): void => { for (const old of document.querySelectorAll('.pg-target')) old.classList.remove('pg-target'); };
@@ -529,6 +546,7 @@ window.addEventListener('resize', replace);
 new ResizeObserver(replace).observe(byId('reader-area'));
 new MutationObserver(replace).observe(byId('reader'), { attributes: true, attributeFilter: ['hidden'] });
 new MutationObserver(replace).observe(byId('cat'), { attributes: true, attributeFilter: ['class', 'style'] });
+new MutationObserver(replace).observe(byId('reader-area'), { attributes: true, attributeFilter: ['class', 'style'] }); // docked or back in the corner
 window.pastel.onClaudeFolder((allowed) => { if (allowed) folder = 'allowed'; else if (folder === 'allowed') folder = 'declined'; refresh(); });
 window.pastel.onCat((id) => { cat = id; if (step && !isCardStep(step)) paintBubble(); });
 window.pastel.onOpenPetGuide(() => void restart());
