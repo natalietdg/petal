@@ -12,6 +12,7 @@ import { applySlash } from '../shared/slash';
 import * as mentions from './mentions';
 import * as mentionBar from './mention-bar';
 import type { MentionPlan } from '../shared/mentions';
+import { screenIsAsking } from '../shared/prompt-answer';
 
 const form = byId<HTMLFormElement>('composer');
 const input = byId<HTMLTextAreaElement>('composer-input');
@@ -93,7 +94,11 @@ function insertAtCursor(text: string): void {
 const refreshReader = (tabId: string): void => { window.dispatchEvent(new CustomEvent('petal:reader-refresh', { detail: tabId })); };
 
 // Pastes a message into a tab's live Claude, echoed at once; a send that never arrived takes its echo back.
+// While Claude waits on a prompt, a pasted Enter would answer it (a permission's focused "Yes"), so nothing is sent.
+export const claudeIsAsking = (tab: tabs.Tab): boolean => screenIsAsking(tabs.screenLines(tab));
+
 export async function pasteToClaude(tab: tabs.Tab, text: string): Promise<boolean> {
+  if (claudeIsAsking(tab)) return false;
   const echo = tabs.addPending(tab, text);
   refreshReader(tab.id);
   const result = await window.pastel.paste(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
@@ -111,6 +116,7 @@ async function deliver(text: string, taken: () => void): Promise<void> {
   const tab = tabs.active();
   if (!text || !tab) return;
   if (tab.update?.state === 'live') {
+    if (claudeIsAsking(tab)) { toLine.note('Claude is asking something in the terminal. Answer it there first, then send.'); return; }
     taken();
     await pasteToClaude(tab, text);
     return;
