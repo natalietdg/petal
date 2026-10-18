@@ -138,6 +138,13 @@ describe('claude missing from the tab’s PATH', () => {
     expect(missing.note).toMatch(/Check again/);
     expect(INSTALL_COMMAND).toBe('curl -fsSL https://claude.ai/install.sh | bash');
   });
+
+  it('says claude is starting when Add Session typed it, with a fallback to type it', () => {
+    const started = bubbleCopy('type-claude', MIKI, { claudeFound: true, folder: 'allowed', startedItself: true });
+    expect(started.say).toBe('Claude is starting in the new tab');
+    expect(started.note).toBe('Give it a second. If nothing starts, type claude and press Enter.');
+    expect(bubbleCopy('type-claude', MIKI, { claudeFound: false, folder: 'allowed', startedItself: true }).say).toBe('Claude Code isn’t installed yet');
+  });
 });
 
 describe('copy', () => {
