@@ -2,6 +2,9 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## Unreleased
+- Tidier screens: one Help › Get started, a simpler Get started list, the Board titled Board, "No sessions yet" in the pill, and the setup guide says when Claude starts by itself.
+
 ## [1.1.2] · 2026-10-18
 - PRDs on the Board: group related tasks under a PRD, and split a big task into subtasks, each with its own owner.
 - Testing opens on your session's task, with a switch to its PRD or the whole project. The pipeline commands stay the project's.
