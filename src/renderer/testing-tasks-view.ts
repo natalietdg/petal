@@ -1,10 +1,12 @@
-// The Testing tab's task pieces: the task picker, a PRD's overview of its tasks' suites, and the empty states.
+// The Testing tab's task pieces: the task picker, a PRD's overview of its tasks' suites, the empty states and the test lock.
 import { el } from './dom';
 import { when } from './testing-view';
 import { groupTasks } from '../shared/task-groups';
 import { parseTarget, targetValue, type OverviewRow, type TestTarget } from '../shared/task-testing';
 import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
+import type { LockView } from '../shared/testing';
+import { restoredText, type RestoredFlag } from '../shared/test-lock';
 
 // Grouped by PRD, then No PRD; each PRD opens with its overview, subtasks sit under their task.
 export function taskPicker(data: TaskData, target: TestTarget, pick: (target: TestTarget) => void): HTMLElement {
@@ -103,4 +105,33 @@ export function suiteChangeLine(change: SuiteChange | null, problem: string | nu
   }
   if (problem) line.append(el('span', 'tst-suite-problem', `${change ? ' ' : ''}${problem}`));
   return line;
+}
+
+export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => void }
+
+// "Lock tests to the testing agent", and a red line for each locked test someone else changed and Petal put back.
+export function lockBar(lock: LockView, restored: RestoredFlag[], fixerName: string, handlers: LockHandlers, busy: boolean): HTMLElement {
+  const box = el('div', 'tst-lock');
+  const label = el('label', 'tst-toggle tst-lock-toggle');
+  const box2 = el('input');
+  box2.type = 'checkbox';
+  box2.checked = lock.enabled && lock.hookPresent;
+  box2.disabled = busy;
+  box2.addEventListener('change', () => handlers.toggle(box2.checked));
+  label.append(box2, el('span', null, 'Lock tests to the testing agent'), el('span', 'tst-muted', 'Only the testing agent may change tests and suites. Adds a hook to this repo’s .claude/settings.local.json.'));
+  box.append(label);
+  if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from .claude/settings.local.json. Turn the lock off and on again.'));
+  if (restored.length) {
+    const list = el('ul', 'tst-lock-flags');
+    for (const flag of restored.slice(-5).reverse()) {
+      const item = el('li', 'tst-lock-flag');
+      item.append(el('span', null, `${restoredText(flag, fixerName)} · ${flag.path} · ${when(flag.at)}`));
+      list.append(item);
+    }
+    const dismiss = el('button', 'tst-link tst-lock-dismiss', 'Dismiss');
+    dismiss.type = 'button';
+    dismiss.addEventListener('click', handlers.dismiss);
+    box.append(list, dismiss);
+  }
+  return box;
 }

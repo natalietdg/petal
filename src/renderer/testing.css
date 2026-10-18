@@ -49,6 +49,9 @@
 .tst-task-select { min-width: 0; max-width: 100%; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--reader-bg); color: var(--reader-fg); font: 600 14px var(--ui-font); }
 .tst-suite-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0; color: var(--muted); font-size: 13px; }
 .tst-suite-problem { color: var(--decide-ink); }
+.tst-lock { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.tst-lock-flags { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.tst-lock-flag { margin: 0; color: var(--decide-ink); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .tst-no-suite, .tst-no-tasks { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .tst-no-suite-title { margin: 0; color: var(--reader-fg); font-weight: 600; }
 .tst-overview-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }

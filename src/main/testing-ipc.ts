@@ -15,13 +15,16 @@ import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
-import { claudeRun, scanLog, type ClaudeCall, type SuiteWrite } from './testing-claude';
+import { claudeRun, scanLog, type ClaudeCall, type FileTouch, type SuiteWrite } from './testing-claude';
 import { projectRootOf, ranIn, repoRoot, runProject } from './testing-project';
 import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
-import { agentsOf, rememberAgent, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { allAgents, rememberAgent, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } from './test-lock';
+import { AGENT_NAME_MAX, cleanAgentName, type AgentRole } from '../shared/agent-names';
+import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, suiteFor, type SuiteViews } from '../shared/task-suite';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
@@ -31,7 +34,7 @@ import { claudeLaunch } from './claude-launch';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type StageResult, type SuiteSeed, type TestingState,
+  type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -121,15 +124,16 @@ function rememberConfirmed(root: string, stages: StageConfig[]): void {
 // One session's log; cwd is Claude's folder, for a call without its own.
 export interface SessionLog { transcript: string; sessionId: string; cwd: string | null }
 
-interface LogFinds { found: { call: ClaudeCall; project: string | null }[]; writes: SuiteWrite[] }
+interface LogFinds { found: { call: ClaudeCall; project: string | null }[]; writes: SuiteWrite[]; touches: FileTouch[] }
 
 // Claude's calls in these logs, each with the project it ran in (its "cd", else Claude's folder then), and its suite file writes.
 async function logCalls(logs: readonly SessionLog[]): Promise<LogFinds> {
-  const finds: LogFinds = { found: [], writes: [] };
+  const finds: LogFinds = { found: [], writes: [], touches: [] };
   for (const log of logs) {
     const scan = await scanLog(log.transcript, log.sessionId);
     for (const call of scan.calls) finds.found.push({ call, project: projectRootOf(ranIn(call.command, call.cwd ?? log.cwd)) });
     finds.writes.push(...scan.suiteWrites);
+    finds.touches.push(...scan.touches);
   }
   return finds;
 }
@@ -184,25 +188,32 @@ function recordRun(root: string, run: PipelineRun): void {
   });
 }
 
-// Suite file writes in the logs of this project's testing agents whose tabs are closed.
-async function closedAgentWrites(root: string, tasks: readonly Task[], open: readonly SessionLog[]): Promise<SuiteWrite[]> {
+// The logs of this project's agents whose tabs are closed: their suite writes and file touches still count.
+async function closedAgentFinds(root: string, open: readonly SessionLog[]): Promise<LogFinds> {
   const seen = new Set(open.map((log) => log.sessionId));
-  const logs = tasks.flatMap((t) => agentsOf(root, t.id)).filter((id) => !seen.has(id))
+  const logs = allAgents(root).map((a) => a.sessionId).filter((id) => !seen.has(id))
     .flatMap((id) => { const file = history.findRecord(id)?.file; return file ? [{ transcript: file, sessionId: id, cwd: root }] : []; });
-  return (await logCalls(logs)).writes;
+  return logCalls(logs);
 }
 
+export interface ProjectChecks { suites: SuiteViews; lock: LockView }
+
 // Claude's runs that ran in this project, from every open session and the old home-folder history, added once each.
-// Then the tasks' suite files, so a change the testing agent just made shows; returns each task's suite.
-async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<SuiteViews> {
+// Then the tasks' suite files, so a change the testing agent just made shows, and the test lock's integrity check.
+async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<ProjectChecks> {
   const { tasks } = loadTasks(root);
-  if (!claudeFolderAllowed()) return syncSuites(root, tasks);
+  if (!claudeFolderAllowed()) return { suites: syncSuites(root, tasks), lock: lockView(root, loadManifest(root)) };
   const logs = openLogs(sessions);
-  const { found, writes } = await logCalls(logs);
-  const suites = syncSuites(root, tasks, [...writes, ...(await closedAgentWrites(root, tasks, logs))]);
+  const { found, writes, touches } = await logCalls(logs);
+  const closed = await closedAgentFinds(root, logs);
+  const allTouches = [...touches, ...closed.touches];
+  const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
+  const suites = syncSuites(root, tasks, [...writes, ...closed.writes]);
   await saveClaudeRuns(root, found, tasks, suites, sessions);
-  return suites;
+  return { suites, lock: lockView(root, manifest) };
 }
+
+const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored });
 
 // Claude's runs in these logs that ran in this project, added once each; used for a concluded session's This session line.
 export async function mergeLogRuns(root: string, logs: readonly SessionLog[]): Promise<void> {
@@ -311,11 +322,11 @@ export function captureFinishedReply(reply: Reply, sessionId: string, cwd: strin
 
 async function stateFor(root: string, sessions: TabSessions, onProject: TabSession | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
-  const suites = await mergeClaudeRuns(root, sessions);
+  const { suites, lock } = await mergeClaudeRuns(root, sessions);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
   return {
-    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suites, runs: named(data.runs), running,
+    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, runs: named(data.runs), running,
     sessionTab: onProject?.tabId ?? null, changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
   };
 }
@@ -446,7 +457,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const task = tasks.find((t) => t.id === taskId);
     return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
   };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, runs: [], running: null, sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: null, sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
   handle('testing:detect', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return blank(false);
@@ -457,18 +468,18 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    const none = { runs: [], running: null, sessionTab: null, criteria: null, seed: null, suites: {}, distillation: [], tasks: [], prds: [], sessionTaskId: null };
+    const none = { runs: [], running: null, sessionTab: null, criteria: null, seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, distillation: [], tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
     if (!root) return none;
-    const suites = await mergeClaudeRuns(root, sessions);
+    const { suites, lock } = await mergeClaudeRuns(root, sessions);
     await captureOpenDistillations(root, sessions);
     const data = store.load(root);
     const onProject = await sessionOnProject(root, sessions, asking);
     return {
       runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: onProject?.tabId ?? null,
-      criteria: readCriteria(root), seed: projectSeed(root), suites, distillation: readDistillation(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+      criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
 
@@ -522,6 +533,36 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const seed = projectSeed(target.root);
     if (!seed || !('stages' in seed)) return { note: 'The project has no commands to start from.' };
     writeSuite(target.root, target.task.id, emptySuite(seed.stages));
+    return { ok: true };
+  });
+
+  // The test lock, per project: the hook entry in its .claude/settings.local.json and the manifest.
+  handle('testing:lock', async (event, { tabId, root: picked, on }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
+    if (!root) return { note: 'No project in this tab. Open one first.' };
+    const problem = setLock(root, on === true);
+    return problem ? { note: problem } : { ok: true };
+  });
+
+  handle('testing:lock-dismiss', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    dismissRestored(target.root, target.task.id);
+    return { ok: true };
+  });
+
+  // Her name for an agent role, for every task in the project; empty puts the default back.
+  handle('testing:agent-name', async (event, { tabId, root: picked, role, name }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
+    if (!root) return { note: 'No project in this tab. Open one first.' };
+    const clean = cleanAgentName(name);
+    if (clean === undefined || (role !== 'tester' && role !== 'fixer')) return { note: `A name is 1 to ${AGENT_NAME_MAX} characters on one line.` };
+    const data = store.load(root);
+    const names = { ...(data.agentNames ?? {}) };
+    if (clean === null) delete names[role as AgentRole]; else names[role as AgentRole] = clean;
+    store.save({ ...data, agentNames: names });
     return { ok: true };
   });
 

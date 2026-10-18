@@ -1,6 +1,8 @@
 // The Testing tab: each task's suite, its runs (hers or Claude's), what it tests with, and the pure helpers both sides share.
 import type { Prd, Task } from './tasks';
 import type { SuiteRecord, SuiteViews } from './task-suite';
+import type { AgentNames, AgentRole } from './agent-names';
+import type { RestoredFlag } from './test-lock';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -64,8 +66,11 @@ export interface ProjectTesting {
   pipeline: PipelineConfig | null; // the commands she confirmed; its stages are the old project pipeline, now only a seed
   runs: PipelineRun[]; // newest first
   suites?: Record<string, SuiteRecord>; // per task: what Petal last took from .petal/suites/<taskId>.json
-  agents?: Record<string, string[]>; // per task: the session ids Petal launched as its testing agent (claude --session-id)
+  agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
+  agentNames?: AgentNames; // her names for the two agents, for every task in the project
 }
+
+export interface AgentRecord { sessionId: string; role: AgentRole }
 
 export type StackKind = 'unit' | 'e2e' | 'mobile' | 'load' | 'lint' | 'ci' | 'skill' | 'agent' | 'command';
 
@@ -91,6 +96,8 @@ export interface TestingState {
   proposed: StageConfig[]; // stages detection suggests
   seed: SuiteSeed | null; // the project's commands, offered to a task with no suite
   suites: SuiteViews; // each task's own suite, by task id
+  lock: LockView; // the project's test lock
+  agentNames: AgentNames; // her names for the testing and bug fix agents
   runs: PipelineRun[];
   running: string | null; // the run id still going
   sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
@@ -99,6 +106,10 @@ export interface TestingState {
   prds: Prd[];
   sessionTaskId: string | null; // the task held by sessionTab's session, shown first
 }
+
+// The test lock as the Testing tab shows it.
+export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[] }
+export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [] };
 
 // The project's commands from before suites were per task: .petal/pipeline.json, else the pipeline she saved. A seed only.
 export type SuiteSeed = { stages: StageConfig[] } | { problem: string };

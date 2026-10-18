@@ -16,7 +16,8 @@ import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from 
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
-import { noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { lockBar, noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
 import { forTask, suiteFor, suitePath, type SuiteFor, type TaskSuite } from '../shared/task-suite';
 import { keepTarget, prdOverview as overviewRows, type TestTarget } from '../shared/task-testing';
@@ -129,13 +130,17 @@ function drawPicker(): void {
   if (data?.project && target) pickerBox.append(taskPicker(data, target, pick));
 }
 
-// Claude's last change to this task's suite, with Undo; or why its file was not taken.
+// The testing agent's last change to this task's suite, with Undo, or why its file was not taken; then the test lock.
 function drawChange(): void {
   changeBox.replaceChildren();
-  const own = taskId() ? data?.suites[taskId() as string] : undefined;
-  const line = own && !draft ? suiteChangeLine(own.change, own.problem, () => void undoChange()) : null;
+  const id = taskId();
+  if (!data?.project || !id || draft) { changeBox.hidden = true; return; }
+  const own = data.suites[id];
+  const line = own ? suiteChangeLine(own.change, own.problem, () => void undoChange()) : null;
   if (line) changeBox.append(line);
-  changeBox.hidden = !line;
+  const restored = data.lock.restored.filter((f) => f.taskId === id);
+  changeBox.append(lockBar(data.lock, restored, agentName(data.agentNames, 'fixer'), { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored() }, false));
+  changeBox.hidden = false;
 }
 
 // The newest result for a stage, from the chosen run or across all runs (Claude's land on their matching stage).
@@ -675,6 +680,16 @@ async function addCoreStage(command: string): Promise<void> {
   await writeSuite({ ...p, stages: withCoreStage(p.stages, command) }, 'Core stage added first. It asks before its first run.');
 }
 
+async function toggleLock(on: boolean): Promise<void> {
+  const id = tabId();
+  if (!id) return;
+  const reply = await window.pastel.testing.setLock({ tabId: id, root: picked(), on });
+  message = isIpcError(reply) ? reply.error : 'note' in reply ? reply.note : on ? 'Tests are locked to the testing agent.' : 'Test lock is off.';
+  await load();
+}
+
+const dismissRestored = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.dismissRestored(request), '');
+
 const seedSuite = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.seedSuite(request), 'Suite started from the project’s commands. Each one still asks before its first run.');
 const undoChange = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.undoSuite(request), 'Change undone.');
 
@@ -695,7 +710,7 @@ async function refresh(): Promise<void> {
   if (!id || !data) return load();
   const result = await window.pastel.testing.history(id, picked());
   if (isIpcError(result) || !data) return;
-  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, seed: result.seed, suites: result.suites, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
+  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, seed: result.seed, suites: result.suites, lock: result.lock, agentNames: result.agentNames, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
   followSessionTask();
   criteria = result.criteria;
   distillation = result.distillation;

@@ -12,6 +12,8 @@ import {
   type SuiteFileNow, type SuiteRecord, type SuiteViews, type TaskSuite,
 } from '../shared/task-suite';
 import type { Task } from '../shared/tasks';
+import type { AgentRecord } from '../shared/testing';
+import type { AgentRole } from '../shared/agent-names';
 
 export const suiteFile = (root: string, taskId: string): string => path.join(root, ...suitePath(taskId).split('/'));
 
@@ -39,18 +41,31 @@ const lastWriter = (writes: readonly SuiteWrite[], taskId: string): string | nul
 
 const MAX_AGENTS = 20; // per task, newest kept
 
-export const agentsOf = (root: string, taskId: string): string[] => store.load(root).agents?.[taskId] ?? [];
+const agentMap = (root: string): Record<string, AgentRecord[]> => store.load(root).agents ?? {};
 
-// The task a testing agent session works for; null for any other session.
-export function agentTaskOf(root: string, sessionId: string | null | undefined): string | null {
+// The sessions Petal launched as this task's agents, oldest first.
+export const agentsOf = (root: string, taskId: string): AgentRecord[] => agentMap(root)[taskId] ?? [];
+export const testersOf = (agents: readonly AgentRecord[]): string[] => agents.filter((a) => a.role === 'tester').map((a) => a.sessionId);
+
+// The task and role of one of Petal's agent sessions; null for any other session.
+export function agentOf(root: string, sessionId: string | null | undefined): { taskId: string; role: AgentRole } | null {
   if (!sessionId) return null;
-  const agents = store.load(root).agents ?? {};
-  return Object.keys(agents).find((taskId) => agents[taskId]?.includes(sessionId)) ?? null;
+  for (const [taskId, list] of Object.entries(agentMap(root))) {
+    const found = list.find((a) => a.sessionId === sessionId);
+    if (found) return { taskId, role: found.role };
+  }
+  return null;
 }
 
-export function rememberAgent(root: string, taskId: string, sessionId: string): void {
+export const agentTaskOf = (root: string, sessionId: string | null | undefined): string | null => agentOf(root, sessionId)?.taskId ?? null;
+
+// Every agent session of the project with its task and role, for the lock manifest.
+export const allAgents = (root: string): { sessionId: string; role: AgentRole; taskId: string }[] =>
+  Object.entries(agentMap(root)).flatMap(([taskId, list]) => list.map((a) => ({ ...a, taskId })));
+
+export function rememberAgent(root: string, taskId: string, sessionId: string, role: AgentRole = 'tester'): void {
   const data = store.load(root);
-  const kept = [...(data.agents?.[taskId] ?? []).filter((id) => id !== sessionId), sessionId].slice(-MAX_AGENTS);
+  const kept = [...agentsOf(root, taskId).filter((a) => a.sessionId !== sessionId), { sessionId, role }].slice(-MAX_AGENTS);
   store.save({ ...data, agents: { ...(data.agents ?? {}), [taskId]: kept } });
 }
 
@@ -63,7 +78,7 @@ export function syncSuites(root: string, tasks: readonly Task[], writes: readonl
   for (const task of tasks) {
     if (!isTaskId(task.id)) continue;
     const before = records[task.id] ?? null;
-    const after = takeSuiteFile(before, readSuiteFile(root, task.id), lastWriter(writes, task.id), data.agents?.[task.id] ?? []);
+    const after = takeSuiteFile(before, readSuiteFile(root, task.id), lastWriter(writes, task.id), testersOf(data.agents?.[task.id] ?? []));
     if (after && JSON.stringify(after) !== JSON.stringify(before)) { records[task.id] = after; changed = true; }
     if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem };
   }

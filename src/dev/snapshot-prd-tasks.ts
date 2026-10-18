@@ -38,7 +38,7 @@ function writeSuite(repo: string, taskId: string, stages: [string, string][]): v
   put(path.join(repo, '.petal', 'suites', `${taskId}.json`), `${JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command })), keepGoing: false, autoRun: false }, null, 2)}\n`);
 }
 
-// A session writing a task's suite file, as its log records it.
+// A session writing a file (a task's suite, a test), as its log records it.
 function appendSuiteWrite(file: string, sessionId: string, uuid: string, cwd: string, target: string): void {
   assertFixtureOutsideClaude(file);
   const at = new Date().toISOString();
@@ -185,6 +185,31 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     put(cartFile, before);
     check(await waitTesting((s) => s.suiteProblem === null && s.stages.length === 2, 10000), 'putting the file back clears the flag');
 
+    // 7b The test lock: on, the hook entry lands in the repo's settings.local.json; a main-session edit to a locked test is put back.
+    const cartTest = path.join(repo, 'src', 'cart.test.ts');
+    const settingsFile = path.join(repo, '.claude', 'settings.local.json');
+    const lockFile = path.join(repo, '.petal', 'lock.json');
+    put(cartTest, 'it("rounds to the cent", () => {});\n');
+    await js("document.querySelector('#testing .tst-lock-toggle input').click()");
+    const approved = await waitFor(() => {
+      const lock = fs.existsSync(lockFile) ? JSON.parse(fs.readFileSync(lockFile, 'utf8')) as { enabled: boolean; approved: Record<string, string> } : null;
+      return lock?.enabled && lock.approved['src/cart.test.ts'] ? lock : null;
+    }, 10000);
+    const settings = fs.existsSync(settingsFile) ? fs.readFileSync(settingsFile, 'utf8') : '';
+    check(approved && settings.includes('.petal/test-lock.mjs') && settings.includes('PreToolUse') && fs.existsSync(path.join(repo, '.petal', 'test-lock.mjs')), `the lock's hook lands in the repo's settings.local.json and the test is approved: ${settings.slice(0, 160)}`);
+    appendSuiteWrite(transcript, SESSION, 'prd-a-edit-test', repo, cartTest);
+    put(cartTest, 'it.skip("rounds to the cent", () => {});\n');
+    const flag = await waitFor<string | null>(async () => {
+      const text: string = await js("document.querySelector('#testing .tst-lock-flag')?.textContent ?? ''");
+      return text && fs.readFileSync(cartTest, 'utf8') === 'it("rounds to the cent", () => {});\n' ? text : null;
+    }, 10000);
+    check(flag && /^Main session changed a test\. Restored\. · src\/cart\.test\.ts · (just now|\d+ min ago)$/.test(flag), `a main-session change to a locked test is restored and flagged: ${flag ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
+    const red: string = await js("(() => { const probe = document.createElement('span'); probe.style.color = 'var(--decide-ink)'; document.getElementById('testing').append(probe); const c = getComputedStyle(probe).color; probe.remove(); return c === getComputedStyle(document.querySelector('#testing .tst-lock-flag')).color ? c : ''; })()");
+    check(red, `the flag shows in the warning colour: ${red}`);
+    await capture('testing-lock');
+    await js("document.querySelector('#testing .tst-lock-toggle input').click()");
+    check(await waitFor(() => (fs.readFileSync(settingsFile, 'utf8').includes('test-lock') ? null : true), 6000), `turning it off removes only the lock's entry: ${fs.readFileSync(settingsFile, 'utf8').trim()}`);
+
     // 8 A task with no suite: Ask Claude starts its testing agent under a session id Petal remembers.
     await pickTarget('task:t-docs');
     const docs = await waitTesting((s) => s.task === 'Document the cart API');
@@ -193,7 +218,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     const startsBefore = testingFixture.loopStarts.length;
     await js("document.querySelector('#testing .tst-ask-suite').click()");
     const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
-    const agent = store.load(repo).agents?.['t-docs']?.[0] ?? '';
+    const agent = store.load(repo).agents?.['t-docs']?.[0]?.sessionId ?? '';
     check(started && agent && started.command.includes(`--session-id ${agent} --`) && started.command.includes('for task t-docs:') && started.command.includes('testing agent') && !/[—–]/.test(started.command), `the testing agent starts in a new tab with its own session id: ${JSON.stringify(started?.command.slice(0, 160))}`);
 
     // 9 The testing agent writes the suite: taken, "Testing agent updated this suite", and Undo restores.
