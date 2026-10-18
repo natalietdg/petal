@@ -72,9 +72,12 @@ export const agentsChipText = ({ running, total }: { running: number; total: num
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// "Sessions · 1 busy · 5 open · 3 agents"; the agents part only when some are active.
+// "Sessions · 1 busy · 5 open · 3 agents"; busy and agents only when above zero.
 export function sessionsPillText({ busy, total, agents }: SessionCounts): string {
-  const parts = ['Sessions', `${busy} busy`, `${total} open`];
+  if (total === 0) return 'No sessions yet';
+  const parts = ['Sessions'];
+  if (busy > 0) parts.push(`${busy} busy`);
+  parts.push(`${total} open`);
   if (agents > 0) parts.push(plural(agents, 'agent'));
   return parts.join(' · ');
 }

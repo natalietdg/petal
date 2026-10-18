@@ -215,7 +215,8 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   await js('PastelTerm.sessionsPanel.setOpen(true)');
   await wait(1500);
   const pill = (await js("document.getElementById('sessions-pill').innerText")).trim();
-  const want = `Sessions · ${sessions.filter((s) => s.status === 'busy').length} busy · ${sessions.length} open`;
+  const busy = sessions.filter((s) => s.status === 'busy').length;
+  const want = `Sessions · ${busy ? `${busy} busy · ` : ''}${sessions.length} open`;
   log(`${pill.startsWith(want) ? 'ok' : 'FAIL'} sessions pill counts the fixture sessions only: "${pill}", want "${want}"`);
   log(`own row marked: ${await js("document.querySelector('.session-row.own .session-own')?.innerText ?? 'none'")}`);
 
