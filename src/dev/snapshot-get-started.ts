@@ -214,11 +214,32 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const fresh = await until((s) => s.open === 'welcome' && s.steps.length === 4);
   check(fresh && fresh.steps.map((s: { id: string }) => s.id).join() === STEP_IDS.join() && doneIds(fresh) === '' && fresh.command === INSTALL_COMMAND && fresh.copy === INSTALL_COMMAND,
     `fresh install: four steps, none ticked, step 1 shows the install command with Copy: ${JSON.stringify(fresh)}`);
-  check(fresh && /Petal never sees your login/.test(fresh.privateLine ?? '') && fresh.checks.length === 4 && fresh.emDashes === 0,
-    `steps carry Check lines and say Petal never sees the login: ${JSON.stringify({ privateLine: fresh?.privateLine, checks: fresh?.checks })}`);
+  check(fresh && /Petal never sees your login/.test(fresh.privateLine ?? '') && fresh.checks.length === 0 && fresh.emDashes === 0,
+    `steps have no Check lines and say Petal never sees the login: ${JSON.stringify({ privateLine: fresh?.privateLine, checks: fresh?.checks })}`);
   await capture('get-started-welcome-fresh');
   await js('PastelTerm.getStarted.open()');
   await until((s) => s.open === 'get-started');
+  const bottom = await js(`(() => {
+    const view = document.getElementById('get-started');
+    const pane = view.querySelector('.welcome-pane');
+    pane.scrollTop = pane.scrollHeight;
+    const last = [...pane.querySelectorAll('.gs-step')].at(-1).getBoundingClientRect();
+    const r = { gap: Math.round(view.querySelector('footer').getBoundingClientRect().top - last.bottom), intro: view.querySelector('.welcome-line').textContent };
+    pane.scrollTop = 0;
+    return r;
+  })()`);
+  check(bottom.gap >= 16 && bottom.intro === 'Four steps to your first reply.', `one-line intro; scrolled down, the last step clears the footer: ${JSON.stringify(bottom)}`);
+  // History's Send is drawn off-screen here: it must match the reader's Send; Close is the quiet outline.
+  const looks = await js(`(() => {
+    const look = (b) => { const s = getComputedStyle(b); return [s.backgroundColor, s.color, s.borderRadius, s.fontWeight].join(' '); };
+    const probe = document.createElement('button');
+    probe.className = 'send-button history-reply-send';
+    document.body.append(probe);
+    const r = { reader: look(document.getElementById('composer-send')), history: look(probe), close: getComputedStyle(document.querySelector('#get-started .gs-close')).backgroundColor };
+    probe.remove();
+    return r;
+  })()`);
+  check(looks.reader === looks.history && looks.close === 'rgba(0, 0, 0, 0)', `one Send style in the reader and History; Close is quiet: ${JSON.stringify(looks)}`);
   for (const id of Object.keys(themes)) {
     applyTheme(id, { persist: false });
     await wait(450);

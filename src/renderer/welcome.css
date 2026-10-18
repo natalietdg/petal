@@ -27,6 +27,7 @@
 .welcome-title { margin: 0; font: 600 1.9em/1.1 var(--display-font); letter-spacing: -0.02em; }
 .welcome-tagline { margin: 0; font: 500 1.15em/1.35 var(--body-font); }
 .welcome-line { margin: 0; color: var(--muted); font-size: 14px; }
+.gs-pane { padding-bottom: 32px; } /* the last step scrolls clear of the footer's rule */
 
 .welcome-section { display: flex; flex-direction: column; gap: 6px; }
 .welcome-styles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }

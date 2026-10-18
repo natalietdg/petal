@@ -133,7 +133,7 @@ export function replyBox(session: Session): HTMLFormElement {
   input.placeholder = 'Reply to this session…';
   input.setAttribute('aria-label', 'Reply to this session');
   input.value = drafts.get(session.sessionId) ?? '';
-  const send = el('button', 'flow-button history-reply-send', 'Send');
+  const send = el('button', 'send-button history-reply-send', 'Send');
   send.type = 'submit';
   const slash = el('button', 'slash-button history-reply-slash', '/');
   slash.type = 'button';
