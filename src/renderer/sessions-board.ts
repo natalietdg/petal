@@ -27,7 +27,7 @@ import {
 
 const view = byId('board');
 const head = el('header', 'board-head');
-const title = el('h2', 'board-title', 'Board'); // matches the header button; "Sessions" is the pill beside it
+const title = el('h2', 'board-title', 'Board'); // matches the header button; the Sessions and Activity tabs say which view
 const summary = el('p', 'board-summary');
 const filterRow = el('div', 'board-filters');
 filterRow.setAttribute('role', 'group');
@@ -357,7 +357,6 @@ function render(force = false): void {
   filterRow.hidden = !sessionsView;
   grid.hidden = !sessionsView;
   boardTasks.element().hidden = !sessionsView;
-  title.textContent = sessionsView ? 'Sessions' : 'Activity';
   const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops, coord.current(), boardTasks.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
