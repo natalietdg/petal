@@ -19,7 +19,7 @@ const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
   { id: 'organizer', name: 'Organizer', summary: 'Optional background agents: one titles, files and tags your recent sessions for History; one builds your Library and lessons from them. All are off by default and use your Claude plan.' },
   { id: 'flowTitles', name: 'Flow titles', summary: 'The prompt that turns each step of a session into the state changes on the Flow view.' },
-  { id: 'handoff', name: 'Handoff', summary: 'What Send to Claude writes when one session hands its history to another.' },
+  { id: 'handoff', name: 'Handoff prompt', summary: 'What Send to Claude writes when one session hands its history to another.' },
   { id: 'hook', name: 'Response hook', summary: 'A shell command of yours that runs each time Claude finishes a reply.' },
   { id: 'start', name: 'Get started', summary: 'The Get started steps, and whether Petal may read your Claude folder.' },
 ];

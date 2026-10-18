@@ -13,7 +13,7 @@ function folderSwitch(): HTMLLabelElement {
     await consent.setChoice(box.checked ? 'allowed' : 'declined');
     page.state.config.claudeFolder.choice = box.checked ? 'allowed' : 'declined';
   });
-  label.append(box, el('span', null, 'Let Petal read my Claude folder (~/.claude)'));
+  label.append(box, el('span', null, 'Let Petal read your Claude folder (~/.claude)'));
   return label;
 }
 
