@@ -105,7 +105,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js(`document.querySelector('#board .task-row[data-task-id="t-coupon"] .task-split').click()`);
     await settle();
     await js(`document.querySelector('#board .task-split .task-split-input').value = 'Coupon API\\nCoupon UI'`);
-    await submit('#board .task-split');
+    await submit('#board form.task-split');
     const split = await waitFor(async () => { const g = await groups(); return g[0]?.subtasks.length === 2 ? g : null; }, 4000);
     check(JSON.stringify(split?.[0]?.subtasks) === JSON.stringify(['Coupon API', 'Coupon UI']), `the split task shows two subtasks: ${JSON.stringify(split ?? await groups())}`);
     const stored = JSON.parse(fs.readFileSync(tasksJson, 'utf8')) as { version: number; prds: { id: string }[]; tasks: { id: string; title: string; prdId: string | null; parentId: string | null }[] };
