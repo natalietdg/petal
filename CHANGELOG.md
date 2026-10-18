@@ -2,7 +2,7 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
-## Unreleased
+## [1.1.2] · 2026-10-18
 - PRDs on the Board: group related tasks under a PRD, and split a big task into subtasks, each with its own owner.
 - Testing opens on your session's task, with a switch to its PRD or the whole project. The pipeline commands stay the project's.
 
