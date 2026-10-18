@@ -26,8 +26,8 @@ const button = byId('workflow-button');
 const LABELS = ['next', 'done', 'why', 'watch', 'decide'];
 const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<Loaded> }[] = [
   { id: 'today', name: 'Today', load: (o) => window.pastel.workflow.today(o.openTabs) },
-  { id: 'setup', name: 'How your setup works', load: () => window.pastel.workflow.setup() },
-  { id: 'time', name: 'Where my time goes', load: () => window.pastel.workflow.time() },
+  { id: 'setup', name: 'Setup', load: () => window.pastel.workflow.setup() },
+  { id: 'time', name: 'Time', load: () => window.pastel.workflow.time() },
   { id: 'handoffs', name: 'Handoffs', load: () => window.pastel.workflow.handoffs() },
   { id: 'factory', name: 'Factory', load: () => window.pastel.factory.get() },
 ];
@@ -170,7 +170,7 @@ function renderToday(data: TodayData): HTMLElement[] {
   return nodes;
 }
 
-// ---- 2. How your setup works
+// ---- 2. Setup: how your setup works
 
 // A <div> per term keeps name and description together in grid layouts.
 function definition(name: string, description: string, className = ''): HTMLDivElement {
@@ -275,7 +275,7 @@ function renderSetup(data: SetupData, token: number): HTMLElement[] {
   return nodes;
 }
 
-// ---- 3. Where my time goes
+// ---- 3. Time: where your time goes
 
 function renderTime(data: TimeData): HTMLElement[] {
   const top = data.groups[0];

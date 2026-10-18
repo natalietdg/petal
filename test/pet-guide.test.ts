@@ -139,6 +139,13 @@ describe('claude missing from the tab’s PATH', () => {
     expect(missing.note).toMatch(/Check again/);
     expect(INSTALL_COMMAND).toBe('curl -fsSL https://claude.ai/install.sh | bash');
   });
+
+  it('says claude is starting when Add Session typed it, with a fallback to type it', () => {
+    const started = bubbleCopy('type-claude', MIKI, { claudeFound: true, folder: 'allowed', startedItself: true });
+    expect(started.say).toBe('Claude is starting in the new tab');
+    expect(started.note).toBe('Give it a second. If nothing starts, type claude and press Enter.');
+    expect(bubbleCopy('type-claude', MIKI, { claudeFound: false, folder: 'allowed', startedItself: true }).say).toBe('Claude Code isn’t installed yet');
+  });
 });
 
 describe('copy', () => {
@@ -188,7 +195,7 @@ describe('copy', () => {
 });
 
 describe('Help menu', () => {
-  it('has Show setup again and the old checklist as Setup checklist, each wired to its own handler', async () => {
+  it('has one Get started item, wired to the pet guide', async () => {
     const { menuTemplate } = await import('../src/main/menu');
     const calls: string[] = [];
     const options = new Proxy({ currentTheme: '', currentCat: '', currentScene: '', currentReading: '' } as Record<string, unknown>, {
@@ -196,9 +203,8 @@ describe('Help menu', () => {
     });
     const help = menuTemplate(options as never).find((item) => item.role === 'help');
     const items = (help?.submenu ?? []) as { label?: string; click?: () => void }[];
-    expect(items.map((item) => item.label).filter(Boolean)).toEqual(['Welcome', 'Show setup again', 'Setup checklist', 'Colour key', 'Keyboard Shortcuts']);
-    items.find((item) => item.label === 'Show setup again')?.click?.();
-    items.find((item) => item.label === 'Setup checklist')?.click?.();
-    expect(calls).toEqual(['onOpenPetGuide', 'onOpenGetStarted']);
+    expect(items.map((item) => item.label).filter(Boolean)).toEqual(['Get started', 'Colour key', 'Keyboard Shortcuts']);
+    items.find((item) => item.label === 'Get started')?.click?.();
+    expect(calls).toEqual(['onOpenPetGuide']);
   });
 });

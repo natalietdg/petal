@@ -66,8 +66,6 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
       steps: document.querySelectorAll('#flow-view .flow-step').length,
       quietRows: [...document.querySelectorAll('#flow-view .flow-quiet')].map((b) => b.textContent),
       waiting: document.querySelectorAll('#flow-view .flow-step.waiting').length,
-      files: [...document.querySelectorAll('#flow-view .flow-file')].map((f) => f.textContent),
-      ledgerRows: document.querySelectorAll('#flow-view .flow-ledger-row').length,
       actors: [...document.querySelectorAll('#flow-view .flow-actor')].map((a) => a.className.split(' ')[1]),
       finalNext: document.querySelector('#flow-view .flow-final')?.innerText ?? null,
     })`);

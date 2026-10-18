@@ -4,6 +4,7 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 
 ## Unreleased
 - Library token cost: Read past sessions, Add to Library and Build my Library say about how many tokens they will use before any call, and the Library shows what the last build used.
+- Tidier screens: one Help › Get started, a simpler Get started list, the Board titled Board, "No sessions yet" in the pill, and the setup guide says when Claude starts by itself.
 
 ## [1.1.2] · 2026-10-18
 - PRDs on the Board: group related tasks under a PRD, and split a big task into subtasks, each with its own owner.

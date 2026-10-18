@@ -1,5 +1,5 @@
 // Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
-// In the welcome, and on launch for installs from before the pet guide until every step is done; Help › Setup checklist and Customize › Get started reopen it.
+// In the welcome, and on launch for installs from before the pet guide until every step is done; Customize › Get started reopens it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
@@ -82,15 +82,13 @@ function installBody(done: boolean): Node[] {
 interface StepCopy {
   title: string;
   body: (done: boolean) => Node[];
-  check: string;
 }
 
 const STEPS: Record<StepId, StepCopy> = {
-  install: { title: 'Install Claude Code', body: installBody, check: 'Petal finds claude on this Mac.' },
+  install: { title: 'Install Claude Code', body: installBody },
   'add-session': {
     title: 'Click Add Session',
     body: () => [para('Claude starts in the new tab by itself.')],
-    check: 'A new tab opens and Claude Code starts in it.',
   },
   'sign-in': {
     title: 'First time only: sign in',
@@ -98,12 +96,10 @@ const STEPS: Record<StepId, StepCopy> = {
       para('Claude Code asks how you want to sign in. Pick one and your browser opens; sign in there with your Claude account.'),
       para('Petal never sees your login. Claude Code and your browser handle it.', 'gs-private'),
     ],
-    check: 'Claude Code shows its prompt in the tab.',
   },
   ask: {
     title: 'Ask Claude something',
     body: () => [para('Type a question in the tab and press Enter.')],
-    check: 'The reply shows in the reader and the cat wakes up.',
   },
 };
 
@@ -128,9 +124,7 @@ function stepRow(step: StepState, number: number): HTMLLIElement {
   const body = el('div', 'step-body');
   body.append(el('p', 'gs-title', copy.title), ...copy.body(step.done));
   if (step.unseen) body.append(para(UNSEEN_NOTE, 'gs-unseen'));
-  const check = el('p', 'step-check');
-  check.append(el('span', 'step-check-label', 'Check'), ` ${copy.check}`);
-  row.append(badge, body, check);
+  row.append(badge, body);
   return row;
 }
 
@@ -210,14 +204,14 @@ function render(): void {
   const pane = el('div', 'welcome-pane gs-pane');
   pane.append(
     el('h1', 'welcome-title', 'Get started'),
-    para('Four steps from installing Claude Code to your first reply. Each ticks itself when Petal sees it happen, and you can tick them yourself.', 'welcome-line'),
+    para('Four steps to your first reply.', 'welcome-line'),
     checklist(),
   );
   const footer = el('footer', 'welcome-footer');
-  const done = el('button', 'welcome-start gs-close', 'Close');
+  const done = el('button', 'cz-quiet-button gs-close', 'Close');
   done.type = 'button';
   done.addEventListener('click', close);
-  footer.append(done, para('Help › Setup checklist brings this back.', 'welcome-note'));
+  footer.append(done, para('Customize › Get started brings this back.', 'welcome-note'));
   view.replaceChildren(pane, footer);
   done.focus({ preventScroll: true });
 }

@@ -1,5 +1,5 @@
-// Sessions board (PASTEL_SNAPSHOT_MODE=sessions-board): one card per open Claude session, opened from the Sessions
-// panel or ⌘⇧O; Waiting first and highlighted, live on the 2s tick, gated while reading is off, no overflow anywhere.
+// Sessions board (PASTEL_SNAPSHOT_MODE=sessions-board): one card per open Claude session, opened from the header's Board
+// button or ⌘⇧O; Waiting first and highlighted, live on the 2s tick, gated while reading is off, no overflow anywhere.
 import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, type BrowserWindow, type MenuItem } from 'electron';
@@ -206,13 +206,15 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     fs.writeFileSync(screen, `${PERMISSION_SCREEN.join('\n')}\n`);
     ptyOf(waitTab ?? '')?.write(harnessLine(`clear; cat '${screen}'; read -r _`));
 
-    // 1 The Sessions chip's panel has Board at the top, beside Add Session; it opens the board and closes the panel.
+    // 1 The Sessions chip's panel lists sessions only; the header's Board opens the board, titled Board to match.
     await js("document.getElementById('sessions-pill').click()");
-    const panel = await waitFor(() => js("(() => { const p = document.getElementById('sessions-panel'); const b = p.querySelector('.sessions-board-open'); return !p.hidden && b ? { first: p.firstElementChild.className, second: p.children[1]?.className, label: b.textContent, sameRow: Math.abs(b.getBoundingClientRect().top - p.firstElementChild.getBoundingClientRect().top) < 2 } : null; })()"), 5000);
-    check(panel?.first.includes('sessions-add') && panel.second.includes('sessions-board-open') && panel.label === 'Board' && panel.sameRow, `Board sits at the top of the Sessions panel, beside Add Session: ${JSON.stringify(panel)}`);
-    await js("document.querySelector('#sessions-panel .sessions-board-open').click()");
+    const panel = await waitFor(() => js("(() => { const p = document.getElementById('sessions-panel'); return !p.hidden ? [...p.querySelectorAll('button')].map((b) => b.textContent) : null; })()"), 5000);
+    check(panel && !panel.includes('Board') && !panel.includes('Add Session'), `the Sessions panel has no Board or Add Session button: ${JSON.stringify(panel)}`);
+    await js("document.getElementById('sessions-pill').click()");
+    await js("document.getElementById('board-button').click()");
     const opened = await waitFor(async () => ((await boardOpen()) && (await js("document.getElementById('sessions-panel').hidden")) ? true : null), 4000);
-    check(opened, 'Board opens the board and closes the panel');
+    const names = await js("({ button: document.querySelector('#board-button .dock-label').textContent, title: document.querySelector('#board .board-title').textContent, label: document.getElementById('board').getAttribute('aria-label') })");
+    check(opened && names.button === 'Board' && names.title === 'Board' && names.label === 'Board', `the header's Board opens the board, and the page is called Board too: ${JSON.stringify(names)}`);
     const readerHidden = await js("({ reader: document.getElementById('reader').hidden, composer: document.getElementById('composer').hidden })");
     check(readerHidden.reader && readerHidden.composer, `it replaces the reader like History: ${JSON.stringify(readerHidden)}`);
 

@@ -1,5 +1,5 @@
 // The pet's setup guide on a new install: cards over the reader (hello, pet, scene, folder, and past sessions when she has some), then a speech
-// bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Show setup again restarts it.
+// bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Get started restarts it.
 import * as overlays from './overlays';
 import * as consent from './consent';
 import * as getStarted from './get-started';
@@ -336,18 +336,18 @@ const target = (s: BubbleStep): HTMLElement | null => ({
 
 function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null } {
   const claudeFound = getStarted.currentFacts().claudeInstalled;
-  const copy = bubbleCopy(s, words(), { claudeFound, folder });
+  const copy = bubbleCopy(s, words(), { claudeFound, folder, startedItself });
   const name = el('p', 'pb-name');
   name.append(petPicture(cat, 'pb-face'), el('span', null, words().name));
   const nodes: Node[] = [name, el('p', 'pb-say', copy.say)];
   if (copy.note) nodes.push(el('p', 'pb-note', copy.note));
   const actions = el('div', 'pb-actions');
   let focus: HTMLElement | null = null;
-  if (s === 'type-claude' && typeClaudeHelp(claudeFound) === 'type') {
+  if (s === 'type-claude' && typeClaudeHelp(claudeFound) === 'type' && !startedItself) {
     const chip = copyChip('claude', 'claude');
     nodes.push(chip);
     focus = chip.querySelector('button');
-  } else if (s === 'type-claude') {
+  } else if (s === 'type-claude' && typeClaudeHelp(claudeFound) === 'install') {
     const chip = copyChip(INSTALL_COMMAND, 'the install command');
     nodes.push(chip);
     focus = chip.querySelector('button');
@@ -369,6 +369,8 @@ function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null }
   return { nodes, focus };
 }
 
+// Found right after Add Session means claude was typed for her; found later via Check again means it wasn't.
+let startedItself = false;
 let shownBubble: BubbleStep | null = null;
 let shownKey = '';
 
@@ -376,7 +378,7 @@ let shownKey = '';
 function paintBubble(force = false): void {
   if (!step || isCardStep(step)) return;
   const s = step;
-  const key = `${s}|${getStarted.currentFacts().claudeInstalled}|${folder}|${cat}`;
+  const key = `${s}|${getStarted.currentFacts().claudeInstalled}|${folder}|${cat}|${startedItself}`;
   if (!force && key === shownKey) { place(); return; }
   const changedStep = s !== shownBubble || key.split('|')[1] !== shownKey.split('|')[1]; // a new step, or claude just found
   shownBubble = s;
@@ -495,6 +497,8 @@ function terminalFor(next: GuideStep | null): void {
 }
 
 async function show(next: GuideStep): Promise<void> {
+  const fromAddSession = step === 'add-session'; // a resumed type-claude never had claude typed for her
+  if (next === 'type-claude') startedItself = fromAddSession && getStarted.currentFacts().claudeInstalled;
   step = next;
   terminalFor(next);
   clearTimeout(celebrateTimer);
@@ -514,7 +518,7 @@ async function show(next: GuideStep): Promise<void> {
   }
   paintBubble(true);
   requestAnimationFrame(place); // the reader's pet settles back into her corner a frame after the cards close
-  if (next === 'type-claude') void getStarted.recheckInstall().then(() => paintBubble()); // she may have installed it since launch
+  if (next === 'type-claude') void getStarted.recheckInstall().then((found) => { startedItself = found && fromAddSession; paintBubble(); }); // she may have installed it since launch
 }
 
 const clearTargets = (): void => { for (const old of document.querySelectorAll('.pg-target')) old.classList.remove('pg-target'); };
@@ -541,13 +545,13 @@ function finish(): void {
   focusTerminal();
 }
 
-// Skip setup, or Esc: the guide ends for good (Help › Show setup again brings it back).
+// Skip setup, or Esc: the guide ends for good (Help › Get started brings it back).
 // Before the folder question is answered it still has to be asked once, so the old question follows.
 export async function skip(): Promise<void> {
   if (step === null) return;
   const wasConsent = step === 'consent';
   end('skipped');
-  announce('Setup skipped. Help, Show setup again brings it back.');
+  announce('Setup skipped. Help, Get started brings it back.');
   if (wasConsent) await consent.setChoice('declined'); // Esc on the folder question always meant Not now
   else if (folder === 'unasked') consent.open();
   focusTerminal();
@@ -591,7 +595,7 @@ export async function resumeIfStarted(): Promise<boolean> {
   return true;
 }
 
-// Help › Show setup again: from the hello card, whatever happened before.
+// Help › Get started: from the hello card, whatever happened before.
 export async function restart(): Promise<void> {
   if (!(await loadState())) return;
   await countPast();

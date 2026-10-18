@@ -116,16 +116,6 @@ function openSettings(): void {
   if (contents) send(contents, 'customize:open');
 }
 
-function openWelcome(): void {
-  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
-  if (contents) send(contents, 'welcome:open');
-}
-
-function openGetStarted(): void {
-  const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
-  if (contents) send(contents, 'get-started:open');
-}
-
 function openPetGuide(): void {
   const contents = focusedContents() ?? BrowserWindow.getAllWindows()[0]?.webContents;
   if (contents) send(contents, 'pet-guide:open');
@@ -164,8 +154,6 @@ function refreshMenu(): void {
     onTextSize: (step) => sendToFocused('text-size:step', step),
     onStopClaude: () => sendToFocused('claude:stop'),
     onOpenSettings: openSettings,
-    onOpenWelcome: openWelcome,
-    onOpenGetStarted: openGetStarted,
     onOpenPetGuide: openPetGuide,
     onOpenColourKey: openColourKey,
     onToggleShortcuts: toggleShortcuts,

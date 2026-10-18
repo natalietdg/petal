@@ -1,4 +1,4 @@
-// Launch checks for a stranger: the first-run screen, the organizer staying off, and Workflow › Setup on an empty ~/.claude.
+// Launch checks for a stranger: the first-run screen with no token-spending offer, the organizer staying off, and Workflow › Setup on an empty ~/.claude.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -28,8 +28,7 @@ const welcomeState = `(() => {
     })(),
     command: view.querySelector('.gs-command code')?.textContent ?? null,
     recheck: Boolean(view.querySelector('.gs-recheck')),
-    organizerBox: view.querySelector('.welcome-switch input')?.checked ?? null,
-    organizerLabel: view.querySelector('.welcome-switch span')?.textContent ?? null,
+    organizerSwitch: Boolean(view.querySelector('.welcome-switch')),
     emDashes: (view.innerText.match(/—/g) ?? []).length,
     reader: !document.getElementById('reader').hidden,
   };
@@ -44,7 +43,7 @@ async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Pr
   applyTheme('paleSky', { persist: false });
 }
 
-// Window sizes Start and the organizer switch must fit without scrolling: the default and a small laptop window.
+// Window sizes Start must fit without scrolling: the default and a small laptop window.
 const FOOTER_SIZES: [width: number, height: number][] = [[1280, 900], [990, 800]];
 
 const footerRects = `(() => {
@@ -52,14 +51,12 @@ const footerRects = `(() => {
   const view = document.getElementById('welcome').getBoundingClientRect();
   const port = { top: 0, left: 0, bottom: window.innerHeight, right: window.innerWidth };
   const start = document.querySelector('.welcome-start').getBoundingClientRect();
-  const toggle = document.querySelector('.welcome-switch').getBoundingClientRect();
   const cat = document.getElementById('cat').getBoundingClientRect();
   const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
   return {
     window: [window.innerWidth, window.innerHeight],
     start: [Math.round(start.left), Math.round(start.top), Math.round(start.right), Math.round(start.bottom)],
     startVisible: inside(start, port) && inside(start, view),
-    switchVisible: inside(toggle, port) && inside(toggle, view),
     startUnderCat: overlaps(start, cat),
     scrolled: document.querySelector('.welcome-pane').scrollTop,
   };
@@ -71,8 +68,8 @@ async function footerInViewCheck({ js, log, wait, capture }: Kit, win: BrowserWi
     resizeOffscreen(win, w, h);
     await wait(700);
     const r = await js(footerRects);
-    const ok = r.startVisible && r.switchVisible && !r.startUnderCat && r.scrolled === 0;
-    log(`${ok ? 'ok' : 'FAIL'} welcome Start and organizer switch in view without scrolling at ${w}x${h}: ${JSON.stringify(r)}`);
+    const ok = r.startVisible && !r.startUnderCat && r.scrolled === 0;
+    log(`${ok ? 'ok' : 'FAIL'} welcome Start in view without scrolling at ${w}x${h}: ${JSON.stringify(r)}`);
     await capture(`welcome-${w}x${h}`);
   }
   resizeOffscreen(win, width, height);
@@ -88,7 +85,7 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   log(`${first.tagline === TAGLINE ? 'ok' : 'FAIL'} welcome tagline: ${JSON.stringify(first.tagline)}`);
   log(`${catsOk ? 'ok' : 'FAIL'} welcome cats each show their picture: ${JSON.stringify(first.cats)}`);
   log(`${first.scenes > 1 && first.emDashes === 0 ? 'ok' : 'FAIL'} welcome scenes and copy: scenes=${first.scenes} emDashes=${first.emDashes}`);
-  log(`${first.organizerBox === false && /uses your Claude plan/.test(first.organizerLabel ?? '') ? 'ok' : 'FAIL'} welcome organizer switch starts off: ${JSON.stringify([first.organizerBox, first.organizerLabel])}`);
+  log(`${!first.organizerSwitch && !configStore.load().organizer.enabled ? 'ok' : 'FAIL'} welcome offers nothing that spends tokens, organizer off: ${JSON.stringify({ switch: first.organizerSwitch, enabled: configStore.load().organizer.enabled })}`);
   log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome's Get started finds claude on this Mac: ${first.claude}`);
   const styleOffer = await js("({ installable: null, button: document.querySelector('#welcome .welcome-styles-add')?.textContent ?? null })");
   styleOffer.installable = (await js('window.pastel.config.get()')).petalStyles?.installable;
@@ -109,12 +106,12 @@ export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const afterEsc = await js(welcomeState);
   log(`${!afterEsc.shown && afterEsc.reader ? 'ok' : 'FAIL'} Esc closes the welcome screen: ${JSON.stringify({ shown: afterEsc.shown, reader: afterEsc.reader })}`);
 
-  send(win.webContents, 'welcome:open'); // what Help › Welcome sends
+  send(win.webContents, 'welcome:open'); // the welcome reopened, as a launch would
   const reopened = await waitFor(async () => ((await js(welcomeState)).shown ? true : null), 5000);
   await js("document.querySelector('.welcome-start').click()");
   await wait(300);
   const started = await js(`({ shown: !document.getElementById('welcome').hidden, tabs: document.querySelectorAll('#tab-strip [role="tab"]').length, active: Boolean(PastelTerm.tabs.active()) })`);
-  log(`${reopened && !started.shown && started.active ? 'ok' : 'FAIL'} Help › Welcome reopens it and Start goes to the tab: ${JSON.stringify({ reopened: Boolean(reopened), ...started })}`);
+  log(`${reopened && !started.shown && started.active ? 'ok' : 'FAIL'} reopened, Start goes to the tab: ${JSON.stringify({ reopened: Boolean(reopened), ...started })}`);
 }
 
 // PASTEL_SNAPSHOT_MODE=welcome-relaunch on the same userData: the second launch skips it.

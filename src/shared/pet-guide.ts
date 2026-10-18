@@ -131,13 +131,16 @@ export interface BubbleCopy {
   note: string | null; // a small line under it, about the pet in the third person
 }
 
-export function bubbleCopy(step: BubbleStep, pet: PetWords, { claudeFound, folder }: { claudeFound: boolean; folder: FolderChoice }): BubbleCopy {
+// startedItself: Add Session typed `claude` for her (it was installed when the tab opened).
+export function bubbleCopy(step: BubbleStep, pet: PetWords, { claudeFound, folder, startedItself = false }: { claudeFound: boolean; folder: FolderChoice; startedItself?: boolean }): BubbleCopy {
   const blind = blindToClaude(step, folder) ? `${pet.name} can’t see Claude’s replies while your Claude folder is off.` : null;
   switch (step) {
     case 'add-session': return { say: 'Click Add Session', note: `It’s up top, in the ring. ${pet.name} will open a new tab for Claude.` };
-    case 'type-claude': return typeClaudeHelp(claudeFound) === 'type'
-      ? { say: 'Now type claude and press Enter', note: 'In the terminal below.' }
-      : { say: 'Claude Code isn’t installed yet', note: 'Paste this in the terminal below and press Enter, then click Check again.' };
+    case 'type-claude':
+      if (typeClaudeHelp(claudeFound) === 'install') return { say: 'Claude Code isn’t installed yet', note: 'Paste this in the terminal below and press Enter, then click Check again.' };
+      return startedItself
+        ? { say: 'Claude is starting in the new tab', note: 'Give it a second. If nothing starts, type claude and press Enter.' }
+        : { say: 'Now type claude and press Enter', note: 'In the terminal below.' };
     case 'claude-setup': return { say: 'Pick a style and sign in, I’ll wait', note: blind ?? `${pet.name} is waiting for you.` };
     case 'ask': return { say: `Ask Claude anything, like ‘${EXAMPLE_ASK}’`, note: blind ?? 'It’s in the reply box, ready to send.' };
     case 'celebrate': return { say: 'That’s it! Replies show up here.', note: `${pet.name} is so proud of you.` };

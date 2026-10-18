@@ -208,11 +208,7 @@ function renderPanel(view: SessionsView): void {
   const rows = view.rows ?? [];
   const list = el('ul', 'session-list');
   list.append(...rows.map(renderRow));
-  const parts: HTMLElement[] = [
-    textButton('Add Session', 'flow-button sessions-add', () => addSession()),
-    textButton('Board', 'flow-button sessions-board-open', () => { setOpen(false); window.dispatchEvent(new Event('petal:open-board')); }),
-    el('p', 'sessions-heading', 'Claude sessions on this Mac'),
-  ];
+  const parts: HTMLElement[] = [el('p', 'sessions-heading', 'Claude sessions on this Mac')];
   if ((addBlocked && limitReached(view)) || overLimit(view)) parts.push(limitBanner(view, rows));
   parts.push(list);
   if (view.closed?.length) {

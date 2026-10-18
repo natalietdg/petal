@@ -36,7 +36,7 @@ let hooks: Hooks = { onNewTab: () => create(), onActivate: () => {}, onCreated: 
 
 const newTabButton = el('button', 'tab-new', '+');
 newTabButton.type = 'button';
-newTabButton.title = 'New tab (⌘T)';
+newTabButton.title = 'New session tab (⌘T)';
 newTabButton.addEventListener('click', () => hooks.onNewTab());
 strip.append(newTabButton);
 

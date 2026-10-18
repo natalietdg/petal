@@ -97,7 +97,8 @@ describe('active subagents', () => {
 describe('pill text', () => {
   it('appends agents only when some are active', () => {
     expect(sessionsPillText({ busy: 1, total: 5, agents: 3 })).toBe('Sessions · 1 busy · 5 open · 3 agents');
-    expect(sessionsPillText({ busy: 0, total: 2, agents: 1 })).toBe('Sessions · 0 busy · 2 open · 1 agent');
+    expect(sessionsPillText({ busy: 0, total: 2, agents: 1 })).toBe('Sessions · 2 open · 1 agent');
+    expect(sessionsPillText({ busy: 0, total: 0, agents: 0 })).toBe('No sessions yet');
     expect(sessionsPillText({ busy: 2, total: 4, agents: 0 })).toBe('Sessions · 2 busy · 4 open');
   });
 

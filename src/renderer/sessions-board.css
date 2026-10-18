@@ -100,9 +100,6 @@
 .board-empty { list-style: none; font-size: 14px; color: var(--muted); }
 .board-folder-off p { margin: 0 0 8px; }
 
-/* The Sessions panel's Board button sits beside Add Session. */
-.sessions-board-open { margin: 0 12px 12px 0; }
-
 @media (prefers-reduced-motion: reduce) {
   .board-status.working .board-dot { animation: none; }
 }

@@ -82,17 +82,10 @@
 .flow-asked { margin: 6px 0 10px; font: 400 0.85em/1.4 var(--ui-font); color: var(--muted); }
 .prose .flow-outcome { margin: 8px 0 0; font-size: 0.92em; }
 
-.prose .flow-file { font-size: 12px; }
-
-.flow-ledger { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 13px; }
-.flow-ledger-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; padding: 3px 0; }
-.flow-ledger-n { color: var(--muted); font-family: var(--mono-font); }
-.flow-ledger-kind { font: 600 11px var(--ui-font); letter-spacing: 0.05em; color: var(--muted); }
 .flow-actor { padding: 0 8px; border-radius: 999px; font: 600 12px var(--ui-font); }
 .actor-you { background: var(--decide-pill); color: var(--decide-ink); }
 .actor-claude { background: var(--next-pill); color: var(--next-ink); }
 .actor-external { background: var(--watch-pill); color: var(--watch-ink); }
-.flow-ledger-what { flex: 1 1 60%; }
 
 .flow-quiet {
   display: block;

@@ -1,5 +1,5 @@
 // First-run screen: what Petal is, the Get started checklist, a cat and a scene, Petal's reply styles (opt-in), the organizer switch.
-// Shown once on a new install (config welcome.seen); Help › Welcome reopens it. Esc or Start closes it.
+// Shown once on an older install (config welcome.seen). Esc or Start closes it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as getStarted from './get-started';
@@ -54,15 +54,6 @@ function scenePicker(state: CustomizeState): HTMLElement {
   return group;
 }
 
-function organizerSwitch(state: CustomizeState): HTMLElement {
-  const label = el('label', 'welcome-switch');
-  const box = el('input');
-  Object.assign(box, { type: 'checkbox', checked: state.config.organizer.enabled });
-  box.addEventListener('change', () => window.pastel.config.save({ organizer: { enabled: box.checked } }));
-  label.append(box, el('span', null, 'Name and tidy sessions with Claude · uses your Claude plan'));
-  return label;
-}
-
 // Opt-in only: nothing is copied until the button is clicked, and the active style never changes here.
 function replyStylesOffer(state: CustomizeState): HTMLElement | null {
   if (!state.petalStyles.installable) return null;
@@ -109,7 +100,7 @@ function render(state: CustomizeState): void {
   // Pinned to the bottom so Start and the switch never need a scroll.
   const footer = el('footer', 'welcome-footer');
   const choices = el('div', 'welcome-footer-text');
-  choices.append(organizerSwitch(state), el('p', 'welcome-note', 'Optional, off unless you turn it on. Esc also closes this; Help › Welcome brings it back.'));
+  choices.append(el('p', 'welcome-note', 'Esc also closes this.'));
   footer.append(startButton, choices); // Start on the left, clear of the cat in the right corner
   view.replaceChildren(pane, footer);
   startButton.focus({ preventScroll: true }); // Esc and Enter work at once; the title stays in view
