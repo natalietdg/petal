@@ -1,5 +1,5 @@
 // Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
-// In the welcome, and on launch for installs from before the pet guide until every step is done; Help › Setup checklist and Customize › Get started reopen it.
+// In the welcome, and on launch for installs from before the pet guide until every step is done; Customize › Get started reopens it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
@@ -217,7 +217,7 @@ function render(): void {
   const done = el('button', 'welcome-start gs-close', 'Close');
   done.type = 'button';
   done.addEventListener('click', close);
-  footer.append(done, para('Help › Setup checklist brings this back.', 'welcome-note'));
+  footer.append(done, para('Customize › Get started brings this back.', 'welcome-note'));
   view.replaceChildren(pane, footer);
   done.focus({ preventScroll: true });
 }

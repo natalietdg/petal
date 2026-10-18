@@ -1,5 +1,5 @@
 // History's session list: all sessions or only starred ones, newest first or A–Z by title, filtered by the search box.
-import { el } from './dom';
+import { el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { timeOf } from './format';
 import { dayLabel, list, openNote, search, state, titleOf, type Session } from './history-state';
@@ -48,6 +48,22 @@ function folderOffNote(): HTMLElement {
   return note;
 }
 
+// Offered here, not on first run, since it spends her Claude plan; hidden until the config says it's off.
+function organizerOffer(): HTMLElement {
+  const offer = el('div', 'history-empty history-organizer-offer');
+  offer.hidden = true;
+  const turnOn = el('button', 'flow-button history-organizer-on', 'Turn it on');
+  turnOn.type = 'button';
+  turnOn.addEventListener('click', async () => {
+    turnOn.disabled = true;
+    const saved = await window.pastel.config.save({ organizer: { enabled: true } });
+    offer.replaceChildren(el('p', null, isIpcError(saved) ? `Couldn’t turn it on: ${saved.error}` : 'On. Change it in Customize › Organizer.'));
+  });
+  offer.append(el('p', null, 'Want Claude to name and tidy your sessions as they come in? It uses your Claude plan.'), turnOn);
+  void window.pastel.config.get().then((state) => { offer.hidden = isIpcError(state) || state.config.organizer.enabled; });
+  return offer;
+}
+
 export function renderList(): void {
   const query = search.value.trim().toLowerCase();
   const haystack = (s: Session) => `${titleOf(s)} ${s.title} ${s.firstPrompt} ${s.organizer?.project ?? ''} ${s.notes ?? ''} ${s.conclusion ? conclusionGist(s.conclusion) : ''}`.toLowerCase();
@@ -64,4 +80,5 @@ export function renderList(): void {
   const favs = state.listKind === 'favorites';
   const empty = query ? 'No sessions match.' : favs ? 'Star a session to keep it here.' : 'No sessions this past week.';
   list.append(el('p', 'history-empty', empty));
+  if (!query && !favs) list.append(organizerOffer());
 }

@@ -21,7 +21,7 @@ const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'flowTitles', name: 'Flow titles', summary: 'The prompt that turns each step of a session into the state changes on the Flow view.' },
   { id: 'handoff', name: 'Handoff', summary: 'What Send to Claude writes when one session hands its history to another.' },
   { id: 'hook', name: 'Response hook', summary: 'A shell command of yours that runs each time Claude finishes a reply.' },
-  { id: 'start', name: 'Get started', summary: 'The setup checklist, and whether Petal may read your Claude folder.' },
+  { id: 'start', name: 'Get started', summary: 'The Get started steps, and whether Petal may read your Claude folder.' },
 ];
 
 for (const s of SECTIONS) {

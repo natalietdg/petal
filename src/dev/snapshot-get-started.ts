@@ -318,8 +318,8 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const expanded = await until((s) => s.steps.length === 4 && s.steps.every((x: { done: boolean }) => x.done));
   check(expanded, 'Show the steps lists all four, ticked');
   await js('PastelTerm.overlays.hideCurrent()');
-  send(win.webContents, 'get-started:open'); // what Help › Setup checklist sends
-  check(await until((s) => s.open === 'get-started'), 'Help › Setup checklist reopens it');
+  send(win.webContents, 'get-started:open'); // what Customize › Get started's button does
+  check(await until((s) => s.open === 'get-started'), 'Customize › Get started reopens it');
   await js('PastelTerm.overlays.hideCurrent()');
 
   // 10. The Customize switch revokes and restores reading.
@@ -395,7 +395,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   await wait(600);
   const stillAsked = await js(CONSENT);
   check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
-    `existing config: History, Customize, Workflow and Help › Setup checklist wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
+    `existing config: History, Customize, Workflow and Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
   await js("document.querySelector('#consent .consent-later').click()");
   // With reading off, sign-in and ask are hand-ticked only, so Get started follows only while another step is open.
   await wait(800);

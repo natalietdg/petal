@@ -42,8 +42,6 @@ export interface MenuOptions {
   onTextSize: (step: TextStep) => void;
   onStopClaude: () => void;
   onOpenSettings: () => void;
-  onOpenWelcome: () => void;
-  onOpenGetStarted: () => void;
   onOpenPetGuide: () => void;
   onOpenColourKey: () => void;
   onToggleShortcuts: () => void;
@@ -52,7 +50,7 @@ export interface MenuOptions {
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onTextSize, onStopClaude, onOpenSettings, onOpenWelcome, onOpenGetStarted, onOpenPetGuide, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onTextSize, onStopClaude, onOpenSettings, onOpenPetGuide, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -142,7 +140,7 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
     { label: 'Theme', submenu: themeItems },
     { label: 'Pet', submenu: [...catItems, { type: 'separator' }, { label: 'Scene', submenu: sceneItems }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Welcome', click: onOpenWelcome }, { label: 'Show setup again', click: onOpenPetGuide }, { label: 'Setup checklist', click: onOpenGetStarted }, { label: 'Colour key', click: onOpenColourKey }, { type: 'separator' }, { label: 'Keyboard Shortcuts', accelerator: ACCEL.shortcuts, click: onToggleShortcuts }] },
+    { role: 'help', submenu: [{ label: 'Get started', click: onOpenPetGuide }, { label: 'Colour key', click: onOpenColourKey }, { type: 'separator' }, { label: 'Keyboard Shortcuts', accelerator: ACCEL.shortcuts, click: onToggleShortcuts }] },
   ];
 }
 

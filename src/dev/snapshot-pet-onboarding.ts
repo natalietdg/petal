@@ -305,10 +305,10 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   check(ended && configStore.load().onboarding.step === 'done', 'Yay! ends the guide and clears the highlight');
   check((await js('PastelTerm.launchScreens.show()')) === false && (await state()).overlay === null, 'done: the next launch shows nothing, no checklist either');
 
-  // 10. Help › Show setup again restarts from the hello card; Esc skips; Skip setup in a bubble skips too.
+  // 10. Help › Get started restarts from the hello card; Esc skips; Skip setup in a bubble skips too.
   send(win.webContents, 'pet-guide:open');
   const again = await until((s) => s.card === 'welcome');
-  check(again, 'Help › Show setup again opens the hello card');
+  check(again, 'Help › Get started opens the hello card');
   await js("document.querySelector('#pet-guide .pg-next').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
   const escaped = await until((s) => s.step === null && s.overlay === null);
   check(escaped && configStore.load().onboarding.step === 'skipped' && configStore.load().claudeFolder.choice === 'allowed', `Esc on a card skips setup and keeps the folder answer: ${JSON.stringify(configStore.load().onboarding)}`);

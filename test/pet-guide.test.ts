@@ -194,7 +194,7 @@ describe('copy', () => {
 });
 
 describe('Help menu', () => {
-  it('has Show setup again and the old checklist as Setup checklist, each wired to its own handler', async () => {
+  it('has one Get started item, wired to the pet guide', async () => {
     const { menuTemplate } = await import('../src/main/menu');
     const calls: string[] = [];
     const options = new Proxy({ currentTheme: '', currentCat: '', currentScene: '', currentReading: '' } as Record<string, unknown>, {
@@ -202,9 +202,8 @@ describe('Help menu', () => {
     });
     const help = menuTemplate(options as never).find((item) => item.role === 'help');
     const items = (help?.submenu ?? []) as { label?: string; click?: () => void }[];
-    expect(items.map((item) => item.label).filter(Boolean)).toEqual(['Welcome', 'Show setup again', 'Setup checklist', 'Colour key', 'Keyboard Shortcuts']);
-    items.find((item) => item.label === 'Show setup again')?.click?.();
-    items.find((item) => item.label === 'Setup checklist')?.click?.();
-    expect(calls).toEqual(['onOpenPetGuide', 'onOpenGetStarted']);
+    expect(items.map((item) => item.label).filter(Boolean)).toEqual(['Get started', 'Colour key', 'Keyboard Shortcuts']);
+    items.find((item) => item.label === 'Get started')?.click?.();
+    expect(calls).toEqual(['onOpenPetGuide']);
   });
 });

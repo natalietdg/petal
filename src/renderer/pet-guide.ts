@@ -1,5 +1,5 @@
 // The pet's setup guide on a new install: cards over the reader (hello, pet, scene, folder, and past sessions when she has some), then a speech
-// bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Show setup again restarts it.
+// bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Get started restarts it.
 import * as overlays from './overlays';
 import * as consent from './consent';
 import * as getStarted from './get-started';
@@ -545,13 +545,13 @@ function finish(): void {
   focusTerminal();
 }
 
-// Skip setup, or Esc: the guide ends for good (Help › Show setup again brings it back).
+// Skip setup, or Esc: the guide ends for good (Help › Get started brings it back).
 // Before the folder question is answered it still has to be asked once, so the old question follows.
 export async function skip(): Promise<void> {
   if (step === null) return;
   const wasConsent = step === 'consent';
   end('skipped');
-  announce('Setup skipped. Help, Show setup again brings it back.');
+  announce('Setup skipped. Help, Get started brings it back.');
   if (wasConsent) await consent.setChoice('declined'); // Esc on the folder question always meant Not now
   else if (folder === 'unasked') consent.open();
   focusTerminal();
@@ -595,7 +595,7 @@ export async function resumeIfStarted(): Promise<boolean> {
   return true;
 }
 
-// Help › Show setup again: from the hello card, whatever happened before.
+// Help › Get started: from the hello card, whatever happened before.
 export async function restart(): Promise<void> {
   if (!(await loadState())) return;
   await countPast();
