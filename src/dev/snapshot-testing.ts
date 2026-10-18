@@ -53,6 +53,17 @@ export function seedTestingProject(outDir: string): { project: string; claudeDir
 export const FIXTURE_TASK = 't-settings';
 export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
 
+// A loop step's cleanup: Stop if the loop still runs, then close the two agent tabs Start opened; true once only startTabs remain.
+export async function endLoop({ js, waitFor }: Pick<Kit, 'js' | 'waitFor'>, startTabs: readonly string[]): Promise<boolean> {
+  const running = async () => ['starting', 'running'].includes(await js('PastelTerm.testing.state().loop'));
+  if (await running()) {
+    await js("document.querySelector('#testing .tst-stop')?.click()");
+    await waitFor(async () => !(await running()) || null, 8000);
+  }
+  for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
+  return Boolean(await waitFor(async () => JSON.stringify(await js('PastelTerm.tabs.ids()')) === JSON.stringify(startTabs) || null, 8000));
+}
+
 // The loop's two agents in snapshot runs: the fixture session plays the testing agent, so its replies and Loop lines
 // drive the loop as before; the bug fix agent gets its own fixture tab and log. The tester's new tab follows an empty
 // log under the same id, so the fixture's own tab is the one Testing finds first.

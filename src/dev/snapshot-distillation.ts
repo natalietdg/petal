@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { FIXTURE_TASK, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -160,6 +160,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
+  const startTabs = await js('PastelTerm.tabs.ids()') as string[];
   try {
     resizeOffscreen(win, 1280, 900);
     check(await waitFor(async () => (await js("PastelTerm.tabs.get(PastelTerm.tabs.ids()[0])?.update?.state")) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
@@ -299,6 +300,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     check(asked?.data === `${PASTE_START}Is tax rounded per line in the API as well? Check: read the helper in the tax package${PASTE_END}\r`, `a thread card sends "Question? Check: ..." to the session: ${JSON.stringify(asked?.data)}`);
 
   } finally {
+    check(await endLoop(kit, startTabs), `the loop stops and its two agent tabs close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     testingFixture.agentIds.length = 0;
     testingFixture.project = null;
     testingFixture.claudeDir = null;

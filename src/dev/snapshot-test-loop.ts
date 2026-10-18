@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { setFixtureStatus } from './snapshot';
-import { FIXER_SESSION, FIXTURE_TASK, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, promptWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -100,6 +100,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
+  const startTabs = await js('PastelTerm.tabs.ids()') as string[];
   try {
     resizeOffscreen(win, 1280, 900);
     check(await waitFor(async () => (await js("PastelTerm.tabs.get(PastelTerm.tabs.ids()[0])?.update?.state")) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
@@ -226,6 +227,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     testingFixture.agentIds.length = 0;
     fixer.status = 'idle';
     setFixtureStatus(feed, 'idle');
+    check(await endLoop(kit, startTabs), `the two agent tabs close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
