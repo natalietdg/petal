@@ -24,16 +24,16 @@ export function isNoResult(run: PipelineRun): boolean {
   return !counted && stage.stageId === null && run.state === 'passed' && !isCheckOnly(checkStep(stage.command));
 }
 
-// The same thing run again: the same stage, else the same command, else the whole pipeline.
+// The same thing run again: the same stage, else the same command, else the whole suite.
 export function runKey(run: PipelineRun): string {
   if (run.stages.length !== 1) return 'pipeline';
   const [stage] = run.stages;
   return stage.stageId ? `stage:${stage.stageId}` : `cmd:${normalizeCommand(checkStep(stage.command))}`;
 }
 
-// What ran: the stage name, else the command; a pipeline run says how many stages.
+// What ran: the stage name, else the command; a whole-suite run says how many stages.
 export function runTitle(run: PipelineRun): string {
-  if (run.stages.length !== 1) return `Pipeline · ${run.stages.length} stages`;
+  if (run.stages.length !== 1) return `Suite · ${run.stages.length} stages`;
   const [stage] = run.stages;
   return stage.stageId ? stage.name : shortCommand(stage.command);
 }
@@ -45,7 +45,7 @@ export function runWhy(run: PipelineRun): string {
     return [prompt, run.sessionName ? cut(run.sessionName, 32) : ''].filter(Boolean).join(' · ');
   }
   if (run.trigger === 'auto') return 'Auto, after Claude’s turn';
-  return run.stages.length === 1 ? 'Run stage' : 'Run pipeline';
+  return run.stages.length === 1 ? 'Run stage' : 'Run suite';
 }
 
 export const byTag = (run: PipelineRun): string => (run.by === 'claude' ? 'by Claude' : 'by you');

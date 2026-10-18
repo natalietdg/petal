@@ -1,11 +1,12 @@
-// Project › PRD › Task › Subtask: the v1 to v2 migration, PRD and split ops, tagging runs with a task, and Testing's scopes.
+// Project › PRD › Task › Subtask: the v1 to v2 migration, PRD and split ops, tagging runs and criteria with a task.
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { removeTempDirs, tempDir } from './helpers';
+import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 import { addTask, assignTask, removeTask, validateTaskFile, type Task, type TaskData, type TaskOwner } from '../src/shared/tasks';
 import { addPrd, editPrd, groupTasks, removePrd, setTaskPrd, siblingIndex, splitTask } from '../src/shared/task-groups';
-import { defaultScope, inScope, prdOf, scoped, scopeTaskIds, taskAt } from '../src/shared/test-scope';
+import { prdOf, taskAt } from '../src/shared/test-scope';
+import { forTask } from '../src/shared/task-suite';
 import { buildLoopBrief, parseCriteria } from '../src/shared/test-loop';
 import { loadTasks, tasksFile, updateTasks } from '../src/main/tasks-store';
 import { taskIdAt } from '../src/main/testing-tasks';
@@ -142,6 +143,7 @@ describe('tagging with the session’s task', () => {
   });
 
   it('reads the repo’s task file; none there tags nothing', () => {
+    useTempUserData();
     const repo = tempDir('petal-repo-');
     fs.mkdirSync(path.join(repo, '.git'));
     expect(taskIdAt(repo, 's1', 150)).toBeNull();
@@ -150,38 +152,28 @@ describe('tagging with the session’s task', () => {
   });
 });
 
-describe('Testing scopes', () => {
-  const { tasks } = board();
-  const runs = [{ id: 'r1', taskId: 'a' }, { id: 'r2', taskId: 'b1' }, { id: 'r3', taskId: 'c' }, { id: 'old' }, { id: 'r4', taskId: null }];
-  const ids = (scope: 'task' | 'prd' | 'project', taskId: string | null) => scoped(runs, scopeTaskIds(scope, taskId, tasks)).map((r) => r.id);
+describe('a task’s own records', () => {
+  const runs = [{ id: 'r1', taskId: 'a' }, { id: 'r2', taskId: 'b1' }, { id: 'old' }, { id: 'r4', taskId: null }];
 
-  it('defaults to the session’s task, else the whole project', () => {
-    expect(defaultScope('a')).toBe('task');
-    expect(defaultScope(null)).toBe('project');
+  it('a task shows only what is tagged with it; untagged records belong to no task', () => {
+    expect(forTask(runs, 'a').map((r) => r.id)).toEqual(['r1']);
+    expect(forTask(runs, 'b').map((r) => r.id)).toEqual([]);
+    expect(forTask(runs, 'b1').map((r) => r.id)).toEqual(['r2']);
+    expect(forTask(runs, null)).toEqual([]);
   });
 
-  it('This task shows its runs and its subtasks’; untagged ones only under Whole project', () => {
-    expect(ids('task', 'a')).toEqual(['r1']);
-    expect(ids('task', 'b')).toEqual(['r2']);
-    expect(ids('task', 'b1')).toEqual(['r2']);
-    expect(ids('project', 'a')).toEqual(['r1', 'r2', 'r3', 'old', 'r4']);
-    expect(ids('task', null)).toEqual([]);
-  });
-
-  it('PRD rolls up every task and subtask in it; a task with no PRD shows nothing there', () => {
+  it('a subtask’s PRD comes from its task', () => {
+    const { tasks } = board();
     expect(prdOf(tasks, tasks.find((t) => t.id === 'b2') ?? null)).toBe('p1');
-    expect(ids('prd', 'b2')).toEqual(['r1', 'r2']);
-    expect(ids('prd', 'c')).toEqual([]);
-    expect(inScope(undefined, null)).toBe(true);
-    expect(inScope(undefined, new Set(['a']))).toBe(false);
+    expect(prdOf(tasks, tasks.find((t) => t.id === 'c') ?? null)).toBeNull();
   });
 
   it('filters criteria lines by their task', () => {
     const criteria = parseCriteria('## Scenarios\n- [pass] cart rounds · test: src/cart.test.ts::rounds · round 1 · task: a\n- [fail] coupon stacks · round 2 · task: b1\n- [pass] old line · round 1\n## Bugs\n- [fixed] cent off · test: src/cart.test.ts::cent · round 1 · task: a\n');
     expect(criteria.malformed).toBe(0);
-    expect(scoped(criteria.scenarios, scopeTaskIds('task', 'a', tasks)).map((s) => s.name)).toEqual(['cart rounds']);
-    expect(scoped(criteria.scenarios, scopeTaskIds('prd', 'a', tasks)).map((s) => s.name)).toEqual(['cart rounds', 'coupon stacks']);
-    expect(scoped(criteria.bugs, scopeTaskIds('task', 'a', tasks)).map((b) => b.name)).toEqual(['cent off']);
+    expect(forTask(criteria.scenarios, 'a').map((s) => s.name)).toEqual(['cart rounds']);
+    expect(forTask(criteria.scenarios, 'b1').map((s) => s.name)).toEqual(['coupon stacks']);
+    expect(forTask(criteria.bugs, 'a').map((b) => b.name)).toEqual(['cent off']);
   });
 });
 

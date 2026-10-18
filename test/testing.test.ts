@@ -10,11 +10,11 @@ import { slashCatalog } from '../src/main/slash-catalog';
 import { parseGoJson, parseJUnit, parseJestJson, parsePlaywrightJson, parseReport, parseText, stripAnsi } from '../src/main/testing-parse';
 import { claudeRun, forgetLogs, isCheckCommand, scanLog } from '../src/main/testing-claude';
 import * as store from '../src/main/testing-store';
-import { cleanPipeline, repoRoot } from '../src/main/testing-ipc';
+import { repoRoot } from '../src/main/testing-ipc';
 import { pipelineScript, resolveRunner, stageFiles, withReporter } from '../src/main/testing-runner';
 import {
   FIX_PROMPT_CAP, RUN_CAP, buildFixPrompt, groupByFile, isTestCommand, matchStage, runStateOf, unconfirmed,
-  type PipelineConfig, type PipelineRun, type StageResult, type TestCase,
+  type PipelineRun, type StageConfig, type StageResult, type TestCase,
 } from '../src/shared/testing';
 
 const FIX = path.join(__dirname, 'fixtures', 'testing');
@@ -366,18 +366,11 @@ describe('Ask Claude to fix', () => {
 });
 
 describe('confirm once, remember, and run', () => {
-  const pipeline: PipelineConfig = { stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }, { id: 'e2e', name: 'E2E', command: 'npx playwright test' }], keepGoing: false, autoRun: false, confirmed: ['npm test'] };
+  const stages: StageConfig[] = [{ id: 'unit', name: 'Unit', command: 'npm test' }, { id: 'e2e', name: 'E2E', command: 'npx playwright test' }];
 
   it('asks only for commands not confirmed before, ignoring spacing', () => {
-    expect(unconfirmed(pipeline, pipeline.stages).map((s) => s.id)).toEqual(['e2e']);
-    expect(unconfirmed({ ...pipeline, confirmed: ['npm test', 'npx playwright  test'] }, pipeline.stages)).toEqual([]);
-  });
-
-  it('a saved pipeline keeps the confirmations main recorded, never the renderer’s', () => {
-    const saved = cleanPipeline({ ...pipeline, confirmed: ['rm -rf /'], autoRun: true }, pipeline);
-    expect(saved).toMatchObject({ confirmed: ['npm test'], autoRun: true });
-    expect(cleanPipeline({ ...pipeline, stages: [{ id: 'x', name: 'X', command: 'echo a\nrm -rf /' }] }, null)).toBeNull();
-    expect(cleanPipeline({ ...pipeline, stages: [{ id: 'x', name: '', command: 'npm test' }] }, null)).toBeNull();
+    expect(unconfirmed(['npm test'], stages).map((s) => s.id)).toEqual(['e2e']);
+    expect(unconfirmed(['npm test', 'npx playwright  test'], stages)).toEqual([]);
   });
 
   it('adds a machine reporter per runner, through package scripts too', () => {

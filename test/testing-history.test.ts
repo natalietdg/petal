@@ -40,7 +40,7 @@ describe('what each history row says', () => {
     expect(shortCommand('npx jest --watchAll=false --coverage=false src/very/long/path/to/some/module.test.ts')).toHaveLength(48);
     const pipeline = run({ by: 'you', trigger: 'click' });
     pipeline.stages = [pipeline.stages[0], { ...pipeline.stages[0], stageId: 'tc' }];
-    expect(runTitle(pipeline)).toBe('Pipeline · 2 stages');
+    expect(runTitle(pipeline)).toBe('Suite · 2 stages');
   });
 
   it('says why: the prompt Claude’s turn answered and its session, or which of her buttons', () => {
@@ -49,7 +49,7 @@ describe('what each history row says', () => {
     expect(runWhy(run({ prompt: '', sessionName: 'acme-notes' }))).toBe('acme-notes');
     const mine = run({ by: 'you', trigger: 'click' });
     expect(runWhy(mine)).toBe('Run stage');
-    expect(runWhy({ ...mine, stages: [mine.stages[0], mine.stages[0]] })).toBe('Run pipeline');
+    expect(runWhy({ ...mine, stages: [mine.stages[0], mine.stages[0]] })).toBe('Run suite');
     expect(runWhy({ ...mine, trigger: 'auto' })).toBe('Auto, after Claude’s turn');
   });
 

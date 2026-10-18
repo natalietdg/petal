@@ -51,7 +51,7 @@ export function healthPanel(health: SuiteHealth, stages: readonly { id: string; 
       const add = el('button', 'tst-button tst-health-add', same ? 'Core stage is first' : existing ? 'Update core stage' : 'Add core stage');
       add.type = 'button';
       add.disabled = same || busy;
-      add.title = 'Puts it first in the pipeline. A new command still asks before its first run.';
+      add.title = 'Puts it first in this task’s suite. A new command still asks before its first run.';
       add.addEventListener('click', () => handlers.addCore(health.command as string));
       core.append(add);
     }

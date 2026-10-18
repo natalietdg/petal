@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
-// Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and a proposed pipeline;
-// Run pipeline confirms the exact commands, then records the line a new tab would run (never executed);
+// Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and its one task's suite;
+// Run suite confirms the exact commands, then records the line a new tab would run (never executed);
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
 // records the paste; Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
-// how long it took; a tab in ~ picks a project instead; a project with no stages makes one from Claude's commands;
+// how long it took; a tab in ~ picks a project instead; a task with no suite starts one from Claude's checks;
 // editing saves; every theme, style and width fits.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
+import { extraTabFixtures, fixtureFile, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
@@ -45,7 +45,37 @@ export function seedTestingProject(outDir: string): { project: string; claudeDir
   put(path.join(claudeDir, 'skills', 'prove-it', 'SKILL.md'), '---\nname: prove-it\ndescription: Verify that claimed changes actually landed in the running app.\n---\n');
   put(path.join(claudeDir, 'skills', 'deploy', 'SKILL.md'), '---\nname: deploy\ndescription: Ship the app to staging.\n---\n');
   put(path.join(claudeDir, 'agents', 'qa-runner.md'), '---\nname: qa-runner\ndescription: Runs the e2e suite and reports failures.\n---\n');
+  seedTask(project, FIXTURE_TASK, 'Settings screen', [['Typecheck', 'npm run typecheck'], ['Unit', 'npm test'], ['Mobile flows', 'maestro test .maestro']]);
+  seedTask(bare, 't-notes', 'Sort notes by date', null);
   return { project, claudeDir, bare };
+}
+
+export const FIXTURE_TASK = 't-settings';
+export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
+
+// The loop's two agents in snapshot runs: the fixture session plays the testing agent, so its replies and Loop lines
+// drive the loop as before; the bug fix agent gets its own fixture tab and log. The tester's new tab follows an empty
+// log under the same id, so the fixture's own tab is the one Testing finds first.
+export function useAgentFixtures(outDir: string, testerId = 'snapshot-fixture'): { fixer: FixtureSession; fixerLog: string } {
+  const dir = path.join(outDir, 'testing-fixture', 'agents');
+  fs.mkdirSync(dir, { recursive: true });
+  const testerLog = path.join(dir, 'tester-tab.jsonl');
+  const fixerLog = path.join(dir, `${FIXER_SESSION}.jsonl`);
+  fs.writeFileSync(testerLog, '');
+  fs.writeFileSync(fixerLog, `${JSON.stringify({ isSidechain: false, type: 'user', uuid: 'fixer-u0', sessionId: FIXER_SESSION, timestamp: new Date().toISOString(), message: { role: 'user', content: 'You are the bug fix agent.' } })}\n`);
+  const fixer: FixtureSession = { sessionId: FIXER_SESSION, transcript: fixerLog, status: 'idle', cwd: testingFixture.project ?? undefined };
+  testingFixture.agentIds.splice(0, Infinity, testerId, FIXER_SESSION);
+  extraTabFixtures.push({ sessionId: testerId, transcript: testerLog, status: 'idle' }, fixer);
+  return { fixer, fixerLog };
+}
+
+// One task held by the fixture session since before its first logged run, so Claude's runs file under it; its suite if given.
+function seedTask(repo: string, id: string, title: string, stages: [string, string][] | null): void {
+  const owner = { sessionId: 'snapshot-fixture', name: 'Fixture', branch: 'main' };
+  const task = { id, title, notes: '', status: 'working', owner, createdAt: Date.now() - 4 * 86_400_000, claimedAt: Date.now() - 3 * 86_400_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
+  put(path.join(repo, '.petal', '.gitignore'), '*\n');
+  put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task] }, null, 2));
+  if (stages) put(path.join(repo, '.petal', 'suites', `${id}.json`), JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command })), keepGoing: false, autoRun: false }, null, 2));
 }
 
 const VITEST_PASS = (n: number) => ` ✓ src/theme.test.ts (${n} tests) 4ms\n\n Test Files  1 passed (1)\n      Tests  ${n} passed (${n})\n`;
@@ -105,6 +135,7 @@ const PROBE = `(() => {
     picker: [...view.querySelectorAll('.tst-pick-name')].map((n) => n.textContent),
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
     makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
+    head: view.querySelector('.tst-summary')?.textContent ?? '',
     bars: view.querySelectorAll('.tst-bar').length,
     sumbar: view.querySelector('.tst-sumbar')?.textContent ?? '',
     failRows: [...view.querySelectorAll('.tst-row.is-failed .tst-row-name')].map((n) => n.textContent),
@@ -144,7 +175,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     resizeOffscreen(win, 1280, 900);
     await wait(1200); // the reader takes in the appended Claude run
 
-    // Opens from the dock; the stack and the proposed pipeline come from the fixture files.
+    // Opens from the dock on the session's task; the stack comes from the fixture files, the stages from the task's suite.
     await click('#testing-button');
     const opened = await settle((p) => p.state.project === 'acme' && (p.tools as unknown[]).length > 2);
     check(opened?.pressed === 'true', 'the Testing button shows pressed');
@@ -154,7 +185,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(/found in \.maestro\//.test(found('Maestro')?.[1] ?? ''), `Maestro found in .maestro: ${JSON.stringify(found('Maestro'))}`);
     check(found('prove-it')?.[1] === 'found in user skills' && !found('deploy'), `prove-it skill listed, deploy not: ${JSON.stringify(found('prove-it'))}`);
     check(found('qa-runner') && found('CI'), 'the qa-runner agent and the CI workflow are listed');
-    check(JSON.stringify(opened?.state.stages) === JSON.stringify(['Typecheck', 'Unit', 'Mobile flows']), `proposed stages: ${JSON.stringify(opened?.state.stages)}`);
+    check(JSON.stringify(opened?.state.stages) === JSON.stringify(['Typecheck', 'Unit', 'Mobile flows']), `the task's stages: ${JSON.stringify(opened?.state.stages)}`);
+    check(opened && opened.head === 'Settings screen · No PRD · 3 stages' && !/acme/.test(opened.head as string), `the header names the task, not the project: ${opened?.head}`);
 
     // Claude's run from the fixture log, mapped onto the Unit stage, labelled by Claude.
     const claude = await settle((p) => (p.runs as string[]).some((r) => /by Claude/.test(r)));
@@ -179,7 +211,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await wait(150);
     await capture('testing-history');
 
-    // Run pipeline: a confirm naming each exact command; nothing recorded yet.
+    // Run suite: a confirm naming each exact command; nothing recorded yet.
     const tabsBefore = await js('PastelTerm.tabs.ids().length') as number;
     await click('#testing .tst-head .tst-primary');
     const asked = await settle((p) => Array.isArray(p.confirm));
@@ -188,7 +220,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await capture('testing-confirm');
     await click('#testing .tst-confirm-run');
     const recorded = await waitFor(() => testingFixture.runs[0] ?? null, 5000);
-    check(recorded && /^sh '.+pipeline\.sh'\r$/.test(recorded.typed), `the new tab's line runs Petal's pipeline script: ${JSON.stringify(recorded?.typed)}`);
+    check(recorded && /^sh '.+pipeline\.sh'\r$/.test(recorded.typed), `the new tab's line runs Petal's run script: ${JSON.stringify(recorded?.typed)}`);
     const script = recorded ? fs.readFileSync(recorded.script, 'utf8') : '';
     check(recorded && recorded.stages[1].exec.includes("npm test -- --reporter=default --reporter=json --outputFile.json='") && script.includes("'npm test'") && script.includes('maestro test .maestro --format junit --output'), 'the script runs each command with a reporter added');
     check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) as number) === tabsBefore + 1 || null, 4000), 'it opened one new tab (snapshot runs type a stand-in, never the commands)');
@@ -212,24 +244,25 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(groups.length === 2 && groups[0][0] === 'src/auth.test.js' && groups[0][2] && groups[0][1] && !groups[1][2] && !groups[1][1], `grouped by file, failing group first and open, passing collapsed: ${JSON.stringify(groups)}`);
     check(JSON.stringify(doneRun?.failRows) === JSON.stringify(['auth > tokens > rejects an expired token']), `the failing test row: ${JSON.stringify(doneRun?.failRows)}`);
     check(/1\s*failed/.test(String(doneRun?.sumbar)) && /4\s*passed/.test(String(doneRun?.sumbar)) && /by you/.test(String(doneRun?.sumbar)), `summary bar: ${String(doneRun?.sumbar).slice(0, 90)}`);
-    check(doneRun && (doneRun.bars as number) >= 2 && /^Pipeline · 3 stages.*by you.*Run pipeline/.test(doneRun.history[1] ?? ''), `her run is the newest row, titled by what ran: ${JSON.stringify(doneRun?.history.slice(0, 2))}`);
+    check(doneRun && (doneRun.bars as number) >= 2 && /^Suite · 3 stages.*by you.*Run suite/.test(doneRun.history[1] ?? ''), `her run is the newest row, titled by what ran: ${JSON.stringify(doneRun?.history.slice(0, 2))}`);
     await capture('testing-pipeline');
 
-    // Edit pipeline: add a stage, save, and it is kept; then back to the three.
+    // Edit suite: add a stage, save, and it is kept in the task's file; then back to the three.
     await click('#testing .tst-head .tst-button:not(.tst-primary)');
     const editing = await settle((p) => p.state.editing);
     check(editing && await js("document.querySelectorAll('#testing .tst-edit-row').length") === 3, 'the editor lists the three stages');
     await capture('testing-edit');
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Add stage').click()");
     await js("(() => { const rows = document.querySelectorAll('#testing .tst-edit-row'); const last = rows[rows.length - 1]; const [n, c] = last.querySelectorAll('input'); n.value = 'Lint'; n.dispatchEvent(new Event('input')); c.value = 'npm run lint'; c.dispatchEvent(new Event('input')); })()");
-    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save pipeline').click()");
+    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save suite').click()");
     const saved = await settle((p) => !p.state.editing && p.state.stages.length === 4);
-    check(saved && saved.state.stages[3] === 'Lint', `saved with a fourth stage: ${JSON.stringify(saved?.state.stages)}`);
+    const suiteJson = fs.readFileSync(path.join(project, '.petal', 'suites', `${FIXTURE_TASK}.json`), 'utf8');
+    check(saved && saved.state.stages[3] === 'Lint' && suiteJson.includes('"npm run lint"'), `saved with a fourth stage, in the task's suite file: ${JSON.stringify(saved?.state.stages)}`);
     await click('#testing .tst-head .tst-button:not(.tst-primary)');
     await settle((p) => p.state.editing);
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Use detected stages').click()");
-    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save pipeline').click()");
-    check(await settle((p) => !p.state.editing && p.state.stages.length === 3), 'Use detected stages restores the proposal');
+    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save suite').click()");
+    check(await settle((p) => !p.state.editing && p.state.stages.length === 3), 'Use detected stages puts back the three detected ones');
 
     // Every theme and reading style, with a failure open.
     for (const theme of ['paleSky', 'blush', 'nightPastel']) {
@@ -268,13 +301,13 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
 
-    // A tab in the home folder is not a project: pick one instead; a repo with no stages starts from Claude's commands.
+    // A tab in the home folder is not a project: pick one instead; a task with no suite starts from Claude's checks.
     testingFixture.project = os.homedir();
     await js('PastelTerm.overlays.hideCurrent()');
     await click('#testing-button');
     const home = await settle((p) => p.state.elsewhere?.reason === 'home');
     check(home && /^This tab is in your home folder, not a project\. Pick a project:/.test(home.pickerTitle as string) && JSON.stringify(home.picker) === JSON.stringify(['acme', 'notes-app']), `home folder shows the picker: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
-    check(home && home.state.stages.length === 0 && !home.history.length, 'no pipeline or history for ~');
+    check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
     await capture('testing-picker');
     await js(`document.querySelector(${JSON.stringify(`#testing .tst-pick[data-root="${bare}"]`)})?.click()`);
     const notes = await settle((p) => p.state.project === 'notes-app' && Boolean(p.makePipeline));
@@ -282,7 +315,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await click('#testing .tst-make-pipeline');
     const made = await settle((p) => p.state.editing);
     const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('input')].map((i) => i.value))") as string[][];
-    check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Make a pipeline proposes Claude's checks: ${JSON.stringify(fields)}`);
+    check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
     await capture('testing-make-pipeline');
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
     await click('#testing .tst-change-project');
@@ -299,9 +332,9 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     testingFixture.claudeDir = null;
     await js('PastelTerm.overlays.hideCurrent()');
     await js('PastelTerm.testing.resetLeftovers()'); // the history row it opened to its repeats
-    // Run pipeline's tab: later steps (Get started) count tabs from a clean start.
+    // Run suite's tab: later steps (Get started) count tabs from a clean start.
     for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
-    check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the pipeline tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
+    check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the run's tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

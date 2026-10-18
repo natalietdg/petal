@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { MAX_FILE_BYTES, adoptClaudePipeline, offersClaudePipeline, parseClaudePipeline, readClaudePipeline, type ClaudePipeline } from '../src/main/testing-claude-pipeline';
-import type { PipelineConfig } from '../src/shared/testing';
+import { MAX_FILE_BYTES, parseClaudePipeline, readClaudePipeline, type ClaudePipeline } from '../src/main/testing-claude-pipeline';
 import { removeTempDirs, tempDir } from './helpers';
 
 const STAGES = [{ name: 'Typecheck', command: 'npm run typecheck' }, { name: 'Unit', command: 'npm test' }];
@@ -71,29 +70,5 @@ describe('readClaudePipeline', () => {
     const linkedDir = project();
     fs.symlinkSync(path.join(outside, '.petal'), path.join(linkedDir, '.petal'));
     expect(readClaudePipeline(linkedDir)).toBeNull();
-  });
-});
-
-describe('the newer-file offer', () => {
-  const claude = (updatedAt: number, stages = STAGES): ClaudePipeline => ({ updatedAt, stages: stages.map((s, i) => ({ id: `s${i}`, ...s })) });
-  const saved = (savedAt: number | undefined, stages = [{ id: 'unit', name: 'Unit', command: 'npm test' }]): PipelineConfig => ({ stages, keepGoing: true, autoRun: true, confirmed: ['npm test'], ...(savedAt === undefined ? {} : { savedAt }) });
-
-  it('no saved pipeline: no offer, the file is the proposal', () => {
-    expect(offersClaudePipeline(null, claude(5000))).toBe(false);
-  });
-
-  it('offered only when the file is newer than her last save and different', () => {
-    expect(offersClaudePipeline(saved(1000), claude(2000))).toBe(true);
-    expect(offersClaudePipeline(saved(3000), claude(2000))).toBe(false);
-    expect(offersClaudePipeline(saved(undefined), claude(2000))).toBe(true); // saved before Petal kept a time
-    expect(offersClaudePipeline(saved(1000, [{ id: 'a', ...STAGES[0] }, { id: 'b', ...STAGES[1] }]), claude(2000))).toBe(false); // same stages
-  });
-
-  it('Use it replaces the stages, keeps her settings and confirmations, and ends the offer', () => {
-    const before = saved(1000);
-    const after = adoptClaudePipeline(before, claude(2000), 1500);
-    expect(after).toEqual({ stages: claude(2000).stages, keepGoing: true, autoRun: true, confirmed: ['npm test'], savedAt: 2000 });
-    expect(offersClaudePipeline(after, claude(2000))).toBe(false);
-    expect(adoptClaudePipeline(null, claude(2000), 9000)).toMatchObject({ keepGoing: false, autoRun: false, confirmed: [], savedAt: 9000 });
   });
 });

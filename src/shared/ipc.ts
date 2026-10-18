@@ -31,7 +31,14 @@ import type { TokenEstimate } from './library-cost';
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
-import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
+import type { LockView, PipelineRun, RunReply, SuiteSeed, TestingState } from './testing';
+import type { AgentNames, AgentRole } from './agent-names';
+import type { AgentAction } from './agent-actions';
+import type { TokenUsage } from './token-usage';
+
+export interface AgentStart { tabId: string | null; sessionId: string }
+export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage }
+import type { SuiteViews, TaskSuite } from './task-suite';
 import type { Criteria } from './test-loop';
 import type { TextStep } from './text-size';
 import type { SessionInfo } from './session-info';
@@ -234,11 +241,21 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
-  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
-  'testing:save-pipeline': { args: [request: { tabId: TabId; root?: string | null; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:use-claude-pipeline': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:run': { args: [request: { tabId: TabId; root?: string | null; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
+  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief: string; fixerBrief: string }]; result: Guarded<{ tester: AgentStart; fixer: AgentStart } | { note: string }> };
+  // The testing agent alone, to draw up a task's suite; only its writes change the suite.
+  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
+  // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
+  'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  // The test lock: on or off for the project, and a restored-file flag dismissed for a task. Agent names per project.
+  'testing:lock': { args: [request: { tabId: TabId; root?: string | null; on: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:lock-dismiss': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:agent-name': { args: [request: { tabId: TabId; root?: string | null; role: AgentRole; name: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:run': { args: [request: { tabId: TabId; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };

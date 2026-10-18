@@ -1,6 +1,7 @@
-// IPC for the Testing tab: what the active tab's project tests with, its pipeline and run history, and running it.
+// IPC for the Testing tab: what the active tab's project tests with, each task's suite and run history, and running it.
 // A run is a script Petal writes under userData and types into a NEW tab after her click (never a tab with claude in it);
 // main watches each stage's exit-code file and report. Reading the project and her skills waits for the folder gate.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,12 +15,20 @@ import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
 import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
-import { claudeRun, scanLog, type ClaudeCall } from './testing-claude';
+import { claudeRun, scanLog, type ClaudeCall, type FileTouch, type SuiteWrite } from './testing-claude';
 import { projectRootOf, ranIn, repoRoot, runProject } from './testing-project';
 import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
-import { adoptClaudePipeline, offersClaudePipeline, readClaudePipeline, type ClaudePipeline } from './testing-claude-pipeline';
+import { readClaudePipeline } from './testing-claude-pipeline';
+import { agentOf, allAgents, rememberAgent, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { setAgentTitle } from './agent-titles';
+import { readAgentLog } from './agent-log';
+import { NO_TOKENS } from '../shared/token-usage';
+import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } from './test-lock';
+import { AGENT_NAME_MAX, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
+import type { LockManifest } from '../shared/test-lock';
+import { checkSuite, emptySuite, suiteFor, type SuiteViews } from '../shared/task-suite';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
 import { writeFileDurable } from './atomic-file';
@@ -28,7 +37,7 @@ import { claudeLaunch } from './claude-launch';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type ClaudePipelineState, type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type StageResult, type TestingState,
+  type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -36,11 +45,11 @@ import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
 import { captureReplies, readDistillation } from './distillation-store';
 import { loadTasks } from './tasks-store';
+import type { Task } from '../shared/tasks';
 import { scopeFacts, taskIdAt } from './testing-tasks';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
-const MAX_STAGES = 20;
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
 const LOOP_STAND_IN = ': petal-loop-start'; // typed in snapshot runs instead of starting claude
 const BRIEF_CAP = 12000;
@@ -93,31 +102,43 @@ function skillsFor(root: string) {
 
 const defaultPipeline = (stages: StageConfig[]): PipelineConfig => ({ stages, keepGoing: false, autoRun: false, confirmed: [] });
 
-const validClaudePipeline = (root: string): ClaudePipeline | null => {
+// The project's commands from before suites were per task: Claude's .petal/pipeline.json, else the pipeline she saved.
+export function projectSeed(root: string): SuiteSeed | null {
   const claude = readClaudePipeline(root);
-  return claude && 'stages' in claude ? claude : null;
+  if (claude && 'stages' in claude) return { stages: claude.stages };
+  const saved = store.load(root).pipeline?.stages ?? [];
+  if (saved.length) return { stages: saved };
+  return claude ? { problem: claude.problem } : null;
+}
+
+// What a Claude run on a task with no suite is matched against: the project's commands, else what detection suggests.
+const fallbackStages = (root: string): StageConfig[] => {
+  const seed = projectSeed(root);
+  return seed && 'stages' in seed ? seed.stages : proposeStages(root, detectStack(root));
 };
 
-// The stages to offer when nothing is saved: the pipeline Claude drew up, else what detection suggests.
-const proposalFor = (root: string, stack = detectStack(root)): StageConfig[] => validClaudePipeline(root)?.stages ?? proposeStages(root, stack);
-
-function claudePipelineState(root: string, saved: PipelineConfig | null): ClaudePipelineState | null {
-  const claude = readClaudePipeline(root);
-  if (!claude) return null;
-  if ('problem' in claude) return { problem: claude.problem };
-  return { proposal: !saved, offer: offersClaudePipeline(saved, claude), stages: claude.stages.length };
+// Commands she confirmed once run without asking again; kept on this machine, never in the repo.
+const confirmedOf = (root: string): string[] => store.load(root).pipeline?.confirmed ?? [];
+function rememberConfirmed(root: string, stages: StageConfig[]): void {
+  const pipeline = store.load(root).pipeline ?? defaultPipeline([]);
+  store.savePipeline(root, { ...pipeline, confirmed: [...new Set([...pipeline.confirmed, ...stages.map((s) => normalizeCommand(s.command))])] });
 }
 
 // One session's log; cwd is Claude's folder, for a call without its own.
 export interface SessionLog { transcript: string; sessionId: string; cwd: string | null }
 
-// Claude's calls in these logs, each with the project it ran in (its "cd", else Claude's folder then).
-async function logCalls(logs: readonly SessionLog[]): Promise<{ call: ClaudeCall; project: string | null }[]> {
-  const found: { call: ClaudeCall; project: string | null }[] = [];
+interface LogFinds { found: { call: ClaudeCall; project: string | null }[]; writes: SuiteWrite[]; touches: FileTouch[] }
+
+// Claude's calls in these logs, each with the project it ran in (its "cd", else Claude's folder then), and its suite file writes.
+async function logCalls(logs: readonly SessionLog[]): Promise<LogFinds> {
+  const finds: LogFinds = { found: [], writes: [], touches: [] };
   for (const log of logs) {
-    for (const call of (await scanLog(log.transcript, log.sessionId)).calls) found.push({ call, project: projectRootOf(ranIn(call.command, call.cwd ?? log.cwd)) });
+    const scan = await scanLog(log.transcript, log.sessionId);
+    for (const call of scan.calls) finds.found.push({ call, project: projectRootOf(ranIn(call.command, call.cwd ?? log.cwd)) });
+    finds.writes.push(...scan.suiteWrites);
+    finds.touches.push(...scan.touches);
   }
-  return found;
+  return finds;
 }
 
 // Every open session's log.
@@ -170,30 +191,60 @@ function recordRun(root: string, run: PipelineRun): void {
   });
 }
 
-// Claude's runs that ran in this project, from every open session and the old home-folder history, added once each.
-async function mergeClaudeRuns(root: string, sessions: TabSessions, stages: StageConfig[]): Promise<void> {
-  if (!claudeFolderAllowed()) return;
-  await saveClaudeRuns(root, await openCalls(sessions), stages, sessions);
+// The logs of this project's agents whose tabs are closed: their suite writes and file touches still count.
+async function closedAgentFinds(root: string, open: readonly SessionLog[]): Promise<LogFinds> {
+  const seen = new Set(open.map((log) => log.sessionId));
+  const logs = allAgents(root).map((a) => a.sessionId).filter((id) => !seen.has(id))
+    .flatMap((id) => { const file = history.findRecord(id)?.file; return file ? [{ transcript: file, sessionId: id, cwd: root }] : []; });
+  return logCalls(logs);
 }
 
-// The pipeline's stages as the Testing tab would show them: saved, else the proposal.
-export const stagesFor = (root: string): StageConfig[] => store.load(root).pipeline?.stages ?? proposalFor(root);
+export interface ProjectChecks { suites: SuiteViews; lock: LockView }
+
+// Claude's runs that ran in this project, from every open session and the old home-folder history, added once each.
+// Then the tasks' suite files, so a change the testing agent just made shows, and the test lock's integrity check.
+async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<ProjectChecks> {
+  const { tasks } = loadTasks(root);
+  if (!claudeFolderAllowed()) return { suites: syncSuites(root, tasks), lock: lockView(root, loadManifest(root)) };
+  const logs = openLogs(sessions);
+  const { found, writes, touches } = await logCalls(logs);
+  const closed = await closedAgentFinds(root, logs);
+  const allTouches = [...touches, ...closed.touches];
+  const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
+  const suites = syncSuites(root, tasks, [...writes, ...closed.writes]);
+  const names = store.load(root).agentNames;
+  for (const agent of allAgents(root)) {
+    const task = tasks.find((t) => t.id === agent.taskId);
+    if (task) setAgentTitle(agent.sessionId, agentTabTitle(names, agent.role, task.title));
+  }
+  await saveClaudeRuns(root, found, tasks, suites, sessions);
+  return { suites, lock: lockView(root, manifest) };
+}
+
+const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored });
 
 // Claude's runs in these logs that ran in this project, added once each; used for a concluded session's This session line.
-export async function mergeLogRuns(root: string, logs: readonly SessionLog[], stages: StageConfig[] = stagesFor(root)): Promise<void> {
+export async function mergeLogRuns(root: string, logs: readonly SessionLog[]): Promise<void> {
   if (!claudeFolderAllowed()) return;
-  await saveClaudeRuns(root, await logCalls(logs), stages, new Map());
+  const { tasks } = loadTasks(root);
+  const { found, writes } = await logCalls(logs);
+  await saveClaudeRuns(root, found, tasks, syncSuites(root, tasks, writes), new Map());
 }
 
 // The store is loaded after the logs are read, so a run saved meanwhile is never lost.
-async function saveClaudeRuns(root: string, found: { call: ClaudeCall; project: string | null }[], stages: StageConfig[], sessions: TabSessions): Promise<void> {
+// A call lands on a stage of its task's suite; with no task or no suite, on the project's commands.
+async function saveClaudeRuns(root: string, found: LogFinds['found'], tasks: Task[], suites: SuiteViews, sessions: TabSessions): Promise<void> {
   const calls = found.filter((c) => c.project === root).map((c) => c.call);
   const moved = root === os.homedir() ? [] : homeRuns().filter((run) => runProject(run) === root);
   const data = store.load(root);
   const known = new Set(data.runs.map((r) => r.id));
   const scripts = scriptsOf(root);
-  const { tasks } = loadTasks(root);
-  const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => withTask(claudeRun(call, stages, scripts, root), taskIdAt(root, call.sessionId, call.at, tasks)));
+  let fallback: StageConfig[] | null = null;
+  const stagesOf = (taskId: string | null): StageConfig[] => suiteFor(tasks, suites, taskId)?.suite.stages ?? (fallback ??= fallbackStages(root));
+  const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => {
+    const taskId = taskIdAt(root, call.sessionId, call.at, tasks);
+    return withTask(claudeRun(call, stagesOf(taskId), scripts, root), taskId);
+  });
   fresh.forEach((run) => known.add(run.id));
   const copied: PipelineRun[] = [];
   for (const run of moved) if (!known.has(run.id)) { known.add(run.id); copied.push(run); } // the old file has a few ids twice
@@ -224,7 +275,7 @@ async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
   const seen = new Map<string, number>(); // root -> most recent use
   const note = (root: string | null, at: number) => { if (root) seen.set(root, Math.max(seen.get(root) ?? 0, at)); };
   for (const s of sessions.values()) note(await projectOf(s), Date.now());
-  for (const { call, project } of await openCalls(sessions)) note(project, call.at);
+  for (const { call, project } of (await openCalls(sessions)).found) note(project, call.at);
   for (const run of homeRuns()) note(runProject(run), run.startedAt);
   for (const record of history.listSessions(new Set(), testingClaudeDir()).slice(0, 40)) note(projectRootOf(record.cwd), record.lastAt);
   return [...seen].sort((a, b) => b[1] - a[1]).slice(0, PICK_MAX).map(([root]) => ({ root, name: path.basename(root) }));
@@ -279,15 +330,12 @@ export function captureFinishedReply(reply: Reply, sessionId: string, cwd: strin
 
 async function stateFor(root: string, sessions: TabSessions, onProject: TabSession | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
-  const proposed = proposalFor(root, stack);
-  const saved = store.load(root).pipeline;
-  const pipeline = saved ?? defaultPipeline(proposed);
-  await mergeClaudeRuns(root, sessions, pipeline.stages);
+  const { suites, lock } = await mergeClaudeRuns(root, sessions);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
   return {
-    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running,
-    sessionTab: onProject?.tabId ?? null, claudePipeline: claudePipelineState(root, saved), changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, runs: named(data.runs), running,
+    sessionTab: onProject?.tabId ?? null, changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
   };
 }
 
@@ -376,21 +424,6 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   return { started: id, typed };
 }
 
-// Stages, keep-going and auto-run from the renderer; confirmations only ever come from a confirmed run.
-export function cleanPipeline(raw: unknown, previous: PipelineConfig | null): PipelineConfig | null {
-  const value = raw as Partial<PipelineConfig> | null;
-  if (!value || !Array.isArray(value.stages) || value.stages.length > MAX_STAGES) return null;
-  const stages: StageConfig[] = [];
-  for (const s of value.stages as Partial<StageConfig>[]) {
-    const name = typeof s?.name === 'string' ? s.name.trim().slice(0, 60) : '';
-    const command = typeof s?.command === 'string' ? s.command.trim() : '';
-    const id = typeof s?.id === 'string' && /^[\w-]{1,64}$/.test(s.id) ? s.id : null;
-    if (!name || !command || !id || command.length > 2000 || /[\r\n]/.test(command) || stages.some((x) => x.id === id)) return null;
-    stages.push({ id, name, command });
-  }
-  return { stages, keepGoing: value.keepGoing === true, autoRun: value.autoRun === true, confirmed: previous?.confirmed ?? [], savedAt: Date.now() };
-}
-
 // ---- Test loop: Petal makes .petal/ (kept out of git) and reads the criteria file; Claude runs the loop itself.
 const criteriaFile = (root: string): string => path.join(root, ...CRITERIA_PATH.split('/'));
 
@@ -423,7 +456,16 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
+  // The project and one of its tasks, for the calls that act on a task's suite.
+  const taskTarget = async (contentsId: number, tabId: unknown, picked: unknown, taskId: unknown): Promise<{ root: string; task: Task; tasks: Task[] } | { note: string }> => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, contentsId, tabId), picked);
+    if (!root) return { note: 'No project in this tab. Open one first.' };
+    const { tasks, problem } = loadTasks(root);
+    const task = tasks.find((t) => t.id === taskId);
+    return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
+  };
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: null, sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
   handle('testing:detect', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return blank(false);
@@ -434,73 +476,133 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    const none = { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null, distillation: [], tasks: [], prds: [], sessionTaskId: null };
+    const none = { runs: [], running: null, sessionTab: null, criteria: null, seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, distillation: [], tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
     if (!root) return none;
-    // An unsaved pipeline is the proposal, so Claude's runs still land on a stage.
-    await mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
+    const { suites, lock } = await mergeClaudeRuns(root, sessions);
     await captureOpenDistillations(root, sessions);
     const data = store.load(root);
     const onProject = await sessionOnProject(root, sessions, asking);
     return {
       runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: onProject?.tabId ?? null,
-      criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline), distillation: readDistillation(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+      criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
 
-  // Prepares .petal/, then either leaves the paste to the reply box's path or starts claude with the brief in a new tab.
-  handle('testing:loop-start', async (event, { tabId, root: picked, brief, newTab }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab. Open one first.' };
-    if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'The loop brief is empty or too long.' };
-    prepareLoop(root);
-    if (newTab !== true) return { tabId: null };
-    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, (await claudeLaunch()).command)}`;
-    if (isSnapshotRun()) testingFixture.loopStarts.push({ command });
-    const opened = openTab(event.sender, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
-    if (opened) runTabs.set(`${event.sender.id}:${opened}`, root);
-    return { tabId: opened ?? null };
+  // Starts one of a task's agents: claude with the brief in a new tab, under a session id Petal picks and remembers with
+  // its role, so the lock and the suite reader know it. Its tab is named for its role and the task.
+  const startAgent = async (contents: WebContents, root: string, task: Task, role: AgentRole, brief: string): Promise<{ tabId: string | null; sessionId: string }> => {
+    const sessionId = (isSnapshotRun() && testingFixture.agentIds.shift()) || crypto.randomUUID();
+    rememberAgent(root, task.id, sessionId, role);
+    setAgentTitle(sessionId, agentTabTitle(store.load(root).agentNames, role, task.title));
+    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, `${(await claudeLaunch()).command} --session-id ${sessionId}`)}`;
+    if (isSnapshotRun()) testingFixture.loopStarts.push({ command, brief });
+    const opened = openTab(contents, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
+    if (opened) runTabs.set(`${contents.id}:${opened}`, root);
+    return { tabId: opened ?? null, sessionId };
+  };
+
+  // The loop for a task: its testing agent and its bug fix agent, each in its own new tab, working at once.
+  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    for (const brief of [testerBrief, fixerBrief]) if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'A loop brief is empty or too long.' };
+    prepareLoop(target.root);
+    const tester = await startAgent(event.sender, target.root, target.task, 'tester', testerBrief);
+    const fixer = await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief);
+    return { tester, fixer };
   });
 
-  handle('testing:save-pipeline', async (event, { tabId, root: picked, pipeline }) => {
+  // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task.
+  handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
+    return { tabId: (await startAgent(event.sender, target.root, target.task, 'tester', prompt)).tabId };
+  });
+
+  // An agent's action log and tokens, from its transcript: the open tab's log, else History's copy.
+  handle('testing:agent-log', async (event, { tabId, root: picked, sessionId }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
     const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab.' };
-    const clean = cleanPipeline(pipeline, store.load(root).pipeline);
-    if (!clean) return { note: 'Each stage needs a name and a one-line command.' };
-    store.savePipeline(root, clean);
+    if (!root || typeof sessionId !== 'string' || !agentOf(root, sessionId)) return { note: 'That isn’t one of this project’s agents.' };
+    const open = [...sessions.values()].find((s) => s.feed.session?.sessionId === sessionId)?.feed.session?.transcript;
+    const file = open ?? history.findRecord(sessionId)?.file;
+    return file ? readAgentLog(file, root) : { actions: [], tokens: NO_TOKENS };
+  });
+
+  // The task's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.
+  handle('testing:save-suite', async (event, { tabId, root: picked, taskId, suite }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const check = checkSuite(suite);
+    if (!check.ok) return { note: 'Each stage needs a name and a one-line command.' };
+    writeSuite(target.root, target.task.id, check.suite);
     return { ok: true };
   });
 
-  // Use it: re-reads and re-checks the file here, never the renderer's copy. New commands still ask before their first run.
-  handle('testing:use-claude-pipeline', async (event, { tabId, root: picked }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab.' };
-    const claude = validClaudePipeline(root);
-    if (!claude) return { note: 'Claude’s .petal/pipeline.json is gone or no longer valid.' };
-    store.savePipeline(root, adoptClaudePipeline(store.load(root).pipeline, claude));
+  // Start from the project's commands: re-read here, never the renderer's copy. New commands still ask before their first run.
+  handle('testing:seed-suite', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const seed = projectSeed(target.root);
+    if (!seed || !('stages' in seed)) return { note: 'The project has no commands to start from.' };
+    writeSuite(target.root, target.task.id, emptySuite(seed.stages));
     return { ok: true };
   });
 
-  handle('testing:run', async (event, { tabId, root: picked, stageId = null, confirmed = false }): Promise<RunReply> => {
+  // The test lock, per project: the hook entry in its .claude/settings.local.json and the manifest.
+  handle('testing:lock', async (event, { tabId, root: picked, on }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const asking = sessionFor(sessions, event.sender.id, tabId);
-    const root = await rootFor(asking, picked);
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab. Open one first.' };
-    if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
+    const problem = setLock(root, on === true);
+    return problem ? { note: problem } : { ok: true };
+  });
+
+  handle('testing:lock-dismiss', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    dismissRestored(target.root, target.task.id);
+    return { ok: true };
+  });
+
+  // Her name for an agent role, for every task in the project; empty puts the default back.
+  handle('testing:agent-name', async (event, { tabId, root: picked, role, name }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
+    if (!root) return { note: 'No project in this tab. Open one first.' };
+    const clean = cleanAgentName(name);
+    if (clean === undefined || (role !== 'tester' && role !== 'fixer')) return { note: `A name is 1 to ${AGENT_NAME_MAX} characters on one line.` };
     const data = store.load(root);
-    const pipeline = data.pipeline ?? defaultPipeline(proposalFor(root));
-    const stages = stageId ? pipeline.stages.filter((s) => s.id === stageId) : pipeline.stages;
+    const names = { ...(data.agentNames ?? {}) };
+    if (clean === null) delete names[role as AgentRole]; else names[role as AgentRole] = clean;
+    store.save({ ...data, agentNames: names });
+    return { ok: true };
+  });
+
+  handle('testing:undo-suite', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    return undoSuiteChange(target.root, target.task.id) ? { ok: true } : { note: 'There is no change to undo.' };
+  });
+
+  // Runs the task's suite (a subtask without one runs its parent's), tagged with that task.
+  handle('testing:run', async (event, { tabId, root: picked, taskId, stageId = null, confirmed = false }): Promise<RunReply> => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const { root, task } = target;
+    if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
+    const suite = suiteFor(target.tasks, syncSuites(root, target.tasks), task.id)?.suite;
+    if (!suite) return { note: 'This task has no suite yet.' };
+    const stages = stageId ? suite.stages.filter((s) => s.id === stageId) : suite.stages;
     if (!stages.length) return { note: 'There are no stages to run.' };
-    const fresh = unconfirmed(pipeline, stages);
+    const fresh = unconfirmed(confirmedOf(root), stages);
     if (fresh.length && !confirmed) return { confirm: { commands: stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
-    const confirmedNow = [...new Set([...pipeline.confirmed, ...stages.map((s) => normalizeCommand(s.command))])];
-    store.savePipeline(root, { ...pipeline, confirmed: confirmedNow });
-    return startRun(root, stages, pipeline.keepGoing, event.sender, openTab, 'click', taskIdAt(root, asking?.feed.session?.sessionId, Date.now()));
+    rememberConfirmed(root, stages);
+    return startRun(root, stages, suite.keepGoing, event.sender, openTab, 'click', task.id);
   });
 
   // Stop watching a run whose tab was closed or interrupted; the run keeps what finished.
@@ -513,7 +615,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 }
 
-// After a Claude turn: run the pipeline if she turned auto-run on, the turn edited files, every command was
+// After a Claude turn: run its task's suite if she turned auto-run on for it, the turn edited files, every command was
 // confirmed before, nothing is running, and no claude on this project is mid-turn. Still a visible new tab.
 export async function onTurnFinished(session: TabSession): Promise<void> {
   if (!deps || !claudeFolderAllowed()) return;
@@ -524,13 +626,15 @@ export async function onTurnFinished(session: TabSession): Promise<void> {
   const { edits } = await scanLog(s.transcript, s.sessionId);
   const before = editsSeen.get(s.transcript) ?? edits; // the first turn seen only sets the baseline, so a restart never runs it
   editsSeen.set(s.transcript, edits);
-  const pipeline = store.load(root).pipeline;
-  if (!pipeline?.autoRun || edits <= before || !pipeline.stages.length || unconfirmed(pipeline, pipeline.stages).length) return;
+  const { tasks } = loadTasks(root);
+  const taskId = taskIdAt(root, s.sessionId, Date.now(), tasks);
+  const suite = suiteFor(tasks, syncSuites(root, tasks), taskId)?.suite; // the session's task's suite, if it asked to run after edits
+  if (!suite?.autoRun || edits <= before || !suite.stages.length || unconfirmed(confirmedOf(root), suite.stages).length) return;
   if ([...watching.values()].some((w) => w.root === root)) return;
   for (const other of deps.sessions.values()) {
     const o = other.feed.session;
     if (o?.status === 'busy' && o.cwd && repoRoot(o.cwd) === root) return;
   }
   const contents = webContents.fromId(session.contentsId);
-  if (contents && !contents.isDestroyed()) startRun(root, pipeline.stages, pipeline.keepGoing, contents, deps.openTab, 'auto', taskIdAt(root, s.sessionId, Date.now()));
+  if (contents && !contents.isDestroyed()) startRun(root, suite.stages, suite.keepGoing, contents, deps.openTab, 'auto', taskId);
 }

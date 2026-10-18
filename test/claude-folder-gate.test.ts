@@ -16,14 +16,18 @@ const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder
 // reply-image-ipc asks the gate per request and names the folder only to refuse pictures in it; reply-image.ts is handed that answer.
 const GATE_PASSED_IN = { file: 'reply-image.ts', field: /\bclaudeAllowed\b/ };
 
-// The one allowed exception: the repo-level project skill (<repo>/.claude/skills/...), not ~/.claude.
-// Only this exact string, only in factory-store.ts; any other mention of .claude there still counts.
-const REPO_SKILL_EXCEPTION = { file: 'factory-store.ts', text: "'.claude/skills/factory/SKILL.md'" };
+// The allowed exceptions, both repo-level, never ~/.claude: the project skill (<repo>/.claude/skills/...) and the test
+// lock's hook entry in <repo>/.claude/settings.local.json. Only these exact strings, only in these files.
+const REPO_EXCEPTIONS: Record<string, string> = {
+  'factory-store.ts': "'.claude/skills/factory/SKILL.md'",
+  'test-lock.ts': "path.join(root, '.claude', 'settings.local.json')",
+};
 const NAMES_CLAUDE_FOLDER = /['"`]\.claude['"`/]/;
 
 function namesClaudeFolder(file: string, text: string): boolean {
   const code = text.replace(/^\s*\/\/.*$/gm, '');
-  const allowed = file === REPO_SKILL_EXCEPTION.file ? code.split(REPO_SKILL_EXCEPTION.text).join('') : code;
+  const exception = REPO_EXCEPTIONS[file];
+  const allowed = exception ? code.split(exception).join('') : code;
   return NAMES_CLAUDE_FOLDER.test(allowed);
 }
 
@@ -33,12 +37,14 @@ describe('the ~/.claude gate, by source', () => {
     expect(naming).toEqual(['claude-folder.ts']);
   });
 
-  it('the repo-skill exception is that exact path in factory-store.ts only', () => {
-    expect(source(REPO_SKILL_EXCEPTION.file)).toContain(REPO_SKILL_EXCEPTION.text);
-    expect(namesClaudeFolder('factory-store.ts', `const p = ${REPO_SKILL_EXCEPTION.text};`)).toBe(false);
-    expect(namesClaudeFolder('factory-store.ts', "path.join(os.homedir(), '.claude')")).toBe(true);
-    expect(namesClaudeFolder('factory-store.ts', "'.claude/settings.json'")).toBe(true);
-    expect(namesClaudeFolder('history.ts', `const p = ${REPO_SKILL_EXCEPTION.text};`)).toBe(true);
+  it('each repo-level exception is that exact text in its own file only', () => {
+    for (const [file, text] of Object.entries(REPO_EXCEPTIONS)) {
+      expect(source(file)).toContain(text);
+      expect(namesClaudeFolder(file, `const p = ${text};`)).toBe(false);
+      expect(namesClaudeFolder(file, "path.join(os.homedir(), '.claude')")).toBe(true);
+      expect(namesClaudeFolder(file, "'.claude/settings.json'")).toBe(true);
+      expect(namesClaudeFolder('history.ts', `const p = ${text};`)).toBe(true);
+    }
   });
 
   it('nothing outside main builds a path to it', () => {

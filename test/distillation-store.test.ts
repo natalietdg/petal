@@ -10,6 +10,7 @@ vi.mock('../src/main/session-title', () => ({ sessionTitleFor: () => 'Checkout l
 vi.mock('../src/main/repo-label', () => ({ repoBranch: () => 'main' }));
 
 const { captureReplies, readDistillation } = await import('../src/main/distillation-store');
+const { useTempUserData, removeTempDirs } = await import('./helpers');
 
 const ROUND = (round: number, extra = '') => `## Distillation\n- Q: What changed? · A: The cap moved into totals.ts.\n**Course:** retest · needs a green run\n## Open threads\n- Free orders allowed? *Check: needs you · the product rule*${extra}\n**Loop:** round ${round}/5 · testing · 0 open`;
 const reply = (id: string, round: number, s: number) => ({ id, markdown: ROUND(round), timestamp: new Date(1_000_000 + s * 1000).toISOString() });
@@ -19,8 +20,9 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-distill-'));
   fs.mkdirSync(path.join(root, '.git'));
   recorded.length = 0;
+  useTempUserData(); // a session that held no task is looked up among the testing agents
 });
-afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); removeTempDirs(); });
 
 const prepare = () => { fs.mkdirSync(path.join(root, '.petal')); fs.writeFileSync(path.join(root, '.petal', 'test-criteria.md'), '# Test criteria\n'); };
 

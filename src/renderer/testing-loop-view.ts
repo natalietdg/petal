@@ -1,5 +1,5 @@
 // The Testing tab's Loop panel: start a test loop (focus, rounds), its round progress from Claude's Loop lines,
-// the criteria file grouped Scenarios / Bugs, and the latest pipeline results Claude ran. testing.ts owns the state.
+// the criteria file grouped Scenarios / Bugs, and the latest suite results Claude ran. testing.ts owns the state.
 import { el } from './dom';
 import { loopBarHtml, phaseWord, type LoopPhase, type LoopProgress } from '../shared/loop-line';
 import { DEFAULT_ROUNDS, MAX_ROUNDS, FOCUS_CAP, openBugs, type Criteria, type CriteriaItem, type CriteriaStatus, type LoopStatus } from '../shared/test-loop';
@@ -40,7 +40,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   stop.addEventListener('click', () => handlers.stop());
   top.append(heading, pill, stop);
   const about = el('p', 'tst-muted tst-loop-about',
-    'Claude writes new tests for what you name, runs the pipeline, and turns every bug it finds into a test before fixing it. Then it runs again, until everything passes or the rounds run out. It never commits.');
+    'Claude writes new tests for what you name, runs this task’s suite, and turns every bug it finds into a test before fixing it. Then it runs again, until everything passes or the rounds run out. It never commits.');
 
   // Built once, so the 4s refresh never wipes what she is typing.
   const form = el('form', 'tst-loop-start');
@@ -94,7 +94,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   function liveBlock(model: LoopModel): HTMLElement | null {
     if (!model.stages.length) return null;
     const row = el('ul', 'tst-loop-live');
-    row.setAttribute('aria-label', 'Latest pipeline results from Claude');
+    row.setAttribute('aria-label', 'Latest suite results from Claude');
     for (const stage of model.stages) {
       const item = el('li', `tst-loop-live-item is-${stage.status}`);
       const dot = el('span', `tst-dot is-${stage.status}`);

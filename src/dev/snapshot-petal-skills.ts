@@ -1,8 +1,8 @@
 // Petal skills (PASTEL_SNAPSHOT_MODE=petal-skills), against a stand-in ~/.claude and a stand-in project:
 // Customize › Formatting lists both skills as not installed; Install copies them into skills/<name>/SKILL.md with the
-// Library path filled in, leaves her own skills alone, and an edit shows as Edited. Testing takes Claude's
-// .petal/pipeline.json as the proposal, offers a newer one over a saved pipeline, Use it replaces the stages and
-// new commands still ask first; a bad file is refused with its reason. Text contrast in every theme.
+// Library path filled in, leaves her own skills alone, and an edit shows as Edited. Testing offers the old
+// .petal/pipeline.json as a seed for a task with no suite, the seed writes the task's suite file, new commands still
+// ask first, and a suite change from outside the testing agent is refused with its reason. Text contrast in every theme.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -56,10 +56,13 @@ const TESTING = `(() => {${RATIO_FN}
   return {
     state: PastelTerm.testing.state(),
     note: note.hidden ? '' : note.textContent,
-    use: Boolean(view.querySelector('.tst-use-claude')),
+    change: view.querySelector('.tst-suite-change')?.textContent ?? '',
+    noSuite: view.querySelector('.tst-no-suite-title')?.textContent ?? null,
+    seed: Boolean(view.querySelector('.tst-seed-suite')),
+    ask: Boolean(view.querySelector('.tst-ask-suite')),
     chips: [...view.querySelectorAll('.tst-stage-name')].map((n) => n.textContent),
     confirm: view.querySelector('.tst-confirm')?.hidden ? null : [...view.querySelectorAll('.tst-confirm-list li')].map((li) => [li.querySelector('code')?.textContent, Boolean(li.querySelector('.tst-new'))]),
-    worst: worstOf([...view.querySelectorAll('.tst-note span, .tst-link, .tst-stage-name, .tst-summary, .tst-title')]),
+    worst: worstOf([...view.querySelectorAll('.tst-note span, .tst-link, .tst-stage-name, .tst-summary, .tst-title, .tst-no-suite-title, .tst-button:not(:disabled), .tst-picker-label, .tst-task-select')]),
   };
 })()`;
 
@@ -79,6 +82,8 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   put(path.join(project, '.petal', '.gitignore'), '*\n');
   const pipelineFile = path.join(project, '.petal', 'pipeline.json');
   put(pipelineFile, `${JSON.stringify(CLAUDE_STAGES, null, 2)}\n`);
+  put(path.join(project, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [{ id: 't-shop', title: 'Checkout', notes: '', status: 'open', owner: null, createdAt: Date.now(), claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null }] }));
+  const suiteFile = path.join(project, '.petal', 'suites', 't-shop.json');
   stylesFixture.claudeDir = claudeDir;
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
@@ -133,26 +138,22 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     applyTheme('paleSky', { persist: false });
     await js('PastelTerm.customize.close()');
 
-    // ---- Testing: Claude's .petal/pipeline.json as the proposal.
-    const names = CLAUDE_STAGES.map((s) => s.name);
-    const proposal: Page = await openTesting((p) => p.state.project === 'shop');
-    check(proposal && JSON.stringify(proposal.state.stages) === JSON.stringify(names) && /the one Claude drew up in \.petal\/pipeline\.json/.test(proposal.note) && !proposal.use, `no saved pipeline: Claude's stages are the proposal: ${JSON.stringify(proposal?.state.stages)} ${proposal?.note}`);
-
-    // A saved pipeline from before the file: offered, Use it replaces the stages and keeps her settings.
+    // ---- Testing: the project's old .petal/pipeline.json is only a seed for a task with no suite.
     store.savePipeline(project, { stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], keepGoing: true, autoRun: false, confirmed: ['npm test'], savedAt: Date.now() - 60_000 });
-    fs.utimesSync(pipelineFile, new Date(), new Date()); // newer than the save however long the run took to get here
-    const offered: Page = await openTesting((p) => p.use);
-    check(offered && JSON.stringify(offered.state.stages) === '["Unit"]' && /^Claude drew up a new pipeline ·\s*Use it$/.test(offered.note.trim()), `a newer file is offered over the saved one: ${offered?.note}`);
-    check(offered && offered.worst[0] >= MIN_RATIO, `offer text contrast ${offered?.worst[0]}:1 ${JSON.stringify(offered?.worst)}`);
+    const names = CLAUDE_STAGES.map((s) => s.name);
+    const empty: Page = await openTesting((p) => p.state.task === 'Checkout' && p.seed);
+    check(empty && empty.noSuite === 'No suite for this task yet' && empty.state.stages.length === 0 && empty.ask, `a task with no suite says so and offers the seed and Ask Claude: ${JSON.stringify(empty && { noSuite: empty.noSuite, seed: empty.seed, stages: empty.state.stages })}`);
+    check(empty && !/project/i.test(empty.state.head), `the header names the task: ${empty?.state.head}`);
+    check(empty && empty.worst[0] >= MIN_RATIO, `no-suite text contrast ${empty?.worst[0]}:1 ${JSON.stringify(empty?.worst)}`);
     await capture('testing-claude-pipeline');
 
-    await js("document.querySelector('#testing .tst-use-claude').click()");
-    const used: Page = await waitFor(async () => { const p: Page = await js(TESTING); return p && p.state.stages.length === names.length ? p : null; }, 5000);
-    const kept = store.load(project).pipeline;
-    check(used && JSON.stringify(used.state.stages) === JSON.stringify(names) && !used.use && /Now using Claude’s pipeline/.test(used.note), `Use it replaces the stages and the offer goes: ${used?.note}`);
-    check(kept?.keepGoing === true && JSON.stringify(kept.confirmed) === '["npm test"]' && (kept.savedAt ?? 0) >= fs.statSync(pipelineFile).mtimeMs, `her settings and confirmations carry over: ${JSON.stringify(kept)}`);
+    await js("document.querySelector('#testing .tst-seed-suite').click()");
+    const seeded: Page = await waitFor(async () => { const p: Page = await js(TESTING); return p && p.state.stages.length === names.length ? p : null; }, 5000);
+    const written = JSON.parse(fs.readFileSync(suiteFile, 'utf8')) as { stages: { name: string; command: string }[] };
+    check(seeded && JSON.stringify(seeded.state.stages) === JSON.stringify(names) && JSON.stringify(written.stages) === JSON.stringify(CLAUDE_STAGES), `Start from the project's commands writes the task's suite file: ${JSON.stringify(seeded?.state.stages)}`);
+    check(fs.readFileSync(pipelineFile, 'utf8') === `${JSON.stringify(CLAUDE_STAGES, null, 2)}\n`, 'the old pipeline file is left as it was');
 
-    // New commands still ask before their first run; nothing runs here.
+    // New commands still ask before their first run; the one she confirmed before is not new. Nothing runs here.
     const runsBefore = testingFixture.runs.length;
     await js("document.querySelector('#testing .tst-head .tst-primary').click()");
     const asked: Page = await waitFor(async () => { const p: Page = await js(TESTING); return p?.confirm ? p : null; }, 5000);
@@ -160,16 +161,10 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(asked && JSON.stringify(asked.confirm) === JSON.stringify(expected) && testingFixture.runs.length === runsBefore, `the confirm names every command, new ones marked: ${JSON.stringify(asked?.confirm)}`);
     await js("[...document.querySelectorAll('#testing .tst-confirm .tst-button')].find((b) => b.textContent === 'Cancel').click()");
 
-    // Reopening: the file is no newer than the save, so no offer.
-    const quiet: Page = await openTesting((p) => p.state.stages.length === names.length);
-    check(quiet && !quiet.use && !/Claude/.test(quiet.note), `no offer once taken: ${JSON.stringify(quiet?.note)}`);
-
-    // A bad file is refused with its reason, and the saved pipeline stays.
-    put(pipelineFile, JSON.stringify([{ name: 'Unit', command: 'npm test\nrm -rf ~' }]));
-    const refused: Page = await openTesting((p) => /was not used/.test(p.note));
-    check(refused && /stage 1 needs a one-line command/.test(refused.note) && refused.state.stages.length === names.length, `a bad file is refused: ${refused?.note}`);
-    const bad: Page = await js(`(async () => window.pastel.testing.useClaudePipeline(PastelTerm.testing.state().sourceTab))()`);
-    check(bad?.note && store.load(project).pipeline?.stages.length === names.length, `Use it re-checks the file in main: ${JSON.stringify(bad)}`);
+    // A change to the suite file from outside the task's testing agent is not applied: the stages stay and the reason shows.
+    put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test\nrm -rf ~' }] }));
+    const refused: Page = await openTesting((p) => /not applied/.test(p.change));
+    check(refused && refused.change === 'Changed outside the testing agent, not applied.' && refused.state.stages.length === names.length, `an outside change is refused and the suite stays: ${refused?.change}`);
   } finally {
     stylesFixture.claudeDir = null;
     testingFixture.project = null;

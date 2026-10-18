@@ -1,5 +1,8 @@
-// The Testing tab: a project's test pipeline, its runs (hers or Claude's), what it tests with, and the pure helpers both sides share.
+// The Testing tab: each task's suite, its runs (hers or Claude's), what it tests with, and the pure helpers both sides share.
 import type { Prd, Task } from './tasks';
+import type { SuiteRecord, SuiteViews } from './task-suite';
+import type { AgentNames, AgentRole } from './agent-names';
+import type { RestoredFlag } from './test-lock';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -60,9 +63,14 @@ export interface PipelineRun {
 export interface ProjectTesting {
   version: 1;
   root: string;
-  pipeline: PipelineConfig | null; // null until she saves or runs; the proposal comes from detection
+  pipeline: PipelineConfig | null; // the commands she confirmed; its stages are the old project pipeline, now only a seed
   runs: PipelineRun[]; // newest first
+  suites?: Record<string, SuiteRecord>; // per task: what Petal last took from .petal/suites/<taskId>.json
+  agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
+  agentNames?: AgentNames; // her names for the two agents, for every task in the project
 }
+
+export interface AgentRecord { sessionId: string; role: AgentRole }
 
 export type StackKind = 'unit' | 'e2e' | 'mobile' | 'load' | 'lint' | 'ci' | 'skill' | 'agent' | 'command';
 
@@ -86,24 +94,27 @@ export interface TestingState {
   elsewhere: Elsewhere | null; // set when project is null because the tab is in ~ or outside a repo
   stack: StackItem[];
   proposed: StageConfig[]; // stages detection suggests
-  pipeline: PipelineConfig; // saved, else the proposal
-  saved: boolean;
+  seed: SuiteSeed | null; // the project's commands, offered to a task with no suite
+  suites: SuiteViews; // each task's own suite, by task id
+  lock: LockView; // the project's test lock
+  agentNames: AgentNames; // her names for the testing and bug fix agents
   runs: PipelineRun[];
   running: string | null; // the run id still going
   sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
-  claudePipeline: ClaudePipelineState | null; // <repo>/.petal/pipeline.json, when there is one
   changed: string[]; // files changed recently (git), for Suite health's core stage
-  tasks: Task[]; // the project's tasks and PRDs, for the This task and PRD scopes
+  tasks: Task[]; // the project's tasks and PRDs; Testing is organised by them
   prds: Prd[];
-  sessionTaskId: string | null; // the task held by sessionTab's session, the default scope
+  sessionTaskId: string | null; // the task held by sessionTab's session, shown first
 }
 
-// What the Testing tab shows about the pipeline Claude wrote: in use as the proposal, offered over a saved one, or why it was refused.
-export type ClaudePipelineState =
-  | { proposal: boolean; offer: boolean; stages: number; problem?: undefined }
-  | { problem: string };
+// The test lock as the Testing tab shows it.
+export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[] }
+export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [] };
 
-export type RunRequest = { tabId: string; root?: string | null; stageId?: string | null; confirmed?: boolean };
+// The project's commands from before suites were per task: .petal/pipeline.json, else the pipeline she saved. A seed only.
+export type SuiteSeed = { stages: StageConfig[] } | { problem: string };
+
+export type RunRequest = { tabId: string; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean };
 export type RunReply =
   | { started: string; typed: string }
   | { confirm: { commands: { name: string; command: string; isNew: boolean }[] } }
@@ -256,9 +267,9 @@ export const slugId = (name: string, taken: string[]): string => {
   return id;
 };
 
-// Commands in the pipeline she has not confirmed yet.
-export const unconfirmed = (pipeline: PipelineConfig, stages: StageConfig[]): StageConfig[] =>
-  stages.filter((s) => !pipeline.confirmed.some((c) => squash(c) === squash(s.command)));
+// Stages whose commands she has not confirmed yet.
+export const unconfirmed = (confirmed: readonly string[], stages: StageConfig[]): StageConfig[] =>
+  stages.filter((s) => !confirmed.some((c) => squash(c) === squash(s.command)));
 export const normalizeCommand = squash;
 
 // The step of a shell line that runs the check, "cd", env and redirections dropped:

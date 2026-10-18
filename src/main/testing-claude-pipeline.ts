@@ -1,8 +1,8 @@
-// <repo>/.petal/pipeline.json: the pipeline the petal-testing-suite skill drew up. Read only, strictly checked, size-capped.
-// It is the proposal when the project has no saved pipeline, and an offer when it is newer than the saved one.
+// <repo>/.petal/pipeline.json: the project-wide pipeline older versions of the testing-suite skill wrote. Read only, strictly
+// checked, size-capped. Suites are per task now; this file is only offered as a starting point for a task with no suite.
 import fs from 'node:fs';
 import path from 'node:path';
-import { slugId, type PipelineConfig, type StageConfig } from '../shared/testing';
+import { slugId, type StageConfig } from '../shared/testing';
 
 export const CLAUDE_PIPELINE_PATH = '.petal/pipeline.json';
 export const MAX_FILE_BYTES = 16 * 1024;
@@ -63,24 +63,4 @@ export function readClaudePipeline(root: string): (ClaudePipeline | { problem: s
   }
   const parsed = parseClaudePipeline(text);
   return 'problem' in parsed ? parsed : { stages: parsed.stages, updatedAt: stat.mtimeMs };
-}
-
-const sameStages = (a: StageConfig[], b: StageConfig[]): boolean =>
-  a.length === b.length && a.every((s, i) => s.name === b[i].name && s.command === b[i].command);
-
-// Offer Claude's pipeline over a saved one only when the file is newer than her last save and says something different.
-export function offersClaudePipeline(saved: PipelineConfig | null, claude: ClaudePipeline): boolean {
-  if (!saved) return false; // no saved pipeline: Claude's is already the proposal
-  return claude.updatedAt > (saved.savedAt ?? 0) && !sameStages(saved.stages, claude.stages);
-}
-
-// Claude's stages replace the saved ones; her settings and the commands she already confirmed carry over.
-export function adoptClaudePipeline(saved: PipelineConfig | null, claude: ClaudePipeline, now = Date.now()): PipelineConfig {
-  return {
-    stages: claude.stages.map((s) => ({ ...s })),
-    keepGoing: saved?.keepGoing ?? false,
-    autoRun: saved?.autoRun ?? false,
-    confirmed: saved?.confirmed ?? [],
-    savedAt: Math.max(now, claude.updatedAt),
-  };
 }

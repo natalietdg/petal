@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { seedTestingProject } from './snapshot-testing';
+import { FIXTURE_TASK, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -59,7 +59,7 @@ export const ROUND_2 = [
 
 const NEEDS_YOU = 'May a 100% coupon make an order free?';
 
-// Petal's own runs for Suite health: the retry test flips within minutes, totals failed recently, theme always passes.
+// Petal's own runs of the fixture task's suite, for Suite health: the retry test flips within minutes, totals failed recently, theme always passes.
 function seedHistory(project: string): void {
   const now = Date.now();
   const test = (file: string, name: string, status: TestCase['status'], durationMs = 12): TestCase => ({ file, name, status, durationMs });
@@ -75,7 +75,7 @@ function seedHistory(project: string): void {
     const failed = tests.filter((t) => t.status === 'failed').length;
     const counts = { passed: tests.length - failed, failed, skipped: 0 };
     const run: PipelineRun = {
-      id: `distill-run-${i}`, by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 9000, state: failed ? 'failed' : 'passed', totals: counts,
+      id: `distill-run-${i}`, by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 9000, state: failed ? 'failed' : 'passed', totals: counts, taskId: FIXTURE_TASK,
       stages: [{ stageId: 'unit', name: 'Unit', command: 'npm test', status: failed ? 'failed' : 'passed', exitCode: failed ? 1 : 0, durationMs: 9000, counts, tests, output: '', runner: 'vitest' }],
     };
     store.putRun(project, run);
@@ -83,7 +83,7 @@ function seedHistory(project: string): void {
   // The retry test passes again four minutes after it failed, on the same code.
   const at = now - 3 * 60 * 60 * 1000 + 4 * 60 * 1000;
   const tests = [test('src/api/client.test.ts', 'client > retries a 503 twice', 'passed')];
-  store.putRun(project, { id: 'distill-run-retry', by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 2000, state: 'passed', totals: { passed: 1, failed: 0, skipped: 0 },
+  store.putRun(project, { id: 'distill-run-retry', by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 2000, state: 'passed', totals: { passed: 1, failed: 0, skipped: 0 }, taskId: FIXTURE_TASK,
     stages: [{ stageId: 'unit', name: 'Unit', command: 'npm test', status: 'passed', exitCode: 0, durationMs: 2000, counts: { passed: 1, failed: 0, skipped: 0 }, tests, output: '', runner: 'vitest' }] });
 }
 
@@ -155,6 +155,8 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
   testingFixture.claudeDir = claudeDir;
   testingFixture.changed = ['src/settings.ts'];
   seedHistory(project);
+  testingFixture.loopStarts.length = 0;
+  useAgentFixtures(outDir);
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
@@ -164,11 +166,10 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     await js("document.getElementById('testing-button').click()");
     check(await settle((p) => p.state.stages.length === 3), 'Testing opens on the fixture project');
 
-    // Start: the brief asks for distillation with Open threads, through the reply box's paste path.
-    const pastesBefore = pasteWrites.length;
+    // Start: the testing agent's brief asks for distillation with Open threads.
     await js(`(() => { const f = document.querySelector('#testing .tst-loop-focus'); f.value = 'checkout flow'; })()`);
     await js("document.querySelector('#testing .tst-loop-go').click()");
-    const brief = (await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('Run a test loop')) ?? null, 5000))?.data ?? '';
+    const brief = (await waitFor(() => testingFixture.loopStarts.find((l) => l.brief?.includes('Run a test loop')) ?? null, 5000))?.brief ?? '';
     check(brief.includes('## Distillation') && brief.includes('## Open threads') && brief.includes('revisiting every open thread from your previous round') && brief.includes('**Course:**') && !/[—–]/.test(brief),
       'the brief asks for Distillation, Open threads, revisits and a Course line, with no long dashes');
 
@@ -292,11 +293,13 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     await js("document.getElementById('testing-button').click()");
     await settle((p) => p.loopOpen === true);
     const beforeAsk = pasteWrites.length;
+    await waitFor(() => js("[...document.querySelectorAll('#testing .tst-loop .tst-thread')].some((t) => t.querySelector('.tst-thread-word')?.textContent === 'open') || null"), 6000);
     await js(`[...document.querySelectorAll('#testing .tst-loop .tst-thread')].find((t) => t.querySelector('.tst-thread-word')?.textContent === 'open')?.querySelector('.thread-card').click()`);
     const asked = await waitFor(() => pasteWrites.slice(beforeAsk).find((w) => w.data.includes('Is tax rounded per line')) ?? null, 4000);
     check(asked?.data === `${PASTE_START}Is tax rounded per line in the API as well? Check: read the helper in the tax package${PASTE_END}\r`, `a thread card sends "Question? Check: ..." to the session: ${JSON.stringify(asked?.data)}`);
 
   } finally {
+    testingFixture.agentIds.length = 0;
     testingFixture.project = null;
     testingFixture.claudeDir = null;
     testingFixture.changed = null;

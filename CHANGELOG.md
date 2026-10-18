@@ -5,6 +5,10 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 ## Unreleased
 - Library token cost: Read past sessions, Add to Library and Build my Library say about how many tokens they will use before any call, and the Library shows what the last build used.
 - Tidier screens: one Help › Get started, a simpler Get started list, the Board titled Board, "No sessions yet" in the pill, and the setup guide says when Claude starts by itself.
+- Testing is per task now: each task has its own suite, runs, loop and history, picked by PRD. A PRD shows an overview of its tasks' suites.
+- A task's suite can only be changed in Petal or by its testing agent, which Petal starts for that task. Its changes show with an Undo.
+- Lock tests to the testing agent (per repo, off by default): a hook refuses other sessions' edits to a task's tests and suite, and a changed test is put back and flagged.
+- The test loop runs two agents at once per task: a testing agent files bugs while a bug fix agent fixes them, through a bug queue. Name them, chat with each, and see their actions and tokens.
 
 ## [1.1.2] · 2026-10-18
 - PRDs on the Board: group related tasks under a PRD, and split a big task into subtasks, each with its own owner.
