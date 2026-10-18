@@ -27,7 +27,7 @@ import {
 
 const view = byId('board');
 const head = el('header', 'board-head');
-const title = el('h2', 'board-title', 'Sessions');
+const title = el('h2', 'board-title', 'Board'); // matches the header button; "Sessions" is the pill beside it
 const summary = el('p', 'board-summary');
 const filterRow = el('div', 'board-filters');
 filterRow.setAttribute('role', 'group');

@@ -1,4 +1,4 @@
-// Add Session, from the dock and from the Sessions panel: one more tab, shown, reply box focused; at her limit, no tab and the limit note.
+// Add Session, from the dock and the tab strip's +: one more tab, shown, reply box focused; at her limit, no tab and the limit note.
 import * as configStore from '../main/config-store';
 import { panelFixture } from '../main/snapshot-mode';
 import type { Kit } from './snapshot';
@@ -13,7 +13,7 @@ const STATE = `(() => {
     focused: document.activeElement?.id ?? null,
     dockLabel: document.getElementById('add-session-button')?.textContent ?? null,
     panelOpen: !panel.hidden,
-    panelAdd: panel.querySelector('.sessions-add')?.textContent ?? null,
+    panelButtons: [...panel.querySelectorAll('button')].map((b) => b.textContent),
     banner: panel.querySelector('.sessions-limit-text')?.textContent ?? null,
     blockedHint: panel.querySelector('.sessions-add-blocked')?.textContent ?? null,
   };
@@ -44,19 +44,21 @@ export async function addSessionCheck(kit: Kit): Promise<void> {
   if (dockTab) opened.push(dockTab);
   await capture('add-session-dock');
 
+  // The panel lists sessions only: Add Session lives in the header and the tab strip.
   await js('PastelTerm.sessionsPanel.setOpen(true)');
-  const panelShown = await waitState((s) => s.panelOpen && s.panelAdd !== null);
-  check(panelShown?.panelAdd === 'Add Session', `Sessions panel offers "Add Session" at the top: ${JSON.stringify(panelShown?.panelAdd)}`);
-  const firstInPanel = await js("document.getElementById('sessions-panel').firstElementChild?.classList.contains('sessions-add')");
-  check(firstInPanel, 'Add Session is the first thing in the panel');
+  const panelShown = await waitState((s) => s.panelOpen);
+  check(panelShown && !panelShown.panelButtons.includes('Add Session') && !panelShown.panelButtons.includes('Board'),
+    `Sessions panel has no Add Session or Board button: ${JSON.stringify(panelShown?.panelButtons)}`);
   await capture('add-session-panel');
+  await js('PastelTerm.sessionsPanel.setOpen(false)');
   const before = (await js(STATE)).ids.length;
-  await js("document.querySelector('#sessions-panel .sessions-add').click()");
-  const fromPanel = await waitState((s) => s.ids.length === before + 1);
-  const panelTab = fromPanel?.ids.at(-1);
-  check(fromPanel && fromPanel.active === panelTab && fromPanel.focused === 'composer-input' && !fromPanel.panelOpen,
-    `panel click: tabs ${before} -> ${fromPanel?.ids.length}, new tab active, reply box focused, panel closed: ${JSON.stringify(fromPanel)}`);
-  if (panelTab) opened.push(panelTab);
+  await js("document.querySelector('#tab-strip .tab-new').click()");
+  const fromPlus = await waitState((s) => s.ids.length === before + 1);
+  const plusTab = fromPlus?.ids.at(-1);
+  const plusTitle = await js("document.querySelector('#tab-strip .tab-new').title");
+  check(fromPlus && fromPlus.active === plusTab && plusTitle === 'New session tab (⌘T)',
+    `+ click: tabs ${before} -> ${fromPlus?.ids.length}, new tab active, its own tooltip: ${JSON.stringify({ plusTitle, fromPlus })}`);
+  if (plusTab) opened.push(plusTab);
 
   // At the limit: 2 open, limit 2.
   panelFixture.sessions = [session(1), session(2)];

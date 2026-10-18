@@ -32,7 +32,6 @@
 .dock-button[aria-pressed="true"] { background: var(--code-bg); border-color: var(--reader-fg); }
 .dock-button.add-session { border-color: var(--next-ink); color: var(--next-ink); }
 .dock-button.dock-mini { padding: 5px 11px; font-size: 13px; } /* Board: a small shortcut beside History */
-.sessions-add { margin: 0 12px 12px; }
 
 .sessions-pill {
   display: flex;
