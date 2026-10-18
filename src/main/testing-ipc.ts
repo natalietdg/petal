@@ -21,9 +21,12 @@ import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
-import { allAgents, rememberAgent, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { agentOf, allAgents, rememberAgent, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { setAgentTitle } from './agent-titles';
+import { readAgentLog } from './agent-log';
+import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } from './test-lock';
-import { AGENT_NAME_MAX, cleanAgentName, type AgentRole } from '../shared/agent-names';
+import { AGENT_NAME_MAX, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, suiteFor, type SuiteViews } from '../shared/task-suite';
 import * as store from './testing-store';
@@ -209,6 +212,11 @@ async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<Pro
   const allTouches = [...touches, ...closed.touches];
   const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
   const suites = syncSuites(root, tasks, [...writes, ...closed.writes]);
+  const names = store.load(root).agentNames;
+  for (const agent of allAgents(root)) {
+    const task = tasks.find((t) => t.id === agent.taskId);
+    if (task) setAgentTitle(agent.sessionId, agentTabTitle(names, agent.role, task.title));
+  }
   await saveClaudeRuns(root, found, tasks, suites, sessions);
   return { suites, lock: lockView(root, manifest) };
 }
@@ -483,29 +491,28 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     };
   });
 
-  // Starts a task's testing agent: claude with the brief in a new tab, under a session id Petal picks and remembers,
-  // so only that session's writes change the task's suite.
-  const startAgent = async (contents: WebContents, root: string, taskId: string, brief: string): Promise<string | null> => {
-    const sessionId = crypto.randomUUID();
-    rememberAgent(root, taskId, sessionId);
+  // Starts one of a task's agents: claude with the brief in a new tab, under a session id Petal picks and remembers with
+  // its role, so the lock and the suite reader know it. Its tab is named for its role and the task.
+  const startAgent = async (contents: WebContents, root: string, task: Task, role: AgentRole, brief: string): Promise<{ tabId: string | null; sessionId: string }> => {
+    const sessionId = (isSnapshotRun() && testingFixture.agentIds.shift()) || crypto.randomUUID();
+    rememberAgent(root, task.id, sessionId, role);
+    setAgentTitle(sessionId, agentTabTitle(store.load(root).agentNames, role, task.title));
     const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, `${(await claudeLaunch()).command} --session-id ${sessionId}`)}`;
-    if (isSnapshotRun()) testingFixture.loopStarts.push({ command });
+    if (isSnapshotRun()) testingFixture.loopStarts.push({ command, brief });
     const opened = openTab(contents, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
     if (opened) runTabs.set(`${contents.id}:${opened}`, root);
-    return opened ?? null;
+    return { tabId: opened ?? null, sessionId };
   };
 
-  // Prepares .petal/, then either leaves the paste to the reply box's path or starts the task's testing agent in a new tab.
-  handle('testing:loop-start', async (event, { tabId, root: picked, brief, newTab, taskId }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab. Open one first.' };
-    if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'The loop brief is empty or too long.' };
-    const task = loadTasks(root).tasks.find((t) => t.id === taskId);
-    if (newTab === true && !task) return { note: 'That task is gone. It may have been deleted in another window.' };
-    prepareLoop(root);
-    if (newTab !== true || !task) return { tabId: null };
-    return { tabId: await startAgent(event.sender, root, task.id, brief) };
+  // The loop for a task: its testing agent and its bug fix agent, each in its own new tab, working at once.
+  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    for (const brief of [testerBrief, fixerBrief]) if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'A loop brief is empty or too long.' };
+    prepareLoop(target.root);
+    const tester = await startAgent(event.sender, target.root, target.task, 'tester', testerBrief);
+    const fixer = await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief);
+    return { tester, fixer };
   });
 
   // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task.
@@ -513,7 +520,17 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
-    return { tabId: await startAgent(event.sender, target.root, target.task.id, prompt) };
+    return { tabId: (await startAgent(event.sender, target.root, target.task, 'tester', prompt)).tabId };
+  });
+
+  // An agent's action log and tokens, from its transcript: the open tab's log, else History's copy.
+  handle('testing:agent-log', async (event, { tabId, root: picked, sessionId }) => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
+    if (!root || typeof sessionId !== 'string' || !agentOf(root, sessionId)) return { note: 'That isn’t one of this project’s agents.' };
+    const open = [...sessions.values()].find((s) => s.feed.session?.sessionId === sessionId)?.feed.session?.transcript;
+    const file = open ?? history.findRecord(sessionId)?.file;
+    return file ? readAgentLog(file, root) : { actions: [], tokens: NO_TOKENS };
   });
 
   // The task's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.

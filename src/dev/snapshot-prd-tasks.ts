@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
-import { extraTabFixtures, folderFixture, panelFixture, testingFixture } from '../main/snapshot-mode';
+import { extraTabFixtures, folderFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
@@ -236,6 +236,106 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js("document.querySelector('#testing .tst-undo-suite').click()");
     const undone = await waitTesting((s) => s.stages.length === 0 && !s.suiteChange);
     check(undone && !fs.existsSync(docsFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this task yet', 'Undo puts back what was there: no suite');
+    // 10 The loop as two agents: rename both, start them, both busy at once with a bug queue between them, chat with each.
+    await pickTarget('task:t-cart');
+    await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2);
+    const lane = (role: string) => `#testing .tst-agent-lane[data-role="${role}"]`;
+    for (const [role, name] of [['tester', 'Quinn'], ['fixer', 'Fixie']] as const) {
+      await waitFor(() => js(`document.querySelector('${lane(role)} .tst-agent-rename-button') ? true : null`), 4000);
+      await js(`document.querySelector('${lane(role)} .tst-agent-rename-button').click()`);
+      await waitFor(() => js(`document.querySelector('${lane(role)} .tst-agent-name-input') ? true : null`), 3000);
+      await js(`(() => { const i = document.querySelector('${lane(role)} .tst-agent-name-input'); i.value = ${JSON.stringify(` ${name} `)}; document.querySelector('${lane(role)} .tst-agent-rename').requestSubmit(); })()`);
+      await waitFor(async () => ((await js(`document.querySelector('${lane(role)} .tst-agent-name')?.textContent`)) === name ? true : null), 6000);
+    }
+    const laneNames: string[] = await js("[...document.querySelectorAll('#testing .tst-agent-name')].map((n) => n.textContent)");
+    const estimateLine: string = await js("document.querySelector('#testing .tst-agent-estimate')?.textContent ?? ''");
+    check(JSON.stringify(laneNames) === JSON.stringify(['Quinn', 'Fixie']) && JSON.stringify(store.load(repo).agentNames) === JSON.stringify({ tester: 'Quinn', fixer: 'Fixie' }), `both agents renamed, saved per project: ${JSON.stringify(laneNames)}`);
+    check(/^About [\d.]+k? tokens per round for both agents\./.test(estimateLine), `an estimate before Start: ${estimateLine}`);
+
+    const TESTER = '7e570000-0000-4000-8000-0000000000a1';
+    const FIXER = '7e570000-0000-4000-8000-0000000000a2';
+    const testerLog = path.join(dir, 'tabs', `${TESTER}.jsonl`);
+    const fixerLog = path.join(dir, 'tabs', `${FIXER}.jsonl`);
+    const stamp = () => new Date().toISOString();
+    const entry = (sessionId: string, fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, cwd: repo, sessionId, timestamp: stamp(), ...fields })}\n`;
+    const usage = { input_tokens: 1200, output_tokens: 300, cache_creation_input_tokens: 4000, cache_read_input_tokens: 9000 };
+    const say = (sessionId: string, uuid: string, prompt: string, text: string) => entry(sessionId, { type: 'user', uuid: `${uuid}-u`, message: { role: 'user', content: prompt } })
+      + entry(sessionId, { type: 'assistant', uuid, message: { id: `msg-${uuid}`, role: 'assistant', usage, content: [{ type: 'text', text }] } });
+    const tool = (sessionId: string, uuid: string, name: string, input: object, result: string, isError = false) => entry(sessionId, { type: 'assistant', uuid, message: { id: `msg-${uuid}`, role: 'assistant', usage, content: [{ type: 'tool_use', id: `toolu_${uuid}`, name, input }] } })
+      + entry(sessionId, { type: 'user', uuid: `${uuid}-r`, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `toolu_${uuid}`, content: result, is_error: isError }] } });
+    put(testerLog, say(TESTER, 'h-t0', 'You are Quinn.', 'Reading the cart code.'));
+    put(fixerLog, say(FIXER, 'h-f0', 'You are Fixie.', 'Ready.'));
+    const testerFixture = { sessionId: TESTER, transcript: testerLog, status: 'idle', cwd: repo };
+    const fixerFixture = { sessionId: FIXER, transcript: fixerLog, status: 'idle', cwd: repo };
+    testingFixture.agentIds.splice(0, Infinity, TESTER, FIXER);
+    extraTabFixtures.push(testerFixture, fixerFixture);
+    const startsBefore10 = testingFixture.loopStarts.length;
+    await js("document.querySelector('#testing .tst-loop-go').click()");
+    const loopStarts = await waitFor(() => (testingFixture.loopStarts.length === startsBefore10 + 2 ? testingFixture.loopStarts.slice(startsBefore10) : null), 6000);
+    check(loopStarts && loopStarts[0]?.command.includes(`--session-id ${TESTER} --`) && loopStarts[0].brief?.startsWith('You are Quinn, this task\'s testing agent.') && loopStarts[1]?.command.includes(`--session-id ${FIXER} --`) && loopStarts[1].brief?.startsWith('You are Fixie, the bug fix agent'), `Start opens the testing agent and the bug fix agent, named: ${JSON.stringify(loopStarts?.map((l) => l.brief?.slice(0, 50)))}`);
+    const tabOfAgent = (id: string): Promise<string | null> => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(id)}) ?? null`);
+    const testerTab = await waitFor(() => tabOfAgent(TESTER), 8000);
+    const fixerTab = await waitFor(() => tabOfAgent(FIXER), 8000);
+    const titles = await waitFor(async () => { const t: string[] = await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`); return t[0]?.startsWith('Quinn') && t[1]?.startsWith('Fixie') ? t : null; }, 8000);
+    check(titles && titles[0] === 'Quinn · Fix the cart total' && titles[1] === 'Fixie · Fix the cart total', `each agent's tab is titled with its name and the task: ${JSON.stringify(titles ?? await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`))}`);
+
+    // Quinn files a bug; the idle Fixie gets it. Then both work at once, and a failure seen mid-edit waits for a recheck.
+    const criteriaFile = path.join(repo, '.petal', 'test-criteria.md');
+    const criteriaBase = fs.readFileSync(criteriaFile, 'utf8');
+    fs.appendFileSync(testerLog, tool(TESTER, 'h-t1', 'Write', { file_path: path.join(repo, 'src', 'cart.test.ts'), content: 'it("drops no cent")\n' }, 'ok')
+      + tool(TESTER, 'h-t2', 'Bash', { command: 'npm test' }, 'Exit code 1\n1 failed', true)
+      + say(TESTER, 'h-t3', 'go on', 'One real bug, filed.\n\n**Loop:** round 1/5 · testing · 1 open'));
+    put(criteriaFile, `${criteriaBase}- [fail] cart total drops a cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n`);
+    const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: cart total drops a cent.')) ?? null, 10000);
+    check(handed, `the bug goes to Fixie's session: ${JSON.stringify(handed?.data.slice(0, 80))}`);
+    testerFixture.status = 'busy';
+    fixerFixture.status = 'busy';
+    check(await waitFor(async () => ((await js("document.querySelectorAll('#testing .tst-agent-lane.is-busy').length")) === 2 ? true : null), 8000), 'both agents are busy at once');
+    fs.appendFileSync(fixerLog, tool(FIXER, 'h-f1', 'Edit', { file_path: path.join(repo, 'src', 'cart.ts'), old_string: 'Math.floor(t)', new_string: 'Math.round(t * 100) / 100' }, 'ok')
+      + tool(FIXER, 'h-f2', 'Edit', { file_path: path.join(repo, 'src', 'cart.test.ts'), old_string: 'a', new_string: 'b' }, 'PreToolUse:Edit hook error: Tests belong to Quinn. Ask it to change them.', true));
+    put(criteriaFile, `${criteriaBase}- [fail] cart total drops a cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] coupon line shows NaN · test: src/coupon.test.ts::label · round 1 · task: t-cart\n`);
+    type AgentsState = { queue: { key: string; state: string }[]; lanes: { role: string; name: string; status: string }[] };
+    const both = await waitFor(async () => {
+      const a = (await js('PastelTerm.testing.state().agents')) as AgentsState;
+      const busy: number = await js("document.querySelectorAll('#testing .tst-agent-lane.is-busy').length");
+      return busy === 2 && a.queue.some((b) => b.state === 'fixing') && a.queue.some((b) => b.state === 'recheck') ? a : null;
+    }, 10000);
+    check(both && both.lanes[1]?.status === 'Fixing cart total drops a cent' && /Testing · round 1\/5/.test(both.lanes[0]?.status ?? ''), `both lanes busy at once, one bug fixing and the mid-edit one waiting for a recheck: ${JSON.stringify(both ?? await js('PastelTerm.testing.state().agents'))}`);
+    const counts: string = await js("document.querySelector('#testing .tst-queue-head')?.textContent ?? ''");
+    check(/Rechecking 1/.test(counts) && /Fixing 1/.test(counts), `the queue counts each state: ${counts}`);
+
+    // Chat: one message to each agent reaches that agent's session; its reply shows in the lane.
+    for (const [role, tab, text] of [['tester', testerTab, 'Add a case for half a cent.'], ['fixer', fixerTab, 'Check the rounding in totals too.']] as const) {
+      const before = pasteWrites.length;
+      await js(`(() => { const i = document.querySelector('${lane(role)} .tst-agent-input'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); document.querySelector('${lane(role)} .tst-agent-send').requestSubmit(); })()`);
+      const sent = await waitFor(() => pasteWrites.slice(before).find((w) => w.data.includes(text)) ?? null, 4000);
+      check(sent && sent.tabId === tab, `the message to the ${role} reached its own session: ${JSON.stringify(sent)}`);
+    }
+    fs.appendFileSync(testerLog, say(TESTER, 'h-t4', 'Add a case for half a cent.', 'Added **half a cent** to the rounding cases.\n\n**Loop:** round 1/5 · testing · 2 open'));
+    fs.appendFileSync(fixerLog, say(FIXER, 'h-f3', 'Check the rounding in totals too.', 'Totals round the same way now.'));
+    const replied = await waitFor(async () => {
+      const t: string = await js(`document.querySelector('${lane('tester')} .tst-agent-turns')?.textContent ?? ''`);
+      const f: string = await js(`document.querySelector('${lane('fixer')} .tst-agent-turns')?.textContent ?? ''`);
+      return t.includes('Added half a cent to the rounding cases.') && f.includes('Totals round the same way now.') ? { t, f } : null;
+    }, 10000);
+    check(replied && await js(`!!document.querySelector('${lane('tester')} .tst-agent-reply strong')`), 'each reply renders in its lane in the reader style');
+    const refusalLine: string = await js(`document.querySelector('${lane('fixer')} .tst-agent-refusal')?.textContent ?? ''`);
+    check(refusalLine === 'Refused: Fixie tried to edit src/cart.test.ts', `the lock's refusal shows in Fixie's lane: ${refusalLine}`);
+    const tokens: string[] = await js("[...document.querySelectorAll('#testing .tst-agent-tokens')].map((n) => n.textContent)");
+    const total: string = await js("document.querySelector('#testing .tst-agent-total')?.textContent ?? ''");
+    check(tokens.length === 2 && tokens.every((t) => /^[\d.]+k tokens$/.test(t)) && /tokens so far for both agents/.test(total), `tokens per lane from each session's usage, and a total: ${JSON.stringify(tokens)} ${total}`);
+    await js(`document.querySelector('${lane('fixer')} .tst-agent-view[data-view="actions"]').click()`);
+    const fixerLogLines = await waitFor<string[] | null>(async () => { const l: string[] = await js(`[...document.querySelectorAll('${lane('fixer')} .tst-agent-step-text')].map((n) => n.textContent)`); return l.some((x) => x.startsWith('Edited src/cart.ts')) ? l : null; }, 6000);
+    const roundLine: string = await js(`document.querySelector('${lane('fixer')} .tst-agent-rounds li')?.textContent ?? ''`);
+    check(fixerLogLines?.includes('Refused: Fixie tried to edit src/cart.test.ts') && fixerLogLines.includes('Edited src/cart.ts (+1 −1)') && fixerLogLines.some((l) => l.startsWith('Quinn → Fixie · cart total drops a cent')) && /edits? · \d+ commands? · 1 refusal$/.test(roundLine), `Fixie's action log: its edits, the refusal and Petal's handoff, with a round line: ${JSON.stringify(fixerLogLines)} ${roundLine}`);
+    await js("document.querySelector('#testing .tst-agentsbox').scrollIntoView({ block: 'start' })");
+    await wait(300);
+    await capture('testing-handoff');
+    testerFixture.status = 'idle';
+    fixerFixture.status = 'idle';
+    await js("document.querySelector('#testing .tst-stop').click()");
+    check(await waitFor(async () => ((await js('PastelTerm.testing.state().loop')) === 'stopped' ? true : null), 15000), 'Stop halts both agents');
+
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
   } finally {
@@ -250,6 +350,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     folderFixture.home = saved.home;
     testingFixture.project = saved.project;
     testingFixture.claudeDir = saved.claudeDir;
+    testingFixture.agentIds.length = 0;
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

@@ -174,6 +174,7 @@ const api = {
     stop: (runId: string) => invoke('testing:stop', { runId }),
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
     agentStart: (request: InvokeArgs<'testing:agent-start'>[0]) => invoke('testing:agent-start', request),
+    agentLog: (request: InvokeArgs<'testing:agent-log'>[0]) => invoke('testing:agent-log', request),
     onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),
   },
   tasks: {

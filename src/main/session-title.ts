@@ -2,6 +2,7 @@
 import * as history from './history';
 import * as organizer from './session-organizer';
 import { sessionTitle } from '../shared/session-label';
+import { agentTitle } from './agent-titles';
 
 // A transcript not on disk yet is looked up again after this; findRecord scans every project folder.
 const MISS_RETRY_MS = 5000;
@@ -17,6 +18,8 @@ function recordOf(sessionId: string): history.SessionRecord | null {
 
 // firstPrompt: what the caller already knows (the reader's first reply), for a session with no transcript record yet.
 export function sessionTitleFor(sessionId: string, { cwd = null, firstPrompt = null }: { cwd?: string | null; firstPrompt?: string | null } = {}): string {
+  const agent = agentTitle(sessionId); // a testing or bug fix agent Petal started is named for its role and task
+  if (agent) return agent;
   const record = recordOf(sessionId);
   return sessionTitle({
     organizerTitle: organizer.loadCached()[sessionId]?.title,

@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
+import { extraTabFixtures, fixtureFile, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
@@ -51,6 +51,23 @@ export function seedTestingProject(outDir: string): { project: string; claudeDir
 }
 
 export const FIXTURE_TASK = 't-settings';
+export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
+
+// The loop's two agents in snapshot runs: the fixture session plays the testing agent, so its replies and Loop lines
+// drive the loop as before; the bug fix agent gets its own fixture tab and log. The tester's new tab follows an empty
+// log under the same id, so the fixture's own tab is the one Testing finds first.
+export function useAgentFixtures(outDir: string, testerId = 'snapshot-fixture'): { fixer: FixtureSession; fixerLog: string } {
+  const dir = path.join(outDir, 'testing-fixture', 'agents');
+  fs.mkdirSync(dir, { recursive: true });
+  const testerLog = path.join(dir, 'tester-tab.jsonl');
+  const fixerLog = path.join(dir, `${FIXER_SESSION}.jsonl`);
+  fs.writeFileSync(testerLog, '');
+  fs.writeFileSync(fixerLog, `${JSON.stringify({ isSidechain: false, type: 'user', uuid: 'fixer-u0', sessionId: FIXER_SESSION, timestamp: new Date().toISOString(), message: { role: 'user', content: 'You are the bug fix agent.' } })}\n`);
+  const fixer: FixtureSession = { sessionId: FIXER_SESSION, transcript: fixerLog, status: 'idle', cwd: testingFixture.project ?? undefined };
+  testingFixture.agentIds.splice(0, Infinity, testerId, FIXER_SESSION);
+  extraTabFixtures.push({ sessionId: testerId, transcript: testerLog, status: 'idle' }, fixer);
+  return { fixer, fixerLog };
+}
 
 // One task held by the fixture session since before its first logged run, so Claude's runs file under it; its suite if given.
 function seedTask(repo: string, id: string, title: string, stages: [string, string][] | null): void {

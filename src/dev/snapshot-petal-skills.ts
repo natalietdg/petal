@@ -56,7 +56,7 @@ const TESTING = `(() => {${RATIO_FN}
   return {
     state: PastelTerm.testing.state(),
     note: note.hidden ? '' : note.textContent,
-    change: view.querySelector('.tst-changebox')?.hidden ? '' : view.querySelector('.tst-changebox')?.textContent ?? '',
+    change: view.querySelector('.tst-suite-change')?.textContent ?? '',
     noSuite: view.querySelector('.tst-no-suite-title')?.textContent ?? null,
     seed: Boolean(view.querySelector('.tst-seed-suite')),
     ask: Boolean(view.querySelector('.tst-ask-suite')),

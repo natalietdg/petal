@@ -10,12 +10,12 @@ import { historyList, pipelineStrip, stackList, stageResults, trend } from './te
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState, type Elsewhere } from '../shared/testing';
-import { latestLoop } from '../shared/loop-line';
-import { buildLoopBrief, isActive, loopStatus, loopTarget, stopLoop, type Criteria } from '../shared/test-loop';
+import { isActive, type Criteria } from '../shared/test-loop';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
+import { createAgents } from './testing-agents';
 import { lockBar, noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
@@ -80,9 +80,6 @@ const expanded = new Set<string>(); // history rows opened to their repeats or o
 let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
 let loopNote = '';
-// A loop Petal started or stopped this run, per project root and task; Claude's Loop lines carry the rest.
-interface LoopRecord { tabId: string | null; startedAt: number; stoppedAt: number | null; stopping: boolean; taskId: string | null }
-const loops = new Map<string, LoopRecord>();
 let loopTick: ReturnType<typeof setInterval> | null = null;
 let target: TestTarget | null = null; // the task or PRD shown; follows the session's task until she picks
 let targetPicked = false;
@@ -470,29 +467,30 @@ function drawSide(): void {
   stackBox.append(el('h3', 'tst-section-title', 'What this repo tests with'), stackList(data.stack, insertSkill));
 }
 
-// ---- Test loop.
-const isLive = (id: string): boolean => tabs.get(id)?.update?.state === 'live';
-const loopKey = (): string | null => (data?.project && taskId() ? `${data.project.root}:${taskId()}` : null);
-const loopRecord = (): LoopRecord | null => loops.get(loopKey() ?? '') ?? null;
-const loopTabId = (): string | null => {
-  const record = loopRecord();
-  const id = record?.tabId ?? data?.sessionTab ?? null;
-  return id && tabs.get(id) ? id : null;
-};
+// ---- Test loop: the task's testing agent and bug fix agent, working at once (testing-agents.ts).
+const agents = createAgents({
+  root: () => data?.project?.root ?? null,
+  picked: () => picked(),
+  tabId: () => tabId(),
+  task: () => shownTask(),
+  suite: () => suite(),
+  stack: () => data?.stack ?? [],
+  names: () => data?.agentNames ?? {},
+  criteria: () => criteria,
+  taskRuns: () => taskRuns(),
+  redraw: () => { if (isOpen()) drawLoop(); },
+  renamed: () => load(),
+  say: (text) => { loopNote = text; drawLoop(); },
+});
+loopPanel.element.after(agents.element);
+const loopTabId = (): string | null => agents.testerTab();
 
-function loopFacts() {
-  const record = loopRecord();
-  const id = loopTabId();
-  const update = id ? tabs.get(id)?.update ?? null : null;
-  const progress = latestLoop(update?.replies ?? [], record?.startedAt ?? 0);
-  const status = loopStatus({ progress, live: id ? isLive(id) : false, startedAt: record?.startedAt ?? null, stoppedAt: record?.stoppedAt ?? null, now: Date.now() });
-  return { record, id, progress, status, ...loopDistillation(update, record?.startedAt ?? 0) };
-}
-
-// The loop session's rounds: stored ones plus any its tab shows since the loop started; with no loop tab, the newest stored session's.
-function loopDistillation(update: tabs.Tab['update'], since: number): { distill: DistillRecord[]; distillKey: string } {
+// Distillation stays on the testing agent's rounds: stored ones plus any its tab shows since the loop started.
+function loopDistillation(): { distill: DistillRecord[]; distillKey: string } {
+  const { record, testerTab } = agents.facts();
+  const update = testerTab ? tabs.get(testerTab)?.update ?? null : null;
   const sessionId = update?.sessionId ?? null;
-  const live = update ? recordsFromReplies(update.replies, sessionId, since) : [];
+  const live = update ? recordsFromReplies(update.replies, sessionId, record?.startedAt ?? 0) : [];
   const groups = bySession(taskDistillation());
   const stored = sessionId ? groups.find((g) => g.sessionId === sessionId) : groups[0];
   return { distill: mergeRecords(stored?.records ?? [], live), distillKey: (sessionId ?? stored?.sessionId) || 'none' };
@@ -509,13 +507,14 @@ function claudeStages(since: number): LoopModel['stages'] {
 
 function drawLoop(): void {
   loopPanel.element.hidden = !folderAllowed || !data?.project || !suite();
+  agents.draw();
   if (loopPanel.element.hidden) { stopLoopTick(); return; }
-  const { record, progress, status, distill, distillKey } = loopFacts();
+  const { record, progress, status } = agents.facts();
+  const { distill, distillKey } = loopDistillation();
   const stages = suite()?.stages ?? [];
-  const where = loopTarget(data?.sessionTab ?? null, isLive);
+  const names = data?.agentNames ?? {};
   const why = !stages.length ? 'Add stages to this task’s suite first. The loop runs them each round.'
-    : where.kind === 'paste' ? 'Claude in this repo’s session writes scenarios as tests, runs this task’s suite, fixes real bugs and runs again. It never commits.'
-      : 'No Claude is running in this repo, so Start opens a new tab with Claude and the brief. It never commits.';
+    : `Start opens two tabs. ${agentName(names, 'tester')} writes and runs tests and files the bugs it finds; ${agentName(names, 'fixer')} fixes them at the same time. Neither commits.`;
   loopPanel.update({
     status, progress, criteria: taskCriteria(), why,
     canStart: Boolean(stages.length) && !isActive(status) && draft === null,
@@ -536,51 +535,12 @@ function stopLoopTick(): void {
   loopTick = null;
 }
 
-// The loop runs the shown task's suite and files its criteria lines under that task.
 async function startLoop(focus: string, rounds: number): Promise<void> {
-  const id = tabId();
-  const p = suite();
-  const key = loopKey();
-  if (!id || !data?.project || !key || !p?.stages.length || isActive(loopFacts().status)) return;
-  const where = loopTarget(data.sessionTab, isLive);
-  const forTaskId = taskId();
-  const brief = buildLoopBrief({ focus, rounds, stages: p.stages, stack: data.stack, taskId: forTaskId, agent: where.kind === 'new-tab' });
-  const reply = await window.pastel.testing.loopStart({ tabId: id, root: picked(), brief, newTab: where.kind === 'new-tab', taskId: forTaskId });
-  if (isIpcError(reply) || 'note' in reply) { loopNote = isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note; drawLoop(); return; }
-  if (where.kind === 'paste') {
-    const tab = tabs.get(where.tabId);
-    if (!tab || !(await composer.pasteToClaude(tab, brief))) { loopNote = 'Couldn’t reach Claude in that tab. Try again.'; drawLoop(); return; }
-    loopNote = '';
-  } else {
-    loopNote = reply.tabId ? 'Claude is starting in a new tab with the brief.' : 'Couldn’t open a new tab for Claude.';
-    if (!reply.tabId) { drawLoop(); return; }
-  }
-  loops.set(key, { tabId: where.kind === 'paste' ? where.tabId : reply.tabId, startedAt: Date.now(), stoppedAt: null, stopping: false, taskId: forTaskId });
+  await agents.start(focus, rounds);
   await refresh();
 }
 
-// Esc interrupts the current step; the stop message follows once that claude is idle.
-async function stopCurrentLoop(): Promise<void> {
-  const id = loopTabId();
-  const key = loopKey();
-  if (!id || !key) return;
-  const record = loops.get(key) ?? { tabId: id, startedAt: 0, stoppedAt: null, stopping: false, taskId: taskId() };
-  if (record.stopping) return;
-  record.stopping = true;
-  loops.set(key, record);
-  loopNote = 'Interrupting Claude, then asking it to stop and summarise.';
-  drawLoop();
-  await stopLoop({
-    sendEsc: () => window.pastel.answerPrompt(id, { kind: 'menu', step: { cancel: true } }),
-    isIdle: () => !tabs.get(id)?.update?.busy,
-    send: async (text) => { const tab = tabs.get(id); return tab ? composer.pasteToClaude(tab, text) : false; },
-    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  });
-  record.stopping = false;
-  record.stoppedAt = Date.now();
-  loopNote = 'Asked Claude to stop. Its summary shows in that tab.';
-  drawLoop();
-}
+const stopCurrentLoop = (): Promise<void> => agents.stop();
 
 function drawAll(): void {
   drawHead();
@@ -714,6 +674,8 @@ async function refresh(): Promise<void> {
   followSessionTask();
   criteria = result.criteria;
   distillation = result.distillation;
+  void agents.refreshLogs().then(() => { if (isOpen()) agents.draw(); }); // logs and tokens follow; the view doesn't wait
+  void agents.step();
   if (draft) { drawHead(); drawPicker(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
 }
@@ -784,4 +746,4 @@ export function resetLeftovers(): void {
 }
 
 // For the snapshot harness.
-export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(taskId() && data?.suites[taskId() as string]?.change), suiteProblem: (taskId() && data?.suites[taskId() as string]?.problem) || null, elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, distillation: loopFacts().distill.length, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(taskId() && data?.suites[taskId() as string]?.change), suiteProblem: (taskId() && data?.suites[taskId() as string]?.problem) || null, elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: loopTabId(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

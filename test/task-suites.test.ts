@@ -240,7 +240,8 @@ describe('the loop brief names the task’s suite file', () => {
   it('tells the testing agent where the suite lives and its shape; a loop in another session may not change it', () => {
     const base = { focus: '', rounds: 1, stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], stack: [], taskId: 't-1a2b' };
     const brief = buildLoopBrief({ ...base, agent: true });
-    expect(brief).toContain('You are this task\'s testing agent. The suite lives in .petal/suites/t-1a2b.json.');
+    expect(brief).toContain('this task\'s testing agent');
+    expect(brief).toContain('The suite lives in .petal/suites/t-1a2b.json.');
     expect(brief).toContain('{"stages": [{"name": "Unit", "command": "npm test"}]}');
     expect(buildLoopBrief(base)).not.toContain('.petal/suites/');
   });

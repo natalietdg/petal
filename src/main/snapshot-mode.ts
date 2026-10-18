@@ -99,6 +99,7 @@ export const testingFixture: {
   project: string | null;
   claudeDir: string | null;
   runs: { runId: string; dir: string; typed: string; script: string; stages: { name: string; command: string; exec: string; report: string | null; exit: string; log: string }[] }[];
-  loopStarts: { command: string }[]; // a test loop started in a new tab: the line it would have typed
+  loopStarts: { command: string; brief?: string }[]; // an agent started in a new tab: the line it would have typed, and its brief
   changed: string[] | null; // the project's recently changed files, instead of asking git
-} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null };
+  agentIds: string[]; // session ids for the next agents Testing starts, so their fixture tabs match; taken in order
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [] };

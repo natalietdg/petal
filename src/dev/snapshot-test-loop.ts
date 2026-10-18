@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { setFixtureStatus } from './snapshot';
-import { FIXTURE_TASK, seedTestingProject } from './snapshot-testing';
+import { FIXER_SESSION, FIXTURE_TASK, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, promptWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -96,6 +96,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.loopStarts.length = 0;
+  const { fixer } = useAgentFixtures(outDir);
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
@@ -105,27 +106,28 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     await js("document.getElementById('testing-button').click()");
     const idle = await settle((p) => p.state.project === 'acme' && p.state.loop === 'idle' && p.state.stages.length === 3);
     check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.aboveStrip, `the Loop panel sits above the pipeline, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, above: idle.aboveStrip })}`);
-    check(idle && /session/.test(String(idle.hint)) && /never commits/.test(String(idle.hint)), `the hint says the brief goes to this project's Claude: ${JSON.stringify(idle?.hint)}`);
+    check(idle && /two tabs/.test(String(idle.hint)) && /Neither commits/.test(String(idle.hint)), `the hint says Start opens the two agents: ${JSON.stringify(idle?.hint)}`);
     await capture('test-loop-start');
 
-    // Start: the brief goes through the reply box's paste path into the fixture's Claude tab.
+    // Start: the testing agent and the bug fix agent each start in a new tab with their own brief and session id.
     const pastesBefore = pasteWrites.length;
     await js(`(() => { const f = document.querySelector('#testing .tst-loop-focus'); f.value = 'checkout flow'; f.dispatchEvent(new Event('input')); const r = document.querySelector('#testing .tst-loop-rounds-input'); r.value = '5'; })()`);
     await js("document.querySelector('#testing .tst-loop-go').click()");
-    const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('Run a test loop')) ?? null, 5000);
-    const brief = pasted?.data ?? '';
-    check(brief.startsWith(PASTE_START) && brief.endsWith(`${PASTE_END}\r`), 'the brief is one bracketed paste, submitted once');
+    const starts = await waitFor(() => (testingFixture.loopStarts.length === 2 ? [...testingFixture.loopStarts] : null), 5000);
+    const brief = starts?.[0]?.brief ?? '';
+    check(starts && /--session-id snapshot-fixture -- /.test(starts[0]?.command ?? '') && starts[1]?.command.includes(`--session-id ${FIXER_SESSION} -- `), `two agents start in new tabs, each under its own session id: ${JSON.stringify(starts?.map((l) => l.command.slice(0, 120)))}`);
     check(brief.includes('Focus: checkout flow.') && brief.includes('up to 5 rounds') && brief.includes('1. Typecheck: `npm run typecheck`\n2. Unit: `npm test`\n3. Mobile flows: `maestro test .maestro`'),
-      `the brief carries the focus, rounds and exact stage commands: ${JSON.stringify(brief.slice(0, 200))}`);
-    check(brief.includes('Never commit, push, or change git history.') && brief.includes('Never weaken, skip or delete a test') && brief.includes('plus Maestro flows') && !brief.includes('\u2014'), 'the brief has the no-commit and no-weakening rules, Maestro, and no em dash');
-    check(testingFixture.loopStarts.length === 0, 'a live session gets the paste; no new tab is opened');
+      `the testing agent's brief carries the focus, rounds and exact stage commands: ${JSON.stringify(brief.slice(0, 200))}`);
+    check(brief.includes('Never commit, push, or change git history.') && brief.includes('Never weaken, skip or delete a test') && brief.includes('plus Maestro flows') && brief.includes('Never edit app code') && !brief.includes('\u2014'), 'the brief has the no-commit, no-weakening and tests-only rules, Maestro, and no em dash');
+    check(/You are Bug fix agent, the bug fix agent/.test(starts?.[1]?.brief ?? '') && !/[\u2014\u2013]/.test(starts?.[1]?.brief ?? ''), `the bug fix agent's brief: ${JSON.stringify(starts?.[1]?.brief?.slice(0, 100))}`);
+    check(!pasteWrites.slice(pastesBefore).some((w) => w.data.includes('Run a test loop')), 'nothing is pasted into the coding session');
     const ignore = path.join(project, '.petal', '.gitignore');
     check(fs.existsSync(ignore) && fs.readFileSync(ignore, 'utf8') === '*\n' && fs.existsSync(path.join(project, '.petal', 'test-criteria.md')), 'Start makes .petal/ with a self-ignoring .gitignore and the criteria skeleton');
     const starting = await settle((p) => p.state.loop === 'starting');
     check(starting && starting.formHidden && starting.startDisabled && starting.stopShown, `while starting, Start is off and Stop shows: ${JSON.stringify(starting?.state.loop)}`);
     await js("document.querySelector('#testing .tst-loop-start').requestSubmit()");
     await wait(600);
-    check(!pasteWrites.slice(pastesBefore + 1).some((w) => w.data.includes('Run a test loop')), 'a second Start during the loop sends nothing');
+    check(testingFixture.loopStarts.length === 2, 'a second Start during the loop starts nothing');
 
     // Loop lines from Claude drive the rounds.
     append('r1s', loopReply(1, 5, 'scenarios', 0, 'Five checkout scenarios written as tests.'));
@@ -153,9 +155,13 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(JSON.stringify(grouped?.regressions) === JSON.stringify(['tax rounds per order, not per line', 'coupon can take the total below zero']), `bugs with a test are marked regression: ${JSON.stringify(grouped?.regressions)}`);
     check(['pass', 'fail', 'flaky', 'fixed'].every((t) => (grouped?.tags as string[] ?? []).includes(t)) && /1 line not in the item format/.test(String(grouped?.notes)), `every status shows and the stray line is counted: ${JSON.stringify(grouped?.notes)}`);
     check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows as the live result: ${JSON.stringify(grouped?.live)}`);
+    // The open bugs join the queue; the idle bug fix agent gets the oldest one.
+    const fixerTab: string | null = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(FIXER_SESSION)}) ?? null`);
+    const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: coupon can take the total below zero.')) ?? null, 8000);
+    check(handed && handed.data.includes('Failing test: src/checkout/coupon.test.ts::caps at the total.') && handed.data.includes('**Fix:** coupon can take the total below zero · done'), `the oldest open bug goes to the bug fix agent: ${JSON.stringify(handed?.data.slice(0, 120))}`);
     await capture('test-loop-running');
 
-    // The reader's strip shows the same Loop line as one bar; the reply body has no raw Loop text.
+    // The reader's strip shows the same Loop line as one bar; the reply body has no raw Loop text. (The fixture tab plays the testing agent.)
     await js('PastelTerm.overlays.hideCurrent()');
     await js("PastelTerm.reader.setView('replies')");
     const strip = await waitFor(async () => js(`(() => {
@@ -190,20 +196,22 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     }
     resizeOffscreen(win, 1280, 900);
 
-    // Stop: one Esc now; the stop message waits until that claude is idle.
+    // Stop halts both: one Esc each now; each stop message waits until that agent is idle.
     setFixtureStatus(feed, 'busy');
-    check(await waitFor(async () => (await js("PastelTerm.tabs.get(PastelTerm.testing.state().loopTab)?.update?.busy")) || null, 6000), 'the fixture tab is busy');
+    const testerTab: string | null = await js('PastelTerm.testing.state().loopTab');
+    check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(testerTab)})?.update?.busy`)) || null, 6000), 'the testing agent is busy');
     const escBefore = promptWrites.length;
     const pastesAtStop = pasteWrites.length;
     await js("document.querySelector('#testing .tst-stop').click()");
-    const esc = await waitFor(() => promptWrites.slice(escBefore).find((keys) => JSON.stringify(keys) === JSON.stringify(['\x1b'])) ?? null, 3000);
-    check(esc && promptWrites.length === escBefore + 1, `Stop sends exactly one Esc through the prompt key path: ${JSON.stringify(promptWrites.slice(escBefore))}`);
+    const escs = await waitFor(() => { const e = promptWrites.slice(escBefore).filter((keys) => JSON.stringify(keys) === JSON.stringify(['\x1b'])); return e.length === 2 ? e : null; }, 3000);
+    check(escs && promptWrites.length === escBefore + 2, `Stop sends one Esc to each agent: ${JSON.stringify(promptWrites.slice(escBefore))}`);
     const stopping = await settle((p) => p.pill === 'Stopping', 3000);
-    await wait(2500);
-    check(stopping && !pasteWrites.slice(pastesAtStop).some((w) => w.data.includes(STOP_MESSAGE)), 'the stop message waits while Claude is busy');
+    const fixerStop = await waitFor(() => pasteWrites.slice(pastesAtStop).find((w) => w.tabId === fixerTab && w.data.includes(STOP_MESSAGE)) ?? null, 4000);
+    await wait(2000);
+    check(stopping && fixerStop && !pasteWrites.slice(pastesAtStop).some((w) => w.tabId === testerTab && w.data.includes(STOP_MESSAGE)), 'the idle bug fix agent gets its stop message; the busy testing agent waits');
     setFixtureStatus(feed, 'idle');
-    const stopPaste = await waitFor(() => pasteWrites.slice(pastesAtStop).find((w) => w.data.includes(STOP_MESSAGE)) ?? null, 8000);
-    check(stopPaste && stopPaste.data === `${PASTE_START}${STOP_MESSAGE}${PASTE_END}\r`, `once idle, the stop message is pasted: ${JSON.stringify(stopPaste?.data.slice(0, 80))}`);
+    const stopPaste = await waitFor(() => pasteWrites.slice(pastesAtStop).find((w) => w.tabId === testerTab && w.data.includes(STOP_MESSAGE)) ?? null, 8000);
+    check(stopPaste && stopPaste.data === `${PASTE_START}${STOP_MESSAGE}${PASTE_END}\r`, `once idle, the testing agent's stop message is pasted: ${JSON.stringify(stopPaste?.data.slice(0, 80))}`);
     const stopped = await settle((p) => p.state.loop === 'stopped' && !p.startDisabled && !p.formHidden);
     check(stopped, `after Stop the loop reads stopped and Start is back: ${JSON.stringify(stopped?.state.loop)}`);
 
@@ -215,6 +223,8 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
   } finally {
     testingFixture.project = null;
     testingFixture.claudeDir = null;
+    testingFixture.agentIds.length = 0;
+    fixer.status = 'idle';
     setFixtureStatus(feed, 'idle');
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
