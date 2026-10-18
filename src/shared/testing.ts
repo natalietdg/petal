@@ -1,4 +1,5 @@
 // The Testing tab: a project's test pipeline, its runs (hers or Claude's), what it tests with, and the pure helpers both sides share.
+import type { Prd, Task } from './tasks';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -52,6 +53,7 @@ export interface PipelineRun {
   prompt?: string; // a Claude run: her prompt that turn answered; '' when the log had none
   cwd?: string; // a Claude run: the folder its command ran in, which files it under a project
   sessionName?: string; // a Claude run: its session's name, added when read, never stored
+  taskId?: string | null; // the task its session held when it ran; absent on older runs
 }
 
 // <userData>/testing/<project-hash>.json
@@ -91,6 +93,9 @@ export interface TestingState {
   sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
   claudePipeline: ClaudePipelineState | null; // <repo>/.petal/pipeline.json, when there is one
   changed: string[]; // files changed recently (git), for Suite health's core stage
+  tasks: Task[]; // the project's tasks and PRDs, for the This task and PRD scopes
+  prds: Prd[];
+  sessionTaskId: string | null; // the task held by sessionTab's session, the default scope
 }
 
 // What the Testing tab shows about the pipeline Claude wrote: in use as the proposal, offered over a saved one, or why it was refused.

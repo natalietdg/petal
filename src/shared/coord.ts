@@ -1,6 +1,6 @@
 // What the Board and the reader strip know about every live session beyond its replies: repo, branch, task, file clashes.
 import type { Clash } from './file-clash';
-import type { Task, TaskOwner, TaskStatus } from './tasks';
+import type { Prd, Task, TaskOwner, TaskStatus } from './tasks';
 
 export interface CoordTask {
   id: string;
@@ -32,16 +32,22 @@ export interface TasksView {
   name: string | null;
   branch: string | null;
   tasks: Task[];
+  prds: Prd[];
   problem: string | null;
 }
 
 export type TaskOp =
-  | { kind: 'add'; title: string; notes: string }
+  | { kind: 'add'; title: string; notes: string; prdId?: string | null }
   | { kind: 'edit'; id: string; title: string; notes: string }
   | { kind: 'move'; id: string; to: number }
   | { kind: 'delete'; id: string }
   | { kind: 'assign'; id: string; toTabId: string; reassign?: boolean }
-  | { kind: 'release'; id: string };
+  | { kind: 'release'; id: string }
+  | { kind: 'prd-add'; title: string; notes: string }
+  | { kind: 'prd-edit'; id: string; title: string; notes: string }
+  | { kind: 'prd-delete'; id: string }
+  | { kind: 'set-prd'; id: string; prdId: string | null }
+  | { kind: 'split'; id: string; titles: string[] };
 
 export type TaskChangeResult = TasksView & { confirm?: string; brief?: string; owner?: TaskOwner };
 

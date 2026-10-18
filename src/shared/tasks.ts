@@ -1,5 +1,5 @@
-// A project's tasks, each with at most one owner: the session Petal gave it to. Stored in <repo>/.petal/tasks.json.
-// Pure list operations; main/tasks-store.ts reads and writes the file.
+// A project's PRDs and tasks, each task with at most one owner: the session Petal gave it to. Stored in <repo>/.petal/tasks.json.
+// Project › PRD › Task › Subtask. Pure list operations; main/tasks-store.ts reads and writes the file.
 import type { TaskLine, TaskLineState } from './task-line';
 
 export type TaskStatus = 'open' | 'claimed' | TaskLineState;
@@ -21,11 +21,25 @@ export interface Task {
   claimedAt: number | null; // when it was given to its owner
   doneAt: number | null;
   doneBy: TaskOwner | null;
+  prdId: string | null;
+  parentId: string | null; // set on a subtask: the task it was split from
 }
 
-export interface TaskFile {
-  version: 1;
+// A PRD groups related tasks; testing rolls up from task to PRD.
+export interface Prd {
+  id: string;
+  title: string;
+  notes: string;
+  createdAt: number;
+}
+
+export interface TaskData {
   tasks: Task[];
+  prds: Prd[];
+}
+
+export interface TaskFile extends TaskData {
+  version: 2;
 }
 
 export const MAX_TITLE = 120;
@@ -34,9 +48,9 @@ const STATUSES: readonly TaskStatus[] = ['open', 'claimed', 'working', 'blocked'
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
-export function cleanTitle(raw: unknown): string {
+export function cleanTitle(raw: unknown, what = 'A task'): string {
   const title = oneLine(String(raw ?? '')).slice(0, MAX_TITLE);
-  if (!title) throw new Error('A task needs a title.');
+  if (!title) throw new Error(`${what} needs a title.`);
   return title;
 }
 
@@ -65,59 +79,88 @@ function toTask(raw: unknown): Task | null {
     claimedAt: numberOrNull(raw.claimedAt),
     doneAt: numberOrNull(raw.doneAt),
     doneBy: toOwner(raw.doneBy),
+    prdId: typeof raw.prdId === 'string' ? raw.prdId : null,
+    parentId: typeof raw.parentId === 'string' ? raw.parentId : null,
   };
 }
 
-export type TaskFileCheck = { ok: true; tasks: Task[] } | { ok: false; problem: string };
-
-// The file as written by Petal; one bad task drops out, a file of the wrong shape is refused whole.
-export function validateTaskFile(raw: unknown): TaskFileCheck {
-  if (!isRecord(raw) || raw.version !== 1 || !Array.isArray(raw.tasks)) return { ok: false, problem: 'it isn’t a Petal task list.' };
-  const tasks = raw.tasks.map(toTask).filter((t): t is Task => t !== null);
-  const ids = new Set(tasks.map((t) => t.id));
-  return ids.size === tasks.length ? { ok: true, tasks } : { ok: false, problem: 'two tasks share an id.' };
+function toPrd(raw: unknown): Prd | null {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.title !== 'string' || !raw.title.trim()) return null;
+  return { id: raw.id, title: raw.title, notes: typeof raw.notes === 'string' ? raw.notes : '', createdAt: numberOrNull(raw.createdAt) ?? 0 };
 }
 
-function find(tasks: readonly Task[], id: string): Task {
+// Links that point nowhere are dropped; a subtask has a top-level parent and always shares its PRD.
+function linkTasks(tasks: Task[], prds: Prd[]): Task[] {
+  const prdIds = new Set(prds.map((p) => p.id));
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const topLevel = (id: string | null): Task | null => {
+    const parent = id ? byId.get(id) : undefined;
+    return parent && parent.parentId === null ? parent : null;
+  };
+  return tasks.map((task) => {
+    const parent = task.parentId !== task.id ? topLevel(task.parentId) : null;
+    const prdId = parent ? parent.prdId : task.prdId;
+    return { ...task, parentId: parent?.id ?? null, prdId: prdId && prdIds.has(prdId) ? prdId : null };
+  });
+}
+
+export type TaskFileCheck = ({ ok: true } & TaskData) | { ok: false; problem: string };
+
+// The file as written by Petal, version 1 (tasks only) or 2; one bad task drops out, a file of the wrong shape is refused whole.
+export function validateTaskFile(raw: unknown): TaskFileCheck {
+  if (!isRecord(raw) || (raw.version !== 1 && raw.version !== 2) || !Array.isArray(raw.tasks)) return { ok: false, problem: 'it isn’t a Petal task list.' };
+  const prds = raw.version === 2 && Array.isArray(raw.prds) ? raw.prds.map(toPrd).filter((p): p is Prd => p !== null) : [];
+  const tasks = raw.tasks.map(toTask).filter((t): t is Task => t !== null);
+  if (new Set(tasks.map((t) => t.id)).size !== tasks.length) return { ok: false, problem: 'two tasks share an id.' };
+  if (new Set(prds.map((p) => p.id)).size !== prds.length) return { ok: false, problem: 'two PRDs share an id.' };
+  return { ok: true, tasks: linkTasks(tasks, prds), prds };
+}
+
+export function findTask(tasks: readonly Task[], id: string): Task {
   const task = tasks.find((t) => t.id === id);
   if (!task) throw new Error('That task is gone. It may have been deleted in another window.');
   return task;
 }
 
-const replace = (tasks: readonly Task[], next: Task): Task[] => tasks.map((t) => (t.id === next.id ? next : t));
+export const replaceTask = (tasks: readonly Task[], next: Task): Task[] => tasks.map((t) => (t.id === next.id ? next : t));
 
-export function addTask(tasks: readonly Task[], input: { title: unknown; notes?: unknown }, id: string, now: number): Task[] {
-  return [...tasks, { id, title: cleanTitle(input.title), notes: cleanNotes(input.notes), status: 'open', owner: null, createdAt: now, claimedAt: null, doneAt: null, doneBy: null }];
+export const newTask = (id: string, input: { title: unknown; notes?: unknown }, now: number, links: Pick<Task, 'prdId' | 'parentId'> = { prdId: null, parentId: null }): Task => ({
+  id, title: cleanTitle(input.title), notes: cleanNotes(input.notes), status: 'open', owner: null, createdAt: now, claimedAt: null, doneAt: null, doneBy: null, ...links,
+});
+
+export function addTask(tasks: readonly Task[], input: { title: unknown; notes?: unknown }, id: string, now: number, prdId: string | null = null): Task[] {
+  return [...tasks, newTask(id, input, now, { prdId, parentId: null })];
 }
 
 export const editTask = (tasks: readonly Task[], id: string, input: { title: unknown; notes?: unknown }): Task[] =>
-  replace(tasks, { ...find(tasks, id), title: cleanTitle(input.title), notes: cleanNotes(input.notes) });
+  replaceTask(tasks, { ...findTask(tasks, id), title: cleanTitle(input.title), notes: cleanNotes(input.notes) });
 
 // Moves a task to `to` (clamped), the others keeping their order.
 export function moveTask(tasks: readonly Task[], id: string, to: number): Task[] {
-  const task = find(tasks, id);
+  const task = findTask(tasks, id);
   const rest = tasks.filter((t) => t.id !== id);
   if (!Number.isFinite(to)) throw new Error('Move it to which place?');
   const at = Math.max(0, Math.min(rest.length, Math.round(to)));
   return [...rest.slice(0, at), task, ...rest.slice(at)];
 }
 
-export const removeTask = (tasks: readonly Task[], id: string): Task[] => { find(tasks, id); return tasks.filter((t) => t.id !== id); };
+// A task goes with its subtasks.
+export const removeTask = (tasks: readonly Task[], id: string): Task[] => { findTask(tasks, id); return tasks.filter((t) => t.id !== id && t.parentId !== id); };
 
 export type AssignResult = { tasks: Task[]; task: Task } | { confirm: string; owner: TaskOwner };
 
 // One owner per task: a task someone else holds needs reassign: true. Giving a done task opens it again.
 export function assignTask(tasks: readonly Task[], id: string, owner: TaskOwner, now: number, { reassign = false } = {}): AssignResult {
-  const task = find(tasks, id);
+  const task = findTask(tasks, id);
   const held = task.owner && task.owner.sessionId !== owner.sessionId && task.status !== 'done' ? task.owner : null;
   if (held && !reassign) return { confirm: `“${task.title}” is with ${held.name}. Give it to ${owner.name} instead?`, owner: held };
   const next: Task = { ...task, owner, status: 'claimed', claimedAt: now, doneAt: null, doneBy: null };
-  return { tasks: replace(tasks, next), task: next };
+  return { tasks: replaceTask(tasks, next), task: next };
 }
 
 export const releaseTask = (tasks: readonly Task[], id: string): Task[] => {
-  const task = find(tasks, id);
-  return replace(tasks, { ...task, owner: null, status: task.status === 'done' ? 'done' : 'open', claimedAt: null });
+  const task = findTask(tasks, id);
+  return replaceTask(tasks, { ...task, owner: null, status: task.status === 'done' ? 'done' : 'open', claimedAt: null });
 };
 
 const normal = (title: string): string => title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -143,7 +186,7 @@ export function applyTaskLine(tasks: readonly Task[], sessionId: string, line: T
   if (!task || task.status === line.state || (task.claimedAt !== null && at < task.claimedAt)) return null;
   const done = line.state === 'done';
   const next: Task = { ...task, status: line.state, doneAt: done ? at : null, doneBy: done ? task.owner : null };
-  return { tasks: replace(tasks, next), task: next, from: task.status };
+  return { tasks: replaceTask(tasks, next), task: next, from: task.status };
 }
 
 const sentence = (text: string): string => {

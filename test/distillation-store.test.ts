@@ -62,4 +62,14 @@ describe('distillation store', () => {
     expect(fs.readFileSync(target, 'utf8')).toContain('"id":"x"'); // the link's target is untouched
     fs.rmSync(outside, { recursive: true, force: true });
   });
+  it('files a new round under the task its session held then; a stored round keeps what it had', () => {
+    prepare();
+    captureReplies(root, [reply('old', 1, 1)], 's1'); // stored before any task: untagged for good
+    const owner = { sessionId: 's1', name: 'Cart', branch: null };
+    const task = { id: 't-cart', title: 'Fix the cart', notes: '', status: 'claimed', owner, createdAt: 0, claimedAt: 1_000_000 + 1500, doneAt: null, doneBy: null, prdId: null, parentId: null };
+    fs.writeFileSync(path.join(root, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task] }));
+    captureReplies(root, [reply('new', 2, 2), reply('old', 1, 1)], 's1');
+    captureReplies(root, [reply('other', 3, 3)], 's2');
+    expect(readDistillation(root).map((r) => [r.id, r.taskId ?? null])).toEqual([['old', null], ['new', 't-cart'], ['other', null]]);
+  });
 });

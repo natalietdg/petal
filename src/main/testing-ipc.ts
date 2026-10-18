@@ -35,6 +35,8 @@ import type { Reply } from '../shared/types';
 import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
 import { captureReplies, readDistillation } from './distillation-store';
+import { loadTasks } from './tasks-store';
+import { scopeFacts, taskIdAt } from './testing-tasks';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
@@ -190,7 +192,8 @@ async function saveClaudeRuns(root: string, found: { call: ClaudeCall; project: 
   const data = store.load(root);
   const known = new Set(data.runs.map((r) => r.id));
   const scripts = scriptsOf(root);
-  const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => claudeRun(call, stages, scripts, root));
+  const { tasks } = loadTasks(root);
+  const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => withTask(claudeRun(call, stages, scripts, root), taskIdAt(root, call.sessionId, call.at, tasks)));
   fresh.forEach((run) => known.add(run.id));
   const copied: PipelineRun[] = [];
   for (const run of moved) if (!known.has(run.id)) { known.add(run.id); copied.push(run); } // the old file has a few ids twice
@@ -199,6 +202,8 @@ async function saveClaudeRuns(root: string, found: { call: ClaudeCall; project: 
   if (fresh.length || copied.length || filled) store.save({ ...data, runs: filled ?? merged });
   for (const run of fresh) recordRun(root, run);
 }
+
+const withTask = (run: PipelineRun, taskId: string | null): PipelineRun => (taskId ? { ...run, taskId } : run);
 
 // Each Claude run's session name, read fresh so a renamed session shows its new name.
 const named = (runs: PipelineRun[]): PipelineRun[] => {
@@ -233,10 +238,10 @@ async function elsewhereFor(session: TabSession | undefined, sessions: TabSessio
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.
-async function sessionTabFor(root: string, sessions: TabSessions, asking: TabSession | undefined): Promise<string | null> {
+async function sessionOnProject(root: string, sessions: TabSessions, asking: TabSession | undefined): Promise<TabSession | null> {
   const mine = [...sessions.values()].filter((s) => s.contentsId === asking?.contentsId && s.feed.session);
   const ordered = [...mine.filter((s) => s === asking), ...mine.filter((s) => s !== asking)];
-  for (const s of ordered) if ((await projectOf(s)) === root) return s.tabId;
+  for (const s of ordered) if ((await projectOf(s)) === root) return s;
   return null;
 }
 
@@ -272,7 +277,7 @@ export function captureFinishedReply(reply: Reply, sessionId: string, cwd: strin
   captureReplies(projectRootOf(isSnapshotRun() && testingFixture.project ? testingFixture.project : cwd), [reply], sessionId);
 }
 
-async function stateFor(root: string, sessions: TabSessions, sessionTab: string | null): Promise<TestingState> {
+async function stateFor(root: string, sessions: TabSessions, onProject: TabSession | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
   const proposed = proposalFor(root, stack);
   const saved = store.load(root).pipeline;
@@ -280,7 +285,10 @@ async function stateFor(root: string, sessions: TabSessions, sessionTab: string 
   await mergeClaudeRuns(root, sessions, pipeline.stages);
   const data = store.load(root);
   const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
-  return { allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running, sessionTab, claudePipeline: claudePipelineState(root, saved), changed: await recentlyChanged(root) };
+  return {
+    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed, pipeline, saved: Boolean(saved), runs: named(data.runs), running,
+    sessionTab: onProject?.tabId ?? null, claudePipeline: claudePipelineState(root, saved), changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+  };
 }
 
 // ---- Watching a run: each stage's exit file, then its report or log.
@@ -339,7 +347,7 @@ function tick(w: Watched): void {
 }
 
 // Writes the script, opens a new tab that runs it, and starts watching. Snapshot runs record the line instead.
-function startRun(root: string, stages: StageConfig[], keepGoing: boolean, contents: WebContents, openTab: OpenTab, trigger: PipelineRun['trigger']): { started: string; typed: string } {
+function startRun(root: string, stages: StageConfig[], keepGoing: boolean, contents: WebContents, openTab: OpenTab, trigger: PipelineRun['trigger'], taskId: string | null): { started: string; typed: string } {
   const id = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = path.join(store.runsDir(root), id);
   fs.mkdirSync(dir, { recursive: true });
@@ -352,10 +360,10 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   const done = path.join(dir, 'done');
   fs.writeFileSync(script, pipelineScript({ root, keepGoing, done, stages: planned.map(({ config, plan, files }) => ({ name: config.name, command: config.command, exec: plan.exec, log: files.log, exit: files.exit })) }));
   const typed = runLine(script);
-  const run: PipelineRun = {
+  const run: PipelineRun = withTask({
     id, by: 'you', trigger, startedAt: Date.now(), finishedAt: null, state: 'running', totals: emptyCounts(),
     stages: planned.map(({ config, plan }) => ({ stageId: config.id, name: config.name, command: config.command, status: 'waiting', exitCode: null, durationMs: null, counts: emptyCounts(), tests: [], output: '', runner: plan.runner })),
-  };
+  }, taskId);
   store.putRun(root, run);
   recordRun(root, run);
   const w: Watched = { root, run, stages: planned, done, started: Date.now(), timer: setInterval(() => tick(w), POLL_MS) };
@@ -415,18 +423,18 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null, changed: [] });
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], pipeline: defaultPipeline([]), saved: false, runs: [], running: null, sessionTab: null, claudePipeline: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
   handle('testing:detect', async (event, { tabId, root: picked }) => {
     if (!claudeFolderAllowed()) return blank(false);
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
-    return root ? stateFor(root, sessions, await sessionTabFor(root, sessions, asking)) : blank(true, await elsewhereFor(asking, sessions));
+    return root ? stateFor(root, sessions, await sessionOnProject(root, sessions, asking)) : blank(true, await elsewhereFor(asking, sessions));
   });
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    const none = { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null, distillation: [] };
+    const none = { runs: [], running: null, sessionTab: null, criteria: null, claudePipeline: null, distillation: [], tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
@@ -435,9 +443,10 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     await mergeClaudeRuns(root, sessions, store.load(root).pipeline?.stages ?? proposalFor(root));
     await captureOpenDistillations(root, sessions);
     const data = store.load(root);
+    const onProject = await sessionOnProject(root, sessions, asking);
     return {
-      runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: await sessionTabFor(root, sessions, asking),
-      criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline), distillation: readDistillation(root),
+      runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: onProject?.tabId ?? null,
+      criteria: readCriteria(root), claudePipeline: claudePipelineState(root, data.pipeline), distillation: readDistillation(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
 
@@ -479,7 +488,8 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   handle('testing:run', async (event, { tabId, root: picked, stageId = null, confirmed = false }): Promise<RunReply> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
+    const asking = sessionFor(sessions, event.sender.id, tabId);
+    const root = await rootFor(asking, picked);
     if (!root) return { note: 'No project in this tab. Open one first.' };
     if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
     const data = store.load(root);
@@ -490,7 +500,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (fresh.length && !confirmed) return { confirm: { commands: stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
     const confirmedNow = [...new Set([...pipeline.confirmed, ...stages.map((s) => normalizeCommand(s.command))])];
     store.savePipeline(root, { ...pipeline, confirmed: confirmedNow });
-    return startRun(root, stages, pipeline.keepGoing, event.sender, openTab, 'click');
+    return startRun(root, stages, pipeline.keepGoing, event.sender, openTab, 'click', taskIdAt(root, asking?.feed.session?.sessionId, Date.now()));
   });
 
   // Stop watching a run whose tab was closed or interrupted; the run keeps what finished.
@@ -522,5 +532,5 @@ export async function onTurnFinished(session: TabSession): Promise<void> {
     if (o?.status === 'busy' && o.cwd && repoRoot(o.cwd) === root) return;
   }
   const contents = webContents.fromId(session.contentsId);
-  if (contents && !contents.isDestroyed()) startRun(root, pipeline.stages, pipeline.keepGoing, contents, deps.openTab, 'auto');
+  if (contents && !contents.isDestroyed()) startRun(root, pipeline.stages, pipeline.keepGoing, contents, deps.openTab, 'auto', taskIdAt(root, s.sessionId, Date.now()));
 }

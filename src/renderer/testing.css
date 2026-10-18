@@ -43,6 +43,15 @@
 .tst-empty { margin: 8px 0; color: var(--muted); }
 .tst-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--muted); }
 
+/* Scope: This task · PRD · Whole project. The pipeline above stays the project's. */
+.tst-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.tst-scope-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 999px; }
+.tst-scope-option { padding: 3px 12px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 13px var(--ui-font); cursor: pointer; }
+.tst-scope-option[aria-pressed="true"] { background: var(--code-bg); color: var(--reader-fg); }
+.tst-scope-option:disabled { cursor: default; }
+.tst-scope-option:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.tst-scope-label { min-width: 0; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+
 :is(.tst-button, .tst-link, .tst-stage, .tst-pick, .tst-other, .tst-loop-focus, .tst-loop-rounds-input, .tst-stage-run, .tst-run, .tst-fix, .tst-insert, .tst-icon, .tst-input, .tst-group-head, .tst-failure):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 
 /* ---- Status dots: passed done-green, failed decide-rose, running next-blue, the rest muted. */

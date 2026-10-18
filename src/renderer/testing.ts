@@ -16,6 +16,8 @@ import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from 
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
+import { scopeBar } from './testing-scope-view';
+import { defaultScope, scoped, scopeTaskIds, type TestScope } from '../shared/test-scope';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
 const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh faster
@@ -29,11 +31,13 @@ const summary = el('p', 'tst-summary');
 const tools = el('div', 'tst-tools-bar');
 const editButton = el('button', 'tst-button', 'Edit pipeline');
 editButton.type = 'button';
+editButton.title = 'The project’s commands, shared by every task and PRD';
 const runButton = el('button', 'tst-button tst-primary', 'Run pipeline');
 runButton.type = 'button';
 tools.append(editButton, runButton);
 head.append(title, summary, tools);
 
+const scopeBox = el('div', 'tst-scopebox');
 const note = el('div', 'tst-note');
 note.setAttribute('role', 'status');
 const confirmBox = el('div', 'tst-confirm');
@@ -54,7 +58,7 @@ stackBox.setAttribute('aria-label', 'What this project tests with');
 side.append(historyBox, healthBox, stackBox);
 body.append(results, side);
 const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop(), askThread: (prompt) => void askThread(loopTabId(), prompt, 'loop') });
-view.append(head, note, confirmBox, loopPanel.element, strip, editor, body);
+view.append(head, scopeBox, note, confirmBox, loopPanel.element, strip, editor, body);
 
 // ---- State, per window.
 let data: TestingState | null = null;
@@ -72,18 +76,50 @@ let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
 let loopNote = '';
 // A loop Petal started or stopped this run, per project root; Claude's Loop lines carry the rest.
-interface LoopRecord { tabId: string | null; startedAt: number; stoppedAt: number | null; stopping: boolean }
+interface LoopRecord { tabId: string | null; startedAt: number; stoppedAt: number | null; stopping: boolean; taskId: string | null }
 const loops = new Map<string, LoopRecord>();
 let loopTick: ReturnType<typeof setInterval> | null = null;
+let scope: TestScope = 'project';
+let scopePicked = false; // she chose one; otherwise it follows the session's task
 
 export const isOpen = (): boolean => overlays.isOpen('testing');
 const pipeline = (): PipelineConfig | null => data?.pipeline ?? null;
 const picked = (): string | null => (sourceTab ? pickedFor.get(sourceTab) ?? null : null);
 const runById = (id: string | null): PipelineRun | null => data?.runs.find((r) => r.id === id) ?? null;
 
+// ---- Scope: runs, criteria and distillation for this task, its PRD, or the whole project. The pipeline stays the project's.
+const scopeIds = (): Set<string> | null => (data ? scopeTaskIds(scope, data.sessionTaskId, data.tasks) : null);
+const scopedRuns = (): PipelineRun[] => scoped(data?.runs ?? [], scopeIds());
+const scopedDistillation = (): DistillRecord[] => scoped(distillation, scopeIds());
+function scopedCriteria(): Criteria | null {
+  if (!criteria) return null;
+  const ids = scopeIds();
+  return { ...criteria, scenarios: scoped(criteria.scenarios, ids), bugs: scoped(criteria.bugs, ids) };
+}
+
+function followSessionTask(): void {
+  if (!scopePicked) scope = defaultScope(data?.sessionTaskId ?? null);
+}
+
+function pickScope(next: TestScope): void {
+  scope = next;
+  scopePicked = true;
+  selectedRun = null;
+  selectedStage = null;
+  drawAll();
+  scopeBox.querySelector<HTMLElement>(`[data-scope="${next}"]`)?.focus();
+}
+
+function drawScope(): void {
+  scopeBox.replaceChildren();
+  scopeBox.hidden = !folderAllowed || !data?.project;
+  if (!data?.project) return;
+  scopeBox.append(scopeBar({ scope, taskId: data.sessionTaskId, tasks: data.tasks, prds: data.prds, project: data.project.name }, pickScope));
+}
+
 // The newest result for a stage, from the chosen run or across all runs (Claude's land on their matching stage).
 function resultOf(stageId: string): { stage: StageResult; run: PipelineRun } | null {
-  const runs = selectedRun ? [runById(selectedRun)].filter((r): r is PipelineRun => r !== null) : data?.runs ?? [];
+  const runs = selectedRun ? [runById(selectedRun)].filter((r): r is PipelineRun => r !== null) : scopedRuns();
   for (const run of runs) {
     const stage = run.stages.find((s) => s.stageId === stageId);
     if (stage) return { stage, run };
@@ -274,8 +310,8 @@ function drawEditor(): void {
   const lineB = el('div', 'tst-actions');
   lineB.append(save, cancel);
   editor.append(
-    el('h3', 'tst-section-title', 'Edit pipeline'),
-    el('p', 'tst-muted', 'Stages run in order in one new tab. Each one is a shell command run in the project folder.'),
+    el('h3', 'tst-section-title', `Edit ${data?.project?.name ?? 'project'} pipeline`),
+    el('p', 'tst-muted', 'These are the project’s commands, the same for every task and PRD. Stages run in order in one new tab, each a shell command in the project folder.'),
     rows, lineA,
     toggle('Keep going after a failure', 'keepGoing', 'Otherwise the pipeline stops at the first failed stage.'),
     toggle('Run the pipeline when Claude finishes a turn that changed files', 'autoRun', 'Off by default. Only commands you already confirmed, in a new visible tab, never while Claude is mid-turn.'),
@@ -340,7 +376,7 @@ function projectPicker(elsewhere: Elsewhere): HTMLElement {
 
 // Each Claude session's distillation goes under that session's newest row in History, once.
 function historyExtras(): (row: RunRow) => HTMLElement | null {
-  const groups = new Map(bySession(distillation).map((g) => [g.sessionId, g.records]));
+  const groups = new Map(bySession(scopedDistillation()).map((g) => [g.sessionId, g.records]));
   const placed = new Set<string>();
   return (row) => {
     const sessionId = row.run.by === 'claude' ? row.run.sessionId ?? null : null;
@@ -365,7 +401,7 @@ async function askThread(tabId: string | null, prompt: string, where: 'loop' | '
 function drawHealth(): void {
   healthBox.replaceChildren();
   if (!data?.project) return;
-  const health = suiteHealth({ runs: data.runs, changed: data.changed });
+  const health = suiteHealth({ runs: scopedRuns(), changed: data.changed });
   healthBox.append(el('h3', 'tst-section-title', 'Suite health'), healthPanel(health, data.pipeline.stages, { addCore: (command) => void addCoreStage(command) }, draft !== null));
 }
 
@@ -375,8 +411,9 @@ function drawSide(): void {
   drawHealth();
   if (!data?.project) return;
   historyBox.append(el('h3', 'tst-section-title', 'History'));
-  if (data.runs.length) {
-    historyBox.append(trend(data.runs, data.pipeline.stages.map((s) => s.id), data.pipeline.stages.map((s) => s.name)), historyList(historyDays(data.runs), selectedRun, expanded, {
+  const runs = scopedRuns();
+  if (runs.length) {
+    historyBox.append(trend(runs, data.pipeline.stages.map((s) => s.id), data.pipeline.stages.map((s) => s.name)), historyList(historyDays(runs), selectedRun, expanded, {
       extra: historyExtras(),
       choose: (id) => {
         selectedRun = selectedRun === id ? null : id;
@@ -390,8 +427,10 @@ function drawSide(): void {
         historyBox.querySelector<HTMLElement>(`[data-toggle="${CSS.escape(key)}"]`)?.focus();
       },
     }));
-  } else {
+  } else if (scope === 'project') {
     historyBox.append(el('p', 'tst-muted', 'No runs yet. Your runs and the tests Claude runs in this project show here.'));
+  } else {
+    historyBox.append(el('p', 'tst-muted', `No runs for this ${scope === 'task' ? 'task' : 'PRD'} yet. Runs started from its sessions show here.`));
   }
   stackBox.append(el('h3', 'tst-section-title', 'What this project tests with'), stackList(data.stack, insertSkill));
 }
@@ -418,7 +457,7 @@ function loopFacts() {
 function loopDistillation(update: tabs.Tab['update'], since: number): { distill: DistillRecord[]; distillKey: string } {
   const sessionId = update?.sessionId ?? null;
   const live = update ? recordsFromReplies(update.replies, sessionId, since) : [];
-  const groups = bySession(distillation);
+  const groups = bySession(scopedDistillation());
   const stored = sessionId ? groups.find((g) => g.sessionId === sessionId) : groups[0];
   return { distill: mergeRecords(stored?.records ?? [], live), distillKey: (sessionId ?? stored?.sessionId) || 'none' };
 }
@@ -442,7 +481,7 @@ function drawLoop(): void {
     : target.kind === 'paste' ? 'Claude in this project’s session writes scenarios as tests, runs the pipeline, fixes real bugs and runs again. It never commits.'
       : 'No Claude is running on this project, so Start opens a new tab with Claude and the brief. It never commits.';
   loopPanel.update({
-    status, progress, criteria, why,
+    status, progress, criteria: scopedCriteria(), why,
     canStart: Boolean(stages.length) && !isActive(status) && draft === null,
     stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
     stopping: record?.stopping ?? false,
@@ -466,8 +505,9 @@ async function startLoop(focus: string, rounds: number): Promise<void> {
   const p = pipeline();
   if (!id || !data?.project || !p?.stages.length || isActive(loopFacts().status)) return;
   const root = data.project.root;
-  const brief = buildLoopBrief({ focus, rounds, stages: p.stages, stack: data.stack });
   const target = loopTarget(data.sessionTab, isLive);
+  const taskId = target.kind === 'paste' ? data.sessionTaskId : null; // the session's task; a new tab holds none
+  const brief = buildLoopBrief({ focus, rounds, stages: p.stages, stack: data.stack, taskId });
   const reply = await window.pastel.testing.loopStart({ tabId: id, root: picked(), brief, newTab: target.kind === 'new-tab' });
   if (isIpcError(reply) || 'note' in reply) { loopNote = isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note; drawLoop(); return; }
   if (target.kind === 'paste') {
@@ -478,7 +518,7 @@ async function startLoop(focus: string, rounds: number): Promise<void> {
     loopNote = reply.tabId ? 'Claude is starting in a new tab with the brief.' : 'Couldn’t open a new tab for Claude.';
     if (!reply.tabId) { drawLoop(); return; }
   }
-  loops.set(root, { tabId: target.kind === 'paste' ? target.tabId : reply.tabId, startedAt: Date.now(), stoppedAt: null, stopping: false });
+  loops.set(root, { tabId: target.kind === 'paste' ? target.tabId : reply.tabId, startedAt: Date.now(), stoppedAt: null, stopping: false, taskId });
   await refresh();
 }
 
@@ -487,7 +527,7 @@ async function stopCurrentLoop(): Promise<void> {
   const id = loopTabId();
   const root = data?.project?.root;
   if (!id || !root) return;
-  const record = loops.get(root) ?? { tabId: id, startedAt: 0, stoppedAt: null, stopping: false };
+  const record = loops.get(root) ?? { tabId: id, startedAt: 0, stoppedAt: null, stopping: false, taskId: null };
   if (record.stopping) return;
   record.stopping = true;
   loops.set(root, record);
@@ -507,6 +547,7 @@ async function stopCurrentLoop(): Promise<void> {
 
 function drawAll(): void {
   drawHead();
+  drawScope();
   drawNote();
   drawConfirm();
   drawLoop();
@@ -592,6 +633,7 @@ async function load(): Promise<void> {
   if (isIpcError(result)) { message = `Couldn’t read this project: ${result.error}`; drawAll(); return; }
   data = result;
   folderAllowed = result.allowed;
+  followSessionTask();
   drawAll();
 }
 
@@ -601,10 +643,11 @@ async function refresh(): Promise<void> {
   if (!id || !data) return load();
   const result = await window.pastel.testing.history(id, picked());
   if (isIpcError(result) || !data) return;
-  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, claudePipeline: result.claudePipeline };
+  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, claudePipeline: result.claudePipeline, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
+  followSessionTask();
   criteria = result.criteria;
   distillation = result.distillation;
-  if (draft) { drawHead(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
+  if (draft) { drawHead(); drawScope(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
 }
 
@@ -620,6 +663,8 @@ export async function open(): Promise<void> {
   data = null;
   criteria = null;
   distillation = [];
+  scope = 'project';
+  scopePicked = false;
   drawAll();
   await load();
   await refresh();
@@ -664,6 +709,7 @@ window.addEventListener(OPEN_TEST_RUN_EVENT, (event) => void openRun(String((eve
 export async function openRun(runId: string): Promise<void> {
   await open();
   if (!isOpen() || !runById(runId)) return;
+  if (!scopedRuns().some((r) => r.id === runId)) { scope = 'project'; scopePicked = true; } // a run outside the scope shows under the whole project
   selectedRun = runId;
   selectedStage = null;
   drawAll();
@@ -677,4 +723,4 @@ export function resetLeftovers(): void {
 }
 
 // For the snapshot harness.
-export const state = () => ({ elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, distillation: loopFacts().distill.length, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ scope, sessionTaskId: data?.sessionTaskId ?? null, scopedRuns: scopedRuns().length, elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: loopFacts().status, distillation: loopFacts().distill.length, loopProgress: loopFacts().progress, loopTab: loopTabId(), project: data?.project?.name ?? null, stages: data?.pipeline.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, claudePipeline: data?.claudePipeline ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

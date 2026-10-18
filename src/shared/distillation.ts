@@ -39,6 +39,7 @@ export interface DistillRecord {
   course: Course;
   reason: string;
   threads: DistillThread[];
+  taskId?: string | null; // the task its session held, set once when first stored
 }
 
 const HEADING = /^\s*#{1,6}\s+distillation\b/i;
@@ -202,6 +203,7 @@ export function toRecord(raw: unknown): DistillRecord | null {
   return {
     id: raw.id.slice(0, 200), sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : null, at: numberOrNull(raw.at) ?? 0,
     round: numberOrNull(raw.round), total: numberOrNull(raw.total), questions, course: raw.course as Course, reason: typeof raw.reason === 'string' ? clean(raw.reason) : '', threads,
+    ...(typeof raw.taskId === 'string' ? { taskId: raw.taskId } : {}),
   };
 }
 

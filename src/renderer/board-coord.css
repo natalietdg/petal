@@ -97,7 +97,31 @@
 .task-input.task-notes-input { flex: 3 1 220px; }
 .task-input::placeholder { color: var(--muted); opacity: 1; }
 .task-input:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 0; }
+.task-add + .prd-add { margin-top: 6px; }
 .task-confirm { margin: 8px 0 0; }
+
+/* PRDs: each groups its tasks; subtasks sit indented under their task. */
+.prd-group { margin: 0 0 10px; }
+.prd-group + .prd-group { padding-top: 8px; border-top: 1px solid var(--rule); }
+.prd-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px; }
+.prd-badge { flex: none; padding: 0 7px; border-radius: 999px; background: var(--why-pill); color: var(--why-ink); font: 600 11px/1.6 var(--ui-font); letter-spacing: 0.04em; }
+.prd-title { min-width: 0; overflow: hidden; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.prd-count,
+.prd-ungrouped { flex: none; margin: 0; font: 600 12px var(--ui-font); color: var(--muted); }
+.prd-ungrouped { padding: 4px 8px; }
+.task-row.is-subtask { margin-left: 22px; padding-left: 10px; border-left: 2px solid var(--rule); border-radius: 0 10px 10px 0; }
+.task-row.is-subtask .task-title { font-weight: 500; }
+.task-prd {
+  max-width: 140px;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+  font: 12px var(--ui-font);
+}
+.task-prd:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.task-split-input { flex: 1 1 100%; resize: vertical; }
 .tasks-note,
 .tasks-problem { margin: 8px 0 0; }
 

@@ -8,6 +8,8 @@ import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
 import { sessionTitleFor } from './session-title';
 import { CRITERIA_PATH } from '../shared/test-loop';
+import { loadTasks } from './tasks-store';
+import { taskIdAt } from './testing-tasks';
 import {
   COURSE_WORDS, DISTILL_FILE_CAP, DISTILL_PATH, RECORDS_CAP, courseText, mergeRecords, parseJsonl, recordsFromReplies, toJsonl,
   type DistillRecord, type ReplyLike,
@@ -40,15 +42,22 @@ export function readDistillation(root: string): DistillRecord[] {
 
 const sameRecord = (a: DistillRecord, b: DistillRecord): boolean => JSON.stringify(a) === JSON.stringify(b);
 
+// A stored record keeps the task it was filed under, or none.
+function keepTask(record: DistillRecord, stored: DistillRecord): DistillRecord {
+  const { taskId: _dropped, ...rest } = record;
+  return stored.taskId ? { ...rest, taskId: stored.taskId } : rest;
+}
+
 // Saves records not stored yet (or changed), newest RECORDS_CAP kept; returns the ones that were new.
 export function saveDistillation(root: string, records: readonly DistillRecord[]): DistillRecord[] {
   if (!records.length || !loopPrepared(root)) return [];
   const stored = readDistillation(root);
   const known = new Map(stored.map((r) => [r.id, r]));
-  const fresh = records.filter((r) => !known.has(r.id));
-  const changed = records.filter((r) => known.has(r.id) && !sameRecord(known.get(r.id) as DistillRecord, r));
+  const incoming = records.map((r) => { const old = known.get(r.id); return old ? keepTask(r, old) : r; });
+  const fresh = incoming.filter((r) => !known.has(r.id));
+  const changed = incoming.filter((r) => known.has(r.id) && !sameRecord(known.get(r.id) as DistillRecord, r));
   if (!fresh.length && !changed.length) return [];
-  const merged = mergeRecords(stored, records).slice(-RECORDS_CAP);
+  const merged = mergeRecords(stored, incoming).slice(-RECORDS_CAP);
   const dir = path.dirname(fileOf(root));
   ensureSelfIgnore(dir, root);
   writeFileDurable(fileOf(root), toJsonl(merged), undefined, { within: root });
@@ -72,7 +81,10 @@ function recordCourse(root: string, record: DistillRecord): void {
 export function captureReplies(root: string | null, replies: readonly ReplyLike[], sessionId: string | null): DistillRecord[] {
   if (!root || !replies.length) return [];
   try {
-    return saveDistillation(root, recordsFromReplies(replies, sessionId));
+    const records = recordsFromReplies(replies, sessionId);
+    if (!records.length) return [];
+    const { tasks } = loadTasks(root);
+    return saveDistillation(root, records.map((r) => { const taskId = taskIdAt(root, sessionId, r.at, tasks); return taskId ? { ...r, taskId } : r; }));
   } catch (error) {
     console.error('[petal] saving distillation failed:', error);
     return [];

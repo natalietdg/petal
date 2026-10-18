@@ -12,7 +12,8 @@ export const FOCUS_CAP = 200;
 
 export const STOP_MESSAGE = 'Stop the test loop now. Leave the code as it is and summarise: round reached, bugs fixed, bugs still open, files changed.';
 
-// ---- The criteria file: "## Scenarios" and "## Bugs", one "- [status] name · test: path::name · round n" per item.
+// ---- The criteria file: "## Scenarios" and "## Bugs", one "- [status] name · test: path::name · round n" per item,
+// with "· task: <id>" when the loop runs for a task.
 export const CRITERIA_STATUSES = ['pass', 'fail', 'flaky', 'fixed'] as const;
 export type CriteriaStatus = typeof CRITERIA_STATUSES[number];
 
@@ -22,6 +23,7 @@ export interface CriteriaItem {
   test: { path: string; name: string | null } | null;
   round: number | null;
   regression: boolean; // a bug with a test that reproduces it
+  taskId: string | null;
 }
 
 export interface Criteria { scenarios: CriteriaItem[]; bugs: CriteriaItem[]; malformed: number; truncated: boolean }
@@ -40,10 +42,14 @@ function parseItem(line: string, section: 'scenarios' | 'bugs'): CriteriaItem | 
   if (!name || /^([·•]|test:)/i.test(name)) return null; // a name is required
   let test: CriteriaItem['test'] = null;
   let round: number | null = null;
+  let taskId: string | null = null;
   for (const part of parts) {
     const testPart = /^test:\s*(.+)$/i.exec(part);
     const roundPart = /^round\s+(\d{1,3})$/i.exec(part);
-    if (testPart?.[1]) {
+    const taskPart = /^task:\s*([\w-]{1,64})$/i.exec(part);
+    if (taskPart?.[1]) {
+      taskId = taskPart[1];
+    } else if (testPart?.[1]) {
       const [file, ...rest] = testPart[1].split('::');
       test = { path: file.trim(), name: rest.length ? rest.join('::').trim() || null : null };
     } else if (roundPart?.[1]) {
@@ -52,7 +58,7 @@ function parseItem(line: string, section: 'scenarios' | 'bugs'): CriteriaItem | 
       return null;
     }
   }
-  return { status, name: name.slice(0, 300), test, round, regression: section === 'bugs' && test !== null };
+  return { status, name: name.slice(0, 300), test, round, regression: section === 'bugs' && test !== null, taskId };
 }
 
 // Lines outside the two sections are ignored; a list line inside one that doesn't fit the format counts as malformed.
@@ -76,7 +82,7 @@ export const openBugs = (criteria: Criteria): number => criteria.bugs.filter((b)
 export const CRITERIA_SKELETON = '# Test criteria\n\nKept by Claude during Petal’s test loop.\n\n## Scenarios\n\n## Bugs\n';
 
 // ---- The brief Petal sends once; Claude runs the loop.
-export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[] }
+export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null }
 
 export const clampRounds = (n: unknown): number => {
   const value = Math.round(Number(n));
@@ -102,7 +108,7 @@ export const DISTILL_BRIEF = [
   '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
 ];
 
-export function buildLoopBrief({ focus, rounds, stages, stack }: BriefInput): string {
+export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
   const tools = stack.filter((s) => !s.insert && s.kind !== 'ci');
@@ -125,8 +131,8 @@ export function buildLoopBrief({ focus, rounds, stages, stack }: BriefInput): st
     ...DISTILL_BRIEF,
     '',
     'Criteria file format: a "## Scenarios" section and a "## Bugs" section, one line per item:',
-    '- [status] name · test: path::test name · round n',
-    'where status is pass, fail, flaky or fixed.',
+    `- [status] name · test: path::test name · round n${taskId ? ` · task: ${taskId}` : ''}`,
+    `where status is pass, fail, flaky or fixed.${taskId ? ` Keep "task: ${taskId}" on every line you add, so Petal files it under this task.` : ''}`,
     '',
     `End each round, and every reply during the loop, with this line: **Loop:** round 1/${n} · scenarios · 0 open`,
     'The phase is one of scenarios, testing, fixing, verifying, done, stopped. Open is the number of bugs not yet fixed.',

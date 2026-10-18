@@ -179,7 +179,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     check(JSON.stringify(edited?.map((r) => [r.title, r.notes])) === JSON.stringify([['Document the cart and coupon API', 'Both endpoints'], ['Fix the cart total', 'Rounding is off by a cent']]), `edited, moved down, deleted: ${JSON.stringify(edited)}`);
     const file = path.join(repoOf(LOGIN), '.petal', 'tasks.json');
     const stored = JSON.parse(fs.readFileSync(file, 'utf8')) as { version: number; tasks: { title: string }[] };
-    check(stored.version === 1 && JSON.stringify(stored.tasks.map((t) => t.title)) === JSON.stringify(['Document the cart and coupon API', 'Fix the cart total']) && fs.readFileSync(path.join(repoOf(LOGIN), '.petal', '.gitignore'), 'utf8') === '*\n',
+    check(stored.version === 2 && JSON.stringify(stored.tasks.map((t) => t.title)) === JSON.stringify(['Document the cart and coupon API', 'Fix the cart total']) && fs.readFileSync(path.join(repoOf(LOGIN), '.petal', '.gitignore'), 'utf8') === '*\n',
       `stored in ${path.relative(dir, file)} beside a self-ignoring .gitignore: ${JSON.stringify(stored.tasks.map((t) => t.title))}`);
     const cartTask = edited?.[1]?.id ?? '';
 

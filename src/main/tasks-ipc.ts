@@ -2,10 +2,11 @@
 import path from 'node:path';
 import { handle } from './ipc';
 import { repoBranch, repoRoot } from './repo-label';
-import { loadTasks, newTaskId, updateTasks } from './tasks-store';
+import { loadTasks, newPrdId, newTaskId, updateTasks } from './tasks-store';
 import { listActivity, recordActivity } from './activity-feed';
 import * as coord from './coord';
-import { addTask, assignTask, editTask, moveTask, releaseTask, removeTask, taskBrief, type Task, type TaskOwner } from '../shared/tasks';
+import { addTask, assignTask, editTask, moveTask, releaseTask, removeTask, taskBrief, type Prd, type Task, type TaskData, type TaskOwner } from '../shared/tasks';
+import { addPrd, editPrd, removePrd, setTaskPrd, splitTask } from '../shared/task-groups';
 import type { TaskChangeResult, TaskOp, TasksView } from '../shared/coord';
 import type { TabSessions } from './tab-session';
 
@@ -22,9 +23,9 @@ export function registerTasksIpc({ sessions }: { sessions: TabSessions }): void 
     return { root: repoRoot(cwd), sessionId: session?.sessionId ?? null, cwd };
   };
 
-  const viewOf = (project: TabProject, tasks?: Task[]): TasksView => {
-    if (!project.root) return { repo: null, name: null, branch: null, tasks: [], problem: null };
-    const list = tasks ? { tasks, problem: null } : loadTasks(project.root);
+  const viewOf = (project: TabProject, data?: TaskData): TasksView => {
+    if (!project.root) return { repo: null, name: null, branch: null, tasks: [], prds: [], problem: null };
+    const list = data ? { ...data, problem: null } : loadTasks(project.root);
     return { repo: project.root, name: path.basename(project.root), branch: repoBranch(project.cwd), ...list };
   };
 
@@ -41,26 +42,34 @@ export function registerTasksIpc({ sessions }: { sessions: TabSessions }): void 
       return { sessionId: target.sessionId, name: coord.sessionName(target.sessionId, target.cwd), branch: repoBranch(target.cwd) };
     });
     await coord.refresh(); // cards and the other windows see it now, not on the next tick
-    return { ...viewOf(project, result.tasks), ...result.extra };
+    return { ...viewOf(project, result.data), ...result.extra };
   });
 
   handle('coord:get', () => coord.current());
   handle('activity:list', () => listActivity());
 }
 
-type Changed = { tasks: Task[]; extra: Partial<TaskChangeResult> };
+type Changed = { data: TaskData; extra: Partial<TaskChangeResult> };
 
 function changeTasks(root: string, op: TaskOp, ownerOf: (tabId: string) => TaskOwner): Changed {
   const now = Date.now();
   const repo = path.basename(root);
   let extra: Partial<TaskChangeResult> = {};
-  const saved = updateTasks(root, (tasks): { tasks: Task[] } | null => {
+  updateTasks(root, (tasks, data): { tasks: Task[]; prds?: Prd[] } | null => {
     switch (op.kind) {
-      case 'add': return { tasks: addTask(tasks, op, newTaskId(), now) };
+      case 'add': return { tasks: addTask(tasks, op, newTaskId(), now, data.prds.some((p) => p.id === op.prdId) ? op.prdId ?? null : null) };
       case 'edit': return { tasks: editTask(tasks, op.id, op) };
       case 'move': return { tasks: moveTask(tasks, op.id, op.to) };
       case 'delete': return { tasks: removeTask(tasks, op.id) };
       case 'release': return { tasks: releaseTask(tasks, op.id) };
+      case 'prd-add': return { tasks, prds: addPrd(data.prds, op, newPrdId(), now) };
+      case 'prd-edit': return { tasks, prds: editPrd(data.prds, op.id, op) };
+      case 'prd-delete': return removePrd(data, op.id);
+      case 'set-prd': return { tasks: setTaskPrd(data, op.id, op.prdId) };
+      case 'split': {
+        const titles = Array.isArray(op.titles) ? op.titles : [];
+        return { tasks: splitTask(tasks, op.id, titles, titles.map(() => newTaskId()), now) };
+      }
       case 'assign': {
         const owner = ownerOf(op.toTabId);
         const result = assignTask(tasks, op.id, owner, now, { reassign: op.reassign === true });
@@ -78,5 +87,6 @@ function changeTasks(root: string, op: TaskOp, ownerOf: (tabId: string) => TaskO
       default: throw new Error('Unknown task change.');
     }
   });
-  return { tasks: saved?.tasks ?? loadTasks(root).tasks, extra };
+  const { tasks, prds } = loadTasks(root);
+  return { data: { tasks, prds }, extra };
 }

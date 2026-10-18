@@ -1,11 +1,13 @@
-// The Board's Tasks section: the active tab's project tasks (add, edit, reorder, delete) and giving one to a session,
-// by a card's Give task or by dragging a task onto a card. Giving sends the session a brief through the reply box's path.
+// The Board's Tasks section: the active tab's project tasks (add, edit, reorder, delete), grouped under PRDs, split into
+// subtasks, and given to a session by a card's Give task or by dragging a task onto a card. Giving sends a brief through the reply box's path.
 import * as tabs from './tabs';
 import * as coord from './coord';
 import { pasteToClaude } from './composer';
 import { sinceText } from './sessions-panel';
 import { el, isIpcError } from './dom';
 import { TASK_STATUS_WORDS, type Task } from '../shared/tasks';
+import { groupTasks, siblingIndex, type TaskGroup } from '../shared/task-groups';
+import { button, prdAddForm, prdHeading, prdPicker, splitForm } from './board-prds';
 import type { TaskChangeResult, TaskOp, TasksView } from '../shared/coord';
 import type { IpcError } from '../shared/types';
 
@@ -17,11 +19,14 @@ section.setAttribute('aria-label', 'Tasks');
 let view: TasksView | null = null;
 let projectTab: string | null = null; // the tab whose repo the list belongs to
 let editing: string | null = null;
+let editingPrd: string | null = null;
+let splitting: string | null = null;
 let note = '';
 let confirm: { taskId: string; toTabId: string; text: string } | null = null;
 let onChanged: () => void = () => {};
 let shownKey = '';
-const draft = { title: '', notes: '' }; // the add form survives a repaint
+const draft = { title: '', notes: '' }; // the add forms survive a repaint
+const prdDraft = { title: '', notes: '' };
 
 export const element = (): HTMLElement => section;
 export const current = (): TasksView | null => view;
@@ -84,15 +89,6 @@ export function giveable(root: string | null): Task[] {
   return view.tasks.filter((t) => t.status !== 'done');
 }
 
-function button(className: string, text: string, label: string, onClick: () => void): HTMLButtonElement {
-  const b = el('button', className, text);
-  b.type = 'button';
-  b.title = label;
-  b.setAttribute('aria-label', label);
-  b.addEventListener('click', onClick);
-  return b;
-}
-
 function ownerLine(task: Task): string {
   if (task.status === 'done') return task.doneBy ? `Done by ${task.doneBy.name} · ${sinceText(task.doneAt)}` : 'Done';
   if (!task.owner) return '';
@@ -121,11 +117,23 @@ function editRow(task: Task): HTMLElement {
   return form;
 }
 
-function taskRow(task: Task, index: number, count: number): HTMLLIElement {
-  const row = el('li', `task-row ${task.status}`);
+// Up and down swap with the nearest task in the same group and level.
+function moveButton(task: Task, delta: -1 | 1): HTMLButtonElement {
+  const to = view ? siblingIndex(view.tasks, task.id, delta) : null;
+  const b = button(`task-action task-${delta < 0 ? 'up' : 'down'}`, delta < 0 ? '↑' : '↓', `Move “${task.title}” ${delta < 0 ? 'up' : 'down'}`, () => { if (to !== null) void change({ kind: 'move', id: task.id, to }); });
+  b.disabled = to === null;
+  return b;
+}
+
+function taskRow(task: Task): HTMLLIElement {
+  const row = el('li', `task-row ${task.status}${task.parentId ? ' is-subtask' : ''}`);
   row.dataset.taskId = task.id;
   if (editing === task.id) {
     row.append(editRow(task));
+    return row;
+  }
+  if (splitting === task.id) {
+    row.append(splitForm(task, (titles) => { splitting = null; void change({ kind: 'split', id: task.id, titles }); }, () => { splitting = null; render(); }));
     return row;
   }
   row.draggable = task.status !== 'done';
@@ -143,15 +151,35 @@ function taskRow(task: Task, index: number, count: number): HTMLLIElement {
   const owner = ownerLine(task);
   if (owner) main.append(el('span', 'task-owner', owner));
   const actions = el('div', 'task-actions');
-  const up = button('task-action task-up', '↑', `Move “${task.title}” up`, () => void change({ kind: 'move', id: task.id, to: index - 1 }));
-  const down = button('task-action task-down', '↓', `Move “${task.title}” down`, () => void change({ kind: 'move', id: task.id, to: index + 1 }));
-  up.disabled = index === 0;
-  down.disabled = index === count - 1;
-  actions.append(up, down,
-    button('task-action task-edit-button', 'Edit', `Edit “${task.title}”`, () => { editing = task.id; render(); }),
-    button('task-action task-delete', 'Delete', `Delete “${task.title}”`, () => void change({ kind: 'delete', id: task.id })));
+  if (!task.parentId && view?.prds.length) actions.append(prdPicker(task, view.prds, (prdId) => void change({ kind: 'set-prd', id: task.id, prdId })));
+  actions.append(moveButton(task, -1), moveButton(task, 1),
+    button('task-action task-edit-button', 'Edit', `Edit “${task.title}”`, () => { editing = task.id; render(); }));
+  if (!task.parentId) actions.append(button('task-action task-split', 'Split', `Split “${task.title}” into subtasks`, () => { splitting = task.id; render(); }));
+  actions.append(button('task-action task-delete', 'Delete', task.parentId ? `Delete subtask “${task.title}”` : `Delete “${task.title}” and its subtasks`, () => void change({ kind: 'delete', id: task.id })));
   row.append(main, actions);
   return row;
+}
+
+// A PRD with its tasks, or the ungrouped rest; subtasks sit right under their task.
+function groupSection(group: TaskGroup): HTMLElement {
+  const box = el('section', group.prd ? 'prd-group' : 'prd-group is-ungrouped');
+  const prd = group.prd;
+  if (prd) {
+    box.dataset.prdId = prd.id;
+    box.append(prdHeading(prd, group.tasks.length, editingPrd === prd.id, {
+      edit: () => { editingPrd = prd.id; render(); },
+      remove: () => void change({ kind: 'prd-delete', id: prd.id }),
+      save: (title, notes) => { editingPrd = null; void change({ kind: 'prd-edit', id: prd.id, title, notes }); },
+      cancel: () => { editingPrd = null; render(); },
+    }));
+  } else if (view?.prds.length) {
+    box.append(el('h4', 'prd-ungrouped', 'No PRD'));
+  }
+  const list = el('ol', 'task-list');
+  list.append(...group.tasks.flatMap(({ task, subtasks }) => [taskRow(task), ...subtasks.map(taskRow)]));
+  if (group.tasks.length) box.append(list);
+  else if (prd) box.append(el('p', 'tasks-empty', 'No tasks in this PRD yet. Pick it from a task’s PRD menu.'));
+  return box;
 }
 
 function addForm(): HTMLFormElement {
@@ -201,11 +229,16 @@ export function render(): void {
     parts.push(el('p', 'tasks-empty', 'Open a Claude session in a git repo to keep tasks for it.'));
   } else {
     if (view.problem) parts.push(el('p', 'board-note tasks-problem', view.problem));
-    const list = el('ol', 'task-list');
-    list.append(...view.tasks.map((t, i, all) => taskRow(t, i, all.length)));
-    if (view.tasks.length) parts.push(list);
-    else parts.push(el('p', 'tasks-empty', 'No tasks yet. Add one, then give it to a session with Give task or by dragging it onto a card.'));
-    if (!view.problem) parts.push(addForm());
+    const groups = groupTasks(view).filter((g) => g.prd || g.tasks.length);
+    parts.push(...groups.map(groupSection));
+    if (!view.tasks.length) parts.push(el('p', 'tasks-empty', 'No tasks yet. Add one, then give it to a session with Give task or by dragging it onto a card.'));
+    if (!view.problem) {
+      parts.push(addForm(), prdAddForm(prdDraft, (title, notes) => {
+        prdDraft.title = '';
+        prdDraft.notes = '';
+        void change({ kind: 'prd-add', title, notes });
+      }));
+    }
   }
   const asking = confirmLine();
   if (asking) parts.push(asking);

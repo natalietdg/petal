@@ -99,7 +99,7 @@ describe('task list', () => {
 
   it('validates a stored file: bad tasks drop, a wrong shape is refused', () => {
     expect(validateTaskFile({ version: 1, tasks: [{ id: 'a', title: 'A', status: 'working' }, { id: 'b' }, 'junk'] })).toEqual({
-      ok: true, tasks: [{ id: 'a', title: 'A', notes: '', status: 'open', owner: null, createdAt: 0, claimedAt: null, doneAt: null, doneBy: null }],
+      ok: true, prds: [], tasks: [{ id: 'a', title: 'A', notes: '', status: 'open', owner: null, createdAt: 0, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null }],
     });
     expect(validateTaskFile({ tasks: [] }).ok).toBe(false);
     expect(validateTaskFile({ version: 1, tasks: [{ id: 'a', title: 'A' }, { id: 'a', title: 'B' }] }).ok).toBe(false);

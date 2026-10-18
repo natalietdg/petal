@@ -62,6 +62,7 @@ import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
 import { mentionsCheck } from './snapshot-mentions';
 import { tasksCheck } from './snapshot-tasks';
+import { prdTasksCheck } from './snapshot-prd-tasks';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
@@ -450,6 +451,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['distillation', keepingStores(['testing', 'activity'], () => distillationCheck(kit, win), kit.outDir)], // appends two loop rounds; records the thread, answer and brief pastes, never a real claude
+    ['prd tasks', keepingStores(['testing', 'activity'], () => prdTasksCheck(kit, { win, openTab: tabs.openTab }), kit.outDir)], // seeds runs for a fixture repo's tasks; never runs a command
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
@@ -748,6 +750,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await mentionsCheck(kit, { win, openTab, sessions, fixtureFile: fakeTranscript() ?? '' }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'prd-tasks' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await keepingStores(['testing', 'activity'], () => prdTasksCheck(kit, { win, openTab }), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

@@ -67,7 +67,7 @@ describe('parseCriteria', () => {
   it('groups items and reads every status', () => {
     expect(parsed.scenarios.map((s) => s.status)).toEqual(['pass', 'fail', 'flaky']);
     expect(parsed.bugs.map((b) => b.status)).toEqual(['fixed', 'fail']);
-    expect(parsed.scenarios[0]).toEqual({ status: 'pass', name: 'guest checkout with a saved card', test: { path: 'src/checkout.test.ts', name: 'guest checkout' }, round: 1, regression: false });
+    expect(parsed.scenarios[0]).toEqual({ status: 'pass', name: 'guest checkout with a saved card', test: { path: 'src/checkout.test.ts', name: 'guest checkout' }, round: 1, regression: false, taskId: null });
     expect(parsed.scenarios[2].test).toEqual({ path: 'e2e/retry.spec.ts', name: null });
   });
   it('marks bugs with a test as regressions', () => {
