@@ -1,4 +1,4 @@
-/* Testing: replaces the reader below the dock, like the Library. Pipeline strip on top, results left, history and stack right. */
+/* Testing: replaces the reader below the dock, like the Library. Task picker and the task's stage strip on top, results left, history and stack right. */
 #reader-area > #testing { order: 1; flex: 1; min-height: 0; }
 #reader-area:has(> #testing:not([hidden])) #sessions-dock { background: none; }
 
@@ -43,16 +43,22 @@
 .tst-empty { margin: 8px 0; color: var(--muted); }
 .tst-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--muted); }
 
-/* Scope: This task · PRD · Whole project. The pipeline above stays the project's. */
-.tst-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
-.tst-scope-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 999px; }
-.tst-scope-option { padding: 3px 12px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 13px var(--ui-font); cursor: pointer; }
-.tst-scope-option[aria-pressed="true"] { background: var(--code-bg); color: var(--reader-fg); }
-.tst-scope-option:disabled { cursor: default; }
-.tst-scope-option:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
-.tst-scope-label { min-width: 0; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+/* Organised by task: the picker, Claude's last change to the suite, a PRD's overview, the empty states. */
+.tst-picker-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.tst-picker-label { color: var(--muted); font-size: 13px; font-weight: 600; }
+.tst-task-select { min-width: 0; max-width: 100%; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--reader-bg); color: var(--reader-fg); font: 600 14px var(--ui-font); }
+.tst-suite-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0; color: var(--muted); font-size: 13px; }
+.tst-suite-problem { color: var(--decide-ink); }
+.tst-no-suite, .tst-no-tasks { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.tst-no-suite-title { margin: 0; color: var(--reader-fg); font-weight: 600; }
+.tst-overview-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tst-overview-list .is-subtask { padding-left: 22px; }
+.tst-overview-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; width: 100%; max-width: 760px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 10px; background: none; color: var(--reader-fg); font: inherit; text-align: left; cursor: pointer; }
+.tst-overview-row:hover { background: var(--code-bg); }
+.tst-overview-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.tst-overview-meta { grid-column: 2; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 
-:is(.tst-button, .tst-link, .tst-stage, .tst-pick, .tst-other, .tst-loop-focus, .tst-loop-rounds-input, .tst-stage-run, .tst-run, .tst-fix, .tst-insert, .tst-icon, .tst-input, .tst-group-head, .tst-failure):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+:is(.tst-button, .tst-link, .tst-stage, .tst-pick, .tst-task-select, .tst-overview-row, .tst-other, .tst-loop-focus, .tst-loop-rounds-input, .tst-stage-run, .tst-run, .tst-fix, .tst-insert, .tst-icon, .tst-input, .tst-group-head, .tst-failure):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 
 /* ---- Status dots: passed done-green, failed decide-rose, running next-blue, the rest muted. */
 .tst-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); }

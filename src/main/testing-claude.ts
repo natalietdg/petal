@@ -1,6 +1,7 @@
 // Claude's own test runs, read from a session log: Bash calls whose command runs tests, typechecks or lints,
 // paired with their results. Reads only what was appended since the last read, per log. Also counts file edits,
-// so an auto run knows a turn changed files. testing-ipc.ts calls this behind the folder gate.
+// so an auto run knows a turn changed files, and writes to a task's suite file, so Petal knows which session made them.
+// testing-ipc.ts calls this behind the folder gate.
 import fs from 'node:fs';
 import { parseEntry, type ContentItem } from './transcript-entry';
 import { promptText, trimTo } from './prompts';
@@ -12,11 +13,15 @@ import { isTestCommand, matchStage, runnerOf, type PipelineRun, type StageConfig
 export interface ClaudeCall { id: string; command: string; at: number; endAt: number; output: string; isError: boolean; sessionId: string; prompt: string; cwd: string | null }
 
 interface Pending { command: string; at: number; prompt: string; cwd: string | null }
-interface LogState { offset: number; rest: string; pending: Map<string, Pending>; calls: ClaudeCall[]; seen: Set<string>; edits: number; prompt: string }
+// A tool call that names .petal/suites/<taskId>.json, read as a write to that task's suite.
+export interface SuiteWrite { taskId: string; at: number; sessionId: string }
+interface LogState { offset: number; rest: string; pending: Map<string, Pending>; calls: ClaudeCall[]; seen: Set<string>; edits: number; prompt: string; suiteWrites: SuiteWrite[] }
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const CHECK_SCRIPT = /\b(npm|pnpm|yarn|bun)\s+(?:run\s+)?(typecheck|type-check|lint|check)\b/;
 const MAX_CALLS = 400; // per log, newest kept
+const MAX_SUITE_WRITES = 100;
+const SUITE_FILE = /\.petal\/suites\/([\w-]{1,64})\.json/g;
 const PROMPT_KEEP = 200;
 const CHUNK = 1 << 20;
 
@@ -44,6 +49,9 @@ function readLine(state: LogState, line: string, sessionId: string): void {
   const cwd = typeof entry.cwd === 'string' ? entry.cwd : null;
   for (const item of itemsOf(entry.message?.content)) {
     if (item.type === 'tool_use' && item.name && EDIT_TOOLS.has(item.name)) state.edits += 1;
+    if (item.type === 'tool_use' && item.input && (EDIT_TOOLS.has(item.name ?? '') || item.name === 'Bash')) { // a Read names the file but changes nothing
+      for (const match of JSON.stringify(item.input).matchAll(SUITE_FILE)) state.suiteWrites.push({ taskId: match[1] as string, at, sessionId });
+    }
     if (item.type === 'tool_use' && item.name === 'Bash' && item.id && !state.seen.has(item.id) && typeof item.input?.command === 'string' && isCheckCommand(item.input.command)) {
       state.pending.set(item.id, { command: item.input.command, at, prompt: state.prompt, cwd });
     }
@@ -56,7 +64,7 @@ function readLine(state: LogState, line: string, sessionId: string): void {
   }
 }
 
-export interface LogScan { calls: ClaudeCall[]; edits: number }
+export interface LogScan { calls: ClaudeCall[]; edits: number; suiteWrites: SuiteWrite[] }
 
 const scanning = new Map<string, Promise<unknown>>(); // one scan per log at a time, so offsets never race
 
@@ -73,9 +81,9 @@ export function scanLog(file: string, sessionId: string): Promise<LogScan> {
 async function readAppended(file: string, sessionId: string): Promise<LogScan> {
   let state = states.get(file);
   let size: number;
-  try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0 }; }
+  try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0, suiteWrites: state?.suiteWrites ?? [] }; }
   if (!state || size < state.offset) {
-    state = { offset: 0, rest: '', pending: new Map(), calls: [], seen: new Set(), edits: 0, prompt: '' };
+    state = { offset: 0, rest: '', pending: new Map(), calls: [], seen: new Set(), edits: 0, prompt: '', suiteWrites: [] };
     states.set(file, state);
   }
   if (size > state.offset) {
@@ -94,8 +102,9 @@ async function readAppended(file: string, sessionId: string): Promise<LogScan> {
       await handle.close();
     }
     if (state.calls.length > MAX_CALLS) state.calls = state.calls.slice(-MAX_CALLS);
+    if (state.suiteWrites.length > MAX_SUITE_WRITES) state.suiteWrites = state.suiteWrites.slice(-MAX_SUITE_WRITES);
   }
-  return { calls: state.calls, edits: state.edits };
+  return { calls: state.calls, edits: state.edits, suiteWrites: state.suiteWrites };
 }
 
 export const forgetLogs = (): void => states.clear();

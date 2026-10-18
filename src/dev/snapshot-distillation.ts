@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { seedTestingProject } from './snapshot-testing';
+import { FIXTURE_TASK, seedTestingProject } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -59,7 +59,7 @@ export const ROUND_2 = [
 
 const NEEDS_YOU = 'May a 100% coupon make an order free?';
 
-// Petal's own runs for Suite health: the retry test flips within minutes, totals failed recently, theme always passes.
+// Petal's own runs of the fixture task's suite, for Suite health: the retry test flips within minutes, totals failed recently, theme always passes.
 function seedHistory(project: string): void {
   const now = Date.now();
   const test = (file: string, name: string, status: TestCase['status'], durationMs = 12): TestCase => ({ file, name, status, durationMs });
@@ -75,7 +75,7 @@ function seedHistory(project: string): void {
     const failed = tests.filter((t) => t.status === 'failed').length;
     const counts = { passed: tests.length - failed, failed, skipped: 0 };
     const run: PipelineRun = {
-      id: `distill-run-${i}`, by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 9000, state: failed ? 'failed' : 'passed', totals: counts,
+      id: `distill-run-${i}`, by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 9000, state: failed ? 'failed' : 'passed', totals: counts, taskId: FIXTURE_TASK,
       stages: [{ stageId: 'unit', name: 'Unit', command: 'npm test', status: failed ? 'failed' : 'passed', exitCode: failed ? 1 : 0, durationMs: 9000, counts, tests, output: '', runner: 'vitest' }],
     };
     store.putRun(project, run);
@@ -83,7 +83,7 @@ function seedHistory(project: string): void {
   // The retry test passes again four minutes after it failed, on the same code.
   const at = now - 3 * 60 * 60 * 1000 + 4 * 60 * 1000;
   const tests = [test('src/api/client.test.ts', 'client > retries a 503 twice', 'passed')];
-  store.putRun(project, { id: 'distill-run-retry', by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 2000, state: 'passed', totals: { passed: 1, failed: 0, skipped: 0 },
+  store.putRun(project, { id: 'distill-run-retry', by: 'you', trigger: 'click', startedAt: at, finishedAt: at + 2000, state: 'passed', totals: { passed: 1, failed: 0, skipped: 0 }, taskId: FIXTURE_TASK,
     stages: [{ stageId: 'unit', name: 'Unit', command: 'npm test', status: 'passed', exitCode: 0, durationMs: 2000, counts: { passed: 1, failed: 0, skipped: 0 }, tests, output: '', runner: 'vitest' }] });
 }
 

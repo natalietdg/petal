@@ -106,7 +106,7 @@ describe('the bundled skills', () => {
   });
 
   it('their descriptions carry the trigger phrases', () => {
-    expect(frontmatter(text('petal-testing-suite')).description).toMatch(/"testing suite".*"set up tests".*"test suite for this project".*\/petal-testing-suite/);
+    expect(frontmatter(text('petal-testing-suite')).description).toMatch(/"testing suite".*"update the testing suite".*"set up tests".*"test suite for this task".*\/petal-testing-suite/);
     expect(frontmatter(text('petal-library')).description).toMatch(/"library".*"check the library".*"what do we know about X".*\/petal-library/);
     expect(frontmatter(text('petal-conclude')).description).toMatch(/"conclude".*\/petal-conclude/);
   });
@@ -116,8 +116,9 @@ describe('the bundled skills', () => {
     expect(text('petal-testing-suite')).not.toContain(LIBRARY_DIR_TOKEN);
   });
 
-  it('the testing skill writes the pipeline file the Testing tab reads, and never commits', () => {
-    expect(text('petal-testing-suite')).toContain('.petal/pipeline.json');
+  it('the testing skill writes its task’s suite file, never the old project pipeline, and never commits', () => {
+    expect(text('petal-testing-suite')).toContain('Write `.petal/suites/<task id>.json`');
+    expect(text('petal-testing-suite')).toContain("Don't edit `.petal/tasks.json` or `.petal/pipeline.json`");
     expect(text('petal-testing-suite')).toMatch(/Never commit/);
   });
 

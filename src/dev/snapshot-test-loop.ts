@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { setFixtureStatus } from './snapshot';
-import { seedTestingProject } from './snapshot-testing';
+import { FIXTURE_TASK, seedTestingProject } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, promptWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -18,20 +18,21 @@ const WIDTHS = [800, 1280, 1600];
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 
+// Every item is filed under the fixture task; the stray line stays unfiled.
 export const CRITERIA_FIXTURE = [
   '# Test criteria',
   '',
   '## Scenarios',
-  '- [pass] guest checkout with a saved card · test: src/checkout/guest.test.ts::pays with a saved card · round 1',
-  '- [pass] coupon applies before tax · test: src/checkout/coupon.test.ts::applies before tax · round 1',
-  '- [fail] coupon larger than the cart total · test: src/checkout/coupon.test.ts::caps at the total · round 2',
-  '- [flaky] payment retry after a 503 · test: src/api/client.test.ts::retries a 503 twice · round 1',
-  '- [pass] checkout flow on a phone · test: .maestro/checkout.yaml · round 2',
+  `- [pass] guest checkout with a saved card · test: src/checkout/guest.test.ts::pays with a saved card · round 1 · task: ${FIXTURE_TASK}`,
+  `- [pass] coupon applies before tax · test: src/checkout/coupon.test.ts::applies before tax · round 1 · task: ${FIXTURE_TASK}`,
+  `- [fail] coupon larger than the cart total · test: src/checkout/coupon.test.ts::caps at the total · round 2 · task: ${FIXTURE_TASK}`,
+  `- [flaky] payment retry after a 503 · test: src/api/client.test.ts::retries a 503 twice · round 1 · task: ${FIXTURE_TASK}`,
+  `- [pass] checkout flow on a phone · test: .maestro/checkout.yaml · round 2 · task: ${FIXTURE_TASK}`,
   '',
   '## Bugs',
-  '- [fixed] tax rounds per order, not per line · test: src/cart/totals.test.ts::rounds tax per line, half up · round 1',
-  '- [fail] coupon can take the total below zero · test: src/checkout/coupon.test.ts::caps at the total · round 2',
-  '- [fail] Place order stays enabled with an empty cart · round 2',
+  `- [fixed] tax rounds per order, not per line · test: src/cart/totals.test.ts::rounds tax per line, half up · round 1 · task: ${FIXTURE_TASK}`,
+  `- [fail] coupon can take the total below zero · test: src/checkout/coupon.test.ts::caps at the total · round 2 · task: ${FIXTURE_TASK}`,
+  `- [fail] Place order stays enabled with an empty cart · round 2 · task: ${FIXTURE_TASK}`,
   '- a stray note Claude left',
   '',
 ].join('\n');

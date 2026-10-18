@@ -30,7 +30,8 @@ import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEdit
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
-import type { ClaudePipelineState, PipelineConfig, PipelineRun, RunReply, TestingState } from './testing';
+import type { PipelineRun, RunReply, SuiteSeed, TestingState } from './testing';
+import type { SuiteViews, TaskSuite } from './task-suite';
 import type { Criteria } from './test-loop';
 import type { TextStep } from './text-size';
 import type { SessionInfo } from './session-info';
@@ -228,11 +229,15 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; claudePipeline: ClaudePipelineState | null; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
-  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean }]; result: Guarded<{ tabId: string | null } | { note: string }> };
-  'testing:save-pipeline': { args: [request: { tabId: TabId; root?: string | null; pipeline: PipelineConfig }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:use-claude-pipeline': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:run': { args: [request: { tabId: TabId; root?: string | null; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; brief: string; newTab: boolean; taskId?: string | null }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  // A task's testing agent: claude in a new tab under a session id Petal remembers; only its writes change the task's suite.
+  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
+  'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:run': { args: [request: { tabId: TabId; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };

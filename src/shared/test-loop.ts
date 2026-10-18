@@ -2,6 +2,7 @@
 // Petal only sends the brief, reads the criteria file and the Loop lines, and can stop it. Pure helpers both sides share.
 import { isTerminal, type LoopProgress } from './loop-line';
 import type { StackItem, StageConfig } from './testing';
+import { suitePath } from './task-suite';
 
 export const CRITERIA_PATH = '.petal/test-criteria.md';
 export const CRITERIA_CAP = 64 * 1024; // bytes read; a bigger file shows its first part
@@ -82,7 +83,7 @@ export const openBugs = (criteria: Criteria): number => criteria.bugs.filter((b)
 export const CRITERIA_SKELETON = '# Test criteria\n\nKept by Claude during Petal’s test loop.\n\n## Scenarios\n\n## Bugs\n';
 
 // ---- The brief Petal sends once; Claude runs the loop.
-export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null }
+export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean } // agent: the task's testing agent, which may change its suite
 
 export const clampRounds = (n: unknown): number => {
   const value = Math.round(Number(n));
@@ -108,7 +109,7 @@ export const DISTILL_BRIEF = [
   '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
 ];
 
-export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null }: BriefInput): string {
+export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
   const tools = stack.filter((s) => !s.insert && s.kind !== 'ci');
@@ -118,13 +119,14 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null }: 
     '',
     `Focus: ${what || 'the whole project; start with the riskiest untested paths'}.`,
     ...(tools.length ? [`Stack: ${tools.map((t) => `${t.label} (${t.foundIn})`).join(', ')}.`] : []),
-    'Pipeline, in this order:',
+    `${taskId ? 'This task’s suite' : 'Pipeline'}, in this order:`,
     ...stages.map((s, i) => `${i + 1}. ${s.name}: \`${s.command}\``),
+    ...(taskId && agent ? [`You are this task's testing agent. The suite lives in ${suitePath(taskId)}. You may change it during the loop (add, fix or remove stages), keeping its shape: {"stages": [{"name": "Unit", "command": "npm test"}]}. Petal takes the change and shows it with an Undo.`] : []),
     `Criteria file: ${CRITERIA_PATH}`,
     '',
     'Each round:',
     `1. Scenarios: write new scenarios for the focus as real tests in the project's existing test folders, using its own frameworks${maestro ? ', plus Maestro flows next to the existing ones' : ''}. Add each under Scenarios in the criteria file.`,
-    '2. Testing: run the pipeline commands above, in order.',
+    `2. Testing: run the ${taskId ? 'suite' : 'pipeline'} commands above, in order.`,
     '3. Before calling a failure a bug, run that test once more. If it passes, record it as flaky, not a bug.',
     '4. For each real bug: add it under Bugs, write or keep a regression test that reproduces it and fails first, fix the code, then run the pipeline again.',
     '5. A stage that fails for an environment reason (missing dependency, wrong command, port in use) is not a product bug: diagnose it, repair the environment or command, and say what you changed. Never weaken, skip or delete a test to get green. Never edit snapshot baselines without saying why.',

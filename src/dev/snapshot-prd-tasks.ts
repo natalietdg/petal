@@ -1,13 +1,15 @@
-// PRDs and task-scoped testing (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2,
+// PRDs and per-task suites (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2,
 // a PRD made on the Board grouping two tasks, one task split into subtasks, then Testing opened from the session that
-// holds a task: scoped to This task by default, with PRD and Whole project a click away. Never runs a command.
+// holds a task: that task's own suite, another task's different stages a pick away, a subtask running its task's suite,
+// the PRD's overview of both, the coding session's suite write refused, and a task with no suite starting its testing
+// agent, whose write is taken with Undo. Never runs a command.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
 import { extraTabFixtures, folderFixture, panelFixture, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { putRun } from '../main/testing-store';
+import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import type { PipelineRun, RunState } from '../shared/testing';
 
@@ -16,10 +18,10 @@ const HOUR = 60 * 60_000;
 
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
-function writeTranscript(file: string, cwd: string): void {
+function writeTranscript(file: string, cwd: string, sessionId = SESSION): void {
   assertFixtureOutsideClaude(file);
   const at = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
-  const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, cwd, sessionId: SESSION, ...fields });
+  const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, cwd, sessionId, ...fields });
   put(file, `${entry({ type: 'user', uuid: 'prd-u0', timestamp: at(10), message: { role: 'user', content: 'fix the cart total rounding' } })}\n${entry({ type: 'assistant', uuid: 'prd-a0', timestamp: at(9), message: { role: 'assistant', content: [{ type: 'text', text: '**Looking at the cart.**' }] } })}\n`);
 }
 
@@ -29,6 +31,18 @@ function writeTasksV1(repo: string): void {
   const task = (id: string, title: string, held = false) => ({ id, title, notes: '', status: held ? 'claimed' : 'open', owner: held ? owner : null, createdAt: Date.now() - 3 * HOUR, claimedAt: held ? Date.now() - 2 * HOUR : null, doneAt: null, doneBy: null });
   put(path.join(repo, '.petal', '.gitignore'), '*\n');
   put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 1, tasks: [task('t-cart', 'Fix the cart total', true), task('t-coupon', 'Coupons'), task('t-docs', 'Document the cart API')] }, null, 2));
+}
+
+// Each PRD task's own suite, as Petal writes the file.
+function writeSuite(repo: string, taskId: string, stages: [string, string][]): void {
+  put(path.join(repo, '.petal', 'suites', `${taskId}.json`), `${JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command })), keepGoing: false, autoRun: false }, null, 2)}\n`);
+}
+
+// A session writing a task's suite file, as its log records it.
+function appendSuiteWrite(file: string, sessionId: string, uuid: string, cwd: string, target: string): void {
+  assertFixtureOutsideClaude(file);
+  const at = new Date().toISOString();
+  fs.appendFileSync(file, `${JSON.stringify({ isSidechain: false, cwd, sessionId, type: 'assistant', uuid, timestamp: at, message: { role: 'assistant', content: [{ type: 'tool_use', id: `toolu_${uuid}`, name: 'Write', input: { file_path: target, content: '{}' } }] } })}\n`);
 }
 
 function run(id: string, minutesAgo: number, state: RunState, taskId: string | null): PipelineRun {
@@ -61,12 +75,15 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     rows: [...g.querySelectorAll('.task-row:not(.is-subtask) .task-title')].map((t) => t.textContent),
     subtasks: [...g.querySelectorAll('.task-row.is-subtask .task-title')].map((t) => t.textContent),
   }))`);
-  const testing = (): Promise<{ scope: string; sessionTaskId: string | null; scopedRuns: number; runs: number } | null> => js("PastelTerm.testing.isOpen() ? PastelTerm.testing.state() : null");
-  const scopeLine = (): Promise<{ pressed: string | null; label: string; disabled: string[] }> => js(`(() => ({
-    pressed: document.querySelector('#testing .tst-scope-option[aria-pressed="true"]')?.dataset.scope ?? null,
-    label: document.querySelector('#testing .tst-scope-label')?.textContent ?? '',
-    disabled: [...document.querySelectorAll('#testing .tst-scope-option:disabled')].map((b) => b.dataset.scope),
-  }))()`);
+  type TestingState = { task: string | null; head: string; stages: string[]; taskRuns: number; target: { kind: string; id: string } | null; suiteChange: boolean; suiteProblem: string | null };
+  const testing = (): Promise<TestingState | null> => js("PastelTerm.testing.isOpen() ? PastelTerm.testing.state() : null");
+  const pickTarget = (value: string) => js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); s.value = ${JSON.stringify(value)}; s.dispatchEvent(new Event('change')); })()`);
+  const picker = (): Promise<{ groups: string[]; options: string[]; value: string }> => js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); return s ? {
+    groups: [...s.querySelectorAll('optgroup')].map((g) => g.label),
+    options: [...s.options].map((o) => o.textContent.trim()),
+    value: s.value,
+  } : { groups: [], options: [], value: '' }; })()`);
+  const waitTesting = (want: (s: TestingState) => boolean, ms = 6000) => waitFor(async () => { const s = await testing(); return s && want(s) ? s : null; }, ms);
 
   try {
     applyTheme('paleSky', { persist: false });
@@ -114,31 +131,86 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await capture('prd-board');
     await js('PastelTerm.sessionsBoard.close()');
 
-    // 4 Testing from the session holding "Fix the cart total": two runs for it, one for a subtask in the PRD, one untagged.
+    // 4 Testing from the session holding "Fix the cart total": its own suite, runs and criteria. Coupons has different stages.
     testingFixture.project = repo;
     testingFixture.claudeDir = path.join(dir, 'claude');
     fs.mkdirSync(testingFixture.claudeDir, { recursive: true });
-    for (const r of [run('prd-run-old', 300, 'passed', null), run('prd-run-sub', 90, 'failed', subtask?.id ?? null), run('prd-run-a1', 60, 'failed', 't-cart'), run('prd-run-a2', 20, 'passed', 't-cart')]) putRun(repo, r);
-    put(path.join(repo, '.petal', 'test-criteria.md'), `# Test criteria\n\n## Scenarios\n- [pass] cart total rounds to the cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] two coupons stack · round 1 · task: ${subtask?.id ?? 'none'}\n- [pass] an old scenario · round 1\n\n## Bugs\n- [fixed] total off by a cent · test: src/cart.test.ts::cent · round 1 · task: t-cart\n`);
+    writeSuite(repo, 't-cart', [['Unit', 'npm test'], ['Lint', 'npm run lint']]);
+    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test']]);
+    for (const r of [run('prd-run-old', 300, 'passed', null), run('prd-run-sub', 90, 'failed', subtask?.id ?? null), run('prd-run-c', 80, 'passed', 't-coupon'), run('prd-run-a1', 60, 'failed', 't-cart'), run('prd-run-a2', 20, 'passed', 't-cart')]) store.putRun(repo, r);
+    put(path.join(repo, '.petal', 'test-criteria.md'), `# Test criteria\n\n## Scenarios\n- [pass] cart total rounds to the cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] two coupons stack · round 1 · task: ${subtask?.id ?? 'none'}\n- [pass] an old scenario · round 1\n\n## Bugs\n- [fixed] total off by a cent · test: src/cart.test.ts::cent · round 1 · task: t-cart\n- [fail] coupon API 500s · round 1 · task: ${subtask?.id ?? 'none'}\n`);
     await js('document.getElementById("testing-button").click()');
-    const scopedTask = await waitFor(async () => { const s = await testing(); return s?.scope === 'task' && s.sessionTaskId === 't-cart' && s.scopedRuns === 2 ? s : null; }, 8000);
-    check(scopedTask, `opens scoped to This task with its 2 runs: ${JSON.stringify(scopedTask ?? await testing())}`);
-    const line = await scopeLine();
-    check(line.pressed === 'task' && line.label === 'Fix the cart total' && !line.disabled.length, `the switch shows This task pressed and names it: ${JSON.stringify(line)}`);
+    const cart = await waitTesting((s) => s.task === 'Fix the cart total' && s.taskRuns === 2, 8000);
+    check(cart && JSON.stringify(cart.stages) === JSON.stringify(['Unit', 'Lint']), `opens on the session's task with its own 2 stages and 2 runs: ${JSON.stringify(cart ?? await testing())}`);
+    check(cart?.head === 'Fix the cart total · PRD Checkout · 2 stages' && !/shop/.test(cart.head), `the header names the task and its PRD, never the project: ${cart?.head}`);
+    const listed = await picker();
+    check(JSON.stringify(listed.groups) === JSON.stringify(['PRD · Checkout', 'No PRD']) && JSON.stringify(listed.options) === JSON.stringify(['All tasks in Checkout', 'Fix the cart total', 'Coupons', '↳ Coupon API', '↳ Coupon UI', 'Document the cart API']), `the picker groups tasks by PRD, subtasks nested: ${JSON.stringify(listed)}`);
     const crit: string[] = await js("[...document.querySelectorAll('#testing .tst-crit-name')].map((n) => n.textContent)");
     check(JSON.stringify(crit) === JSON.stringify(['cart total rounds to the cent', 'total off by a cent']), `criteria show this task's scenario and bug only: ${JSON.stringify(crit)}`);
-    const editLabel: string = await js("document.querySelector('#testing .tst-head .tst-button')?.title ?? ''");
-    check(/project’s commands/.test(editLabel), `Edit pipeline says the commands are the project's: ${editLabel}`);
-    await capture('testing-task-scope');
+    const projectWords: string = await js("[...document.querySelectorAll('#testing .tst-head, #testing .tst-pickerbox, #testing .tst-editor')].map((n) => n.textContent).join(' ')");
+    check(!/Whole project|project’s commands|pipeline/i.test(projectWords) && !(await js("document.querySelector('#testing .tst-scope-option')")), `no Whole project switch and no project pipeline wording: ${projectWords.slice(0, 120)}`);
+    await capture('testing-task-suite');
 
-    // 5 PRD adds the subtask's run; Whole project adds the untagged one.
-    await js("document.querySelector('#testing .tst-scope-option[data-scope=\"prd\"]').click()");
-    const prd = await waitFor(async () => { const s = await testing(); return s?.scope === 'prd' && s.scopedRuns === 3 ? s : null; }, 3000);
-    check(prd && (await scopeLine()).label === 'Checkout', `PRD rolls up the subtask's run under Checkout: ${JSON.stringify(prd ?? await testing())}`);
-    await capture('testing-prd-scope');
-    await js("document.querySelector('#testing .tst-scope-option[data-scope=\"project\"]').click()");
-    const whole = await waitFor(async () => { const s = await testing(); return s?.scope === 'project' && s.scopedRuns >= 4 && s.scopedRuns === s.runs ? s : null; }, 3000);
-    check(whole, `Whole project shows every run, the untagged one too: ${JSON.stringify(whole ?? await testing())}`);
+    // 5 Another task: its own stages and runs. A subtask without a suite runs its task's.
+    await pickTarget('task:t-coupon');
+    const coupon = await waitTesting((s) => s.task === 'Coupons');
+    check(coupon && JSON.stringify(coupon.stages) === JSON.stringify(['Typecheck', 'E2E']) && coupon.taskRuns === 1 && coupon.head === 'Coupons · PRD Checkout · 2 stages', `switching tasks switches the stages and runs: ${JSON.stringify(coupon ?? await testing())}`);
+    const chips: string[] = await js("[...document.querySelectorAll('#testing .tst-stage-name')].map((n) => n.textContent)");
+    check(JSON.stringify(chips) === JSON.stringify(['Typecheck', 'E2E']), `the strip shows Coupons' stages: ${JSON.stringify(chips)}`);
+    await capture('testing-other-task');
+    await pickTarget(`task:${subtask?.id ?? ''}`);
+    const sub = await waitTesting((s) => s.task === 'Coupon API');
+    check(sub && JSON.stringify(sub.stages) === JSON.stringify(['Typecheck', 'E2E']) && sub.taskRuns === 1 && /from Coupons/.test(sub.head), `a subtask without a suite runs its task's: ${JSON.stringify(sub ?? await testing())}`);
+
+    // 6 The PRD: an overview of each task's suite, last result, pass rate and open bugs; a row opens that task.
+    await pickTarget(`prd:${prdId ?? ''}`);
+    const overview = await waitFor<string[][] | null>(async () => {
+      const rows: string[][] = await js("[...document.querySelectorAll('#testing .tst-overview-row')].map((r) => [r.querySelector('.tst-overview-name').textContent, r.querySelector('.tst-overview-meta').textContent])");
+      return rows.length === 4 ? rows : null;
+    }, 4000);
+    check(overview?.[0]?.[0] === 'Fix the cart total' && /^2 stages · Last run passed · .+ · 50% passed · 0 open bugs$/.test(overview[0][1] ?? '') && overview[1]?.[0] === 'Coupons' && /^2 stages · Last run passed · .+ · 100% passed · 0 open bugs$/.test(overview[1][1] ?? ''), `the overview lists both tasks with their suites: ${JSON.stringify(overview)}`);
+    check(overview?.[2]?.[0] === 'Coupon API' && /^2 stages, its task’s suite · Last run failed · .+ · 0% passed · 1 open bug$/.test(overview[2][1] ?? ''), `subtasks show under their task with their own results: ${JSON.stringify(overview?.slice(2))}`);
+    check((await testing())?.head === 'PRD · Checkout' && (await js("document.querySelector('#testing .tst-tools-bar').hidden")), 'the header names the PRD; Edit and Run are for a task');
+    await capture('testing-prd-overview');
+    await js(`document.querySelector('#testing .tst-overview-row[data-task="t-cart"]').click()`);
+    check(await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2), 'a row opens that task');
+
+    // 7 The coding session holding the task rewrites its suite file: not applied, flagged, the stages stay.
+    const cartFile = path.join(repo, '.petal', 'suites', 't-cart.json');
+    const before = fs.readFileSync(cartFile, 'utf8');
+    appendSuiteWrite(transcript, SESSION, 'prd-a-suite', repo, cartFile);
+    put(cartFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }] }));
+    const outside = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent, not applied.', 8000);
+    check(outside && JSON.stringify(outside.stages) === JSON.stringify(['Unit', 'Lint']) && !outside.suiteChange, `the coding session's write is not applied and is flagged: ${JSON.stringify(outside ?? await testing())}`);
+    put(cartFile, before);
+    check(await waitTesting((s) => s.suiteProblem === null && s.stages.length === 2, 10000), 'putting the file back clears the flag');
+
+    // 8 A task with no suite: Ask Claude starts its testing agent under a session id Petal remembers.
+    await pickTarget('task:t-docs');
+    const docs = await waitTesting((s) => s.task === 'Document the cart API');
+    const noSuite: string = await js("document.querySelector('#testing .tst-no-suite-title')?.textContent ?? ''");
+    check(docs && docs.stages.length === 0 && noSuite === 'No suite for this task yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
+    const startsBefore = testingFixture.loopStarts.length;
+    await js("document.querySelector('#testing .tst-ask-suite').click()");
+    const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
+    const agent = store.load(repo).agents?.['t-docs']?.[0] ?? '';
+    check(started && agent && started.command.includes(`--session-id ${agent} --`) && started.command.includes('for task t-docs:') && started.command.includes('testing agent') && !/[—–]/.test(started.command), `the testing agent starts in a new tab with its own session id: ${JSON.stringify(started?.command.slice(0, 160))}`);
+
+    // 9 The testing agent writes the suite: taken, "Testing agent updated this suite", and Undo restores.
+    const agentLog = path.join(dir, 'tabs', `${agent}.jsonl`);
+    const docsFile = path.join(repo, '.petal', 'suites', 't-docs.json');
+    writeTranscript(agentLog, repo, agent);
+    appendSuiteWrite(agentLog, agent, 'prd-agent-suite', repo, docsFile);
+    extraTabFixtures.push({ sessionId: agent, transcript: agentLog, status: 'idle', cwd: repo });
+    openTab(win.webContents);
+    put(docsFile, JSON.stringify({ stages: [{ name: 'Docs build', command: 'npm run docs' }, { name: 'Links', command: 'npm run check-links' }] }));
+    const updated = await waitTesting((s) => s.stages.length === 2 && s.suiteChange, 10000);
+    const line: string = await js("document.querySelector('#testing .tst-suite-change')?.textContent ?? ''");
+    check(updated && /^Testing agent updated this suite · (just now|\d+ min ago) · Undo$/.test(line), `the agent's write shows its stages and says so: ${line} ${JSON.stringify(updated?.stages ?? await testing())}`);
+    await capture('testing-suite-change');
+    await js("document.querySelector('#testing .tst-undo-suite').click()");
+    const undone = await waitTesting((s) => s.stages.length === 0 && !s.suiteChange);
+    check(undone && !fs.existsSync(docsFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this task yet', 'Undo puts back what was there: no suite');
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
   } finally {

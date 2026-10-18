@@ -164,11 +164,13 @@ const api = {
   testing: {
     detect: (tabId: TabId, root: string | null = null) => invoke('testing:detect', { tabId, root }),
     history: (tabId: TabId, root: string | null = null) => invoke('testing:history', { tabId, root }),
-    savePipeline: (request: InvokeArgs<'testing:save-pipeline'>[0]) => invoke('testing:save-pipeline', request),
-    useClaudePipeline: (tabId: TabId, root: string | null = null) => invoke('testing:use-claude-pipeline', { tabId, root }),
+    saveSuite: (request: InvokeArgs<'testing:save-suite'>[0]) => invoke('testing:save-suite', request),
+    seedSuite: (request: InvokeArgs<'testing:seed-suite'>[0]) => invoke('testing:seed-suite', request),
+    undoSuite: (request: InvokeArgs<'testing:undo-suite'>[0]) => invoke('testing:undo-suite', request),
     run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
     stop: (runId: string) => invoke('testing:stop', { runId }),
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
+    agentStart: (request: InvokeArgs<'testing:agent-start'>[0]) => invoke('testing:agent-start', request),
     onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),
   },
   tasks: {

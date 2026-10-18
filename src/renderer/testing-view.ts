@@ -1,7 +1,7 @@
-// The Testing tab's pieces, built from data: the pipeline strip, a stage's grouped results, history with its trend,
+// The Testing tab's pieces, built from data: a suite's stage strip, a stage's grouped results, history with its trend,
 // and what the project tests with. testing.ts owns the state and wires the handlers passed in here.
 import { el } from './dom';
-import { groupByFile, passRate, type PipelineConfig, type PipelineRun, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
+import { groupByFile, passRate, type PipelineRun, type StageConfig, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
 import { chartRuns, resultText, runDuration, runTitle, runWhy, shortCommand, type HistoryDay, type RunRow } from '../shared/testing-history';
 
 const TREND_RUNS = 20;
@@ -31,12 +31,12 @@ const dot = (status: string): HTMLElement => {
   return node;
 };
 
-// ---- The pipeline: stage chips left to right, joined by a line.
+// ---- The suite: stage chips left to right, joined by a line.
 export interface StripHandlers { select: (stageId: string) => void; runStage: (stageId: string) => void }
 
-export function pipelineStrip(pipeline: PipelineConfig, resultOf: (stageId: string) => StageResult | null, selected: string | null, handlers: StripHandlers, busy: boolean): HTMLElement {
+export function pipelineStrip(pipeline: { stages: StageConfig[] }, resultOf: (stageId: string) => StageResult | null, selected: string | null, handlers: StripHandlers, busy: boolean): HTMLElement {
   const list = el('ol', 'tst-pipeline');
-  list.setAttribute('aria-label', 'Pipeline stages');
+  list.setAttribute('aria-label', 'Suite stages');
   pipeline.stages.forEach((stage, i) => {
     const result = resultOf(stage.id);
     const status: StageStatus = result?.status ?? 'waiting';
@@ -112,7 +112,7 @@ function testRow(stage: StageResult, test: TestCase, handlers: ResultHandlers): 
 export function stageResults(stage: StageResult | null, run: PipelineRun | null, handlers: ResultHandlers): HTMLElement {
   const box = el('div', 'tst-results-body');
   if (!stage || !run) {
-    box.append(el('p', 'tst-empty', 'This stage hasn’t run yet. Run it alone or run the whole pipeline.'));
+    box.append(el('p', 'tst-empty', 'This stage hasn’t run yet. Run it alone or run the whole suite.'));
     return box;
   }
   box.append(summaryBar(stage, run, handlers));
