@@ -12,6 +12,7 @@ import {
   type BackfillDays, type BackfillPlan, type BackfillState, type LibraryEntry, type LibraryList, type LibrarySort,
 } from '../shared/library';
 import { aliasesFrom, likeness } from '../shared/library-titles';
+import { estimateText, lastRunText, usedText } from '../shared/library-cost';
 import * as lessons from './library-lessons';
 
 const MAX_ANGLE = 72; // degrees above and below 3 o'clock that still show a note
@@ -40,9 +41,10 @@ pastButton.type = 'button';
 tools.append(sortGroup, search, pastButton);
 const progress = el('p', 'lib-progress');
 progress.setAttribute('role', 'status');
-head.append(title, summary, progress, tools);
+const costLine = el('p', 'lib-cost'); // the last build's token use
+head.append(title, summary, progress, costLine, tools);
 
-// Read past sessions asks first: how many, about how many calls, and which range.
+// Read past sessions asks first: how many, about how many calls and tokens, and which range.
 const confirmBox = el('section', 'lib-confirm');
 confirmBox.setAttribute('aria-label', 'Read past sessions');
 confirmBox.hidden = true;
@@ -409,6 +411,8 @@ function drawSummary(): void {
   pastButton.disabled = !folderAllowed || backfill.running;
   pastButton.title = !folderAllowed ? 'Allow reading your Claude folder first'
     : backfill.running ? 'Already reading past sessions' : 'Read your past Claude sessions for domain knowledge';
+  costLine.textContent = data?.lastRun && !backfill.running ? lastRunText(data.lastRun) : '';
+  costLine.hidden = !costLine.textContent;
   drawProgress();
 }
 
@@ -429,7 +433,7 @@ function confirmText(): string {
   if (!plan) return 'Counting your sessions…';
   if ('skipped' in plan) return `Can’t read past sessions: ${plan.skipped}.`;
   if (!plan.sessions) return `Nothing new to read ${rangeText(plan.days)}.`;
-  return `Read ${plural(plan.sessions, 'session')} ${rangeText(plan.days)}? This uses your Claude plan, about ${plural(plan.calls, 'call')}.`;
+  return `Read ${plural(plan.sessions, 'session')} ${rangeText(plan.days)}? This uses your Claude plan, about ${plural(plan.calls, 'call')}. ${estimateText(plan.estimate)}`;
 }
 
 function drawConfirm(): void {
@@ -494,7 +498,7 @@ function backfillDoneText(state: BackfillState): string {
     ? [state.added ? `added ${plural(state.added, 'note')}` : '', state.updated ? `updated ${state.updated}` : ''].filter(Boolean).join(', ')
     : 'no new domain knowledge';
   const read = state.done < state.total ? `Stopped after ${state.done} of ${state.total} past sessions` : `Read ${plural(state.done, 'past session')}`;
-  return `${read}: ${found}.`;
+  return `${read}: ${found}.${state.usage ? ` ${usedText(state.usage)}` : ''}`;
 }
 
 function setBackfill(next: BackfillState): void {
@@ -503,7 +507,7 @@ function setBackfill(next: BackfillState): void {
   if (finished) status = backfillDoneText(next);
   if (!isOpen()) return;
   drawSummary();
-  if (finished) drawNote();
+  if (finished) { drawNote(); void load(); } // load picks up the run's token count
 }
 
 function drawAll(): void {
@@ -854,7 +858,7 @@ new ResizeObserver(() => {
 // ---- Open, close, refresh.
 export async function load(): Promise<void> {
   const result = await window.pastel.library.list();
-  data = isIpcError(result) ? { allowed: folderAllowed, autoBuild: false, running: false, entries: [] } : result;
+  data = isIpcError(result) ? { allowed: folderAllowed, autoBuild: false, running: false, entries: [], lastRun: null } : result;
   if (!isIpcError(result)) folderAllowed = result.allowed;
   if (!reading.hidden || lessons.isOpen()) return;
   refilter();
@@ -883,6 +887,7 @@ export function setFolderAllowed(allowed: boolean): void {
 }
 
 export const state = () => ({ lessons: lessons.state(), sort, category, text, selected, shown: shown.map((e) => e.title), backfill: { ...backfill }, confirm: confirmBox.hidden ? '' : confirmText(),
+  cost: costLine.hidden ? '' : costLine.textContent ?? '',
   tidy: tidyBox.hidden ? null : [...tidyBox.querySelectorAll('.lib-tidy-names')].map((n) => n.textContent ?? ''), toast: toast.hidden ? '' : toast.textContent ?? '' });
 
 window.pastel.library.onChanged(() => { if (isOpen()) void load(); });

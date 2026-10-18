@@ -137,6 +137,7 @@ const api = {
     list: () => invoke('library:list'),
     read: (slug: string) => invoke('library:read', { slug }),
     addSession: (tabId: TabId) => invoke('library:add-session', { tabId }),
+    addEstimate: (tabId: TabId) => invoke('library:add-estimate', { tabId }),
     onChanged: (callback: () => void) => subscribe('library:changed', callback),
     backfillPlan: (days: BackfillDays) => invoke('library:backfill-plan', { days }),
     backfillStart: (days: BackfillDays) => invoke('library:backfill-start', { days }),

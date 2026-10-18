@@ -27,6 +27,7 @@ import type { ReplyImageStatus } from './reply-image-url';
 import type { SlashList } from './slash';
 import type { Delivery } from './mentions';
 import type { BackfillDays, BackfillPlan, BackfillState, LibraryDoc, LibraryEditResult, LibraryList, LibraryRunResult } from './library';
+import type { TokenEstimate } from './library-cost';
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
@@ -115,6 +116,7 @@ export interface CustomizeState {
   magazinePath: string | null;
   organizer: OrganizerStatus;
   backgroundCalls: number; // Petal's headless Claude calls today, all kinds
+  libraryRange: { low: number; high: number }; // Build my Library's tokens per session, estimated locally
   backgroundModels: readonly string[];
   hookRuns: HookRun[];
   hookDir: string;
@@ -205,6 +207,7 @@ export interface InvokeChannels {
   'library:list': { args: []; result: Guarded<LibraryList> };
   'library:read': { args: [request: { slug: string }]; result: Guarded<LibraryDoc> };
   'library:add-session': { args: [request: { tabId: TabId }]; result: Guarded<LibraryRunResult> };
+  'library:add-estimate': { args: [request: { tabId: TabId }]; result: Guarded<TokenEstimate | { skipped: string }> };
   // Reading past sessions: count first, then run in the background until done or stopped.
   'library:backfill-plan': { args: [request: { days: BackfillDays }]; result: Guarded<BackfillPlan | { skipped: string }> };
   'library:backfill-start': { args: [request: { days: BackfillDays }]; result: Guarded<BackfillState | { skipped: string }> };

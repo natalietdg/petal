@@ -374,7 +374,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   await fitsAtEveryWidth('import');
   await js("document.querySelector('#pet-guide .pg-library input').click()");
   const costed = await until((s) => Boolean(s.library?.confirm && s.library.confirm !== 'Counting…'));
-  check(costed && costed.library.checked && /^Reads 5 sessions from the last 30 days: about \d+ Claude calls?, on your plan\.$/.test(costed.library.confirm) && extracts.length === 0,
+  check(costed && costed.library.checked && /^Reads 5 sessions from the last 30 days: about \d+ Claude calls?, on your plan\. About [\d,]+ tokens to read, [\d,]+ to write\.$/.test(costed.library.confirm) && extracts.length === 0,
     `ticking Also build my Library shows Read past sessions' count and Claude call estimate inline, nothing started yet: ${JSON.stringify(costed?.library)}`);
   await shot('05b-import-library');
   await contrastOk('import card with the Library cost');

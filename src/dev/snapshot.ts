@@ -43,6 +43,7 @@ import { readerStepsCheck } from './snapshot-reader-steps';
 import { openThreadsCheck } from './snapshot-open-threads';
 import { slashMenuCheck } from './snapshot-slash';
 import { libraryCheck } from './snapshot-library';
+import { libraryCostCheck } from './snapshot-library-cost';
 import { lessonsCheck } from './snapshot-lessons';
 import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
@@ -445,8 +446,9 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
-    ['library', keepingStores(['library', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
-    ['lessons', keepingStores(['library', 'activity'], () => lessonsCheck(kit, win), kit.outDir)], // a stubbed extractor and a stand-in CLAUDE.md only; puts back what it changes
+    ['library', keepingStores(['library', 'cost', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
+    ['library cost', keepingStores(['library', 'cost', 'activity'], () => libraryCostCheck(kit, win), kit.outDir)], // stubbed usage numbers only; never a real claude
+    ['lessons', keepingStores(['library', 'cost', 'activity'], () => lessonsCheck(kit, win), kit.outDir)], // a stubbed extractor and a stand-in CLAUDE.md only; puts back what it changes
     ['testing', keepingStores(['testing', 'activity'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
     ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
@@ -455,7 +457,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
-    ['conclusion', keepingStores(['library', 'testing', 'activity'], () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed), kit.outDir)], // appends conclude turns; after the steps that measure the reader
+    ['conclusion', keepingStores(['library', 'cost', 'testing', 'activity'], () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed), kit.outDir)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
@@ -688,6 +690,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'distillation') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await distillationCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'library-cost') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await keepingStores(['library', 'cost', 'activity'], () => libraryCostCheck(kit, win), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

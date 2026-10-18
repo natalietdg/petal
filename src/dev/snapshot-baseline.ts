@@ -74,8 +74,11 @@ function fixtureRestorer(): () => void {
   };
 }
 
-// The three stores a step's fixtures land in; compared by content, restored from a copy.
-const STORES = { activity: () => path.join(path.dirname(libraryDir()), 'activity.json'), library: libraryDir, testing: testingDir };
+// The stores a step's fixtures land in; compared by content, restored from a copy. cost: the last Library build's tokens.
+const STORES = {
+  activity: () => path.join(path.dirname(libraryDir()), 'activity.json'), library: libraryDir, testing: testingDir,
+  cost: () => path.join(path.dirname(libraryDir()), 'library-last-run.json'),
+};
 type StoreName = keyof typeof STORES;
 
 function fingerprint(target: string): string {

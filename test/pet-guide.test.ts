@@ -66,8 +66,9 @@ describe('the import card', () => {
     expect(importSaid({ sessions: 5, projects: 2 })).toBe('You’ve used Claude Code before! I found 5 past sessions in 2 projects.');
     expect(importSaid({ sessions: 1, projects: 1 })).toBe('You’ve used Claude Code before! I found 1 past session in 1 project.');
     expect(cardCopy('import', MIKI).title).toBe('Import your past sessions');
-    expect(libraryConfirm({ days: 30, sessions: 5, calls: 7 })).toBe('Reads 5 sessions from the last 30 days: about 7 Claude calls, on your plan.');
-    expect(libraryConfirm({ days: 30, sessions: 0, calls: 0 })).toBe('Nothing new to read from the last 30 days.');
+    expect(libraryConfirm({ days: 30, sessions: 5, calls: 7, estimate: { read: 31_234, write: 4200, calls: 7 } }))
+      .toBe('Reads 5 sessions from the last 30 days: about 7 Claude calls, on your plan. About 31,000 tokens to read, 4,200 to write.');
+    expect(libraryConfirm({ days: 30, sessions: 0, calls: 0, estimate: { read: 0, write: 0, calls: 0 } })).toBe('Nothing new to read from the last 30 days.');
   });
 });
 

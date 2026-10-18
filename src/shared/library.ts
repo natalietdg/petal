@@ -1,4 +1,5 @@
 // The Library: domain knowledge Petal collects from sessions, one Markdown note per topic. Shapes and the list's sort and filter.
+import { usedText, type LastLibraryRun, type TokenEstimate, type TokenUsage } from './library-cost';
 
 export interface LibraryEntry {
   slug: string; // the note's file name without .md
@@ -15,6 +16,7 @@ export interface LibraryList {
   autoBuild: boolean; // Customize › Organizer › Build my Library from sessions
   running: boolean;
   entries: LibraryEntry[];
+  lastRun: LastLibraryRun | null; // the last build's token use
 }
 
 export type LibraryDoc = { slug: string; title: string; category: string; updated: string; sources: string[]; markdown: string } | { missing: true };
@@ -24,6 +26,7 @@ export interface LibraryRunResult {
   updated: number; // notes that gained facts
   lessons?: number; // new lessons kept from the same run, when Learn lessons is on
   skipped?: string; // why nothing ran
+  usage?: TokenUsage; // what its Claude calls reported using; absent when none ran or none reported
 }
 
 // A note she renamed, recategorised, merged or deleted; trashId undoes a delete.
@@ -111,10 +114,11 @@ export function addButtonState({ sessionId, folderAllowed, busy }: { sessionId: 
 // The status line after an add: short, in her words.
 export function addResultText(result: LibraryRunResult): string {
   if (result.skipped) return `Nothing added: ${result.skipped}.`;
-  if (!result.added && !result.updated) return 'Nothing new since this session was last read.';
+  const used = result.usage ? ` ${usedText(result.usage)}` : '';
+  if (!result.added && !result.updated) return `Nothing new since this session was last read.${used}`;
   const parts = [result.added ? `Added ${result.added} note${result.added === 1 ? '' : 's'}` : '', result.updated ? `updated ${result.updated}` : ''].filter(Boolean);
   const text = parts.join(', ');
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.${used}`;
 }
 
 // ---- Reading past sessions.
@@ -130,6 +134,7 @@ export interface BackfillPlan {
   days: BackfillDays;
   sessions: number; // logs with something not read yet
   calls: number; // about how many Claude calls, at the per-run cap
+  estimate: TokenEstimate; // counted from the exact text the run would send
 }
 
 export interface BackfillState {
@@ -141,6 +146,7 @@ export interface BackfillState {
   updated: number;
   days: BackfillDays;
   note?: string; // why it ended early, when it did
+  usage?: TokenUsage; // summed from every session's calls so far
 }
 
 export const IDLE_BACKFILL: BackfillState = { running: false, stopping: false, done: 0, total: 0, added: 0, updated: 0, days: 30 };

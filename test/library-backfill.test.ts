@@ -102,8 +102,8 @@ describe('the call estimate', () => {
     log('s-b', 2, talk + 'x'.repeat(1024 * 1024 + 10));
     log('s-old', 100);
     const { planBackfill } = await import('../src/main/library-backfill');
-    expect(planBackfill(30, NOW)).toEqual({ days: 30, sessions: 2, calls: 3 });
-    expect(planBackfill(0, NOW)).toEqual({ days: 0, sessions: 3, calls: 4 });
+    expect(planBackfill(30, NOW)).toMatchObject({ days: 30, sessions: 2, calls: 3 });
+    expect(planBackfill(0, NOW)).toMatchObject({ days: 0, sessions: 3, calls: 4 });
   });
 
   it('without the Claude folder allowed, nothing is listed', async () => {

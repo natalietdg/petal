@@ -21,9 +21,11 @@ import { canonicalCategory, cleanFact, knownTopics, listEntries, mergeTopics, sq
 import { counters, isSnapshotRun, libraryFixture } from './snapshot-mode';
 import * as librarySessions from './library-sessions';
 import type { LibraryRunResult } from '../shared/library';
+import { NO_USAGE, addUsage, usageOfReply, type TokenUsage } from '../shared/library-cost';
 import type { NoteRef } from '../shared/session-info';
 import { recordActivity } from './activity-feed';
 import { sessionTitleFor } from './session-title';
+import { recordRun } from './library-cost-store';
 
 export const CHUNK_BYTES = 1024 * 1024; // of raw log per Claude call; tool output makes logs bulky
 export const DIGEST_CHARS = 30_000; // of prompts and replies sent per call
@@ -86,6 +88,18 @@ export function readChunk(file: string, offset: number, { chunkBytes = CHUNK_BYT
     at = lineEnd;
   }
   return { digest: parts.join('\n'), next: start + at, atEnd: start + at >= size, cwd };
+}
+
+// The chunks one run reads from `offset`, in order: the build and its token estimate both walk exactly these.
+export function* runChunks(file: string, offset: number): Generator<Chunk> {
+  let at = offset;
+  for (let i = 0; i < MAX_CHUNKS_PER_RUN; i += 1) {
+    const chunk = readChunk(file, at);
+    if (chunk.next === at && !chunk.digest) return; // nothing new
+    yield chunk;
+    at = chunk.next;
+    if (chunk.atEnd) return;
+  }
 }
 
 function lineText(line: string): { text: string; cwd: string | null } {
@@ -238,15 +252,14 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
     if (isSnapshotRun()) counters.libraryRunsSkipped += 1;
     return { ...result, skipped: isSnapshotRun() ? 'snapshot run' : 'Claude Code isn’t installed' };
   }
-  let offset = loadOffsets()[target.sessionId]?.offset ?? 0;
+  const offset = loadOffsets()[target.sessionId]?.offset ?? 0;
   let cwd: string | null = null; // a later chunk may not repeat the folder
   const notes = { added: [] as NoteRef[], updated: [] as NoteRef[] };
-  for (let i = 0; i < MAX_CHUNKS_PER_RUN; i += 1) {
-    const chunk = readChunk(target.transcript, offset);
-    if (chunk.next === offset && !chunk.digest) break; // nothing new
+  for (const chunk of runChunks(target.transcript, offset)) {
     if (chunk.digest) {
       const categories = wants.library ? listEntries().map((e) => e.category) : [];
       const answer = await askFor(run, wants, chunk.digest, categories);
+      if (answer.usage) result.usage = addUsage(result.usage ?? NO_USAGE, answer.usage);
       if (wants.library) {
         const topics = answer.topics.map((t) => ({ ...t, category: canonicalCategory(t.category, categories) }));
         const merged = mergeTopics(topics, { sessionId: target.sessionId, date: new Date().toISOString().slice(0, 10) });
@@ -257,19 +270,28 @@ async function runSession(target: SessionTarget, force: boolean): Promise<Librar
       if (answer.lessons.length) result.lessons = (result.lessons ?? 0) + addLessons(answer.lessons, { sessionId: target.sessionId, cwd: chunk.cwd ?? cwd }).length;
     }
     cwd ??= chunk.cwd;
-    offset = chunk.next;
-    saveOffset(target.sessionId, offset); // after the merge, so a failed call is retried next time
-    if (chunk.atEnd) break;
+    saveOffset(target.sessionId, chunk.next); // after the merge, so a failed call is retried next time
   }
   if (wants.library) librarySessions.record(target.sessionId, notes); // a lessons-only run says nothing about the Library
   return result;
 }
 
-// One call per chunk, shaped by what the run wants.
-async function askFor(run: Extractor, wants: { library: boolean; lessons: boolean }, digest: string, categories: readonly string[]): Promise<{ topics: TopicInput[]; lessons: LessonInput[] }> {
-  if (wants.library && wants.lessons) return parseCombined(await run(combinedPromptFor(digest, categories, knownTopics())));
-  if (wants.lessons) return { topics: [], lessons: parseLessons(await run(lessonsPromptFor(digest))) };
-  return { topics: parseTopics(await run(promptFor(digest, categories, knownTopics()))), lessons: [] };
+type Wants = { library: boolean; lessons: boolean };
+
+// The prompt one call sends, shaped by what the run wants; the estimate measures it with an empty digest.
+export function promptOf(wants: Wants, digest: string, categories: readonly string[]): string {
+  if (wants.library && wants.lessons) return combinedPromptFor(digest, categories, knownTopics());
+  if (wants.lessons) return lessonsPromptFor(digest);
+  return promptFor(digest, categories, knownTopics());
+}
+
+// One call per chunk; the reply's usage counts toward the run's tokens.
+async function askFor(run: Extractor, wants: Wants, digest: string, categories: readonly string[]): Promise<{ topics: TopicInput[]; lessons: LessonInput[]; usage: TokenUsage | null }> {
+  const stdout = await run(promptOf(wants, digest, categories));
+  const usage = usageOfReply(stdout); // null when the reply carries none
+  if (wants.library && wants.lessons) return { ...parseCombined(stdout), usage };
+  if (wants.lessons) return { topics: [], lessons: parseLessons(stdout), usage };
+  return { topics: parseTopics(stdout), lessons: [], usage };
 }
 
 const notes = (n: number): string => `${n} note${n === 1 ? '' : 's'}`;
@@ -318,5 +340,9 @@ export function queueSession(target: SessionTarget, { force = false }: { force?:
 // For the triggers: fire and forget, never throws.
 export function harvest(session: { sessionId?: string | null; transcript?: string | null } | null | undefined): void {
   if (!session?.sessionId || !session.transcript) return;
-  void queueSession({ sessionId: session.sessionId, transcript: session.transcript });
+  void queueSession({ sessionId: session.sessionId, transcript: session.transcript }).then((result) => {
+    if (!result.usage) return;
+    recordRun('auto', 1, result.usage);
+    for (const listener of changeListeners) listener(); // an open Library shows the new token count
+  });
 }

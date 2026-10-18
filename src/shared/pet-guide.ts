@@ -2,6 +2,7 @@
 // what Petal sees until the first reply.
 import type { FolderChoice } from './claude-folder';
 import { rangeText, type BackfillPlan } from './library';
+import { estimateText } from './library-cost';
 export { INSTALL_COMMAND } from './get-started';
 
 export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent', 'import'] as const;
@@ -118,9 +119,9 @@ export const importSaid = ({ sessions, projects }: { sessions: number; projects:
   `You’ve used Claude Code before! I found ${count(sessions, 'past session', 'past sessions')} in ${count(projects, 'project', 'projects')}.`;
 
 export const IMPORT_LIBRARY_DAYS = 30;
-// Read past sessions' own numbers, shown before it starts: what it reads and what it costs.
+// Read past sessions' own numbers, shown before it starts: what it reads and what it costs, in calls and tokens.
 export const libraryConfirm = (plan: BackfillPlan): string => plan.sessions
-  ? `Reads ${count(plan.sessions, 'session', 'sessions')} ${rangeText(plan.days)}: about ${count(plan.calls, 'Claude call', 'Claude calls')}, on your plan.`
+  ? `Reads ${count(plan.sessions, 'session', 'sessions')} ${rangeText(plan.days)}: about ${count(plan.calls, 'Claude call', 'Claude calls')}, on your plan. ${estimateText(plan.estimate)}`
   : `Nothing new to read ${rangeText(plan.days)}.`;
 
 export const IMPORT_LABELS = { show: 'Show them in History', later: 'Not now', library: 'Also build my Library from them' } as const;

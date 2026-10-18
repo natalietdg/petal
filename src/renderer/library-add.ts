@@ -3,6 +3,7 @@
 import * as library from './library';
 import { byId, el, isIpcError } from './dom';
 import { addButtonState, addResultText } from '../shared/library';
+import { estimateText } from '../shared/library-cost';
 
 const STATUS_MS = 6000; // a result stays this long, then fades
 const FADE_MS = 400;
@@ -16,12 +17,14 @@ let folderAllowed = true;
 let busyTab: string | null = null;
 let statusTab: string | null = null; // the tab the shown status belongs to
 let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+const estimates = new Map<string, string>(); // tab -> its token estimate line, counted on hover
 
 function paint(): void {
   const next = addButtonState({ sessionId, folderAllowed, busy: busyTab !== null && busyTab === tabId });
   button.hidden = next.hidden;
   button.disabled = next.disabled;
-  button.title = next.title;
+  const estimate = tabId && !next.disabled ? estimates.get(tabId) : undefined;
+  button.title = estimate ? `${next.title}. ${estimate}` : next.title;
   button.setAttribute('aria-label', next.disabled && !next.hidden ? `Add to Library, off: ${next.title}` : 'Add to Library');
   if (statusTab !== tabId) status.hidden = true;
 }
@@ -44,9 +47,22 @@ function showStatus(text: string, { fade }: { fade: boolean }): void {
   }, STATUS_MS);
 }
 
+// Counted in main from the log, before she clicks; no Claude call.
+async function loadEstimate(): Promise<void> {
+  const tab = tabId;
+  if (!tab || button.disabled) return;
+  const result = await window.pastel.library.addEstimate(tab);
+  if (isIpcError(result) || 'skipped' in result) estimates.delete(tab);
+  else estimates.set(tab, result.calls ? estimateText(result) : 'Nothing new to read.');
+  paint();
+}
+button.addEventListener('pointerenter', () => void loadEstimate());
+button.addEventListener('focus', () => void loadEstimate());
+
 button.addEventListener('click', async () => {
   const tab = tabId;
   if (!tab || button.disabled) return;
+  estimates.delete(tab); // what is left to read changes with this run
   busyTab = tab;
   paint();
   showStatus('Reading this session…', { fade: false });

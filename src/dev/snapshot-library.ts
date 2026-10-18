@@ -41,7 +41,7 @@ export const LIBRARY_NOTES: { title: string; category: string; daysAgo: number; 
 const LONG_TITLE = 'Settlement instructions for cross-border payouts';
 
 // Fake past session logs under a stand-in Claude folder: four recent, one 40 days old, one subagent-only.
-function seedPastSessions(home: string, now = Date.now()): void {
+export function seedPastSessions(home: string, now = Date.now()): void {
   fs.rmSync(home, { recursive: true, force: true });
   const project = path.join(home, 'projects', '-demo-acme');
   fs.mkdirSync(project, { recursive: true });
@@ -127,7 +127,7 @@ export function seedLibrary(dir: string, now = Date.now()): void {
   }
 }
 
-const PROBE = `(() => {
+export const PROBE = `(() => {
   const view = document.getElementById('library');
   if (!view || view.hidden) return null;
   const rgb = (s) => (s.match(/[\\d.]+/g) ?? []).map(Number);
@@ -135,7 +135,7 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...view.querySelectorAll('.lib-title, .lib-summary, .lib-sort-button, .lib-filter, .lib-add, .lib-tab-name, .lib-tab.selected .lib-tab-cat, .lib-letter, .lib-chip, .lib-preview-title, .lib-preview-meta, .lib-preview-facts li, .lib-read, .lib-note span, .lib-link, .lib-empty-title, .lib-empty-text, .lib-back, .lib-reading-title, .lib-reading .prose li, .lib-progress span, .lib-confirm-text, .lib-confirm .lib-sort-button, .lib-confirm-go, .lib-confirm-cancel, .lib-manage-button, .lib-manage-hint, .lib-tidy-names strong, .lib-tidy-names span, .lib-tidy-merge, .lib-tidy-keep, .lib-toast span, .lib-undo')].filter(visible);
+  const texts = [...view.querySelectorAll('.lib-title, .lib-summary, .lib-cost, .lib-sort-button, .lib-filter, .lib-add, .lib-tab-name, .lib-tab.selected .lib-tab-cat, .lib-letter, .lib-chip, .lib-preview-title, .lib-preview-meta, .lib-preview-facts li, .lib-read, .lib-note span, .lib-link, .lib-empty-title, .lib-empty-text, .lib-back, .lib-reading-title, .lib-reading .prose li, .lib-progress span, .lib-confirm-text, .lib-confirm .lib-sort-button, .lib-confirm-go, .lib-confirm-cancel, .lib-manage-button, .lib-manage-hint, .lib-tidy-names strong, .lib-tidy-names span, .lib-tidy-merge, .lib-tidy-keep, .lib-toast span, .lib-undo')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const list = view.querySelector('.lib-list');
   const options = [...view.querySelectorAll('.lib-tab')];
@@ -385,7 +385,7 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     };
     try {
       await click('#library .lib-past');
-      const asked = await settle((p) => /^Read 4 sessions from the last 30 days\? This uses your Claude plan, about 4 calls\.$/.test((p.state as { confirm?: string }).confirm ?? ''));
+      const asked = await settle((p) => /^Read 4 sessions from the last 30 days\? This uses your Claude plan, about 4 calls\. About [\d,]+ tokens to read, [\d,]+ to write\.$/.test((p.state as { confirm?: string }).confirm ?? ''));
       check(asked, `the confirm counts 4 recent sessions, leaving out the old and the subagent one: ${JSON.stringify((await probe())?.state)}`);
       await click('#library .lib-confirm [data-days="90"]');
       const ninety = await settle((p) => /^Read 5 sessions from the last 90 days/.test((p.state as { confirm?: string }).confirm ?? ''));

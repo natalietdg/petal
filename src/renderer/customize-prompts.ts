@@ -3,6 +3,7 @@ import { el, isIpcError } from './dom';
 import { timeOf } from './format';
 import { actionButton, card, field, keepConfig, note, numberInput, page, save } from './customize-kit';
 import type { OrganizerStatus } from '../main/session-organizer';
+import { roundTokens } from '../shared/library-cost';
 
 type PromptSection = 'organizer' | 'flowTitles';
 const INTERVAL_MINUTES = { min: 1, max: 240 };
@@ -65,7 +66,7 @@ function libraryCard(): HTMLDivElement {
   const fields = el('div', 'cz-fields');
   fields.append(
     field('Build my Library from sessions · uses your Claude plan', checkbox(config.library.autoBuild, (on) => save({ library: { autoBuild: on } })),
-      'When a session ends, Claude reads what was new in it and adds domain knowledge (how systems, rules and terms work) to the Library. Off unless you turn it on.'),
+      `When a session ends, Claude reads what was new in it and adds domain knowledge (how systems, rules and terms work) to the Library. Each session uses about ${roundTokens(page.state.libraryRange.low)} to ${roundTokens(page.state.libraryRange.high)} tokens. Off unless you turn it on.`),
     field('Learn lessons from sessions · uses your Claude plan', checkbox(config.lessons.learn, (on) => save({ lessons: { learn: on } })),
       'When a session ends, Claude notes how to work with you: your corrections, its mistakes, approaches you approved. They wait in Library › Lessons; nothing goes into a CLAUDE.md until you add it.'),
     field('Model for background work', model, 'Library and lessons runs. Haiku is fastest and cheapest.'),

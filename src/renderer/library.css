@@ -88,6 +88,7 @@
 
 .lib-progress { margin: 0; font-size: 14px; font-weight: 600; color: var(--reader-fg); }
 .lib-progress .lib-link { font-size: 14px; }
+.lib-cost { margin: 0; font-size: 14px; color: var(--muted); }
 
 /* ---- Read past sessions: the ask before it starts. */
 .lib-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 12px; padding: 14px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--code-bg); }

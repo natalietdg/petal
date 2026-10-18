@@ -5,7 +5,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { allowedClaudeHome } from './claude-folder';
 import { CHUNK_BYTES, MAX_CHUNKS_PER_RUN, loadOffsets, queueSession, type SessionTarget } from './library-extract';
+import { estimateSessions } from './library-estimate';
+import { recordRun } from './library-cost-store';
 import { IDLE_BACKFILL, type BackfillDays, type BackfillPlan, type BackfillState } from '../shared/library';
+import { NO_USAGE, addUsage } from '../shared/library-cost';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HEAD_BYTES = 64 * 1024; // enough of a log to tell a subagent's own log apart
@@ -68,7 +71,7 @@ export function planBackfill(days: BackfillDays, now = Date.now()): BackfillPlan
   const home = allowedClaudeHome();
   if (!home) return { skipped: NO_FOLDER };
   const sessions = listPastSessions(home, { days, now });
-  return { days, sessions: sessions.length, calls: sessions.reduce((sum, s) => sum + callsFor(s.unread), 0) };
+  return { days, sessions: sessions.length, calls: sessions.reduce((sum, s) => sum + callsFor(s.unread), 0), estimate: estimateSessions(sessions) };
 }
 
 // ---- The run: one at a time in the background, until done or stopped; gone on restart, offsets keep the place.
@@ -100,10 +103,12 @@ export function startBackfill(days: BackfillDays, now = Date.now()): BackfillSta
       for (const session of sessions) {
         if (stopRequested) break;
         const result = await queueSession(session, { force: true });
-        set({ done: state.done + 1, added: state.added + result.added, updated: state.updated + result.updated });
+        const usage = result.usage ? addUsage(state.usage ?? NO_USAGE, result.usage) : state.usage;
+        set({ done: state.done + 1, added: state.added + result.added, updated: state.updated + result.updated, usage });
         if (result.skipped && STOPS_ALL.has(result.skipped)) { set({ note: result.skipped }); break; }
       }
     } finally {
+      if (state.usage) recordRun('past', state.done, state.usage);
       set({ running: false, stopping: false });
     }
   })();

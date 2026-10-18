@@ -5,6 +5,7 @@ import { app, shell } from 'electron';
 import { CAT_CHOICES, SCENE_CHOICES, READING_CHOICES, isReadingChoice } from './menu';
 import * as organizer from './session-organizer';
 import { callsToday } from './background-calls';
+import { autoBuildRange } from './library-estimate';
 import * as configStore from './config-store';
 import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
@@ -112,6 +113,7 @@ function customizeState(): CustomizeState {
     magazinePath,
     organizer: organizer.status(),
     backgroundCalls: callsToday(),
+    libraryRange: autoBuildRange(),
     backgroundModels: configStore.BACKGROUND_MODELS,
     hookRuns: responseHook.recentRuns(),
     hookDir: responseHook.hookDir(),
