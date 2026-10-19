@@ -25,7 +25,7 @@ import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, suiteFile, syncSu
 import { setAgentTitle } from './agent-titles';
 import { readAgentLog } from './agent-log';
 import { NO_TOKENS } from '../shared/token-usage';
-import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } from './test-lock';
+import { dismissRestored, lockHookPresent, loadManifest, refreshLock, resolveUnconfirmed, setLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import { cleanSavedLoop, noEvents, withEvent } from '../shared/agent-loop';
 import type { LockManifest } from '../shared/test-lock';
@@ -622,6 +622,14 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if ('note' in target) return target;
     dismissRestored(target.root, target.task.id);
     return { ok: true };
+  });
+
+  // Her Keep or Restore for a locked test changed outside Claude.
+  handle('testing:lock-resolve', async (event, { tabId, root: picked, taskId, path: rel, keep }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const problem = resolveUnconfirmed(target.root, String(rel), keep === true);
+    return problem ? { note: problem } : { ok: true };
   });
 
   // Her name for an agent role, for every task in the project; empty puts the default back.

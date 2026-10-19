@@ -259,6 +259,7 @@ export interface InvokeChannels {
   // The test lock: on or off for the project, and a restored-file flag dismissed for a task. Agent names per project.
   'testing:lock': { args: [request: { tabId: TabId; root?: string | null; on: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:lock-dismiss': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:lock-resolve': { args: [request: { tabId: TabId; root?: string | null; taskId: string; path: string; keep: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:agent-name': { args: [request: { tabId: TabId; root?: string | null; role: AgentRole; name: string }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:run': { args: [request: { tabId: TabId; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };

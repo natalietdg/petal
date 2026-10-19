@@ -8,7 +8,7 @@ import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 // @ts-expect-error: a plain .mjs shipped as the hook, no type declarations
 import { bashWrites, decide, isTestPath } from '../resources/hooks/petal-test-lock.mjs';
 import { LOCK_COMMAND, hasLockHook, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
-import { integrityStep, lockedFiles, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
+import { TOUCH_SLACK_MS, integrityStep, lastToucher, lockedFiles, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
 import { dismissRestored, loadManifest, refreshLock, resolveUnconfirmed, setLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
@@ -162,11 +162,11 @@ describe('what is locked', () => {
     const inputs = (touches: { target: string; at: number; sessionId: string; kind: 'edit' | 'bash'; cwd: string | null }[]) => ({ suiteTasks: [], criteria, agents, touches });
     expect(refreshLock(repo, inputs([]), {}).approved['src/cart.test.ts']).toBeTruthy();
     fs.writeFileSync(test, 'it.skip("rounds")\n');
-    const after = refreshLock(repo, inputs([{ target: 'src/cart.test.ts', at: 5, sessionId: 'main', kind: 'edit', cwd: repo }]), {});
+    const after = refreshLock(repo, inputs([{ target: 'src/cart.test.ts', at: Date.now(), sessionId: 'main', kind: 'edit', cwd: repo }]), {});
     expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds")\n');
     expect(after.restored).toMatchObject([{ path: 'src/cart.test.ts', taskId: 't-cart', by: 'main' }]);
     fs.writeFileSync(test, 'it("rounds to the cent")\n');
-    refreshLock(repo, inputs([{ target: 'src/cart.test.ts', at: 9, sessionId: 'tester', kind: 'edit', cwd: repo }]), {});
+    refreshLock(repo, inputs([{ target: 'src/cart.test.ts', at: Date.now(), sessionId: 'tester', kind: 'edit', cwd: repo }]), {});
     expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds to the cent")\n');
     expect(fs.readFileSync(path.join(repo, '.petal', 'locked', 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds to the cent")\n');
     expect(readManifest(JSON.parse(fs.readFileSync(path.join(repo, '.petal', 'lock.json'), 'utf8'))).sessions).toEqual({ tester: { role: 'tester', taskId: 't-cart' } });
@@ -221,5 +221,19 @@ describe('agent names', () => {
     expect(agentName({}, 'tester')).toBe('Testing agent');
     expect(agentName({ fixer: 'Fixie' }, 'fixer')).toBe('Fixie');
     expect(agentName({ fixer: 'a\nb' }, 'fixer')).toBe('Bug fix agent');
+  });
+});
+
+describe('lastToucher', () => {
+  const root = '/repo';
+  const touch = (at: number, sessionId: string) => ({ target: '/repo/test/a.test.ts', at, sessionId, kind: 'edit' as const, cwd: root });
+
+  it('credits the newest Claude touch that made the change', () => {
+    expect(lastToucher([touch(1000, 's1'), touch(2000, 's2')], 'test/a.test.ts', root, 2000)).toBe('s2');
+  });
+
+  it('ignores touches from before the file last changed, so her own later edit is nobody', () => {
+    const changedAt = 2000 + TOUCH_SLACK_MS + 1;
+    expect(lastToucher([touch(2000, 'tester')], 'test/a.test.ts', root, changedAt)).toBeNull();
   });
 });

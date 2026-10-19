@@ -170,6 +170,7 @@ const api = {
     undoSuite: (request: InvokeArgs<'testing:undo-suite'>[0]) => invoke('testing:undo-suite', request),
     setLock: (request: InvokeArgs<'testing:lock'>[0]) => invoke('testing:lock', request),
     dismissRestored: (request: InvokeArgs<'testing:lock-dismiss'>[0]) => invoke('testing:lock-dismiss', request),
+    resolveLock: (request: InvokeArgs<'testing:lock-resolve'>[0]) => invoke('testing:lock-resolve', request),
     setAgentName: (request: InvokeArgs<'testing:agent-name'>[0]) => invoke('testing:agent-name', request),
     run: (request: InvokeArgs<'testing:run'>[0]) => invoke('testing:run', request),
     stop: (runId: string) => invoke('testing:stop', { runId }),

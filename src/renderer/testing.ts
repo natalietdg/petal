@@ -136,7 +136,7 @@ function drawChange(): void {
   const line = own ? suiteChangeLine(own.change, own.problem, () => void undoChange()) : null;
   if (line) changeBox.append(line);
   const restored = data.lock.restored.filter((f) => f.taskId === id);
-  changeBox.append(lockBar(data.lock, restored, agentName(data.agentNames, 'fixer'), { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored() }, false));
+  changeBox.append(lockBar(data.lock, restored, agentName(data.agentNames, 'fixer'), { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }, false));
   changeBox.hidden = false;
 }
 
@@ -635,6 +635,8 @@ async function toggleLock(on: boolean): Promise<void> {
 }
 
 const dismissRestored = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.dismissRestored(request), '');
+const resolveLock = (path: string, keep: boolean): Promise<boolean> =>
+  suiteCall((request) => window.pastel.testing.resolveLock({ ...request, path, keep }), keep ? 'Kept your change. It is the locked copy now.' : 'Put the locked copy back.');
 
 const seedSuite = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.seedSuite(request), 'Suite started from the project’s commands. Each one still asks before its first run.');
 const undoChange = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.undoSuite(request), 'Change undone.');

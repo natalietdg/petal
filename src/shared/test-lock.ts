@@ -87,11 +87,15 @@ export function lockedFiles({ root, suiteTasks, criteria, agents, touches }: Loc
 }
 
 // The session that last changed a locked file: its last edit of it, or a shell line naming it, whichever is later.
-export function lastToucher(touches: readonly Touch[], rel: string, root: string): string | null {
+// A touch this much before the file's last change still counts as the one that made it.
+export const TOUCH_SLACK_MS = 5000;
+
+// Touches older than the file's last change (changedAt) didn't make that change, so they don't count.
+export function lastToucher(touches: readonly Touch[], rel: string, root: string, changedAt = 0): string | null {
   let best: { at: number; sessionId: string } | null = null;
   for (const t of touches) {
     const hit = t.kind === 'edit' ? repoPath(t.target, root, t.cwd) === rel : t.target.includes(rel);
-    if (hit && (!best || t.at >= best.at)) best = { at: t.at, sessionId: t.sessionId };
+    if (hit && t.at >= changedAt - TOUCH_SLACK_MS && (!best || t.at >= best.at)) best = { at: t.at, sessionId: t.sessionId };
   }
   return best?.sessionId ?? null;
 }

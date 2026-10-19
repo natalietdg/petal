@@ -17,6 +17,7 @@ import type { AgentNames } from '../shared/agent-names';
 const RESTORED_KEPT = 30;
 
 const at = (root: string, rel: string): string => path.join(root, ...rel.split('/'));
+const changedAt = (root: string, rel: string): number => { try { return fs.statSync(at(root, rel)).mtimeMs; } catch { return 0; } };
 const settingsFile = (root: string): string => path.join(root, '.claude', 'settings.local.json');
 
 export function loadManifest(root: string): LockManifest {
@@ -101,7 +102,7 @@ export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, name
   const unconfirmed: RestoredFlag[] = [];
   for (const rel of Object.keys(owners)) {
     if (rel.startsWith(SUITE_PREFIX)) continue;
-    const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root), sessions);
+    const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root, changedAt(root, rel)), sessions);
     if (step.kind === 'approve') { keepCopy(root, rel); approved[rel] = hashOf(at(root, rel)) as string; }
     if (step.kind === 'restore' && restoreCopy(root, rel)) restored.push({ path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: step.by });
     if (step.kind === 'unconfirmed') unconfirmed.push(waiting.get(rel) ?? { path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: 'unconfirmed' });
