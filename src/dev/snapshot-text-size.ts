@@ -68,7 +68,7 @@ const OVERFLOW = `(() => {
   return {
     page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     body: over(document.body),
-    reader: over(reader),
+    reader: over(document.getElementById('latest')), // this step's reply only: older turns hold window fit's 40-column table, which no 800px column fits
     wide,
     terminal: Math.round(screen.getBoundingClientRect().right - host.getBoundingClientRect().right),
     width: window.innerWidth,
@@ -217,6 +217,7 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
   const TALL = 1320;
   resizeOffscreen(win, 1280, TALL);
   await wait(600);
+  const hadChosenSplit = await js('PastelTerm.layout.setChosenSplitForSnapshot(false)') as boolean; // the divider step chose one; a new user hasn't
   await js('PastelTerm.layout.makeRoomForClaudeSetup(true)');
   const room: Record<number, { rows: number; share: number }> = {};
   await js(CLICK_TERMINAL);
@@ -234,6 +235,7 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
     `setup room holds ${CLAUDE_SETUP_ROWS} rows at each size (or the reader at its ${floor}% floor): ${JSON.stringify(room)}`);
   check(room[12].share > room[16].share && room[16].share > room[22].share, `and gives the reader ${room[12].share}% / ${room[16].share}% / ${room[22].share}% at 12 / 16 / 22px`);
   await js('PastelTerm.layout.makeRoomForClaudeSetup(false)');
+  await js(`PastelTerm.layout.setChosenSplitForSnapshot(${hadChosenSplit})`);
   await menu(0);
   resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   await wait(400);

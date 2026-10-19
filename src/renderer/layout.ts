@@ -50,6 +50,14 @@ export function makeRoomForClaudeSetup(on: boolean): void {
   applySplit();
 }
 
+// Snapshot harness: the setup-room check measures a new user's split, so an earlier step's chosen split is set aside, then put back.
+export function setChosenSplitForSnapshot(chosen: boolean): boolean {
+  const was = chosenSplit;
+  chosenSplit = chosen;
+  applySplit();
+  return was;
+}
+
 function applySplit(): void {
   const shown = shownFraction();
   const reader = Math.round(shown * 1000);
