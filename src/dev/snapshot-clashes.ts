@@ -1,6 +1,6 @@
-// Tasks, file clashes and Activity (PASTEL_SNAPSHOT_MODE=tasks): tasks kept in the project's .petal folder, one given
-// to a fixture session (its brief recorded, never typed), fixture Task lines moving it to working and done, clash chips
-// for two sessions editing one file, and the Activity feed in order with its filters. Contrast and overflow everywhere.
+// File clashes and Activity (PASTEL_SNAPSHOT_MODE=clashes): clash chips for two sessions editing one file, the reader's
+// clash line and heads-up, a task held by a fixture session (given through the store, as Testing does) shown on its card
+// as Task lines move it, and the Activity feed in order with its filters. Contrast and overflow everywhere.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -31,18 +31,14 @@ const WIDTHS = [800, 1200, 1600];
 const entry = (fields: Record<string, unknown>) => JSON.stringify({ isSidechain: false, ...fields });
 const iso = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
 
-// Rows the page shows, read through the DOM only.
-const TASK_ROWS = `[...document.querySelectorAll('#board .task-row')].map((r) => ({
-  id: r.dataset.taskId, title: r.querySelector('.task-title')?.textContent ?? null, status: r.querySelector('.task-status')?.textContent ?? null,
-  notes: r.querySelector('.task-notes')?.textContent ?? null, owner: r.querySelector('.task-owner')?.textContent ?? null,
-}))`;
+// Card lines the page shows, read through the DOM only.
 const CARD_EXTRAS = `[...document.querySelectorAll('#board .board-card')].map((c) => ({
   id: c.dataset.sessionId, task: c.querySelector('.board-task .board-text')?.textContent ?? null, taskClass: c.querySelector('.board-task')?.className ?? null,
-  clash: c.querySelector('.board-clash')?.textContent ?? null, give: Boolean(c.closest('.board-item').querySelector('.board-give-toggle')),
+  clash: c.querySelector('.board-clash')?.textContent ?? null,
 }))`;
 const ACTIVITY = `[...document.querySelectorAll('#board .activity-item')].map((b) => ({ id: b.dataset.id, kind: b.dataset.kind, text: b.querySelector('.activity-text')?.textContent ?? '', who: b.querySelector('.activity-who')?.textContent ?? '', at: Date.parse(b.querySelector('time')?.dateTime ?? '') }))`;
 
-// Page, board and every task row, card and activity item: nothing sideways at this width.
+// Page, board and every card and activity item: nothing sideways at this width.
 const OVERFLOW = `(() => {
   const over = [];
   const doc = document.documentElement;
@@ -50,7 +46,7 @@ const OVERFLOW = `(() => {
   const board = document.getElementById('board');
   if (board.scrollWidth - board.clientWidth > 1) over.push({ id: '#board', by: board.scrollWidth - board.clientWidth });
   const box = board.getBoundingClientRect();
-  for (const e of board.querySelectorAll('.board-head, .board-tasks, .task-row, .task-add, .board-card, .board-give, .activity-filters, .activity-item, .board-clash, .board-task')) {
+  for (const e of board.querySelectorAll('.board-head, .board-card, .activity-filters, .activity-item, .board-clash, .board-task')) {
     if (!e.getClientRects().length) continue;
     const r = e.getBoundingClientRect();
     if (r.right > box.right + 1 || r.left < box.left - 1) over.push({ id: e.className, right: Math.round(r.right), box: Math.round(box.right) });
@@ -67,7 +63,7 @@ const CONTRAST = `(() => {
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
   const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length >= 3 && (c[3] ?? 1) > 0.5) return c; } return [255, 255, 255]; };
   const out = [];
-  for (const sel of ['.task-status', '.task-title', '.task-owner', '.task-notes', '.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-give-toggle', '.board-view', '.activity-badge', '.activity-text', '.activity-who', '.activity-detail', '.clash-chip', '.clash-text', '.clash-headsup', '.tasks-project']) {
+  for (const sel of ['.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-view', '.activity-badge', '.activity-text', '.activity-who', '.activity-detail', '.clash-chip', '.clash-text', '.clash-headsup']) {
     for (const e of document.querySelectorAll(sel)) {
       if (!e.getClientRects().length) continue;
       const fg = rgb(getComputedStyle(e).color);
@@ -97,9 +93,9 @@ function appendTurn(file: string, f: Fixture, n: number, prompt: string, reply: 
   fs.appendFileSync(file, `${entry({ type: 'user', uuid: `${f.id}-lu${n}`, timestamp: at, sessionId: f.id, message: { role: 'user', content: prompt } })}\n${entry({ type: 'assistant', uuid: `${f.id}-la${n}`, timestamp: at, sessionId: f.id, message: { role: 'assistant', content: [{ type: 'text', text: reply }] } })}\n`);
 }
 
-export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'openTab'> & { win: BrowserWindow }): Promise<void> {
+export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'openTab'> & { win: BrowserWindow }): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, themes, outDir } = kit;
-  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} tasks: ${what}`);
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} clashes: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
   const sizeTo = async (width: number) => {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -108,19 +104,17 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     }
     return false;
   };
-  const dir = path.join(outDir, 'tasks');
+  const dir = path.join(outDir, 'clashes');
   const saved = { panel: panelFixture.sessions, home: folderFixture.home };
   const restoreActivity = keepActivity();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const transcript = (f: Fixture) => path.join(dir, 'tabs', `${f.id}.jsonl`);
   const repoOf = (f: Fixture) => path.join(dir, 'repos', f.folder);
   const tabOf = (f: Fixture): Promise<string | null> => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(f.id)}) ?? null`);
-  const rows = (): Promise<{ id: string; title: string; status: string; notes: string | null; owner: string | null }[]> => js(TASK_ROWS);
-  const extras = async (f: Fixture) => ((await js(CARD_EXTRAS)) as { id: string; task: string | null; taskClass: string | null; clash: string | null; give: boolean }[]).find((c) => c.id === f.id);
+  const extras = async (f: Fixture) => ((await js(CARD_EXTRAS)) as { id: string; task: string | null; taskClass: string | null; clash: string | null }[]).find((c) => c.id === f.id);
   const settle = () => wait(250);
   const openBoard = async () => { await js('PastelTerm.sessionsBoard.open()'); await waitFor(() => js("PastelTerm.overlays.current() === 'board' || null"), 3000); };
-  const submit = async (selector: string) => { await js(`document.querySelector(${JSON.stringify(selector)}).requestSubmit()`); await settle(); };
-  const type = (selector: string, value: string) => js(`(() => { const i = document.querySelector(${JSON.stringify(selector)}); i.value = ${JSON.stringify(value)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const taskOp = (tabId: string | null, op: object) => js(`window.pastel.tasks.change(${JSON.stringify(tabId)}, ${JSON.stringify(op)})`);
 
   try {
     applyTheme('paleSky', { persist: false });
@@ -150,92 +144,32 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     const names: Record<string, string> = await js(`Object.fromEntries(PastelTerm.tabs.ids().map((t) => [PastelTerm.tabs.get(t).update?.sessionId, PastelTerm.tabs.get(t).update?.label]))`);
     const nameOf = (f: Fixture) => names[f.id] ?? '';
 
-    // 1 The Board's Tasks section belongs to the active tab's repo; it starts empty, with no new dock button.
-    const dockBefore: number = await js("document.querySelectorAll('#sessions-dock .dock-button').length");
+    // 1 The Board opens on Sessions; no Tasks section or Give task under the cards.
     await openBoard();
-    const head = await waitFor(() => js("(() => { const h = document.querySelector('#board .tasks-project'); return h ? { project: h.textContent, empty: document.querySelector('#board .tasks-empty')?.textContent ?? null, views: [...document.querySelectorAll('#board .board-view')].map((b) => b.textContent + ':' + b.getAttribute('aria-selected')) } : null; })()"), 5000);
-    check(head?.project === 'shop · main' && head.empty?.startsWith('No tasks yet') && JSON.stringify(head.views) === JSON.stringify(['Sessions:true', 'Activity:false']), `Tasks for shop · main, empty, under the Sessions view: ${JSON.stringify(head)}`);
-    check((await js("document.querySelectorAll('#sessions-dock .dock-button').length")) === dockBefore, `the dock keeps its ${dockBefore} buttons`);
+    const views = await waitFor(async () => ((await extras(LOGIN)) ? js("[...document.querySelectorAll('#board .board-view')].map((b) => b.textContent + ':' + b.getAttribute('aria-selected'))") : null), 5000);
+    check(JSON.stringify(views) === JSON.stringify(['Sessions:true', 'Activity:false']), `under the Sessions view: ${JSON.stringify(views)}`);
+    check(!(await js("document.querySelector('#board .board-tasks, #board .board-give, #board .task-row')")), 'no task list or Give task on the Board');
 
-    // 2 Add three tasks, edit one, reorder, delete one; the list lives in shop/.petal/tasks.json, ignored by git.
-    for (const [title, notes] of [['Fix the cart total', 'Rounding is off by a cent'], ['Document the cart API', ''], ['Old idea', 'drop me']]) {
-      await type('#board .task-add .task-title-input', title);
-      await type('#board .task-add .task-notes-input', notes);
-      await submit('#board .task-add');
-      await waitFor(async () => ((await rows()).some((r) => r.title === title) ? true : null), 3000);
-    }
-    const added = await rows();
-    check(JSON.stringify(added.map((r) => [r.title, r.status, r.notes])) === JSON.stringify([['Fix the cart total', 'Open', 'Rounding is off by a cent'], ['Document the cart API', 'Open', null], ['Old idea', 'Open', 'drop me']]), `three tasks added, Open: ${JSON.stringify(added)}`);
-    const docsTask = added[1]?.id ?? '';
-    await js(`document.querySelector('#board .task-row[data-task-id="${docsTask}"] .task-edit-button').click()`);
-    await settle();
-    await type('#board .task-edit .task-input', 'Document the cart and coupon API');
-    await type('#board .task-edit .task-notes-input', 'Both endpoints');
-    await submit('#board .task-edit');
-    await js(`document.querySelector('#board .task-row[data-task-id="${added[0]?.id}"] .task-down').click()`);
-    await settle();
-    await js(`document.querySelector('#board .task-row[data-task-id="${added[2]?.id}"] .task-delete').click()`);
-    const edited = await waitFor(async () => { const r = await rows(); return r.length === 2 ? r : null; }, 3000);
-    check(JSON.stringify(edited?.map((r) => [r.title, r.notes])) === JSON.stringify([['Document the cart and coupon API', 'Both endpoints'], ['Fix the cart total', 'Rounding is off by a cent']]), `edited, moved down, deleted: ${JSON.stringify(edited)}`);
+    // 2 A task given to the login session through the store (as Testing does) shows on its card; Task lines move it.
     const file = path.join(repoOf(LOGIN), '.petal', 'tasks.json');
-    const stored = JSON.parse(fs.readFileSync(file, 'utf8')) as { version: number; tasks: { title: string }[] };
-    check(stored.version === 2 && JSON.stringify(stored.tasks.map((t) => t.title)) === JSON.stringify(['Document the cart and coupon API', 'Fix the cart total']) && fs.readFileSync(path.join(repoOf(LOGIN), '.petal', '.gitignore'), 'utf8') === '*\n',
-      `stored in ${path.relative(dir, file)} beside a self-ignoring .gitignore: ${JSON.stringify(stored.tasks.map((t) => t.title))}`);
-    const cartTask = edited?.[1]?.id ?? '';
-
-    // 3 Give task on the login card: the brief is pasted through the reply box's path (recorded), the task is Given to it.
-    const giveable = await waitFor(async () => { const [l, d, a] = [await extras(LOGIN), await extras(DOCS), await extras(API)]; return l?.give && d?.give && a && !a.give ? { l, d, a } : null; }, 5000);
-    check(giveable, `Give task shows on the shop cards only, not on the api card: ${JSON.stringify(giveable ?? [await extras(LOGIN), await extras(API)])}`);
-    const pastesBefore = pasteWrites.length;
-    await js(`document.querySelector('#board .board-card[data-session-id="${LOGIN.id}"]').closest('.board-item').querySelector('.board-give-toggle').click()`);
-    await settle();
-    const choices: string[] = await js(`[...document.querySelector('#board .board-card[data-session-id="${LOGIN.id}"]').closest('.board-item').querySelectorAll('.board-give-task')].map((b) => b.textContent)`);
-    check(JSON.stringify(choices) === JSON.stringify(['Document the cart and coupon API', 'Fix the cart total']), `the card lists the open tasks: ${JSON.stringify(choices)}`);
-    await js(`document.querySelector('#board .board-give-task[data-task-id="${cartTask}"]').click()`);
-    const given = await waitFor(async () => (pasteWrites.length > pastesBefore ? pasteWrites.slice(pastesBefore) : null), 4000);
+    const added = await taskOp(loginTab, { kind: 'add', title: 'Fix the cart total', notes: 'Rounding is off by a cent' });
+    const cartTask: string = added?.tasks?.[0]?.id ?? '';
     const brief = 'Task: Fix the cart total. Rounding is off by a cent. When you start, end your replies with **Task:** Fix the cart total · working|blocked|done.';
-    check(given?.length === 1 && given[0]?.tabId === loginTab && given[0].data === `\x1b[200~${brief}\x1b[201~\r`, `the brief went to the login tab, bracketed, once: ${JSON.stringify(given)}`);
-    const claimed = await waitFor(async () => { const r = (await rows()).find((x) => x.id === cartTask); const c = await extras(LOGIN); return r?.status === 'Given' && c?.task === 'Fix the cart total · Given' ? { r, c } : null; }, 5000);
-    check(claimed, `Given to the login session, on its row and its card: ${JSON.stringify(claimed ?? { row: (await rows()).find((x) => x.id === cartTask), card: await extras(LOGIN) })}`);
-    await capture('tasks-given');
-
-    // 4 One owner: dragging the given task onto the docs card asks to reassign; Cancel keeps it. A free task drags straight over.
-    const drag = (taskId: string, f: Fixture) => js(`(() => {
-      const row = document.querySelector('#board .task-row[data-task-id="${taskId}"]');
-      const card = document.querySelector('#board .board-card[data-session-id="${f.id}"]');
-      const data = new DataTransfer();
-      row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: data }));
-      const over = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: data });
-      card.dispatchEvent(over);
-      card.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
-      row.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: data }));
-      return over.defaultPrevented;
-    })()`);
-    const accepted = await drag(cartTask, DOCS);
-    const asked = await waitFor(() => js("document.querySelector('#board .task-confirm')?.textContent ?? null"), 4000);
-    check(accepted && asked?.includes('is with') && asked.includes(nameOf(LOGIN)), `a claimed task asks before it changes hands: ${JSON.stringify({ accepted, asked })}`);
-    await js("[...document.querySelectorAll('#board .task-confirm .session-link')].find((b) => b.textContent === 'Cancel').click()");
-    await settle();
-    const kept = (await rows()).find((r) => r.id === cartTask);
-    check(kept?.status === 'Given' && !(await js("document.querySelector('#board .task-confirm')")) && pasteWrites.length === pastesBefore + 1, `Cancel keeps its owner and sends nothing: ${JSON.stringify(kept)}`);
-    await drag(docsTask, DOCS);
-    const docsGiven = await waitFor(async () => (pasteWrites.length === pastesBefore + 2 ? pasteWrites.at(-1) : null), 4000);
-    check(docsGiven?.tabId === docsTab && docsGiven.data.includes('Task: Document the cart and coupon API. Both endpoints.'), `a free task dropped on a card goes to it: ${JSON.stringify(docsGiven)}`);
-    const owners = JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: { title: string; owner: { sessionId: string } | null }[] };
-    check(owners.tasks.every((t) => t.owner) && new Set(owners.tasks.map((t) => t.owner?.sessionId)).size === 2, `each task has exactly one owner: ${JSON.stringify(owners.tasks.map((t) => [t.title, t.owner?.sessionId]))}`);
-
-    // 5 Claude's Task lines move it: working, then done with who and when; the reply's status block and strip show the line.
+    const assigned = await taskOp(loginTab, { kind: 'assign', id: cartTask, toTabId: loginTab });
+    check(cartTask && assigned?.brief === brief, `the store hands back the task's brief: ${JSON.stringify(assigned?.brief ?? assigned)}`);
+    const claimed = await waitFor(async () => { const c = await extras(LOGIN); return c?.task === 'Fix the cart total · Given' ? c : null; }, 5000);
+    check(claimed?.taskClass?.includes('claimed'), `Given on the login card: ${JSON.stringify(claimed ?? await extras(LOGIN))}`);
     appendTurn(transcript(LOGIN), LOGIN, 1, brief, '**Found the rounding bug.**\n\n**Doing:** fixing the total\n**Task:** Fix the cart total · working');
-    const working = await waitFor(async () => { const r = (await rows()).find((x) => x.id === cartTask); const c = await extras(LOGIN); return r?.status === 'Working' && c?.task === 'Fix the cart total · Working' ? { r, c } : null; }, 8000);
-    check(working, `the working line moves it to Working: ${JSON.stringify(working ?? { row: (await rows()).find((x) => x.id === cartTask), card: await extras(LOGIN) })}`);
+    const working = await waitFor(async () => { const c = await extras(LOGIN); return c?.task === 'Fix the cart total · Working' ? c : null; }, 8000);
+    check(working, `the working line moves it to Working: ${JSON.stringify(working ?? await extras(LOGIN))}`);
     appendTurn(transcript(LOGIN), LOGIN, 2, 'ship it', '**The total rounds right.**\n\n**Next:** nothing pending\n**Task:** Fix the cart total · done');
-    const done = await waitFor(async () => { const r = (await rows()).find((x) => x.id === cartTask); return r?.status === 'Done' && r.owner?.startsWith(`Done by ${nameOf(LOGIN)} · `) ? r : null; }, 8000);
-    check(done && (await extras(LOGIN))?.task === 'Fix the cart total · Done', `done shows who finished it and when: ${JSON.stringify(done ?? (await rows()).find((x) => x.id === cartTask))}`);
-    const doneFile = (JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: { id: string; status: string; doneAt: number | null; doneBy: { sessionId: string } | null }[] }).tasks.find((t) => t.id === cartTask);
-    check(doneFile?.status === 'done' && doneFile.doneBy?.sessionId === LOGIN.id && typeof doneFile.doneAt === 'number', `and the file records it: ${JSON.stringify(doneFile)}`);
-    await capture('board-tasks');
+    const done = await waitFor(async () => { const c = await extras(LOGIN); return c?.task === 'Fix the cart total · Done' ? c : null; }, 8000);
+    check(done, `the done line moves it to Done: ${JSON.stringify(done ?? await extras(LOGIN))}`);
+    const doneFile = (JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: { id: string; status: string; doneBy: { sessionId: string } | null }[] }).tasks.find((t) => t.id === cartTask);
+    check(doneFile?.status === 'done' && doneFile.doneBy?.sessionId === LOGIN.id, `and the file records who finished it: ${JSON.stringify(doneFile)}`);
+    await capture('board-task-line');
 
-    // 6 Clash: the two shop sessions both edited src/cart.ts; the api session's src/cart.ts is another repo.
+    // 3 Clash: the two shop sessions both edited src/cart.ts; the api session's src/cart.ts is another repo.
     const chips = await waitFor(async () => { const [l, d, a] = [await extras(LOGIN), await extras(DOCS), await extras(API)]; return l?.clash && d?.clash ? { l: l.clash, d: d.clash, a: a?.clash ?? null } : null; }, 8000);
     check(chips?.l === 'Clash · src/cart.ts' && chips.d === 'Clash · src/cart.ts' && chips.a === null, `clash chips on both shop cards, none on api: ${JSON.stringify(chips)}`);
     await capture('clash-board');
@@ -252,7 +186,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     await js(`PastelTerm.tabs.activate(${JSON.stringify(apiTab)})`);
     check(await waitFor(() => js("document.getElementById('reader-clash').hidden || null"), 3000), 'the api tab shows no clash');
 
-    // 7 Activity: a conclusion (real, from the docs log) plus a test run, a Library note and a message recorded the way their modules do.
+    // 4 Activity: a conclusion (real, from the docs log) plus a test run, a Library note and a message recorded the way their modules do.
     appendTurn(transcript(DOCS), DOCS, 1, 'conclude', '**Conclusion:** The cart API is documented.\n**Result:** README covers both endpoints.\n**Impact:** New devs can call it.');
     await waitFor(async () => ((await js('PastelTerm.tabs.get(' + JSON.stringify(docsTab) + ').update?.conclusion?.conclusion')) ? true : null), 8000);
     recordActivity({ id: 'test:run-snapshot', kind: 'test', sessionId: null, sessionName: null, branch: 'main', repo: 'shop', text: 'Tests passed in shop: 42 passed', detail: ['Unit: passed'], target: { runId: 'run-snapshot' } });
@@ -275,7 +209,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     check(items.find((i) => i.kind === 'edits' && i.text.includes(nameOf(API)))?.who.includes('feature-x'), 'items carry the session’s branch');
     await capture('activity');
 
-    // 8 Filters: kind, session and branch; each one narrows the list to exactly its items.
+    // 5 Filters: kind, session and branch; each one narrows the list to exactly its items.
     const press = async (selector: string) => { await js(`document.querySelector(${JSON.stringify(selector)}).click()`); await settle(); return (await js(ACTIVITY)) as typeof items; };
     const edits = await press('#board .activity-kind[data-kind="edits"]');
     check(edits.length === items.filter((i) => i.kind === 'edits').length && edits.every((i) => i.kind === 'edits'), `Edits filter: ${edits.length}`);
@@ -295,7 +229,7 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     check(JSON.stringify(featureCards) === JSON.stringify([API.id]), `the same branch filter on the Board's cards: ${JSON.stringify(featureCards)}`);
     await js("(() => { const s = document.querySelector('#board .board-branch'); s.value = ''; s.dispatchEvent(new Event('change')); })()");
 
-    // 9 Clicking an item jumps: a Task line's item to its tab and reply, a test run to Testing.
+    // 6 Clicking an item jumps: a Task line's item to its tab and reply, a test run to Testing.
     await js("document.querySelector('#board .board-view[data-view=\"activity\"]').click()");
     await settle();
     const doneItem = (await js(ACTIVITY) as typeof items).find((i) => i.text.includes('finished “Fix'));
@@ -309,13 +243,13 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     check(await waitFor(() => js("PastelTerm.overlays.current() === 'testing' || null"), 4000), 'a test run item opens Testing');
     await js('PastelTerm.testing.close()');
 
-    // 10 Survives a restart: the capped list is in userData/activity.json.
+    // 7 Survives a restart: the capped list is in userData/activity.json.
     flushActivity();
     const userData = path.join(outDir, 'userData', 'activity.json');
     const persisted = JSON.parse(fs.readFileSync(userData, 'utf8')) as { version: number; events: { kind: string }[] };
     check(persisted.version === 1 && persisted.events.length >= items.length && persisted.events.length <= 500, `activity.json keeps ${persisted.events.length} events (cap 500)`);
 
-    // 11 Contrast in 3 themes x 4 reading styles, Sessions and Activity views, and the reader's clash line.
+    // 8 Contrast in 3 themes x 4 reading styles, Sessions and Activity views, and the reader's clash line.
     await openBoard();
     for (const [themeId] of Object.entries(themes)) {
       applyTheme(themeId, { persist: false });
@@ -344,12 +278,11 @@ export async function tasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'ope
     applyTheme('paleSky', { persist: false });
     await js("window.pastel.look.setReading('newspaper')");
 
-    // 12 No overflow at 800, 1200 and 1600, with a Give task list open and in Activity.
+    // 9 No overflow at 800, 1200 and 1600, in Sessions and Activity.
     for (const width of WIDTHS) {
       check(await sizeTo(width), `${width}px window sized`);
       for (const boardView of ['sessions', 'activity']) {
         await js(`document.querySelector('#board .board-view[data-view="${boardView}"]').click()`);
-        if (boardView === 'sessions') await js(`document.querySelector('#board .board-card[data-session-id="${DOCS.id}"]')?.closest('.board-item').querySelector('.board-give-toggle')?.click()`);
         await wait(250);
         const over = await js(OVERFLOW);
         check(over.length === 0, `${width}px ${boardView}: nothing sideways ${JSON.stringify(over)}`);

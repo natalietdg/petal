@@ -1,5 +1,5 @@
 // PRDs and per-task suites (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2,
-// a PRD made on the Board grouping two tasks, one task split into subtasks, then Testing opened from the session that
+// a PRD made through the task store grouping two tasks, one task split into subtasks, then Testing opened from the session that
 // holds a task: that task's own suite, another task's different stages a pick away, a subtask running its task's suite,
 // the PRD's overview of both, the coding session's suite write refused, and a task with no suite starting its testing
 // agent, whose write is taken with Undo. Never runs a command.
@@ -66,15 +66,9 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
   const saved = { panel: panelFixture.sessions, home: folderFixture.home, project: testingFixture.project, claudeDir: testingFixture.claudeDir };
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
-  const settle = () => wait(250);
-  const type = (selector: string, value: string) => js(`(() => { const i = document.querySelector(${JSON.stringify(selector)}); i.value = ${JSON.stringify(value)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-  const submit = async (selector: string) => { await js(`document.querySelector(${JSON.stringify(selector)}).requestSubmit()`); await settle(); };
-  const pickPrd = (taskId: string, prdId: string) => js(`(() => { const s = document.querySelector('#board .task-row[data-task-id="${taskId}"] .task-prd'); s.value = ${JSON.stringify(prdId)}; s.dispatchEvent(new Event('change')); })()`);
-  const groups = (): Promise<{ prd: string | null; rows: string[]; subtasks: string[] }[]> => js(`[...document.querySelectorAll('#board .prd-group')].map((g) => ({
-    prd: g.querySelector('.prd-title')?.textContent ?? null,
-    rows: [...g.querySelectorAll('.task-row:not(.is-subtask) .task-title')].map((t) => t.textContent),
-    subtasks: [...g.querySelectorAll('.task-row.is-subtask .task-title')].map((t) => t.textContent),
-  }))`);
+  type View = { tasks: { id: string; title: string; prdId: string | null; parentId: string | null }[]; prds: { id: string; title: string }[] };
+  const taskOp = (tabId: string | null, op: object): Promise<View> => js(`window.pastel.tasks.change(${JSON.stringify(tabId)}, ${JSON.stringify(op)})`);
+  const groups = (v: View | null) => v?.tasks.map((t) => [t.title, v.prds.find((p) => p.id === t.prdId)?.title ?? null, v.tasks.find((p) => p.id === t.parentId)?.title ?? null]);
   type TestingState = { task: string | null; head: string; stages: string[]; taskRuns: number; target: { kind: string; id: string } | null; suiteChange: boolean; suiteProblem: string | null };
   const testing = (): Promise<TestingState | null> => js("PastelTerm.testing.isOpen() ? PastelTerm.testing.state() : null");
   const pickTarget = (value: string) => js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); s.value = ${JSON.stringify(value)}; s.dispatchEvent(new Event('change')); })()`);
@@ -101,35 +95,24 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(tab, `a tab follows the fixture session: ${tab}`);
     await js(`PastelTerm.tabs.activate(${JSON.stringify(tab)})`);
 
-    // 1 The Board reads the v1 file: three tasks, no PRD groups yet.
-    await js('PastelTerm.sessionsBoard.open()');
-    const first = await waitFor(async () => { const g = await groups(); return g.length === 1 && g[0]?.rows.length === 3 ? g : null; }, 5000);
-    check(first?.[0]?.prd === null, `v1 tasks show ungrouped: ${JSON.stringify(first ?? await groups())}`);
+    // 1 The store reads the v1 file: three tasks, no PRDs yet. Testing's picker reads the same store.
+    const first: View | null = await js(`window.pastel.tasks.get(${JSON.stringify(tab)})`);
+    check(first?.tasks.length === 3 && first.prds.length === 0, `v1 tasks read, ungrouped: ${JSON.stringify(groups(first))}`);
 
-    // 2 New PRD, then two tasks picked into it from their PRD menus.
-    await type('#board .prd-add .prd-title-input', 'Checkout');
-    await type('#board .prd-add .task-notes-input', 'Cart to payment');
-    await submit('#board .prd-add');
-    const prdId = await waitFor<string | null>(() => js("document.querySelector('#board .prd-group[data-prd-id]')?.dataset.prdId ?? null"), 4000);
+    // 2 New PRD, then two tasks put into it.
+    const made = await taskOp(tab, { kind: 'prd-add', title: 'Checkout', notes: 'Cart to payment' });
+    const prdId = made?.prds[0]?.id ?? null;
     check(prdId, `the PRD is made: ${prdId}`);
-    await pickPrd('t-cart', prdId ?? '');
-    await settle();
-    await pickPrd('t-coupon', prdId ?? '');
-    const grouped = await waitFor(async () => { const g = await groups(); return g[0]?.rows.length === 2 ? g : null; }, 4000);
-    check(JSON.stringify(grouped) === JSON.stringify([{ prd: 'Checkout', rows: ['Fix the cart total', 'Coupons'], subtasks: [] }, { prd: null, rows: ['Document the cart API'], subtasks: [] }]), `Checkout groups two tasks, the third is under No PRD: ${JSON.stringify(grouped ?? await groups())}`);
+    await taskOp(tab, { kind: 'set-prd', id: 't-cart', prdId });
+    const grouped = await taskOp(tab, { kind: 'set-prd', id: 't-coupon', prdId });
+    check(JSON.stringify(groups(grouped)) === JSON.stringify([['Fix the cart total', 'Checkout', null], ['Coupons', 'Checkout', null], ['Document the cart API', null, null]]), `Checkout groups two tasks, the third has no PRD: ${JSON.stringify(groups(grouped))}`);
 
-    // 3 Split Coupons into two subtasks, nested under it inside the PRD.
-    await js(`document.querySelector('#board .task-row[data-task-id="t-coupon"] .task-split').click()`);
-    await settle();
-    await js(`document.querySelector('#board .task-split .task-split-input').value = 'Coupon API\\nCoupon UI'`);
-    await submit('#board form.task-split');
-    const split = await waitFor(async () => { const g = await groups(); return g[0]?.subtasks.length === 2 ? g : null; }, 4000);
-    check(JSON.stringify(split?.[0]?.subtasks) === JSON.stringify(['Coupon API', 'Coupon UI']), `the split task shows two subtasks: ${JSON.stringify(split ?? await groups())}`);
+    // 3 Split Coupons into two subtasks, inside the PRD.
+    const split = await taskOp(tab, { kind: 'split', id: 't-coupon', titles: ['Coupon API', 'Coupon UI'] });
+    check(JSON.stringify(groups(split)?.filter((g) => g[2] === 'Coupons')) === JSON.stringify([['Coupon API', 'Checkout', 'Coupons'], ['Coupon UI', 'Checkout', 'Coupons']]), `the split task has two subtasks: ${JSON.stringify(groups(split))}`);
     const stored = JSON.parse(fs.readFileSync(tasksJson, 'utf8')) as { version: number; prds: { id: string }[]; tasks: { id: string; title: string; prdId: string | null; parentId: string | null }[] };
     const subtask = stored.tasks.find((t) => t.title === 'Coupon API');
     check(stored.version === 2 && stored.prds.length === 1 && subtask?.parentId === 't-coupon' && subtask.prdId === prdId, `written back as version 2 with the PRD and subtasks: ${JSON.stringify(stored.tasks.map((t) => [t.title, t.prdId, t.parentId]))}`);
-    await capture('prd-board');
-    await js('PastelTerm.sessionsBoard.close()');
 
     // 4 Testing from the session holding "Fix the cart total": its own suite, runs and criteria. Coupons has different stages.
     testingFixture.project = repo;
