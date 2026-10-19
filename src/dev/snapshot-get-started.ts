@@ -154,8 +154,8 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   // 1. The folder question comes first on a fresh install.
   await js('PastelTerm.launchScreens.show()');
   const consent = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
-  check(consent && consent.title === 'Read your Claude folder?' && consent.buttons.join() === 'Allow,Not now' && consent.reads.length === 2
-    && /stays on this Mac\. Nothing is uploaded\./.test(consent.text) && /writes nothing there unless you ask/.test(consent.text) && consent.emDashes === 0,
+  check(consent && consent.title === 'Read your Claude folder?' && consent.buttons.join() === 'Allow,Not now' && consent.reads.length === 7
+    && /stays on this Mac\. Nothing is uploaded\./.test(consent.text) && /What Petal writes in ~\/\.claude, only when you ask/i.test(consent.text) && /CLAUDE\.md: a lesson/.test(consent.text) && consent.emDashes === 0,
     `fresh state shows "Read your Claude folder?" with what it reads, Allow and Not now: ${JSON.stringify(consent)}`);
   for (const [id, look] of [['paleSky', 'light'], ['nightPastel', 'dark']]) {
     applyTheme(id, { persist: false });

@@ -12,6 +12,23 @@ export const READS = [
   'Settings and output styles, for Customize.',
 ];
 
+// Every file Petal writes under ~/.claude; each waits for her click.
+export const WRITES = [
+  'settings.json: your output style, when you pick Use this style.',
+  'output-styles/petal-*.md: when you pick Add Petal’s reply styles.',
+  'skills/petal-*: when you install or update a Petal skill.',
+  'petal-factory.json and skills/factory/SKILL.md: each time you edit the Workflow factory.',
+  'CLAUDE.md: a lesson, after you preview the change and confirm it.',
+];
+
+export const WRITES_TITLE = 'What Petal writes in ~/.claude, only when you ask';
+
+export function writesList(): HTMLElement {
+  const list = el('ul', 'consent-reads consent-writes');
+  list.append(...WRITES.map((line) => el('li', null, line)));
+  return list;
+}
+
 export async function choice(): Promise<FolderChoice> {
   const state = await window.pastel.config.get();
   return isIpcError(state) ? 'unasked' : state.config.claudeFolder.choice;
@@ -41,7 +58,8 @@ function render(): void {
     el('h2', 'welcome-label', 'What Petal reads'),
     list,
     el('p', 'consent-line', 'Everything stays on this Mac. Nothing is uploaded.'),
-    el('p', 'consent-line', 'Petal writes nothing there unless you ask it to: switching your output style, or adding Petal’s reply styles.'),
+    el('h2', 'welcome-label', WRITES_TITLE),
+    writesList(),
     el('p', 'welcome-note', 'Not now keeps the terminal working as usual; the reader stays empty. You can change this in Customize › Get started.'),
   );
   const footer = el('footer', 'welcome-footer');

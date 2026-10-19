@@ -10,7 +10,7 @@ import { bashWrites, decide, isTestPath } from '../resources/hooks/petal-test-lo
 import { LOCK_COMMAND, hasLockHook, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
 import { integrityStep, lockedFiles, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
-import { loadManifest, refreshLock, setLock } from '../src/main/test-lock';
+import { dismissRestored, loadManifest, refreshLock, resolveUnconfirmed, setLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
 
 afterEach(removeTempDirs);
@@ -140,7 +140,10 @@ describe('what is locked', () => {
     const sessions = { tester: { role: 'tester' as const, taskId: 't' }, fixer: { role: 'fixer' as const, taskId: 't' } };
     expect(integrityStep('a', 'h2', 'h1', 'tester', sessions)).toEqual({ kind: 'approve', path: 'a' });
     expect(integrityStep('a', 'h2', 'h1', 'fixer', sessions)).toEqual({ kind: 'restore', path: 'a', by: 'fixer' });
-    expect(integrityStep('a', 'h2', 'h1', null, sessions)).toEqual({ kind: 'restore', path: 'a', by: 'main' });
+    expect(integrityStep('a', 'h2', 'h1', 'main', sessions)).toEqual({ kind: 'restore', path: 'a', by: 'main' });
+    expect(integrityStep('a', 'h2', 'h1', null, sessions)).toEqual({ kind: 'unconfirmed', path: 'a' });
+    expect(integrityStep('a', null, 'h1', null, sessions)).toEqual({ kind: 'unconfirmed', path: 'a' });
+    expect(restoredText({ path: 'src/a.test.ts', at: 1, taskId: 't', by: 'unconfirmed' }, 'Fixie')).toBe('src/a.test.ts changed outside Claude. Keep it or restore the locked copy?');
     expect(integrityStep('a', 'h1', 'h1', 'main', sessions)).toEqual({ kind: 'keep', path: 'a' });
     expect(integrityStep('a', 'h1', undefined, 'main', sessions)).toEqual({ kind: 'approve', path: 'a' });
     expect(restoredText({ path: 'a', at: 1, taskId: 't', by: 'main' }, 'Fixie')).toBe('Main session changed a test. Restored.');
@@ -167,6 +170,44 @@ describe('what is locked', () => {
     expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds to the cent")\n');
     expect(fs.readFileSync(path.join(repo, '.petal', 'locked', 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds to the cent")\n');
     expect(readManifest(JSON.parse(fs.readFileSync(path.join(repo, '.petal', 'lock.json'), 'utf8'))).sessions).toEqual({ tester: { role: 'tester', taskId: 't-cart' } });
+  });
+
+  it('a change no Claude session made is never reverted: it asks once, then Keep or Restore settles it', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    fs.mkdirSync(path.join(repo, 'src'));
+    const test = path.join(repo, 'src', 'cart.test.ts');
+    fs.writeFileSync(test, 'it("rounds")\n');
+    setLock(repo, true);
+    const criteria = parseCriteria('## Scenarios\n- [pass] rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n');
+    const inputs = { suiteTasks: [], criteria, agents: [{ sessionId: 'tester', role: 'tester' as const, taskId: 't-cart' }], touches: [] };
+    refreshLock(repo, inputs, {});
+    const asked = (m: ReturnType<typeof loadManifest>) => m.restored.filter((f) => f.by === 'unconfirmed');
+
+    fs.writeFileSync(test, 'it("rounds, her edit")\n');
+    const first = refreshLock(repo, inputs, {});
+    expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds, her edit")\n');
+    expect(asked(first)).toMatchObject([{ path: 'src/cart.test.ts', taskId: 't-cart', by: 'unconfirmed' }]);
+    expect(asked(refreshLock(repo, inputs, {}))).toEqual(asked(first)); // asks once, same flag
+
+    dismissRestored(repo, 't-cart');
+    expect(asked(loadManifest(repo))).toHaveLength(1); // Dismiss clears Restored lines, not questions
+
+    expect(resolveUnconfirmed(repo, 'src/cart.test.ts', true)).toBeNull();
+    expect(fs.readFileSync(path.join(repo, '.petal', 'locked', 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds, her edit")\n');
+    expect(asked(refreshLock(repo, inputs, {}))).toEqual([]);
+    expect(resolveUnconfirmed(repo, 'src/cart.test.ts', true)).toBe('That change was already handled.');
+
+    fs.writeFileSync(test, 'it.skip("rounds")\n');
+    refreshLock(repo, inputs, {});
+    expect(resolveUnconfirmed(repo, 'src/cart.test.ts', false)).toBeNull();
+    expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds, her edit")\n');
+    expect(asked(refreshLock(repo, inputs, {}))).toEqual([]);
+
+    fs.writeFileSync(test, 'it.skip("rounds")\n');
+    refreshLock(repo, inputs, {});
+    fs.writeFileSync(test, 'it("rounds, her edit")\n'); // she put it back herself: the question drops
+    expect(asked(refreshLock(repo, inputs, {}))).toEqual([]);
   });
 });
 
