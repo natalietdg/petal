@@ -1,6 +1,6 @@
 // The test loop as two agents working at once, joined by a per-task bug queue. The testing agent keeps writing and running
 // tests and files bugs as [fail] lines in the criteria file; the bug fix agent takes the oldest open bug whenever it is
-// idle; the testing agent verifies each fix on its next run. Pure: Petal calls stepQueue on every refresh and sends
+// idle; the testing agent verifies each fix on its next run. Pure: Petal's loop timer calls stepQueue and sends
 // the messages it returns.
 import type { CriteriaItem } from './test-loop';
 import type { LoopPhase } from './loop-line';

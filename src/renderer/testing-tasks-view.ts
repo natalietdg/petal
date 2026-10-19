@@ -88,12 +88,10 @@ export function sessionPicker(sessions: readonly PickSession[], choose: (session
   return box;
 }
 
-export function noTasks(openBoard: () => void): HTMLElement {
+// A repo with no tasks and no Claude in this tab: one line, since a session is what gets the task.
+export function noTasks(): HTMLElement {
   const box = el('div', 'tst-no-tasks');
-  const go = el('button', 'tst-button tst-open-board', 'Open the Board');
-  go.type = 'button';
-  go.addEventListener('click', openBoard);
-  box.append(el('p', 'tst-empty', 'No tasks yet. Testing keeps a suite for each task. Add a task on the Board first.'), go);
+  box.append(el('p', 'tst-empty', 'Start Claude in this tab to give it a test suite.'));
   return box;
 }
 

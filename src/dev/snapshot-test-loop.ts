@@ -1,6 +1,7 @@
 // Test loop: Start pastes the brief into the fixture's Claude tab (never a real claude) and makes .petal/ kept out of git;
 // fixture Loop lines drive the round progress here and in the reader's strip; a criteria fixture renders grouped;
-// Start stays off while the loop runs; Stop records one Esc, then the stop message only once the tab is idle.
+// Start stays off while the loop runs; with Testing closed the queue still steps and is saved, and the lanes come back
+// from what was saved; the last round's tokens show next to the estimate; Stop records one Esc, then the stop message once idle.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -11,6 +12,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, promptWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import { STOP_MESSAGE } from '../shared/test-loop';
+import * as store from '../main/testing-store';
 import type { ReaderFeed } from '../main/reader-feed';
 
 const MIN_RATIO = 4.5;
@@ -96,7 +98,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.loopStarts.length = 0;
-  const { fixer } = useAgentFixtures(outDir);
+  const { fixer, fixerLog } = useAgentFixtures(outDir);
   await js('PastelTerm.welcome.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
@@ -161,6 +163,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: coupon can take the total below zero.')) ?? null, 8000);
     check(handed && handed.data.includes('Failing test: src/checkout/coupon.test.ts::caps at the total.') && handed.data.includes('**Fix:** coupon can take the total below zero · done'), `the oldest open bug goes to the bug fix agent: ${JSON.stringify(handed?.data.slice(0, 120))}`);
     await capture('test-loop-running');
+    const loopTesterTab: string | null = await js('PastelTerm.testing.state().loopTab');
 
     // The reader's strip shows the same Loop line as one bar; the reply body has no raw Loop text. (The fixture tab plays the testing agent.)
     await js('PastelTerm.overlays.hideCurrent()');
@@ -173,8 +176,29 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
         inBody: !!document.querySelector('#latest .status-block .status-loop'), raw: /Loop:/.test(document.getElementById('latest').textContent) };
     })()`), 6000);
     check(strip && strip.count === 1 && strip.now === '2' && strip.max === '5' && strip.caption === 'Fixing · round 2/5 · 3 open' && strip.inBody && !strip.raw, `the session strip shows one Loop bar: ${JSON.stringify(strip)}`);
+
+    // Testing stays closed: the bug fix agent's Fix line still moves its bug to verify, the testing agent is asked to
+    // verify it, and the next open bug goes to the now idle bug fix agent. The queue is saved next to the agent records.
+    check(!(await js('PastelTerm.testing.isOpen()')), 'Testing is closed while the queue steps');
+    const pastesClosed = pasteWrites.length;
+    fs.appendFileSync(fixerLog, line({ type: 'user', uuid: 'fixer-u1', sessionId: FIXER_SESSION, message: { role: 'user', content: 'Bug: coupon can take the total below zero.' } })
+      + line({ type: 'assistant', uuid: 'fixer-a1', sessionId: FIXER_SESSION, message: { role: 'assistant', content: [{ type: 'text', text: 'Capped the discount at the total.\n\n**Fix:** coupon can take the total below zero · done' }] } }));
+    const verify = await waitFor(() => pasteWrites.slice(pastesClosed).find((w) => w.tabId === loopTesterTab && w.data.includes('Verify "coupon can take the total below zero"')) ?? null, 10000);
+    const next = await waitFor(() => pasteWrites.slice(pastesClosed).find((w) => w.tabId === fixerTab && w.data.includes('Bug: Place order stays enabled with an empty cart.')) ?? null, 10000);
+    check(verify && next && !(await js('PastelTerm.testing.isOpen()')), `with Testing closed, the fix goes to verify and the next bug goes out: ${JSON.stringify({ verify: verify?.data.slice(0, 60), next: next?.data.slice(0, 60) })}`);
+    const saved = await waitFor(() => { const q = store.load(project).loops?.[FIXTURE_TASK]?.queue ?? []; return q.some((b) => b.name === 'coupon can take the total below zero' && b.state === 'verify') && q.some((b) => b.state === 'fixing') ? q : null; }, 6000);
+    check(saved, `the queue is saved with the agent records: ${JSON.stringify(store.load(project).loops?.[FIXTURE_TASK]?.queue.map((b) => [b.name, b.state]))}`);
+
+    // A new window (or a reload) knows only what main saved: the lanes, the queue and Petal's events come back on open.
+    await js('PastelTerm.testing.forgetLoops()');
     await js("document.getElementById('testing-button').click()");
     await settle((p) => p.state.loop === 'running');
+    type Lanes = { lanes: number; queue: string[][]; fixerEvents: string[]; tokens: number };
+    const back = await waitFor<Lanes | null>(async () => {
+      const l: Lanes = await js(`(() => { const a = PastelTerm.testing.state().agents; return { lanes: document.querySelectorAll('#testing .tst-agent-lane').length, queue: a.queue.map((b) => [b.name, b.state]), fixerEvents: a.events.fixer.map((e) => e.text), tokens: document.querySelectorAll('#testing .tst-agent-tokens').length }; })()`);
+      return l.lanes === 2 && l.tokens === 2 && l.queue.some(([, state]) => state === 'verify') ? l : null;
+    }, 8000);
+    check(back && back.fixerEvents.includes('Testing agent → Bug fix agent · coupon can take the total below zero') && back.queue.some(([name, state]) => name === 'Place order stays enabled with an empty cart' && state === 'fixing'), `the lanes rebuild from the saved loop: ${JSON.stringify(back)}`);
 
     // Every theme and reading style; then widths.
     for (const theme of ['paleSky', 'blush', 'nightPastel']) {
@@ -221,6 +245,17 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     const done = await settle((p) => p.state.loop === 'done' && p.pill === 'Done');
     check(done && !done.startDisabled && /Round 2 of 5/.test(String(done.facts)), `a done line ends it and Start is back: ${JSON.stringify(done?.facts)}`);
     await capture('test-loop-done');
+
+    // Tokens: the last finished round's actual, for both agents, next to the per-round estimate (cache reads count in both).
+    if (transcript) {
+      const usage = (input: number, output: number, cacheWrite: number, cacheRead: number) => ({ input_tokens: input, output_tokens: output, cache_creation_input_tokens: cacheWrite, cache_read_input_tokens: cacheRead });
+      const tool = (id: string, round: number, at: number, use: object) => line({ type: 'assistant', uuid: `loop-a-${id}`, timestamp: new Date(at).toISOString(), message: { id: `msg-${id}`, role: 'assistant', usage: use, content: [{ type: 'text', text: `**Loop:** round ${round}/5 · testing · 0 open` }, { type: 'tool_use', id: `toolu_${id}`, name: 'Bash', input: { command: 'npm test' } }] } })
+        + line({ type: 'user', uuid: `loop-u-${id}`, timestamp: new Date(at).toISOString(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `toolu_${id}`, content: 'ok' }] } });
+      fs.appendFileSync(transcript, tool('tok3', 3, Date.now() - 2000, usage(500, 100, 400, 1000)) + tool('tok4', 4, Date.now(), usage(1000, 200, 0, 3000)));
+    }
+    const roundLine = await waitFor<string | null>(async () => { const t: string = await js("document.querySelector('#testing .tst-agent-round')?.textContent ?? ''"); return t.startsWith('Round 3:') ? t : null; }, 10000);
+    check(roundLine && /^Round 3: 2\.0k tokens for both agents · about [\d.]+k estimated per round$/.test(roundLine), `the last round's actual sits next to the estimate: ${roundLine ?? await js("document.querySelector('#testing .tst-agent-round')?.textContent ?? ''")}`);
+    check(/tokens so far for both agents$/.test(await js("document.querySelector('#testing .tst-agent-total')?.textContent ?? ''")), 'and the total so far');
   } finally {
     testingFixture.project = null;
     testingFixture.claudeDir = null;

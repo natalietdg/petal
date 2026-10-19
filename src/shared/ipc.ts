@@ -31,7 +31,7 @@ import type { TokenEstimate } from './library-cost';
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
-import type { LockView, PipelineRun, RunReply, SuiteSeed, TestingState } from './testing';
+import type { LockView, LoopFacts, PipelineRun, RunReply, SavedLoop, SuiteSeed, TestingState } from './testing';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
@@ -245,11 +245,13 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, SavedLoop>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief: string; fixerBrief: string }]; result: Guarded<{ tester: AgentStart; fixer: AgentStart } | { note: string }> };
   // The testing agent alone, to draw up a task's suite; only its writes change the suite.
   'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  // The loop timer: saves one task's loop, then lists the running loops with an agent tab in this window.
+  'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null }]; result: Guarded<{ loops: LoopFacts[] }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
   'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };

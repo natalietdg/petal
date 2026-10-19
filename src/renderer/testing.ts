@@ -356,7 +356,7 @@ function drawResults(): void {
     results.append(data.elsewhere ? sessionPicker(data.elsewhere.sessions, (id) => void chooseSession(id)) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
-  if (!data.tasks.length) { results.append(noTasks(openBoard)); return; }
+  if (!data.tasks.length) { results.append(noTasks()); return; } // main gives the tab's Claude session a task, so none means no session
   if (target?.kind === 'prd') {
     results.append(el('h3', 'tst-section-title', 'Tasks and their suites'), prdOverview(overviewRows(data, target.id, data.suites, data.runs, criteria), (id) => pick({ kind: 'task', id })));
     return;
@@ -464,7 +464,6 @@ const agents = createAgents({
   suite: () => suite(),
   stack: () => data?.stack ?? [],
   names: () => data?.agentNames ?? {},
-  criteria: () => criteria,
   taskRuns: () => taskRuns(),
   redraw: () => { if (isOpen()) drawLoop(); },
   renamed: () => load(),
@@ -564,8 +563,6 @@ function insertSkill(item: StackItem): void {
   composer.insertCommand(item.insert);
 }
 
-const openBoard = (): void => { overlays.hide('testing'); byId('board-button').click(); };
-
 // Ask Claude to draw one up: starts this task's testing agent in a new tab on the testing-suite skill. Only it may write the suite.
 async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
@@ -579,6 +576,7 @@ async function askForSuite(task: Task): Promise<void> {
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note
     : reply.tabId ? 'Started this task’s testing agent in a new tab. Its suite shows here when it writes one.' : 'Couldn’t open a new tab for the testing agent.';
   drawNote();
+  await refresh(); // its lane shows now
 }
 
 async function run(stageId: string | null, confirmed: boolean): Promise<void> {
@@ -662,8 +660,8 @@ async function refresh(): Promise<void> {
   followSessionTask();
   criteria = result.criteria;
   distillation = result.distillation;
+  if (data.project) agents.adoptAll(data.project.root, result.loops); // lanes rebuild from the saved loops
   void agents.refreshLogs().then(() => { if (isOpen()) agents.draw(); }); // logs and tokens follow; the view doesn't wait
-  void agents.step();
   if (draft) { drawHead(); drawPicker(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
 }
@@ -732,6 +730,7 @@ export function resetLeftovers(): void {
   pickedFor.clear();
   expanded.clear();
 }
+export const forgetLoops = (): void => agents.forget(); // as a new window would start, with only what main saved
 
 // For the snapshot harness.
 export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(taskId() && data?.suites[taskId() as string]?.change), suiteProblem: (taskId() && data?.suites[taskId() as string]?.problem) || null, elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: loopTabId(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

@@ -4,6 +4,8 @@ import type { SuiteRecord, SuiteViews } from './task-suite';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { RestoredFlag } from './test-lock';
 import type { PickSession } from './task-testing';
+import type { QueuedBug } from './bug-queue';
+import type { CriteriaItem } from './test-loop';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -69,9 +71,29 @@ export interface ProjectTesting {
   suites?: Record<string, SuiteRecord>; // per task: what Petal last took from .petal/suites/<taskId>.json
   agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
   agentNames?: AgentNames; // her names for the two agents, for every task in the project
+  loops?: Record<string, SavedLoop>; // per task: its agents' lanes and bug queue, so they outlive a reload
 }
 
 export interface AgentRecord { sessionId: string; role: AgentRole }
+
+// Petal's own line in an agent's log: a handoff, a queue move, her message.
+export interface LoopEvent { at: number; text: string }
+
+export interface LoopAgent { tabId: string | null; sessionId: string }
+
+// A task's agents as Petal last left them. draft: the testing agent alone, drawing up the suite before one exists.
+export interface SavedLoop {
+  kind: 'loop' | 'draft';
+  tester: LoopAgent;
+  fixer: LoopAgent | null; // null for a draft
+  startedAt: number; // 0 when rebuilt from agent records saved before loops were
+  stoppedAt: number | null;
+  queue: QueuedBug[];
+  events: Record<AgentRole, LoopEvent[]>;
+}
+
+// A running loop whose agents have a tab in the asking window, with what stepping its queue needs.
+export interface LoopFacts { root: string; taskId: string; loop: SavedLoop; bugs: CriteriaItem[]; runs: PipelineRun[]; names: AgentNames }
 
 export type StackKind = 'unit' | 'e2e' | 'mobile' | 'load' | 'lint' | 'ci' | 'skill' | 'agent' | 'command';
 
