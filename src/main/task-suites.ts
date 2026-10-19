@@ -99,9 +99,10 @@ export function syncSuites(root: string, tasks: readonly Task[], writes: readonl
   for (const task of tasks) {
     if (!isTaskId(task.id)) continue;
     const before = records[task.id] ?? null;
-    const after = takeSuiteFile(before, readSuiteFile(root, task.id), lastWriter(writes, task.id), testersOf(data.agents?.[task.id] ?? []));
+    const file = readSuiteFile(root, task.id);
+    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), testersOf(data.agents?.[task.id] ?? []));
     if (after && JSON.stringify(after) !== JSON.stringify(before)) { records[task.id] = after; changed = true; }
-    if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem };
+    if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem, ...(file.at ? { at: file.at } : {}) };
   }
   if (changed) store.save({ ...data, suites: records });
   return views;

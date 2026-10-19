@@ -135,7 +135,7 @@ describe('suites on disk', () => {
     const changed = syncSuites(root, tasks, [{ taskId: 'a', at: Date.now(), sessionId: 'agent-1' }]);
     expect(changed.a).toMatchObject({ suite: suite('Unit', 'E2e'), change: { previous: suite('Unit') } });
     expect(undoSuiteChange(root, 'a')).toBe(true);
-    expect(syncSuites(root, tasks).a).toEqual({ suite: suite('Unit'), change: null, problem: null });
+    expect(syncSuites(root, tasks).a).toEqual({ suite: suite('Unit'), change: null, problem: null, at: fs.statSync(suiteFile(root, 'a')).mtimeMs });
     expect(fs.readFileSync(suiteFile(root, 'a'), 'utf8')).toBe(suiteText(suite('Unit')));
     expect(undoSuiteChange(root, 'a')).toBe(false);
   });
@@ -149,7 +149,7 @@ describe('suites on disk', () => {
     fs.writeFileSync(suiteFile(root, 'a'), suiteText(suite('Wipe')));
     for (const sessionId of ['s1', 'agent-c']) {
       const read = syncSuites(root, tasks, [{ taskId: 'a', at: Date.now(), sessionId }]);
-      expect(read.a).toEqual({ suite: suite('Unit'), change: null, problem: OUTSIDE_AGENT });
+      expect(read.a).toEqual({ suite: suite('Unit'), change: null, problem: OUTSIDE_AGENT, at: fs.statSync(suiteFile(root, 'a')).mtimeMs });
     }
   });
 

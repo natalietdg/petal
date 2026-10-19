@@ -74,6 +74,8 @@ export function createAgents(ctx: AgentContext) {
     const bySession = matches.find((id) => tabs.get(id)?.update?.state === 'live') ?? matches[0]; // a live one first
     return bySession ?? (agent.tabId && tabs.get(agent.tabId) ? agent.tabId : null);
   };
+  // The shown task's testing agent tab while it draws up the suite, else null.
+  const draftTab = (): string | null => { const r = record(); return r?.kind === 'draft' && !r.stoppedAt ? tabOf(r.tester) : null; };
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
   const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
 
@@ -314,7 +316,7 @@ export function createAgents(ctx: AgentContext) {
     return { kind: r?.kind ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, draw, testerTab: () => facts().testerTab, state, forget: () => loops.clear() };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => loops.clear() };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

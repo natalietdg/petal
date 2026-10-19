@@ -1,4 +1,4 @@
-// Minimise: the headers fold to a thin strip (⌘⇧H) and the terminal to its tab strip (⌘R, or the divider dragged to the bottom).
+// Minimise: Focus's first level folds the headers to a thin strip (one click, ⌘⇧H) and the terminal folds to its tab strip (⌘R, or the divider dragged to the bottom).
 // Each persists in config.json and restores the layout exactly; Focus over a minimised terminal comes back minimised.
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
@@ -15,10 +15,10 @@ const MEASURE = `(() => {
   return {
     dock: h('sessions-dock'), readerArea: h('reader-area'), reader: h('reader'), pane: h('terminal-pane'), strip: h('tab-strip'), terminal: h('terminal'),
     head: shown(document.getElementById('reader-head')),
-    dockButtons: ['customize-button', 'workflow-button', 'history-button', 'board-button', 'add-session-button'].filter((id) => shown(document.getElementById(id))),
+    dockButtons: ['customize-button', 'history-button', 'board-button', 'add-session-button'].filter((id) => shown(document.getElementById(id))),
     sessionsPill: shown(document.getElementById('sessions-pill')),
     updateDot: (() => { const p = document.getElementById('update-pill'); return shown(p) ? Math.round(p.getBoundingClientRect().width) : null; })(),
-    headersButton: { shown: shown(document.getElementById('headers-min-toggle')), expanded: document.getElementById('headers-min-toggle').getAttribute('aria-expanded') },
+    focusToggle: { shown: shown(document.getElementById('focus-toggle')), level: document.getElementById('focus-toggle').dataset.level },
     termButton: { shown: shown(document.getElementById('term-min-toggle')), expanded: document.getElementById('term-min-toggle').getAttribute('aria-expanded') },
     inline: app.style.gridTemplateRows, grid: getComputedStyle(app).gridTemplateRows, valueNow: document.getElementById('divider').getAttribute('aria-valuenow'),
     focusInTerminal: inTerminal, focusId: document.activeElement?.id ?? null,
@@ -36,26 +36,33 @@ async function headersCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await js("PastelTerm.updatePill.show('1.0.7')"); // the dot must survive the fold; show takes the ready version
   await wait(200);
   const before: Measure = await js(MEASURE);
-  await js("document.getElementById('headers-min-toggle').click()");
+  await js("document.getElementById('focus-toggle').click()"); // Focus, first level
   await wait(300);
   const min: Measure = await js(MEASURE);
   check(!min.head && min.dockButtons.length === 0 && min.dock < before.dock && min.dock <= 40,
     `dock and reader header hidden, dock a thin strip: ${JSON.stringify({ head: min.head, buttons: min.dockButtons, dock: `${before.dock}→${min.dock}px` })}`);
-  check(min.headersButton.shown && min.headersButton.expanded === 'false' && min.sessionsPill && min.updateDot !== null && min.updateDot <= 14,
-    `strip keeps restore, sessions count and an update dot: ${JSON.stringify({ button: min.headersButton, pill: min.sessionsPill, dot: min.updateDot })}`);
+  check(min.focusToggle.shown && min.focusToggle.level === 'headers' && min.sessionsPill && min.updateDot !== null && min.updateDot <= 14,
+    `strip keeps the Focus control, sessions count and an update dot: ${JSON.stringify({ toggle: min.focusToggle, pill: min.sessionsPill, dot: min.updateDot })}`);
   check(min.reader > before.reader && min.readerArea === before.readerArea, `reader grows ${before.reader}→${min.reader}px inside the same area`);
   await capture('headers-minimised');
 
   check(await waitFor(() => configStore.load().reader.headersMinimised || null, 3000), 'saved to config');
-  await js('PastelTerm.headersMin.set(false, false)');
-  await js('PastelTerm.headersMin.restore()');
-  check(await js('PastelTerm.headersMin.isMinimised()'), 'a config re-read brings it back minimised');
+  await js("PastelTerm.focusMode.setLevel('normal', false)");
+  await js('PastelTerm.focusMode.restore()');
+  check(await js('PastelTerm.focusMode.level()') === 'headers', 'a config re-read brings it back minimised');
 
-  win.webContents.send('headers:toggle'); // View > Minimise Headers (⌘⇧H)
-  await waitFor(async () => !(await js('PastelTerm.headersMin.isMinimised()')) || null, 2000);
+  // A second click is the reply-only level, never saved; ⌘⇧H from there goes back to the headers level.
+  await js("document.getElementById('focus-toggle').click()");
+  const second = await js("({ level: PastelTerm.focusMode.level(), toggle: document.getElementById('focus-toggle').dataset.level })");
+  check(second.level === 'focus' && second.toggle === 'focus' && configStore.load().reader.headersMinimised, `second click: only the reply, headers level still saved: ${JSON.stringify(second)}`);
+  win.webContents.send('headers:toggle'); // View > Focus: Minimise Headers (⌘⇧H)
+  check(await waitFor(async () => (await js('PastelTerm.focusMode.level()')) === 'headers' || null, 2000), '⌘⇧H from only the reply goes to the headers level');
+
+  win.webContents.send('headers:toggle');
+  await waitFor(async () => (await js('PastelTerm.focusMode.level()')) === 'normal' || null, 2000);
   await wait(300);
   const back: Measure = await js(MEASURE);
-  check(back.head && back.dockButtons.length === before.dockButtons.length && Math.abs(back.dock - before.dock) <= PX && Math.abs(back.reader - before.reader) <= PX && back.headersButton.expanded === 'true',
+  check(back.head && back.dockButtons.length === before.dockButtons.length && Math.abs(back.dock - before.dock) <= PX && Math.abs(back.reader - before.reader) <= PX && back.focusToggle.level === 'normal',
     `⌘⇧H restores exactly: dock ${back.dock}/${before.dock}px, reader ${back.reader}/${before.reader}px`);
   check(await waitFor(() => configStore.load().reader.headersMinimised === false || null, 3000), 'restore saved to config');
   if (updateWasHidden) await js('PastelTerm.updatePill.reset()');
@@ -86,9 +93,9 @@ async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: Ta
   check(await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.tabId === session.tabId && w.data.includes('minimised-ok-42')) ?? null, 8000), 'reply box sends to the active tab');
 
   // Focus over a minimised terminal returns to minimised.
-  await js('PastelTerm.focusMode.set(true)');
+  await js("PastelTerm.focusMode.setLevel('focus')");
   await wait(300);
-  await js('PastelTerm.focusMode.set(false)');
+  await js("PastelTerm.focusMode.setLevel('normal')");
   await wait(300);
   const afterFocus: Measure = await js(MEASURE);
   check(afterFocus.grid === min.grid && afterFocus.inline === min.inline && afterFocus.terminal === 0 && !afterFocus.focusInTerminal,
@@ -131,8 +138,8 @@ async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: Ta
 }
 
 export async function minimiseCheck(kit: Kit, win: BrowserWindow, tabs: TabsDeps): Promise<void> {
-  await kit.js('PastelTerm.welcome.close()');
-  await kit.js('PastelTerm.focusMode.set(false)');
+  await kit.js('PastelTerm.getStarted.close()');
+  await kit.js("PastelTerm.focusMode.setLevel('normal')");
   await headersCheck(kit, win);
   await terminalCheck(kit, win, tabs);
 }

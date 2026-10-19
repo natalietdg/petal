@@ -68,8 +68,11 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
       waiting: document.querySelectorAll('#flow-view .flow-step.waiting').length,
       actors: [...document.querySelectorAll('#flow-view .flow-actor')].map((a) => a.className.split(' ')[1]),
       finalNext: document.querySelector('#flow-view .flow-final')?.innerText ?? null,
+      decisions: [...document.querySelectorAll('#flow-view .flow-step .flow-decision')].map((d) => d.querySelector('.flow-actor').textContent + ' | ' + d.querySelector('.flow-decision-what').textContent),
+      decisionsTab: Boolean(document.querySelector('#reader-head .view-toggle [data-view="decisions"], #decisions-view')),
     })`);
     log(`fixture flow ${id}: ${JSON.stringify(shape)}`);
+    log(`${shape.decisions.some((d: string) => d.startsWith('Decided by you')) && !shape.decisionsTab ? 'ok' : 'FAIL'} decisions shown on their step cards, no Decisions tab ${id}: ${JSON.stringify(shape.decisions)}`);
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `flow-${id}` });
     const source = await exportAndPreview(kit, '#flow-view', `flow-export-${id}`, themes[id]);
     if (id === 'paleSky') {
@@ -77,14 +80,6 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
       fs.writeFileSync(file, source ?? '');
       log(`fixture .mmd written: ${file}; equals the stored mermaid: ${source === flowStore.load('fixture')?.mermaid.latest.source}`);
     }
-  }
-  for (const id of THEMES) {
-    applyTheme(id, { persist: false });
-    await js("PastelTerm.reader.setView('decisions')");
-    await waitFor(() => js("document.querySelectorAll('#decisions-view .decision').length"), 10000);
-    const decisions = await js(`[...document.querySelectorAll('#decisions-view .decision')].map((d) => d.querySelector('.flow-actor').textContent + ' | ' + d.querySelector('.decision-what').textContent)`);
-    log(`${decisions.some((d: string) => d.startsWith('Decided by you')) ? 'ok' : 'FAIL'} decisions ${id}: ${JSON.stringify(decisions)}`);
-    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `decisions-${id}` });
   }
   // Click a step: it must land on that reply in Replies view.
   await js("document.querySelector('#flow-view .flow-step:last-of-type .flow-step-head').click()");
@@ -456,7 +451,7 @@ async function echoCheck(kit: Kit, session: TabSession, echoedAtOnce: string[]):
 export async function customizeScreens(kit: Kit): Promise<void> {
   const { js, waitFor, log, wait, themes, applyTheme, verifiedCapture } = kit;
   const menuChecked = (label: string) => Menu.getApplicationMenu()?.items.flatMap((m): MenuItem[] => m.submenu?.items ?? []).find((i) => i.label === label)?.checked;
-  const sections = ['look', 'formatting', 'sessions', 'organizer', 'flowTitles', 'handoff', 'hook'];
+  const sections = ['look', 'formatting', 'sessions', 'organizer', 'prompts', 'hook'];
   for (const id of THEMES) {
     applyTheme(id, { persist: false });
     await js("PastelTerm.customize.open('look')");
@@ -494,11 +489,11 @@ export async function customizeScreens(kit: Kit): Promise<void> {
   log(`${hook.runs === 0 && hook.skippedInSnapshot >= 1 ? 'ok' : 'FAIL'} reply-finished fired, response hook skipped in snapshot: ${JSON.stringify(hook)}`);
 }
 
-// Overlay manager: History, Workflow and Customize replace each other; Esc closes the open one and brings back the reader and reply box.
+// Overlay manager: History and Customize replace each other, Workflow's tabs open inside Customize; Esc closes the open one and brings back the reader and reply box.
 export async function overlaysCheck(kit: Kit): Promise<void> {
   const { js, wait, log } = kit;
   const state = () => js(`(() => {
-    const ids = ['history', 'workflow', 'customize'];
+    const ids = ['history', 'customize'];
     return {
       shown: ids.filter((id) => !document.getElementById(id).hidden),
       pressed: ids.filter((id) => document.getElementById(id + '-button').getAttribute('aria-pressed') === 'true'),
@@ -508,15 +503,15 @@ export async function overlaysCheck(kit: Kit): Promise<void> {
   })()`);
   const only = (id: string, s: { shown: string[]; pressed: string[]; reader: boolean; composer: boolean }) =>
     s.shown.join() === id && s.pressed.join() === id && !s.reader && !s.composer;
-  for (const [step, id] of [["document.getElementById('history-button').click()", 'history'], ["document.getElementById('customize-button').click()", 'customize'], ["document.getElementById('workflow-button').click()", 'workflow']]) {
+  for (const [step, id] of [["document.getElementById('history-button').click()", 'history'], ["document.getElementById('customize-button').click()", 'customize'], ["document.querySelector('#customize-tabs [data-section=\"today\"]').click()", 'customize']]) {
     await js(step);
     await wait(400);
     const s = await state();
     log(`${only(id, s) ? 'ok' : 'FAIL'} overlays: ${id} open alone, reader and reply box hidden: ${JSON.stringify(s)}`);
   }
-  await js("document.querySelector('#workflow-tabs button').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  await js("document.querySelector('#customize-tabs [data-section=\"today\"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
   const closed = await state();
-  log(`${!closed.shown.length && !closed.pressed.length && closed.reader && closed.composer ? 'ok' : 'FAIL'} overlays: Esc closes Workflow, reader and reply box back: ${JSON.stringify(closed)}`);
+  log(`${!closed.shown.length && !closed.pressed.length && closed.reader && closed.composer ? 'ok' : 'FAIL'} overlays: Esc on Customize › Today closes it, reader and reply box back: ${JSON.stringify(closed)}`);
 }
 
 // Invoke failures come back as { error } instead of rejecting; an unknown setting is a safe one to provoke (nothing is written).

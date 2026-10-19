@@ -1,4 +1,5 @@
 // The Testing tab is organised by task: which task or PRD it shows, and a PRD's overview of its tasks' suites. Pure.
+import { byRecent, latest } from './task-activity';
 import { groupTasks } from './task-groups';
 import { forTask, suiteFor, type SuiteViews } from './task-suite';
 import { openBugs, type Criteria } from './test-loop';
@@ -65,20 +66,18 @@ export function prdOverview(data: TaskData, prdId: string, suites: SuiteViews, r
 
 // ---- The session picker for a tab outside any project: her Claude sessions in a repo, each opening its task's suite.
 export type PickStatus = 'busy' | 'idle' | 'closed';
-export interface SessionCandidate { sessionId: string; root: string | null; status: PickStatus }
+export interface SessionCandidate { sessionId: string; root: string | null; status: PickStatus; at?: number | null } // at: its latest activity
 export interface PickSession { sessionId: string; name: string; root: string; project: string; status: PickStatus; suite: boolean }
 
-// Live sessions then recent ones, each in the order given; one outside a repo or already listed is left out.
+// Newest activity first, live and recent mixed; one outside a repo is left out, one listed twice keeps its first entry and newest time.
 export function listedSessions<T extends SessionCandidate>(live: readonly T[], recent: readonly T[], max: number): (T & { root: string })[] {
-  const seen = new Set<string>();
-  const out: (T & { root: string })[] = [];
+  const seen = new Map<string, T & { root: string }>();
   for (const s of [...live, ...recent]) {
-    if (out.length >= max) break;
-    if (!s.root || seen.has(s.sessionId)) continue;
-    seen.add(s.sessionId);
-    out.push({ ...s, root: s.root });
+    if (!s.root) continue;
+    const first = seen.get(s.sessionId);
+    seen.set(s.sessionId, first ? { ...first, at: latest(first.at, s.at) } : { ...s, root: s.root });
   }
-  return out;
+  return byRecent([...seen.values()], (s) => latest(s.at)).slice(0, max);
 }
 
 // The picked session, only when the picker listed it; the renderer never names a folder.

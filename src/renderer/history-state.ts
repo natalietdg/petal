@@ -6,7 +6,7 @@ import type { HistoryList } from '../shared/ipc';
 import type { HistoryListKind } from '../shared/favorites';
 
 export type Session = HistoryList['sessions'][number];
-export type PreviewMode = 'replies' | 'flow' | 'decisions';
+export type PreviewMode = 'replies' | 'flow';
 export type SortBy = 'recent' | 'title';
 
 export const state = {

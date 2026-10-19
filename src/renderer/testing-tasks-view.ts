@@ -1,19 +1,20 @@
 // The Testing tab's task pieces: the task pickers, a PRD's overview of its tasks' suites, the empty states and the test lock.
 import { el } from './dom';
 import { when } from './testing-view';
+import { groupsByActivity, taskActivity } from '../shared/task-activity';
 import { groupTasks } from '../shared/task-groups';
 import { parseTarget, targetValue, type OverviewRow, type PickSession, type TestTarget } from '../shared/task-testing';
 import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
-import type { LockView } from '../shared/testing';
+import type { LockView, TestingState } from '../shared/testing';
 import { restoredText, type RestoredFlag } from '../shared/test-lock';
 import { unconfirmedRow, type ResolveUnconfirmed } from './test-lock-confirm';
 
-// Grouped by PRD, then No PRD; each PRD opens with its overview, subtasks sit under their task.
-export function taskPicker(data: TaskData, target: TestTarget, pick: (target: TestTarget) => void): HTMLElement {
+// Grouped by PRD, newest activity first; each PRD opens with its overview, subtasks sit under their task.
+export function taskPicker(data: TaskData & Pick<TestingState, 'runs' | 'suites'>, target: TestTarget, pick: (target: TestTarget) => void): HTMLElement {
   const wrap = el('label', 'tst-picker-bar');
   const select = el('select', 'tst-task-select');
-  for (const group of groupTasks(data)) {
+  for (const group of groupsByActivity(groupTasks(data), taskActivity(data.runs, data.suites))) {
     if (!group.prd && !group.tasks.length) continue;
     const box = el('optgroup');
     box.label = group.prd ? `PRD · ${group.prd.title}` : 'No PRD';
@@ -62,7 +63,7 @@ export function prdOverview(rows: OverviewRow[], open: (taskId: string) => void)
   return box;
 }
 
-// The tab is in ~ or outside a repo: her Claude sessions in a repo, live first; a row opens that session's suite.
+// The tab is in ~ or outside a repo: her Claude sessions in a repo, newest activity first; a row opens that session's suite.
 export function sessionPicker(sessions: readonly PickSession[], choose: (sessionId: string) => void): HTMLElement {
   const box = el('div', 'tst-picker');
   box.append(el('p', 'tst-picker-title', 'This tab isn’t in a project. Pick a session:'));
@@ -95,7 +96,7 @@ export function noTasks(): HTMLElement {
   return box;
 }
 
-export interface NoSuiteActions { askClaude: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null }
+export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null }
 
 export function noSuite(actions: NoSuiteActions, seedProblem: string | null, busy: boolean): HTMLElement {
   const box = el('div', 'tst-no-suite');
@@ -107,7 +108,15 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     return b;
   };
   const row = el('div', 'tst-actions');
-  row.append(button('tst-ask-suite', 'Ask Claude to draw one up', actions.askClaude, true));
+  if (actions.showDraft) {
+    // While its testing agent draws, a status stands where Ask Claude was, so a second agent can't be started.
+    const status = el('span', 'tst-button tst-drawing', 'Testing agent is drawing up the suite');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-disabled', 'true');
+    const show = button('tst-show-draft', 'Show its tab', actions.showDraft, true);
+    show.disabled = false; // a run in progress doesn't stop her looking at the tab
+    row.append(status, show);
+  } else row.append(button('tst-ask-suite', 'Ask Claude to draw one up', actions.askClaude, true));
   if (actions.seed) row.append(button('tst-seed-suite', 'Start from the project’s commands', actions.seed));
   if (actions.fromRuns) row.append(button('tst-make-pipeline', 'Start from Claude’s checks', actions.fromRuns));
   row.append(button('tst-edit-suite', 'Add stages yourself', actions.edit));

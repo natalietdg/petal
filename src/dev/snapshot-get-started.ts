@@ -34,7 +34,7 @@ const EXISTING_CONFIG = {
 
 const STATE = `(() => {
   const open = PastelTerm.overlays.current();
-  const view = open === 'welcome' ? document.getElementById('welcome') : document.getElementById('get-started');
+  const view = document.getElementById('get-started');
   const list = view.querySelector('.gs-list');
   const steps = [...(list?.querySelectorAll('.gs-step') ?? [])].map((li) => ({ id: li.dataset.step, done: li.classList.contains('done'), badge: li.querySelector('.step-badge')?.textContent }));
   const status = document.getElementById('reader-status');
@@ -167,8 +167,8 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   // 2. Not now: nothing under the folder is opened, by any reader, while the terminal still works.
   const probe = watchReads(home);
   await js("document.querySelector('#consent .consent-later').click()");
-  const welcomeUp = await until((s) => s.open === 'welcome', 6000);
-  check(welcomeUp && configStore.load().claudeFolder.choice === 'declined', `Not now saves "declined" and the welcome follows: ${JSON.stringify({ open: welcomeUp?.open, choice: configStore.load().claudeFolder.choice })}`);
+  const checklistUp = await until((s) => s.open === 'get-started', 6000);
+  check(checklistUp && configStore.load().claudeFolder.choice === 'declined', `Not now saves "declined" and Get started follows: ${JSON.stringify({ open: checklistUp?.open, choice: configStore.load().claudeFolder.choice })}`);
   const readers = await js(`(async () => ({
     history: (await window.pastel.history.list()),
     setup: (await window.pastel.workflow.setup()),
@@ -179,7 +179,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   await js('PastelTerm.history.open()');
   await wait(3000); // several reader ticks
   await js('PastelTerm.history.close()');
-  await js('PastelTerm.welcome.open()'); // History took the welcome's place
+  await js('PastelTerm.getStarted.open()'); // History took its place
   const historyRows = JSON.stringify(readers.history).includes('SENTINEL');
   check(probe.seen.length === 0, `Not now: no reader opened anything in the stand-in ~/.claude: ${JSON.stringify(probe.seen.slice(0, 6))}`);
   check(!historyRows && !readers.setup?.hasClaudeMd && !(readers.styles?.styles?.length) && /isn’t reading your Claude folder/.test(readers.styles?.problem ?? ''),
@@ -202,23 +202,20 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const plain = await until((s) => s.tabs.length === 2);
   await wait(2500);
   const plainId = plain?.tabs[1];
-  check(plainId && claudeStarts.length === startsBefore && !(await js(bufferText(plainId))).includes('petal-start-claude') && plain.open === 'welcome',
-    `Add Session without Claude Code types nothing and the welcome stays: ${JSON.stringify({ tabs: plain?.tabs, starts: claudeStarts.length - startsBefore, open: plain?.open })}`);
+  check(plainId && claudeStarts.length === startsBefore && !(await js(bufferText(plainId))).includes('petal-start-claude') && plain.open === 'get-started',
+    `Add Session without Claude Code types nothing and the checklist stays: ${JSON.stringify({ tabs: plain?.tabs, starts: claudeStarts.length - startsBefore, open: plain?.open })}`);
   if (plainId) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(plainId)})`);
   await until((s) => s.tabs.length === 1);
   configStore.save({ getStarted: { done: [] } }); // the extra tab ticked Add Session; a fresh install hasn't
   await js('PastelTerm.getStarted.load()');
-  await js('PastelTerm.welcome.open()');
+  await js('PastelTerm.getStarted.open()');
 
   // 4. Fresh: step 1 open with the install command and Copy, nothing ticked.
-  const fresh = await until((s) => s.open === 'welcome' && s.steps.length === 4);
+  const fresh = await until((s) => s.open === 'get-started' && s.steps.length === 4);
   check(fresh && fresh.steps.map((s: { id: string }) => s.id).join() === STEP_IDS.join() && doneIds(fresh) === '' && fresh.command === INSTALL_COMMAND && fresh.copy === INSTALL_COMMAND,
     `fresh install: four steps, none ticked, step 1 shows the install command with Copy: ${JSON.stringify(fresh)}`);
   check(fresh && /Petal never sees your login/.test(fresh.privateLine ?? '') && fresh.checks.length === 0 && fresh.emDashes === 0,
     `steps have no Check lines and say Petal never sees the login: ${JSON.stringify({ privateLine: fresh?.privateLine, checks: fresh?.checks })}`);
-  await capture('get-started-welcome-fresh');
-  await js('PastelTerm.getStarted.open()');
-  await until((s) => s.open === 'get-started');
   const bottom = await js(`(() => {
     const view = document.getElementById('get-started');
     const pane = view.querySelector('.welcome-pane');
@@ -411,12 +408,12 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const askedAgain = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
   check(askedAgain, 'existing config: the folder question shows on launch');
   check((await js("document.activeElement?.id")) === 'consent', `existing config: focus sits on the question, not Allow, so a stray Enter can't answer it: ${await js('document.activeElement?.className')}`);
-  for (const id of ['history-button', 'customize-button', 'workflow-button']) await js(`document.getElementById('${id}').click()`);
+  for (const id of ['history-button', 'customize-button']) await js(`document.getElementById('${id}').click()`);
   send(win.webContents, 'get-started:open');
   await wait(600);
   const stillAsked = await js(CONSENT);
   check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
-    `existing config: History, Customize, Workflow and Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
+    `existing config: History, Customize and Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
   await js("document.querySelector('#consent .consent-later').click()");
   // With reading off, sign-in and ask are hand-ticked only, so Get started follows only while another step is open.
   await wait(800);

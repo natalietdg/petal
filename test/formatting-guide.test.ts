@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { SHAPE_ENTRIES } from '../src/renderer/shape-guide-entries';
+import { KEY_ENTRIES, SHAPE_ENTRIES } from '../src/renderer/formatting-guide-entries';
 import { STATUS_KEYS } from '../src/shared/status-lines';
 
 // The reader's markdown pipeline: every class these files can put on a reply.
@@ -50,7 +50,7 @@ function rendererClasses(): Set<string> {
 const classesIn = (selector: string): string[] => [...selector.matchAll(/\.([a-z][a-z0-9-]*)/g)].map((m) => m[1] ?? '');
 const guideClasses = new Set(SHAPE_ENTRIES.flatMap((entry) => entry.expects.flatMap(classesIn)));
 
-describe('shape guide', () => {
+describe('formatting guide', () => {
   const classes = rendererClasses();
 
   it('reads a real class list from the renderer', () => {
@@ -89,5 +89,12 @@ describe('shape guide', () => {
   it('gives the lede example room for a drop cap (160+ characters)', () => {
     const lede = SHAPE_ENTRIES.find((e) => e.id === 'lede')?.markdown.split('\n\n')[2] ?? '';
     expect(lede.length).toBeGreaterThanOrEqual(160);
+  });
+
+  it('samples each colour label from its own shape row, with no empty example', () => {
+    for (const entry of KEY_ENTRIES) {
+      expect(entry.markdown, entry.id).not.toBe('');
+      expect(SHAPE_ENTRIES.find((shape) => shape.id === entry.id)?.markdown, entry.id).toBe(entry.markdown);
+    }
   });
 });

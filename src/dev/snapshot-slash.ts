@@ -93,7 +93,7 @@ export async function slashMenuCheck(kit: Kit, win: BrowserWindow): Promise<void
     await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
   };
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
   try {

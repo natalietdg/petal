@@ -10,10 +10,8 @@
   <div id="app">
     <div id="reader-area">
       <section id="history" hidden></section>
-      <section id="workflow" hidden></section>
       <section id="customize" hidden></section>
       <section id="repos" hidden aria-label="Open Repo"></section>
-      <section id="welcome" hidden aria-label="Welcome to Petal"></section>
       <section id="get-started" hidden aria-label="Get started"></section>
       <section id="pet-guide" hidden tabindex="-1" aria-label="Set up Petal"></section>
       <section id="consent" hidden tabindex="-1" aria-label="Read your Claude folder?"></section>
@@ -23,7 +21,6 @@
       <section id="testing" hidden aria-label="Testing"></section>
       <aside id="sessions-dock">
         <button id="customize-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="dock-label">Customize</span></button>
-        <button id="workflow-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg><span class="dock-label">Workflow</span></button>
         <button id="library-button" class="dock-button" type="button" aria-pressed="false" title="Domain knowledge from your sessions"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5.5A1.5 1.5 0 0 1 5.5 4H9v15H5.5A1.5 1.5 0 0 0 4 20.5"/><path d="M9 4h4v15H9"/><path d="M14.5 5.2l3.4-.9 3.1 13.6-3.4.9z"/></svg><span class="dock-label">Library</span></button>
         <button id="testing-button" class="dock-button" type="button" aria-pressed="false" title="Run this project's test pipeline and see results"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.8 18.2A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg><span class="dock-label">Testing</span></button>
         <button id="history-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span class="dock-label">History</span></button>
@@ -31,7 +28,7 @@
         <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="dock-label">Add Session</span></button>
         <button id="update-pill" class="update-pill" type="button" hidden></button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
-        <button id="headers-min-toggle" class="headers-min-button" type="button" aria-expanded="true" aria-controls="reader-head" aria-label="Minimise the headers" title="Minimise the headers (⌘⇧H)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button id="focus-toggle" class="focus-toggle" type="button" data-level="normal" aria-label="Minimise the headers" title="Minimise the headers (⌘⇧H)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
         <div id="sessions-panel" class="sessions-panel" hidden></div>
       </aside>
       <header id="reader-head">
@@ -44,20 +41,17 @@
             <div class="view-toggle" role="tablist">
               <button type="button" data-view="replies" aria-selected="true">Replies</button>
               <button type="button" data-view="flow" aria-selected="false">Flow</button>
-              <button type="button" data-view="decisions" aria-selected="false">Decisions</button>
             </div>
             <div class="reader-head-end">
-              <button type="button" id="colour-key-button" class="colour-key-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="colour-key" title="What the colours in a reply mean"><span class="ck-dots" aria-hidden="true"></span><span class="head-label">Colour key</span></button>
+              <button type="button" id="colour-key-button" class="colour-key-button" title="What the colours in a reply mean"><span class="ck-dots" aria-hidden="true"></span><span class="head-label">Colour key</span></button>
               <button id="agents-chip" class="agents-chip" type="button" hidden></button>
               <button id="reader-star" class="fav-star reader-star" type="button" hidden></button>
               <button id="notes-toggle" class="notes-toggle" type="button" aria-pressed="false" title="Your notes for this session, beside the replies"><svg class="dock-icon head-icon-only" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg><span class="head-label">Notes</span></button>
               <button id="library-add-session" class="notes-toggle library-add" type="button" hidden><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/><path d="M12 7v6M9 10h6"/></svg><span class="head-label">Add to Library</span></button>
-              <button id="focus-toggle" class="focus-button" type="button" aria-pressed="false" title="Only the reply, filling the window (⌘⇧F · Esc to leave)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="head-label">Focus</span></button>
             </div>
           </div>
           <p id="library-add-status" class="library-add-status" role="status" hidden></p>
         </div>
-        <div id="colour-key" class="colour-key" role="dialog" aria-label="Colour key" hidden></div>
         <div id="agents-menu" class="agents-menu" role="menu" aria-label="Agents today" tabindex="-1" hidden></div>
       </header>
       <div id="cat"></div>
@@ -71,7 +65,6 @@
             <section id="older"></section>
           </div>
           <section id="flow-view" class="prose" hidden></section>
-          <section id="decisions-view" class="prose" hidden></section>
         </div>
       </main>
       <section id="prompt-dock" aria-live="polite"></section>
@@ -82,7 +75,6 @@
           <button id="composer-send" type="submit" aria-label="Send">Send</button>
         </div>
       </form>
-      <button id="focus-exit" class="focus-button focus-exit" type="button" hidden title="Back to the full layout (Esc · ⌘⇧F)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>Exit focus</button>
     </div>
     <div id="divider" role="separator" aria-orientation="horizontal" aria-label="Resize reader and terminal" aria-valuemin="20" aria-valuemax="85" tabindex="0" title="Drag to resize · double-click to reset"></div>
     <section id="terminal-pane">

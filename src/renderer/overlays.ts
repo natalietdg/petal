@@ -1,8 +1,8 @@
-// History, Workflow, Customize, Library, Testing and Open Repo are views over the reader, one at a time.
+// History, Customize (with the Workflow tabs), Library, Testing and Open Repo are views over the reader, one at a time.
 // Opening one closes the others; Esc closes it; the reader and reply box show only when none is open.
 import { byId, focusTerminal } from './dom';
 
-export type OverlayId = 'history' | 'workflow' | 'customize' | 'repos' | 'welcome' | 'get-started' | 'consent' | 'pet-guide' | 'board' | 'shortcuts' | 'library' | 'testing';
+export type OverlayId = 'history' | 'customize' | 'repos' | 'get-started' | 'consent' | 'pet-guide' | 'board' | 'shortcuts' | 'library' | 'testing';
 
 interface Overlay {
   view: HTMLElement;
@@ -11,10 +11,8 @@ interface Overlay {
 
 const OVERLAYS: Record<OverlayId, Overlay> = {
   history: { view: byId('history'), button: byId('history-button') },
-  workflow: { view: byId('workflow'), button: byId('workflow-button') },
   customize: { view: byId('customize'), button: byId('customize-button') },
   repos: { view: byId('repos') },
-  welcome: { view: byId('welcome') },
   'get-started': { view: byId('get-started') },
   consent: { view: byId('consent') },
   'pet-guide': { view: byId('pet-guide') },

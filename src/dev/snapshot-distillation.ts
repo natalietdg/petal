@@ -157,7 +157,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
   seedHistory(project);
   testingFixture.loopStarts.length = 0;
   useAgentFixtures(outDir);
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs = await js('PastelTerm.tabs.ids()') as string[];

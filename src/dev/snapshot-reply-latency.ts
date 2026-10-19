@@ -86,7 +86,7 @@ export async function replyLatencyCheck(kit: Kit, { win, feed, file, sessions, o
   const { js, wait, waitFor, log, outDir } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} reply latency: ${what}`);
   const contents = win.webContents;
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js("PastelTerm.tabs.activate(PastelTerm.tabs.ids()[0]); PastelTerm.reader.setView('replies')");
   assertFixtureOutsideClaude(file);
   fs.appendFileSync(file, priorTurns('fx'));

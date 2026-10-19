@@ -3,12 +3,12 @@
    :is(#latest, .prose) carries an id's weight, so these beat reader.css and magazine.css's shared rules. */
 
 /* Tokens. Night keeps its own colours; the light themes print on warm paper with black ink. */
-[data-reading="print"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview) {
+[data-reading="print"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
   --print-ink: var(--reader-fg);
   --print-tint: var(--code-bg);
   --print-mono: "IBM Plex Mono", var(--mono-font);
 }
-[data-reading="print"][data-theme="light"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview) {
+[data-reading="print"][data-theme="light"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
   --reader-bg: #FFF7F4;
   --reader-fg: #141414;
   --muted: #59514D;

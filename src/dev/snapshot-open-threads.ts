@@ -151,7 +151,7 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     return p;
   };
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   await js("PastelTerm.reader.setView('replies')");
   const [startWidth, startHeight] = win.getContentSize();
@@ -195,11 +195,11 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
 
     // Focus mode.
     await setReading('newspaper');
-    await js('PastelTerm.focusMode.set(true)');
+    await js('PastelTerm.focusMode.setLevel("focus")');
     await wait(400);
     await show(THREADS_REPLY);
     await assertLook('focus');
-    await js('PastelTerm.focusMode.set(false)');
+    await js('PastelTerm.focusMode.setLevel("normal")');
     await wait(300);
 
     // A click sends through the reply box's path: pasted to a live Claude, else Claude starts with it.

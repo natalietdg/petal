@@ -17,7 +17,7 @@ export const WRITES = [
   'settings.json: your output style, when you pick Use this style.',
   'output-styles/petal-*.md: when you pick Add Petal’s reply styles.',
   'skills/petal-*: when you install or update a Petal skill.',
-  'petal-factory.json and skills/factory/SKILL.md: each time you edit the Workflow factory.',
+  'petal-factory.json and skills/factory/SKILL.md: each time you edit the factory in Customize › Factory.',
   'CLAUDE.md: a lesson, after you preview the change and confirm it.',
 ];
 

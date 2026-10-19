@@ -1,4 +1,4 @@
-/* Workflow › Factory: stations left to right with arrows, wrapping on narrow windows. */
+/* Customize › Factory: stations left to right with arrows, wrapping on narrow windows. */
 .fx { min-width: 0; }
 .fx-scope { margin: 0 0 14px; flex-wrap: wrap; max-width: 100%; }
 .fx-scope button { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,17 +1,4 @@
-/* Workflow replaces the reader while open, below the dock. */
-#workflow {
-  position: relative;
-  overflow-y: auto;
-  background: var(--reader-bg);
-  color: var(--reader-fg);
-  font-family: var(--ui-font);
-}
-#workflow[hidden] { display: none; }
-
-.workflow-pane { max-width: 1180px; margin: 0 auto; padding: 16px 40px 60px; }
-.workflow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-bottom: 22px; }
-.workflow-title { margin: 0; font: 600 2em/1.1 var(--display-font); letter-spacing: -0.02em; }
-.workflow-tabs { margin: 0; }
+/* The Workflow tabs (Today, Setup, Time, Handoffs, Factory) draw into Customize's body. */
 
 /* The one-line answer that opens every section. */
 .wf-summary { max-width: 46em; margin: 0 0 18px; font: 500 1.3em/1.4 var(--body-font); }

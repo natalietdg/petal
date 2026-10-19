@@ -15,7 +15,7 @@
 .agents-chip[aria-expanded="true"] { border-color: var(--muted); }
 .agents-chip[hidden] { display: none; }
 
-/* Dropdown: under the chip (agents-menu.ts sets top/right), the Colour key's popover frame, scrolling past its cap. */
+/* Dropdown: under the chip (agents-menu.ts sets top/right), a small framed popover, scrolling past its cap. */
 .agents-menu {
   position: fixed;
   z-index: 20;

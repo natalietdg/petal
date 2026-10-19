@@ -23,8 +23,7 @@ const PAGE_STATE = `(() => {
     overlay: P.overlays.current(),
     sessionsPanel: P.sessionsPanel.isOpen(),
     terminalMinimised: P.layout.isTerminalMinimised(),
-    headersMinimised: P.headersMin.isMinimised(),
-    focusMode: P.focusMode.isOn(),
+    focusLevel: P.focusMode.level(),
     split: document.getElementById('divider').getAttribute('aria-valuenow'),
     reading: document.documentElement.dataset.reading ?? null,
     readerView: P.reader.currentView(),
@@ -118,7 +117,7 @@ export interface StepIsolation {
 
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-// Call once the run is at its resting state (after the welcome step closes the first-run screen).
+// Call once the run is at its resting state (after the launch step closes Get started).
 export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<StepIsolation> {
   const { js, log, waitFor } = kit;
   flushActivity();
@@ -169,13 +168,9 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
       leaks.push(`terminal minimised=${page.terminalMinimised}`);
       await js(`PastelTerm.layout.setTerminalMinimised(${want.terminalMinimised})`);
     }
-    if (page.headersMinimised !== want.headersMinimised) {
-      leaks.push(`headers minimised=${page.headersMinimised}`);
-      await js(`PastelTerm.headersMin.set(${want.headersMinimised})`);
-    }
-    if (page.focusMode !== want.focusMode) {
-      leaks.push(`focus mode=${page.focusMode}`);
-      await js(`PastelTerm.focusMode.set(${want.focusMode})`);
+    if (page.focusLevel !== want.focusLevel) {
+      leaks.push(`focus level=${page.focusLevel}`);
+      await js(`PastelTerm.focusMode.setLevel(${JSON.stringify(want.focusLevel)})`);
     }
     if (page.readerView !== want.readerView) {
       leaks.push(`reader view ${page.readerView}`);

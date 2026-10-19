@@ -97,7 +97,7 @@ export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const outside = '/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.png';
   const markdown = replyText(outside);
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   const update = { state: 'live', cwd: repo, replies: [{ id: 'reply-images-new', timestamp: '2026-10-16T09:40:00.000Z', prompt: 'where are the screenshots?', markdown }] };
   const showSample = async () => {
     await js(`PastelTerm.reader.update(${JSON.stringify(update)})`);
@@ -168,7 +168,7 @@ export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<vo
   applyTheme('paleSky', { persist: false });
 
   // Focus mode: the same reply, the same thumbnails, the lightbox's Esc does not leave focus.
-  await js('PastelTerm.focusMode.set(true)');
+  await js('PastelTerm.focusMode.setLevel("focus")');
   await showSample();
   await js("document.querySelectorAll('#latest figure.reply-image').forEach((f) => f.scrollIntoView())");
   const focused = (await settled('#latest .prose'))?.[0];
@@ -186,7 +186,7 @@ export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<vo
   log(`captured reply-images-inline: ${JSON.stringify(rect)}`);
 
   await capture('reply-images-focus');
-  await js('PastelTerm.focusMode.set(false)');
+  await js('PastelTerm.focusMode.setLevel("normal")');
 
   // History preview: the same reply from a session log, relative path against the session's cwd.
   const previous = { records: historyFixture.records, live: historyFixture.live };

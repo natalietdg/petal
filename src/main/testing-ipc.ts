@@ -31,6 +31,7 @@ import { cleanSavedLoop, noEvents, withEvent } from '../shared/agent-loop';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, forTask, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
 import { listedSession, listedSessions, ownedTask, type PickSession, type SessionCandidate } from '../shared/task-testing';
+import { lastRunAt, latest } from '../shared/task-activity';
 import { panelSessions } from './agents-ipc';
 import { giveSessionTask } from './tasks-ipc';
 import * as store from './testing-store';
@@ -274,12 +275,25 @@ const named = (runs: PipelineRun[]): PipelineRun[] => {
 const PICK_MAX = 20;
 type Candidate = SessionCandidate & { cwd: string | null };
 
-// Her Claude sessions in a repo, for a tab in ~ or outside a repo: the Sessions panel's live ones, then History's recent ones.
+// Her Claude sessions in a repo, for a tab in ~ or outside a repo: the Sessions panel's live ones and History's recent ones.
 function sessionPicks(): (Candidate & { root: string })[] {
-  const live = panelSessions().map((s): Candidate => ({ sessionId: s.sessionId, cwd: s.cwd, root: projectRootOf(s.cwd), status: s.status === 'busy' ? 'busy' : 'idle' }));
+  const live = panelSessions().map((s): Candidate => ({ sessionId: s.sessionId, cwd: s.cwd, root: projectRootOf(s.cwd), status: s.status === 'busy' ? 'busy' : 'idle', at: s.updatedAt ?? null }));
   const recent = history.listSessions(new Set(), testingClaudeDir()).filter((r) => !r.live)
-    .map((r): Candidate => ({ sessionId: r.sessionId, cwd: r.cwd, root: projectRootOf(r.cwd), status: 'closed' }));
-  return listedSessions(live, recent, PICK_MAX);
+    .map((r): Candidate => ({ sessionId: r.sessionId, cwd: r.cwd, root: projectRootOf(r.cwd), status: 'closed', at: r.lastAt }));
+  const withRun = taskRunActivity();
+  return listedSessions(live.map(withRun), recent.map(withRun), PICK_MAX);
+}
+
+// A candidate's time moved up to its task's latest run, each repo's tasks and runs read once.
+function taskRunActivity(): (c: Candidate) => Candidate {
+  const byRoot = new Map<string, { tasks: Task[]; runAt: Map<string, number> }>();
+  return (c) => {
+    if (!c.root) return c;
+    if (!byRoot.has(c.root)) byRoot.set(c.root, { tasks: loadTasks(c.root).tasks, runAt: lastRunAt(store.load(c.root).runs) });
+    const repo = byRoot.get(c.root);
+    const taskId = repo ? ownedTask(repo.tasks, c.sessionId)?.id : undefined;
+    return { ...c, at: latest(c.at, taskId ? repo?.runAt.get(taskId) : null) };
+  };
 }
 
 async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere | null> {
@@ -523,13 +537,13 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // Starts one of a task's agents: claude with the brief in a new tab, under a session id Petal picks and remembers with
   // its role, so the lock and the suite reader know it. Its tab is named for its role and the task.
-  const startAgent = async (contents: WebContents, root: string, task: Task, role: AgentRole, brief: string): Promise<{ tabId: string | null; sessionId: string }> => {
+  const startAgent = async (contents: WebContents, root: string, task: Task, role: AgentRole, brief: string, background: boolean): Promise<{ tabId: string | null; sessionId: string }> => {
     const sessionId = (isSnapshotRun() && testingFixture.agentIds.shift()) || crypto.randomUUID();
     rememberAgent(root, task.id, sessionId, role);
     setAgentTitle(sessionId, agentTabTitle(store.load(root).agentNames, role, task.title));
     const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, `${(await claudeLaunch()).command} --session-id ${sessionId}`)}`;
     if (isSnapshotRun()) testingFixture.loopStarts.push({ command, brief });
-    const opened = openTab(contents, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background: true });
+    const opened = openTab(contents, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background });
     if (opened) runTabs.set(`${contents.id}:${opened}`, root);
     return { tabId: opened ?? null, sessionId };
   };
@@ -540,22 +554,38 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if ('note' in target) return target;
     for (const brief of [testerBrief, fixerBrief]) if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'A loop brief is empty or too long.' };
     prepareLoop(target.root);
-    const tester = await startAgent(event.sender, target.root, target.task, 'tester', testerBrief);
-    const fixer = await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief);
+    const tester = await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true);
+    const fixer = await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, true);
     saveLoop(target.root, target.task.id, { kind: 'loop', tester, fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
     return { tester, fixer };
   });
 
-  // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task.
+  // A draft still drawing up its suite: not stopped, and its testing agent's tab is open in some window.
+  const draftLive = (root: string, taskId: string): boolean => {
+    const loop = loopsOf(root)[taskId];
+    if (loop?.kind !== 'draft' || loop.stoppedAt !== null) return false;
+    return [...sessions.values()].some((s) => s.tabId === loop.tester.tabId || s.feed.session?.sessionId === loop.tester.sessionId);
+  };
+  const drafting = new Set<string>(); // `${root}:${taskId}` while its draft agent is being started
+
+  // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task, in a tab she is shown.
+  // One per task: a second ask while the first is still drawing gets a note.
   handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
-    const tester = await startAgent(event.sender, target.root, target.task, 'tester', prompt);
-    const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
-    const now = Date.now();
-    saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
-    return { tabId: tester.tabId };
+    const key = `${target.root}:${target.task.id}`;
+    if (drafting.has(key) || draftLive(target.root, target.task.id)) return { note: 'This task’s testing agent is already drawing up its suite.' };
+    drafting.add(key);
+    try {
+      const tester = await startAgent(event.sender, target.root, target.task, 'tester', prompt, false);
+      const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
+      const now = Date.now();
+      saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
+      return { tabId: tester.tabId };
+    } finally {
+      drafting.delete(key);
+    }
   });
 
   // The renderer's timer: saves one loop when asked, then lists the running loops whose agents have a tab in this window.

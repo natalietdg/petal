@@ -88,7 +88,6 @@ const api = {
   onStopClaude: (callback: () => void) => subscribe('claude:stop', callback),
   onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
-  onOpenWelcome: (callback: () => void) => subscribe('welcome:open', callback),
   onOpenGetStarted: (callback: () => void) => subscribe('get-started:open', callback),
   onOpenPetGuide: (callback: () => void) => subscribe('pet-guide:open', callback),
   onClaudeFolder: (callback: (allowed: boolean) => void) => subscribe('claude-folder:changed', callback),

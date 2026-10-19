@@ -10,7 +10,6 @@ import * as sessionsPanel from './sessions-panel';
 import * as scenes from './scenes';
 import * as cat from './cat';
 import * as diagrams from './diagrams';
-import * as flow from './flow';
 import * as history from './history';
 import * as composer from './composer';
 import * as workflow from './workflow';
@@ -20,9 +19,8 @@ import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
-import * as colourKey from './colour-key';
+import { COLOUR_LABELS_ID } from './formatting-guide';
 import './planet-reading';
-import * as welcome from './welcome';
 import * as getStarted from './get-started';
 import * as consent from './consent';
 import * as launchScreens from './launch-screens';
@@ -40,7 +38,6 @@ import * as boardActivity from './board-activity';
 import * as clashNotice from './clash-notice';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
-import * as headersMin from './headers-min';
 import * as shortcuts from './shortcuts';
 import * as library from './library';
 import * as libraryAdd from './library-add';
@@ -54,7 +51,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -95,7 +92,6 @@ async function start(): Promise<void> {
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
-    flow.followReaderSession(update.sessionId);
     favorites.followReader(tab.id, update.sessionId);
     libraryAdd.follow(tab.id, update.sessionId);
     cat.setBusy(update.busy);
@@ -111,7 +107,7 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel, the open overlay, a scene card or the colour key, or leaves focus, instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay or a scene card, or leaves focus, instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
@@ -119,8 +115,7 @@ async function start(): Promise<void> {
     else if (overlays.isOpen('pet-guide')) void petGuide.skip(); // a setup card; the bubble leaves Esc to the shell and Claude
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
-    else if (colourKey.isOpen()) colourKey.close();
-    else if (focusMode.isOn()) focusMode.set(false);
+    else if (focusMode.isOn()) focusMode.setLevel('normal');
     else return true;
     return false;
   });
@@ -199,7 +194,6 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   window.pastel.onToggleLayout(layout.toggleTerminalMinimised);
-  window.pastel.onToggleHeaders(headersMin.toggle);
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
   byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();
@@ -217,11 +211,13 @@ async function start(): Promise<void> {
     history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
-  // Help > Colour key: back to the reader first, since an open overlay hides the header the key hangs from.
-  window.pastel.onOpenColourKey(() => {
-    overlays.hideCurrent();
-    colourKey.open();
-  });
+  // The header's Colour key and Help > Colour key: Customize › Formatting, scrolled to the colour labels.
+  const openColourLabels = async () => {
+    await customize.open('formatting');
+    document.getElementById(COLOUR_LABELS_ID)?.scrollIntoView({ block: 'start' });
+  };
+  byId('colour-key-button').addEventListener('click', () => void openColourLabels());
+  window.pastel.onOpenColourKey(() => void openColourLabels());
   dockFit.init();
   headFit.init();
   updatePill.init();
@@ -229,7 +225,7 @@ async function start(): Promise<void> {
   // The first tab starts Claude too, once she has allowed the reader to follow it (a new install answers that first).
   const { term, renderer } = tabs.create({ startClaude: claudeFound && folderAllowed });
   await getStarted.load();
-  const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, the welcome, then Get started
+  const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, then Get started
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
 }
 

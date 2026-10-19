@@ -36,7 +36,6 @@ import { latencyCheck } from './snapshot-latency';
 import { replyLatencyCheck } from './snapshot-reply-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
-import { colourKeyCheck } from './snapshot-colour-key';
 import { shortcutsCheck } from './snapshot-shortcuts';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
@@ -57,7 +56,7 @@ import { historyLayoutCheck } from './snapshot-history-layout';
 import { petSizeCheck } from './snapshot-pet-size';
 import { customizeStylesCheck } from './snapshot-customize-styles';
 import { factoryCheck } from './snapshot-factory';
-import { shapeGuideCheck } from './snapshot-shape-guide';
+import { formattingGuideCheck } from './snapshot-formatting-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
@@ -68,7 +67,7 @@ import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
 import { minimiseCheck } from './snapshot-minimise';
 import { textSizeCheck } from './snapshot-text-size';
-import { organizerOffCheck, setupEmptyCheck, welcomeCheck, welcomeRelaunchCheck } from './snapshot-onboarding';
+import { launchCheck, organizerOffCheck, setupEmptyCheck } from './snapshot-onboarding';
 import { getStartedCheck } from './snapshot-get-started';
 import { firstRunCheck } from './snapshot-first-run';
 import { petOnboardingCheck } from './snapshot-pet-onboarding';
@@ -387,14 +386,14 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
   applyTheme('paleSky', { persist: false });
 }
 
-const BASELINE_AFTER = 'welcome'; // the first-run screen is up until this step closes it
+const BASELINE_AFTER = 'launch'; // Get started is up from the fresh launch until this step closes it
 
 // Runs every fixture check in order; returns how many finished, so a cut-short run shows in the marker.
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
   const steps: [string, () => Promise<unknown>][] = [
     ['reply', () => fixtureReply({ js, log, pty })], // first: the feed must read the fixture it writes, not an older copy
-    ['welcome', async () => { organizerOffCheck(kit, 'start'); await welcomeCheck(kit, win); }], // still open from the fresh launch
+    ['launch', async () => { organizerOffCheck(kit, 'start'); await launchCheck(kit); }], // Get started still open from the fresh launch
     ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
     ['cat frames', () => catFrames({ js, win, capture, log, feed, themes, applyTheme })],
     ['cat gallery', () => catGallery(kit, win)],
@@ -425,7 +424,6 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['factory', () => factoryCheck(kit, win)],
-    ['shape guide', () => shapeGuideCheck(kit, win)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
@@ -442,7 +440,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['headline links', () => headlineLinksCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['bubble images', () => bubbleImagesCheck(kit, win)],
-    ['colour key', () => colourKeyCheck(kit, win)],
+    ['formatting guide', () => formattingGuideCheck(kit, win)], // shapes, then colour labels with their own sample reply
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
@@ -466,7 +464,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
   ];
   const count: StepCount = { done: 0, total: steps.length };
   log(`SNAPSHOT START steps=${count.total}`);
-  let isolation: StepIsolation | null = null; // set once the first-run screen is closed: the run's resting state
+  let isolation: StepIsolation | null = null; // set once the launch screen is closed: the run's resting state
   for (const [name, step] of steps) {
     log(`step ${count.done + 1}/${count.total} ${name}`);
     try {
@@ -560,13 +558,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   let transcript = '';
   pty.onData((data) => { transcript += data; });
 
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'welcome-relaunch') {
-    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-    await welcomeRelaunchCheck(kit);
-    await capture('welcome-relaunch');
-    return finish();
-  }
-
   if (process.env.PASTEL_SNAPSHOT_MODE === 'flow-relaunch') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await views.flowRelaunch(kit, { fixtureFile: fakeTranscript() ?? '', realSessionId: process.env.PETAL_SNAPSHOT_REAL_SESSION ?? '' });
@@ -610,12 +601,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
-    return finish();
-  }
-
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
-    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-    await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
@@ -808,10 +793,10 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     return finish();
   }
 
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'shape-guide' && fakeTranscript()) {
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'formatting-guide' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
-    await shapeGuideCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    await formattingGuideCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
@@ -825,7 +810,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'builtin-menus' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await builtinMenusCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
@@ -834,7 +819,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'stop-button' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await stopButtonCheck(kit, { win, feed, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
@@ -846,19 +831,11 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     return finish();
   }
 
-  // Get started and the folder question on fixture state; welcome: the first-run screen alone, without reading her ~/.claude. Each needs a fresh PASTEL_SNAPSHOT_DIR.
+  // Get started and the folder question on fixture state, without reading her ~/.claude. Needs a fresh PASTEL_SNAPSHOT_DIR.
   if (process.env.PASTEL_SNAPSHOT_MODE === 'get-started' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await getStartedCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
-    return finish();
-  }
-
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'welcome' && fakeTranscript()) {
-    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-    organizerOffCheck(kit, 'start');
-    await fixtureReply({ js, log, pty });
-    await welcomeCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
