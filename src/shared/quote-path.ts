@@ -17,3 +17,11 @@ export function pathsFromUriList(list: string): string[] {
     }
   });
 }
+
+// Claude Code splits a paste before each absolute path and at newlines, then attaches pieces ending in these.
+const PASTE_PIECE = / (?=\/|[A-Za-z]:\\)|\n/;
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp)$/i;
+const unquote = (piece: string): string => piece.replace(/^(['"])(.*)\1$/, '$2');
+
+// True when Claude Code will read part of this paste as an image file, which it does after the paste ends.
+export const pastesImagePath = (text: string): boolean => text.split(PASTE_PIECE).some((piece) => IMAGE_FILE.test(unquote(piece.trim())));

@@ -5,7 +5,7 @@ import * as repos from './repos';
 import { parseRepoCommand } from '../shared/repo-match';
 import { byId, el, focusTerminal, isIpcError } from './dom';
 import { acceptFileDrags, droppedPaths } from './terminal';
-import { quotePaths } from '../shared/quote-path';
+import { pastesImagePath, quotePaths } from '../shared/quote-path';
 import { OPEN_THREAD_EVENT } from './open-threads';
 import * as slashMenu from './slash-menu';
 import { applySlash } from '../shared/slash';
@@ -27,6 +27,8 @@ const toLine = mentionBar.create(form, input, () => mentions.targets());
 // Bracketed paste keeps multi-line replies as one message instead of sending at each newline.
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
+// Claude Code drops an Enter that lands while it is still reading a pasted image, so that Enter waits this long.
+const IMAGE_READ_MS = 800;
 
 function fit(): void {
   input.style.height = 'auto';
@@ -97,11 +99,21 @@ const refreshReader = (tabId: string): void => { window.dispatchEvent(new Custom
 // While Claude waits on a prompt, a pasted Enter would answer it (a permission's focused "Yes"), so nothing is sent.
 export const claudeIsAsking = (tab: tabs.Tab): boolean => screenIsAsking(tabs.screenLines(tab));
 
+// One write with its Enter, unless the message holds an image path: then the Enter follows once Claude has read it.
+async function sendPaste(tabId: tabs.Tab['id'], text: string): ReturnType<typeof window.pastel.paste> {
+  const pasted = `${PASTE_START}${text}${PASTE_END}`;
+  if (!pastesImagePath(text)) return window.pastel.paste(tabId, `${pasted}\r`);
+  const result = await window.pastel.paste(tabId, pasted);
+  if (isIpcError(result) || !result.sent) return result;
+  await new Promise((resolve) => setTimeout(resolve, IMAGE_READ_MS));
+  return window.pastel.paste(tabId, '\r');
+}
+
 export async function pasteToClaude(tab: tabs.Tab, text: string): Promise<boolean> {
   if (claudeIsAsking(tab)) return false;
   const echo = tabs.addPending(tab, text);
   refreshReader(tab.id);
-  const result = await window.pastel.paste(tab.id, `${PASTE_START}${text}${PASTE_END}\r`);
+  const result = await sendPaste(tab.id, text);
   const sent = !isIpcError(result) && result.sent;
   if (echo !== null && !sent) {
     tabs.removePending(tab, echo);
