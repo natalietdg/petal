@@ -27,8 +27,10 @@ const toLine = mentionBar.create(form, input, () => mentions.targets());
 // Bracketed paste keeps multi-line replies as one message instead of sending at each newline.
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
-// Claude Code drops an Enter that lands while it is still reading a pasted image, so that Enter waits this long.
-const IMAGE_READ_MS = 800;
+// Claude Code drops an Enter that lands while it is still reading a pasted image, so the Enter waits for its [Image #n].
+const IMAGE_READ_MAX_MS = 5000;
+const IMAGE_POLL_MS = 100;
+const IMAGE_SETTLE_MS = 150;
 
 function fit(): void {
   input.style.height = 'auto';
@@ -100,20 +102,32 @@ const refreshReader = (tabId: string): void => { window.dispatchEvent(new Custom
 export const claudeIsAsking = (tab: tabs.Tab): boolean => screenIsAsking(tabs.screenLines(tab));
 
 // One write with its Enter, unless the message holds an image path: then the Enter follows once Claude has read it.
-async function sendPaste(tabId: tabs.Tab['id'], text: string): ReturnType<typeof window.pastel.paste> {
+async function sendPaste(tab: tabs.Tab, text: string): ReturnType<typeof window.pastel.paste> {
   const pasted = `${PASTE_START}${text}${PASTE_END}`;
-  if (!pastesImagePath(text)) return window.pastel.paste(tabId, `${pasted}\r`);
-  const result = await window.pastel.paste(tabId, pasted);
+  if (!pastesImagePath(text)) return window.pastel.paste(tab.id, `${pasted}\r`);
+  const before = imageTags(tab);
+  const result = await window.pastel.paste(tab.id, pasted);
   if (isIpcError(result) || !result.sent) return result;
-  await new Promise((resolve) => setTimeout(resolve, IMAGE_READ_MS));
-  return window.pastel.paste(tabId, '\r');
+  await imagesRead(tab, before);
+  return window.pastel.paste(tab.id, '\r');
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const imageTags = (tab: tabs.Tab): number => tabs.screenLines(tab).join('\n').split('[Image #').length - 1;
+
+// Resolves once a new [Image #n] shows in Claude's input, or after IMAGE_READ_MAX_MS if it never does.
+async function imagesRead(tab: tabs.Tab, before: number): Promise<void> {
+  for (let waited = 0; waited < IMAGE_READ_MAX_MS; waited += IMAGE_POLL_MS) {
+    await sleep(IMAGE_POLL_MS);
+    if (imageTags(tab) > before) { await sleep(IMAGE_SETTLE_MS); return; }
+  }
 }
 
 export async function pasteToClaude(tab: tabs.Tab, text: string): Promise<boolean> {
   if (claudeIsAsking(tab)) return false;
   const echo = tabs.addPending(tab, text);
   refreshReader(tab.id);
-  const result = await sendPaste(tab.id, text);
+  const result = await sendPaste(tab, text);
   const sent = !isIpcError(result) && result.sent;
   if (echo !== null && !sent) {
     tabs.removePending(tab, echo);
