@@ -247,10 +247,11 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     await capture('test-loop-done');
 
     // Tokens: the last finished round's actual, for both agents, next to the per-round estimate (cache reads count in both).
+    // Each line carries its cwd, as Claude Code logs it, so a later step reading this log never files these runs under its own project.
     if (transcript) {
       const usage = (input: number, output: number, cacheWrite: number, cacheRead: number) => ({ input_tokens: input, output_tokens: output, cache_creation_input_tokens: cacheWrite, cache_read_input_tokens: cacheRead });
-      const tool = (id: string, round: number, at: number, use: object) => line({ type: 'assistant', uuid: `loop-a-${id}`, timestamp: new Date(at).toISOString(), message: { id: `msg-${id}`, role: 'assistant', usage: use, content: [{ type: 'text', text: `**Loop:** round ${round}/5 · testing · 0 open` }, { type: 'tool_use', id: `toolu_${id}`, name: 'Bash', input: { command: 'npm test' } }] } })
-        + line({ type: 'user', uuid: `loop-u-${id}`, timestamp: new Date(at).toISOString(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `toolu_${id}`, content: 'ok' }] } });
+      const tool = (id: string, round: number, at: number, use: object) => line({ type: 'assistant', uuid: `loop-a-${id}`, timestamp: new Date(at).toISOString(), cwd: project, message: { id: `msg-${id}`, role: 'assistant', usage: use, content: [{ type: 'text', text: `**Loop:** round ${round}/5 · testing · 0 open` }, { type: 'tool_use', id: `toolu_${id}`, name: 'Bash', input: { command: 'npm test' } }] } })
+        + line({ type: 'user', uuid: `loop-u-${id}`, timestamp: new Date(at).toISOString(), cwd: project, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `toolu_${id}`, content: 'ok' }] } });
       fs.appendFileSync(transcript, tool('tok3', 3, Date.now() - 2000, usage(500, 100, 400, 1000)) + tool('tok4', 4, Date.now(), usage(1000, 200, 0, 3000)));
     }
     const roundLine = await waitFor<string | null>(async () => { const t: string = await js("document.querySelector('#testing .tst-agent-round')?.textContent ?? ''"); return t.startsWith('Round 3:') ? t : null; }, 10000);

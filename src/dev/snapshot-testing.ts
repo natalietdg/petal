@@ -466,6 +466,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     testingFixture.claudeDir = null;
     await js('PastelTerm.overlays.hideCurrent()');
     await js('PastelTerm.testing.resetLeftovers()'); // the history row it opened to its repeats
+    await js('PastelTerm.testing.forgetLoops()'); // the bug fix agent's loop: keepingStores drops the saved one, this the window's copy
     // Run suite's tab: later steps (Get started) count tabs from a clean start.
     for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
     check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the run's tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
