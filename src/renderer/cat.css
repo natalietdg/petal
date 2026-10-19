@@ -151,6 +151,7 @@
 #cat:not(.awake) .eyes-closed { opacity: 1; animation: none; }
 .cat-z { display: none; }
 #cat:not(.awake) .cat-z { display: block; }
+#cat:not(.awake) .tail-down { opacity: 0; } /* asleep: tail up, still */
 
 /* Sleeping: a slow z drifts up every few seconds. */
 .cat-z {
@@ -160,17 +161,18 @@
   font: 600 14px var(--ui-font);
   color: var(--muted);
   opacity: 0;
-  animation: cat-z 4.5s steps(4) infinite; /* stepped: the motion clock only draws on a change */
+  animation: cat-z 4.5s steps(4) 6, cat-z-rest 1ms 27s forwards; /* drifts ~30 s then rests, so an idle Petal can stop the motion clock */
 }
+@keyframes cat-z-rest { to { opacity: 1; transform: translate(3px, -2px); } }
 @keyframes cat-z {
   0%, 30% { opacity: 0; transform: translate(0, 6px); }
   55% { opacity: 1; }
   85%, 100% { opacity: 0; transform: translate(6px, -10px); }
 }
 
-/* Busy: the tail flicks between two frames; the left ear twitches now and then. */
-.tail-down { animation: tail-flick 1.4s steps(1) infinite; }
-.tail-up { animation: tail-flick 1.4s steps(1) infinite reverse; }
+/* Awake: the tail flicks between two frames; the left ear twitches now and then. Asleep, nothing loops. */
+#cat.awake .tail-down { animation: tail-flick 1.4s steps(1) infinite; }
+#cat.awake .tail-up { animation: tail-flick 1.4s steps(1) infinite reverse; }
 @keyframes tail-flick {
   0% { opacity: 0; }
   50% { opacity: 1; }
@@ -237,29 +239,30 @@
 @keyframes sparkle { 50% { opacity: 1; } }
 
 /* Each cat's own small tic on top. Mika: the left ear twitches. */
-#cat[data-cat="mika"] .ear-left { animation: ear-twitch 5s steps(1) infinite; }
+#cat.awake[data-cat="mika"] .ear-left { animation: ear-twitch 5s steps(1) infinite; }
 /* Miki: both big ears swivel, like her listening for the fridge. */
-#cat[data-cat="miki"] .ear-left { animation: ear-swivel 2.6s steps(1) infinite; }
-#cat[data-cat="miki"] .ear-right { animation: ear-swivel 2.6s steps(1) infinite reverse; }
+#cat.awake[data-cat="miki"] .ear-left { animation: ear-swivel 2.6s steps(1) infinite; }
+#cat.awake[data-cat="miki"] .ear-right { animation: ear-swivel 2.6s steps(1) infinite reverse; }
 @keyframes ear-swivel {
   0%, 40% { transform: none; }
   45%, 70% { transform: translate(-1px, 1px); }
   75%, 100% { transform: none; }
 }
 /* Kira: kneads, one white paw then the other. */
-#cat[data-cat="kira"] .paw-left { animation: knead 1.1s steps(1) infinite; }
-#cat[data-cat="kira"] .paw-right { animation: knead 1.1s steps(1) infinite 0.55s; }
+#cat.awake[data-cat="kira"] .paw-left { animation: knead 1.1s steps(1) infinite; }
+#cat.awake[data-cat="kira"] .paw-right { animation: knead 1.1s steps(1) infinite 0.55s; }
 @keyframes knead {
   0% { transform: translateY(-1px); }
   50% { transform: none; }
 }
 /* Winged cats: wings flutter a pixel, slow at rest and fast while Claude works. */
-#cat .wings { animation: flutter 2.4s steps(1) infinite; }
+#cat.awake .wings { animation: flutter 2.4s steps(1) infinite; }
 #cat.busy .wings { animation-duration: 0.5s; }
 @keyframes flutter { 50% { transform: translateY(-1px); } }
-/* Slow blink every ~4s while busy. */
-.eyes-closed { opacity: 0; animation: blink-closed 4.2s steps(1) infinite; }
-.eyes-open { animation: blink-open 4.2s steps(1) infinite; }
+/* Slow blink every ~4s while awake. */
+.eyes-closed { opacity: 0; }
+#cat.awake .eyes-closed, .cat-portrait .eyes-closed { animation: blink-closed 4.2s steps(1) infinite; }
+#cat.awake .eyes-open, .cat-portrait .eyes-open { animation: blink-open 4.2s steps(1) infinite; }
 @keyframes blink-closed { 0%, 93% { opacity: 0; } 94%, 98% { opacity: 1; } 99% { opacity: 0; } }
 @keyframes blink-open { 0%, 93% { opacity: 1; } 94%, 98% { opacity: 0; } 99% { opacity: 1; } }
 
@@ -283,6 +286,7 @@
   transition: opacity 0.15s;
 }
 #cat:hover .cat-tip { opacity: 1; }
+#cat[hidden] { display: none !important; } /* Pet › No pet, even where a layout rule shows her */
 
 /* Static frames only: tail up, ear still, z shown. */
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,7 @@
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
 import * as textSize from './text-size';
-import { petWords, portrait, setSize } from './cat';
+import { NO_PET, petWords, portrait, setSize } from './cat';
 import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import { outputStylesCard } from './customize-styles';
@@ -13,7 +13,7 @@ import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
 import { READER_PERCENT, TERMINAL_FONT, type SizeRange, type TextPane } from '../shared/text-size';
 
-// picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her.
+// picture: a pixel portrait drawn before the name, so every chip naming a cat also shows her ('' draws none).
 function chipGroup(label: string, choices: readonly Choice[], current: string, onPick: (id: string) => void, picture?: (id: string) => string): HTMLDivElement {
   const group = el('div', 'cz-chips');
   group.setAttribute('role', 'radiogroup');
@@ -25,10 +25,11 @@ function chipGroup(label: string, choices: readonly Choice[], current: string, o
     }, 'cz-chip');
     chip.setAttribute('role', 'radio');
     chip.setAttribute('aria-checked', String(id === current));
-    if (picture) {
+    const art = picture?.(id);
+    if (art) {
       const portraitBox = el('span', 'cat-portrait');
       portraitBox.dataset.cat = id;
-      portraitBox.innerHTML = picture(id); // built from Petal's own pixel data, no outside text
+      portraitBox.innerHTML = art; // built from Petal's own pixel data, no outside text
       chip.prepend(portraitBox);
     }
     group.append(chip);
@@ -86,8 +87,11 @@ function textSizeCard(): HTMLDivElement {
   return card('Text size', rows, note('Also ⌘= bigger, ⌘- smaller and ⌘0 actual size, for the terminal when you last clicked or typed there, otherwise the reader.'));
 }
 
+const petPicture = (id: string): string => (id === NO_PET ? '' : portrait(id));
+
 // Pet size wording uses the chosen pet's name and pronoun.
 function sizeNoteText(id: string): string {
+  if (id === NO_PET) return 'No pet in the corner. Pet size applies once you pick one.';
   const { name, they, their } = petWords(id);
   const They = they[0].toUpperCase() + they.slice(1);
   return `Pet size is the biggest ${name} gets. ${They} shrinks on ${their} own when a line of text would sit under ${they === 'he' ? 'him' : 'her'}.`;
@@ -101,7 +105,7 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Theme', choices.themes, look.theme, (id) => { look.theme = id; set.setTheme(id); }),
     chipGroup('Reading style', choices.reading, look.reading, (id) => { look.reading = id; set.setReading(id); }),
     textSizeCard(),
-    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); sizeNote.textContent = sizeNoteText(id); }, portrait),
+    chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); sizeNote.textContent = sizeNoteText(id); }, petPicture),
     chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
     birthdayCard(),
