@@ -353,9 +353,15 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       check(before.visible && !before.disabled && before.nextTo && before.title === 'Save this session’s domain knowledge to your Library', `Add to Library shows beside Notes with its tooltip: ${JSON.stringify(before)}`);
       check(before.ratios.every((r) => r >= MIN_RATIO), `the header button is readable: ${JSON.stringify(before.ratios)}`);
       // The token estimate sits under the button as muted text, no hover needed, in the Read past sessions wording.
-      const counted = await js('window.pastel.library.addEstimate(PastelTerm.tabs.active().id)') as TokenEstimate | { skipped: string };
-      const wantCost = 'calls' in counted && counted.calls ? estimateText(counted) : 'Nothing new to read.';
-      const shownCost = await waitFor(async () => { const h = await header(); return h.cost ? h : null; }, 5000);
+      // The line may be up to a minute old (earlier steps append to the log), so hover recounts it first, as her pointer would.
+      await js("document.getElementById('library-add-session').dispatchEvent(new PointerEvent('pointerenter'))");
+      let wantCost = '';
+      const shownCost = await waitFor(async () => {
+        const counted = await js('window.pastel.library.addEstimate(PastelTerm.tabs.active().id)') as TokenEstimate | { skipped: string };
+        wantCost = 'calls' in counted && counted.calls ? estimateText(counted) : 'Nothing new to read.';
+        const h = await header();
+        return h.cost === wantCost ? h : null;
+      }, 5000) ?? await header();
       check(shownCost?.cost === wantCost && /^(About [\d,]+ tokens to read, [\d,]+ to write\.|Nothing new to read\.)$/.test(shownCost.cost),
         `the estimate shows inline under the button: ${JSON.stringify(shownCost?.cost)} (want ${JSON.stringify(wantCost)})`);
       check(shownCost && shownCost.costRatio !== null && shownCost.costRatio >= MIN_RATIO && shownCost.costMuted, `the estimate line is muted and readable: ${JSON.stringify(shownCost && { ratio: shownCost.costRatio, muted: shownCost.costMuted })}`);
