@@ -293,7 +293,7 @@ export interface InvokeChannels {
   // The reply box's send: answered, so a send that never reached the pty can be taken back.
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
   // A message to other sessions in this window (mentions, Board's Message…, a reply's To line); main wraps and pastes it.
-  'mentions:send': { args: [request: { from: TabId | null; to: TabId[]; text: string }]; result: Guarded<{ deliveries: Delivery[] }> };
+  'mentions:send': { args: [request: { from: TabId | null; to: TabId[]; text: string; asking: TabId[] }]; result: Guarded<{ deliveries: Delivery[] }> };
   // An image pasted into the reply box, saved as a PNG; Claude reads it by the returned path.
   'paste:save-image': { args: [request: { bytes: Uint8Array }]; result: Guarded<{ file: string }> };
   // An image path in one of her messages, as a data URL; prompt is the text that names it.

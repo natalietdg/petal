@@ -147,6 +147,23 @@ describe('deliverMentions (main)', () => {
     expect(deliverMentions({ from: 'me', to: many, text: 'hi' }, () => undefined).deliveries).toHaveLength(MAX_TARGETS);
   });
 
+  it('writes nothing to a tab that is asking something, and records no message for it', () => {
+    const p = ports();
+    const { deliveries, messages } = deliverMentions({ from: 'me', to: ['a', 'b'], text: 'hi', asking: ['a'] }, (id) => p[id]);
+    expect(deliveries.map((d) => d.outcome)).toEqual(['asking', 'queued']);
+    expect(p.a?.written).toEqual([]);
+    expect(messages.map((m) => m.to.name)).toEqual(['Welcome email']);
+  });
+
+  it('pastes an image-path message without its Enter, and says the Enter comes later', () => {
+    const p = ports();
+    const { deliveries } = deliverMentions({ from: 'me', to: ['a'], text: 'see /tmp/shot.png' }, (id) => p[id]);
+    const message = 'Message from session "Sessions board" (petal · mentions): see /tmp/shot.png';
+    expect(p.a?.written).toEqual([pasted(message, false)]);
+    expect(p.a?.written[0]?.endsWith('\r')).toBe(false);
+    expect(deliveries).toEqual([{ tabId: 'a', name: 'Fix stale prices', outcome: 'sent', enterLater: true }]);
+  });
+
   it('wraps as Petal when the sending tab has no Claude', () => {
     const p = ports();
     deliverMentions({ from: 'off', to: ['a'], text: 'hi' }, (id) => p[id]);
@@ -158,6 +175,11 @@ describe('deliverySummary', () => {
   it('reads as one line', () => {
     expect(deliverySummary([{ tabId: 'a', name: 'A', outcome: 'sent' }, { tabId: 'b', name: 'B', outcome: 'sent' }, { tabId: 'c', name: 'C', outcome: 'not-running' }], ['ghost']))
       .toBe('Sent to A, B · Not running, not sent: C · Not open in this window: @session:ghost');
+  });
+
+  it('names a session that is asking and tells her to answer it there', () => {
+    expect(deliverySummary([{ tabId: 'a', name: 'A', outcome: 'sent' }, { tabId: 'b', name: 'B', outcome: 'asking' }])).toBe('Sent to A · B is asking something; answer it there first');
+    expect(deliverySummary([{ tabId: 'b', name: 'B', outcome: 'asking' }, { tabId: 'c', name: 'C', outcome: 'asking' }])).toBe('B, C are asking something; answer it there first');
   });
 });
 

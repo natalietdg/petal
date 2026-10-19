@@ -13,11 +13,12 @@ export interface MentionTarget {
 }
 
 // How main's send went for one mentioned tab.
-export type DeliveryOutcome = 'sent' | 'queued' | 'not-running' | 'closed';
+export type DeliveryOutcome = 'sent' | 'queued' | 'not-running' | 'closed' | 'asking';
 export interface Delivery {
   tabId: string;
   name: string;
   outcome: DeliveryOutcome;
+  enterLater?: boolean; // pasted without its Enter: the message holds an image path Claude reads first
 }
 
 export const mentionSlug = (name: string): string =>
@@ -97,13 +98,19 @@ export function planMentions(text: string, targets: readonly MentionTarget[], al
   return { to: parsed.targets, unknown: parsed.unknown, body: parsed.body, alsoHere: alsoHere && parsed.body.length > 0 };
 }
 
-const OUTCOME_WORDS: Record<DeliveryOutcome, string> = { sent: 'Sent to', queued: 'Queued for', 'not-running': 'Not running, not sent:', closed: 'Closed, not sent:' };
+const OUTCOME_WORDS: Record<DeliveryOutcome, (names: readonly string[]) => string> = {
+  sent: (names) => `Sent to ${names.join(', ')}`,
+  queued: (names) => `Queued for ${names.join(', ')}`,
+  'not-running': (names) => `Not running, not sent: ${names.join(', ')}`,
+  closed: (names) => `Closed, not sent: ${names.join(', ')}`,
+  asking: (names) => `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} asking something; answer it there first`,
+};
 
 // One line after a send: "Sent to A, B · Not running, not sent: C".
 export function deliverySummary(deliveries: readonly Delivery[], unknown: readonly string[] = []): string {
   const parts = (Object.keys(OUTCOME_WORDS) as DeliveryOutcome[]).flatMap((outcome) => {
     const names = deliveries.filter((d) => d.outcome === outcome).map((d) => d.name);
-    return names.length ? [`${OUTCOME_WORDS[outcome]} ${names.join(', ')}`] : [];
+    return names.length ? [OUTCOME_WORDS[outcome](names)] : [];
   });
   if (unknown.length) parts.push(`Not open in this window: ${unknown.map((slug) => `${SESSION_PREFIX}${slug}`).join(', ')}`);
   return parts.join(' · ');
