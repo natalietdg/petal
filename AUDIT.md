@@ -524,3 +524,5 @@
 #527 | 2026-10-19 | ACTION | Claude | Built and installed an add-task form on the empty Testing picker without her asking (Claude's own design call) | 86086e6
 #528 | 2026-10-19 | DECISION | Natalie | Rejected the add-task form; Testing outside a repo picks a SESSION, and the suite follows that session. Supersedes #523, #527 | in progress
 #529 | 2026-10-19 | DECISION | Natalie | Board cards get a Close button | in progress
+#530 | 2026-10-19 | ACTION | Claude | Feature reassessment (4 read-only agents); top issues re-checked in code: @mention writes Enter without asking-guard (main/mentions.ts:49), agent loop only steps while Testing open (testing.ts:689) | chat report
+#531 | 2026-10-19 | DECISION | Natalie | Fix the reassessment's broken items and recommended cuts (Claude recommended): mentions safety+image, background agent loop + lane rehydrate + per-round tokens + drafting lane + in-repo auto task, lock Keep/Restore, consent copy, permission parser, hide Board task UI, No pet + idle clock. Merges (formatting guide, focus, flow+decisions, Customize+Workflow fold, welcome cut) queued as wave 2 | 6 branches in progress
