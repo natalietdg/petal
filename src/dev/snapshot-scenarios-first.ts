@@ -42,7 +42,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
   const say = (sessionId: string, uuid: string, prompt: string, text: string) => entry(sessionId, { type: 'user', uuid: `${uuid}-u`, message: { role: 'user', content: prompt } })
     + entry(sessionId, { type: 'assistant', uuid, message: { id: `msg-${uuid}`, role: 'assistant', content: [{ type: 'text', text }] } });
   const tabOf = (sessionId: string) => waitFor(() => hostOf(win.webContents.id, repo, sessionId), 10000); // its agent terminal, as main says
-  const reopen = async () => { await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`); await js("document.getElementById('testing-button').click()"); };
+  const reopen = async () => { await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`); await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()"); }; // the button toggles
   const pickTask = (id: string) => js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); s.value = 'task:${id}'; s.dispatchEvent(new Event('change')); })()`);
   type Screen = { lane: string | null; scenarios: string[]; sources: string[]; edit: boolean; approve: boolean; drawing: string | null; ended: boolean };
   const screen = (): Promise<Screen> => js(`(() => {

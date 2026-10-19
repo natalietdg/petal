@@ -340,6 +340,11 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(fixEstimate), `a one-line estimate under Send to bug fix agent: ${JSON.stringify(fixEstimate)}`);
     const pastesBefore = pasteWrites.length;
     const startsBefore = testingFixture.loopStarts.length;
+    const fixerLog = path.join(outDir, 'testing-fixture', 'agents', `${FIXER_SESSION}.jsonl`);
+    fs.mkdirSync(path.dirname(fixerLog), { recursive: true });
+    fs.writeFileSync(fixerLog, '');
+    testingFixture.agentIds.splice(0, Infinity, FIXER_SESSION); // its terminal reports this session, as a real claude would
+    extraTabFixtures.push({ sessionId: FIXER_SESSION, transcript: fixerLog, status: 'idle', cwd: project });
     await click('#testing .tst-row.is-failed .tst-fix');
     const fixerStart = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.startsWith('You are Bug fix agent, the bug fix agent')) ?? null, 4000);
     const fixerBrief = fixerStart?.brief ?? '';
@@ -348,8 +353,10 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const fixerLoop = await waitFor(() => { const l = store.load(project).loops?.[FIXTURE_TASK]; return l?.queue.length ? l : null; }, 4000);
     check(fixerLoop && fixerLoop.testerSessionId === null && fixerLoop.fixerSessionId && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.testerSessionId, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
     const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, fixerLoop?.fixerSessionId ?? null), 10000);
+    await waitFor(() => (fixerTab && agentTerminals().includes(fixerTab) ? true : null), 10000); // main counts it once its shell starts
     check(fixerTab && agentTerminals().includes(fixerTab) && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab) && (await js('PastelTerm.tabs.active()?.id')) === startTabs[0], `it runs in an agent terminal, off the tab bar, and her tab stays shown: ${fixerTab}`);
-    const lanes = await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as string[][];
+    const laneStatuses = () => js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as Promise<string[][]>;
+    const lanes = await waitFor(async () => { const l = await laneStatuses(); return l.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing')) ? l : null; }, 10000) ?? await laneStatuses(); // the lanes read main on their next tick
     check(lanes.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing auth > tokens')) && lanes.some(([role, status]) => role === 'tester' && status === 'Not started'), `its lane shows it fixing; the testing agent's is not started: ${JSON.stringify(lanes)}`);
 
     // A second send of the same test while it is being fixed adds nothing.

@@ -381,10 +381,11 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js(`PastelTerm.tabs.requestClose(${JSON.stringify(testerTab)})`);
     const reopenBox = await waitFor<{ placeholder: string; terminal: string | null } | null>(() => js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); return i && !i.disabled && !PastelTerm.tabs.get(${JSON.stringify(testerTab)}) && i.placeholder.includes('Resumes') ? { placeholder: i.placeholder, terminal: document.querySelector('${lane('tester')} .tst-agent-terminal')?.textContent ?? null } : null; })()`), 10000);
     check(reopenBox?.placeholder === 'Message Quinn. Resumes its session' && reopenBox.terminal === 'Terminal', `with its terminal closed Quinn's box stays on and Terminal stays: ${JSON.stringify(reopenBox)}`);
+    const noteBefore = await js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent || null`) as string | null;
     const resumesBefore = testingFixture.resumes.length;
     await js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); i.value = 'Still there?'; i.dispatchEvent(new Event('input')); document.querySelector('${lane('tester')} .tst-agent-send').requestSubmit(); })()`);
     const reopened = await waitFor(() => (testingFixture.resumes.slice(resumesBefore).some((r) => r.sessionId === TESTER) ? true : null), 6000);
-    const reopenLine: string = await waitFor(() => js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent || null`), 4000) ?? '';
+    const reopenLine: string = await waitFor(async () => { const t = await js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent || null`) as string | null; return t && t !== noteBefore ? t : null; }, 4000) ?? ''; // this send's note, not the last one
     check(reopened && reopenLine === 'Resuming Quinn’s session. Your message goes once it’s ready.', `Send resumed Quinn's own session in an agent terminal: ${JSON.stringify({ resumes: testingFixture.resumes.slice(resumesBefore), reopenLine })}`);
 
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");

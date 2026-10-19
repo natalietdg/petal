@@ -109,7 +109,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(drafterTab && ended?.ended === 'The testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show terminal: ${JSON.stringify(ended)}`);
     await capture('suite-draft-ended');
     const pastesBefore = pasteWrites.length;
-    await js("document.querySelector('#testing .tst-ask-again').click()");
+    await js("document.querySelector('#testing .tst-ask-again')?.click()");
     const again = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('You stopped without writing .petal/suites/t-draft.json')) ?? null, 5000);
     check(again && again.tabId === drafterTab && testingFixture.loopStarts.length === startsBefore + 1, `Ask again pastes a follow-up into its terminal, no new agent: ${JSON.stringify(again?.data.slice(0, 80))}`);
     check(await waitFor(async () => { const s = await screen(); return s.drawing && !s.ended ? true : null; }, 5000), 'it reads as drawing again after the follow-up');
@@ -178,9 +178,9 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()");
     await pickTask('t-edit');
     const gone = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
-    check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && gone.show, `a closed terminal ends the draft, with Ask again and Show terminal: ${JSON.stringify(gone)}`);
+    check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && gone.show, `a closed terminal ends the draft, with Ask again and Show terminal: ${JSON.stringify({ gone, editSession, editTab, screen: gone ? null : await screen(), lane: gone ? null : await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.state, l.status])") })}`);
     const resumesBefore = testingFixture.resumes.length;
-    await js("document.querySelector('#testing .tst-ask-again').click()");
+    await js("document.querySelector('#testing .tst-ask-again')?.click()");
     const resumed = await waitFor(() => testingFixture.resumes.slice(resumesBefore).find((r) => r.sessionId === editSession) ?? null, 5000);
     await wait(1000);
     check(resumed?.command.includes(`--resume '${editSession}'`) && testingFixture.loopStarts.length === startsBefore + 3, `Ask again resumes the same testing agent, no new one: ${JSON.stringify(resumed?.command.slice(-80))}`);
