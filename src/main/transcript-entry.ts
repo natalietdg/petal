@@ -32,6 +32,7 @@ export interface TranscriptEntry {
   isMeta?: boolean;
   isSidechain?: boolean;
   isCompactSummary?: boolean; // the summary Claude Code writes after /compact, logged as a user entry
+  imagePasteIds?: unknown; // her turn's "[Image #n]" numbers, in the order their source notes follow
   cwd?: unknown;
   aiTitle?: string;
   origin?: { kind?: string; handback?: boolean }; // another agent's message arrives as a meta user entry, kind 'peer'

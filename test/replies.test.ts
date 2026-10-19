@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReplyCollector, assistantText } from '../src/main/replies';
-import { assistantEntry, toolResultEntry, toolUseEntry, userEntry } from './helpers';
+import { assistantEntry, imageTurnEntries, toolResultEntry, toolUseEntry, userEntry } from './helpers';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 
 describe('assistantText', () => {
@@ -132,5 +132,36 @@ describe('ReplyCollector', () => {
     c.add(assistantEntry('r', 'a'));
     c.newestFirst().pop();
     expect(c.newestFirst()).toHaveLength(1);
+  });
+});
+
+describe('ReplyCollector: her pasted images', () => {
+  const pasted = '/var/folders/fs/ab/T/petal-paste/paste-2026-10-19T08-55-19-646Z-0b0b0b0b.png';
+
+  it('puts the path from the meta note after her turn into her prompt, waiting and answered', () => {
+    const c = new ReplyCollector();
+    for (const entry of imageTurnEntries('[Image #3] what is this', [3], [pasted])) c.add(entry);
+    expect(c.waiting().map((w) => w.prompt)).toEqual([`[Image: source: ${pasted}] what is this`]);
+    expect(c.promptCount).toBe(1); // the note is not a prompt of hers
+    c.add(assistantEntry('A login screen.', 'a1', { timestamp: '2026-10-19T08:55:30.000Z' }));
+    expect(c.newestFirst()[0].prompt).toBe(`[Image: source: ${pasted}] what is this`);
+  });
+
+  it('a note after the reply has started still lands on that reply', () => {
+    const c = new ReplyCollector();
+    const [turn, , , note] = imageTurnEntries('[Image #1]', [1], [pasted]);
+    c.add(turn);
+    c.add(assistantEntry('Looking.', 'a1', { timestamp: '2026-10-19T08:55:30.000Z' }));
+    expect(c.add(note)).toBe(true);
+    expect(c.newestFirst()[0].prompt).toBe(`[Image: source: ${pasted}]`);
+  });
+
+  it('ignores a stray source note and meta entries that are not notes', () => {
+    const c = new ReplyCollector();
+    const [, , , note] = imageTurnEntries('[Image #1]', [1], [pasted]);
+    expect(c.add(note)).toBe(false);
+    c.add(userEntry('plain'));
+    expect(c.add({ type: 'user', isMeta: true, message: { content: [{ type: 'text', text: 'Caveat: not a note' }] } })).toBe(false);
+    expect(c.waiting().map((w) => w.prompt)).toEqual(['plain']);
   });
 });

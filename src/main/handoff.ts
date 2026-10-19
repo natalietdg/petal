@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { app } from 'electron';
-import { rawPromptText, commandText, isAgentMessage } from './prompts';
+import { rawPromptText, commandText, imagePasteIds, imageSources, isAgentMessage } from './prompts';
+import { placeImageSources } from '../shared/image-paths';
 import { stripPasted } from '../shared/pasted-content';
 import { sessionTitle } from '../shared/session-label';
 import { assistantText } from './replies';
@@ -31,14 +32,23 @@ const handoffsDir = () => path.join(app.getPath('userData'), 'handoffs');
 export async function readTurns(file: string): Promise<Turn[]> {
   const turns: Turn[] = [];
   let afterAgent = false; // Claude's answer to another agent's message is its own turn, with no prompt of hers
+  let imageTurn: { turn: Turn; ids: number[] } | null = null; // her latest turn, until its image paths arrive
   const lines = readline.createInterface({ input: fs.createReadStream(file, 'utf8'), crlfDelay: Infinity });
   for await (const line of lines) {
     let entry: TranscriptEntry | null;
     try { entry = line ? parseEntry(line) : null; } catch { entry = null; }
     if (!entry) continue;
+    const sources = imageSources(entry);
+    if (sources.length && imageTurn) {
+      imageTurn.turn.prompt = placeImageSources(imageTurn.turn.prompt, sources, imageTurn.ids);
+      imageTurn = null;
+      continue;
+    }
     const prompt = rawPromptText(entry) || commandText(entry); // History's bubbles split out pasted blocks
     if (prompt) {
-      turns.push({ prompt, reply: [] });
+      const turn: Turn = { prompt, reply: [] };
+      turns.push(turn);
+      imageTurn = { turn, ids: imagePasteIds(entry) };
       afterAgent = false;
       continue;
     }

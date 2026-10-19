@@ -11,8 +11,12 @@ import { historyFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { quotePath } from '../shared/quote-path';
+import { ReplyCollector } from '../main/replies';
+import { parseEntry } from '../main/transcript-entry';
+import { assertFixtureOutsideClaude } from './snapshot-views';
 
 const SESSION = 'b1b1b1b1-0000-4000-8000-0000000000b1';
+const SENT_SESSION = 'b2b2b2b2-0000-4000-8000-0000000000b2';
 const NARROW = 800;
 const EDGE_TOLERANCE_PX = 0.5;
 const THUMB_MAX_PX = 240;
@@ -74,6 +78,20 @@ interface Bubble {
   scrollWidth: number;
   clientWidth: number;
   right: number;
+}
+
+// Her composer paste as Claude Code logs it: "[Image #3]" and base64 in her turn, the path in a meta note after it.
+function sentImageLog(image: string, reply: string): string[] {
+  const at = new Date().toISOString();
+  return [
+    { type: 'user', uuid: 'sent-u', timestamp: at, promptId: 'p1', imagePasteIds: [3], message: { role: 'user', content: [
+      { type: 'text', text: '[Image #3] what is this screen' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: fs.readFileSync(image).toString('base64') } },
+    ] } },
+    { type: 'attachment', uuid: 'sent-att', timestamp: at, attachment: { type: 'hook_success' } },
+    { type: 'user', uuid: 'sent-note', timestamp: at, promptId: 'p1', isMeta: true, message: { role: 'user', content: [{ type: 'text', text: `[Image: source: ${image}]` }] } },
+    { type: 'assistant', uuid: 'sent-a', timestamp: at, message: { role: 'assistant', content: [{ type: 'text', text: reply }] } },
+  ].map((line) => JSON.stringify(line));
 }
 
 export async function bubbleImagesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -196,6 +214,32 @@ export async function bubbleImagesCheck(kit: Kit, win: BrowserWindow): Promise<v
     await js('PastelTerm.history.close()');
     historyFixture.records = previous.records;
     historyFixture.live = previous.live;
+  }
+
+  // Her sent message from a real-shaped log, through the parsers the reader and History use.
+  const sentLog = sentImageLog(image, 'That is the login screen.');
+  const collector = new ReplyCollector();
+  for (const line of sentLog) collector.add(parseEntry(line));
+  const [sent] = collector.newestFirst();
+  await js(`PastelTerm.reader.update(${JSON.stringify({ state: 'live', replies: [sent] })})`);
+  await waitFor(() => js(`document.getElementById('latest').dataset.replyId === ${JSON.stringify(sent.id)}`), 5000);
+  const sentBubble = (await settled('#latest .reader-you'))?.[0];
+  check(sentBubble?.thumbs.length === 1 && sentBubble.thumbs[0].natural > 0 && !sentBubble.text.includes('[Image #3]') && sentBubble.text.includes('what is this screen'), `sent message: "[Image #3]" shown as her pasted picture: ${JSON.stringify(sentBubble?.thumbs)} ${JSON.stringify(sentBubble?.text)}`);
+  const sentFile = path.join(outDir, 'bubble-images-fixture', `${SENT_SESSION}.jsonl`);
+  assertFixtureOutsideClaude(sentFile);
+  fs.writeFileSync(sentFile, sentLog.join('\n') + '\n');
+  const before = { records: historyFixture.records, live: historyFixture.live };
+  historyFixture.records = [{ sessionId: SENT_SESSION, file: sentFile, cwd: path.join(outDir, 'bubble-images-fixture', 'repo'), title: 'Sent screenshot', firstPrompt: 'what is this screen', lastAt: Date.now(), messages: 2, messagesExact: true }];
+  historyFixture.live = [];
+  try {
+    await js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(SENT_SESSION)}); return PastelTerm.history.setPreviewMode('replies'); })`);
+    const sentHistory = (await settled('#history .history-you'))?.[0];
+    check(sentHistory?.thumbs.length === 1 && sentHistory.thumbs[0].natural > 0 && !sentHistory.text.includes('[Image #3]'), `History sent message: her pasted picture shown: ${JSON.stringify(sentHistory?.thumbs)} ${JSON.stringify(sentHistory?.text)}`);
+    await capture('bubble-images-sent-history');
+  } finally {
+    await js('PastelTerm.history.close()');
+    historyFixture.records = before.records;
+    historyFixture.live = before.live;
   }
 
   resizeOffscreen(win, startWidth, startHeight);

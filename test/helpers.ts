@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { TranscriptEntry } from '../src/main/transcript-entry';
+import { parseEntry, type TranscriptEntry } from '../src/main/transcript-entry';
 
 const made: string[] = [];
 
@@ -60,6 +60,20 @@ export const toolUseEntry = (): TranscriptEntry => ({
   uuid: 'tool-use',
   message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] },
 });
+
+// A pasted-image turn as Claude Code 2.1 logs it: "[Image #n]" plus base64 blocks, two attachments, then a meta note per path.
+export function imageTurnEntries(text: string, ids: number[], paths: string[], at = '2026-10-19T08:55:19.646Z'): TranscriptEntry[] {
+  const lines = [
+    { type: 'user', uuid: `u-${text.slice(0, 8)}`, timestamp: at, promptId: 'p1', imagePasteIds: ids, message: { role: 'user', content: [
+      { type: 'text', text },
+      ...paths.map(() => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } })),
+    ] } },
+    { type: 'attachment', uuid: 'att-1', timestamp: at, attachment: { type: 'hook_success' } },
+    { type: 'attachment', uuid: 'att-2', timestamp: at, attachment: { type: 'skill_listing' } },
+    { type: 'user', uuid: 'u-sources', timestamp: at, promptId: 'p1', isMeta: true, turnCompanion: 'meta', message: { role: 'user', content: paths.map((p) => ({ type: 'text', text: `[Image: source: ${p}]` })) } },
+  ];
+  return lines.map((line) => parseEntry(JSON.stringify(line)));
+}
 
 export function writeJsonl(file: string, entries: (TranscriptEntry | string)[]): string {
   fs.writeFileSync(file, entries.map((e) => (typeof e === 'string' ? e : JSON.stringify(e))).join('\n') + '\n');

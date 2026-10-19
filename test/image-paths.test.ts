@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findImageRefs, splitPromptImages } from '../src/shared/image-paths';
+import { findImageRefs, placeImageSources, splitPromptImages } from '../src/shared/image-paths';
 import { quotePaths } from '../src/shared/quote-path';
 
 const paths = (text: string): string[] => findImageRefs(text).map((r) => r.path);
@@ -60,5 +60,26 @@ describe('splitPromptImages', () => {
       { kind: 'image', path: '/a/1.png', raw: '[Image #1] /a/1.png' },
       { kind: 'text', text: '[Image #2]' },
     ]);
+  });
+});
+
+describe('placeImageSources', () => {
+  const pasted = '/var/folders/fs/ab/T/petal-paste/paste-2026-10-19T08-55-19-646Z-0b0b0b0b.png';
+
+  it('puts each path where its "[Image #id]" sits, matched by imagePasteIds', () => {
+    expect(placeImageSources('[Image #3] [Image #4] compare these', ['/a/3.png', '/b/4.png'], [3, 4]))
+      .toBe('[Image: source: /a/3.png] [Image: source: /b/4.png] compare these');
+  });
+
+  it('an image-only send becomes just the picture', () => {
+    expect(splitPromptImages(placeImageSources('[Image #3]', [pasted], [3]))).toEqual([{ kind: 'image', path: pasted, raw: `[Image: source: ${pasted}]` }]);
+  });
+
+  it('without ids, pairs paths with the placeholders in order', () => {
+    expect(placeImageSources('see [Image #7] then [Image #8]', ['/a.png', '/b.png'])).toBe('see [Image: source: /a.png] then [Image: source: /b.png]');
+  });
+
+  it('a path with no placeholder for it goes on its own line, and "$" in a path stays literal', () => {
+    expect(placeImageSources('[Image #1] hi', ['/x/$&.png', '/y/2.png'], [1])).toBe('[Image: source: /x/$&.png] hi\n[Image: source: /y/2.png]');
   });
 });
