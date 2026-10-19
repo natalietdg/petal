@@ -1,8 +1,8 @@
 // The test loop as two agents at once: the bug queue between them, the mid-edit recheck, stop rules, Stop halting both,
 // the two briefs, token counts and the action log read from a transcript.
 import { describe, expect, it } from 'vitest';
-import { activeBugs, bugKey, fixLines, queueCounts, queueDone, stepQueue, type QueueFacts, type QueuedBug } from '../src/shared/bug-queue';
-import { buildFixerBrief, buildLoopBrief, parseCriteria, stopAll, STOP_MESSAGE } from '../src/shared/test-loop';
+import { activeBugs, addSent, bugKey, fixLines, queueCounts, queueDone, sentBug, stepQueue, type QueueFacts, type QueuedBug } from '../src/shared/bug-queue';
+import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, parseCriteria, stopAll, STOP_MESSAGE } from '../src/shared/test-loop';
 import { estimateRoundTokens, sumUsage, tokenText, totalTokens, CHARS_PER_TOKEN, TURNS_PER_ROUND, BASE_CONTEXT_TOKENS } from '../src/shared/token-usage';
 import { actionsFrom, roundSummaries } from '../src/shared/agent-actions';
 import { agentTabTitle } from '../src/shared/agent-names';
@@ -71,6 +71,39 @@ describe('the bug queue', () => {
   });
 });
 
+describe('bugs she sends from a failed run', () => {
+  const test = { name: 'cart rounds', file: 'src/cart.test.ts' };
+
+  it('one per click: the test she picked, or the whole stage', () => {
+    expect(sentBug('Unit', test, 'prompt')).toEqual({ name: 'cart rounds', test: 'src/cart.test.ts::cart rounds', sent: { stage: 'Unit', failure: 'prompt' } });
+    expect(sentBug('Unit', null, 'x'.repeat(5000))).toMatchObject({ name: 'Unit stage fails', test: null });
+    expect(sentBug('Unit', null, 'x'.repeat(5000)).sent.failure).toHaveLength(3200);
+  });
+
+  it('joins the queue open, and the idle fixer gets it', () => {
+    const { queue, added } = addSent([], sentBug('Unit', test, 'prompt'), 100);
+    expect(added).toBe(true);
+    expect(queue).toMatchObject([{ key: 'cart rounds', state: 'open', asked: false, sent: { stage: 'Unit' } }]);
+    expect(stepQueue(queue, facts(), words).send.map((m) => [m.to, m.key])).toEqual([['fixer', 'cart rounds']]);
+  });
+
+  it('a fresh bug fix agent starts on it already fixing, so it is not sent twice', () => {
+    const { queue } = addSent([], sentBug('Unit', test, 'prompt'), 100, 'fixing');
+    expect(queue[0]).toMatchObject({ state: 'fixing', asked: true });
+    expect(stepQueue(queue, facts(), words).send).toEqual([]);
+  });
+
+  it('dedupes against the same test or name already waiting or being fixed; one awaiting verify starts over', () => {
+    const filed: QueuedBug = { key: 'cart is off', name: 'cart is off', test: 'src/cart.test.ts::cart rounds', state: 'fixing', since: 1, asked: true, testerRound: 1, rechecked: false };
+    expect(addSent([filed], sentBug('Unit', test, 'prompt'), 100).added).toBe(false); // same test, filed by the tester
+    expect(addSent([{ ...filed, key: 'cart rounds', test: null, state: 'open' }], sentBug('Unit', test, 'prompt'), 100).added).toBe(false); // same name
+    const again = addSent([{ ...filed, state: 'verify' }], sentBug('Unit', test, 'prompt'), 100);
+    expect(again.added).toBe(true);
+    expect(again.queue.map((b) => [b.key, b.state])).toEqual([['cart rounds', 'open']]);
+    expect(addSent([{ ...filed, test: 'src/other.test.ts::x' }], sentBug('Unit', test, 'prompt'), 100).queue).toHaveLength(2);
+  });
+});
+
 describe('Stop halts both agents', () => {
   it('each gets Esc, then the stop message', async () => {
     const sent: string[] = [];
@@ -102,6 +135,16 @@ describe('the two briefs', () => {
     expect(brief).toContain('**Fix:** the bug name · done');
     expect(brief).toContain('Never commit');
     expect(brief).not.toMatch(/[—–]/);
+  });
+
+  it('the bug fix agent started alone carries the failure she sent, the app-code-only rule and its Fix line', () => {
+    const brief = buildSentFixerBrief({ taskId: 't-1', taskTitle: 'Fix the cart total.', bugName: 'cart rounds', prompt: 'The test "cart rounds" in src/cart.test.ts fails in the Unit stage (`npm test`).', names });
+    expect(brief).toContain('You are Fixie, the bug fix agent for the task "Fix the cart total" (t-1).');
+    expect(brief).toContain('The test "cart rounds" in src/cart.test.ts fails in the Unit stage (`npm test`).');
+    expect(brief).toContain('Fix the app code only. Never edit tests, test data, snapshot baselines or .petal/suites/t-1.json: only Quinn changes those.');
+    expect(brief).toContain('End your reply with this line: **Fix:** cart rounds · done');
+    expect(brief).toContain('Never commit');
+    expect(brief).not.toMatch(/[\u2014\u2013]/);
   });
 
   it('tab titles use her names; the default names otherwise', () => {

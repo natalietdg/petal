@@ -172,7 +172,9 @@
   cursor: pointer;
 }
 .tst-fix:hover { background: var(--decide-pill); }
-.tst-fix-stage { margin-left: auto; }
+.tst-fix-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.tst-fix-actions.is-stage { margin-left: auto; }
+.tst-ask-here { color: var(--reader-fg); font-size: 13px; font-weight: 500; }
 
 .tst-group { margin: 0 0 8px; border: 1px solid var(--rule); border-radius: 12px; }
 .tst-group.is-failed { border-color: var(--decide-ink); }
@@ -200,7 +202,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.tst-row .tst-fix { margin: 2px 0 4px 20px; }
+.tst-row .tst-fix-actions { margin: 2px 0 4px 20px; }
 
 /* ---- History. */
 .tst-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }

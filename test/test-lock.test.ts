@@ -1,6 +1,7 @@
 // The test lock: the hook's decision, its shell write patterns, failing open, the settings.local.json entry, and the
 // integrity check that restores a locked test changed outside the testing agent.
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +11,7 @@ import { bashWrites, decide, isTestPath } from '../resources/hooks/petal-test-lo
 import { LOCK_COMMAND, hasLockHook, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
 import { TOUCH_SLACK_MS, integrityStep, lastToucher, lockedFiles, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
-import { dismissRestored, loadManifest, refreshLock, resolveUnconfirmed, setLock } from '../src/main/test-lock';
+import { dismissRestored, loadManifest, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
 
 afterEach(removeTempDirs);
@@ -151,7 +152,7 @@ describe('what is locked', () => {
   });
 
   it('restores a locked test the main session changed, and keeps the testing agent’s change', () => {
-    useTempUserData();
+    const userData = useTempUserData();
     const repo = tempDir('petal-repo-');
     fs.mkdirSync(path.join(repo, 'src'));
     const test = path.join(repo, 'src', 'cart.test.ts');
@@ -168,7 +169,9 @@ describe('what is locked', () => {
     fs.writeFileSync(test, 'it("rounds to the cent")\n');
     refreshLock(repo, inputs([{ target: 'src/cart.test.ts', at: Date.now(), sessionId: 'tester', kind: 'edit', cwd: repo }]), {});
     expect(fs.readFileSync(test, 'utf8')).toBe('it("rounds to the cent")\n');
-    expect(fs.readFileSync(path.join(repo, '.petal', 'locked', 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds to the cent")\n');
+    expect(fs.readFileSync(path.join(lockedCopiesDir(repo), 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds to the cent")\n');
+    expect(lockedCopiesDir(repo).startsWith(userData)).toBe(true);
+    expect(fs.existsSync(path.join(repo, '.petal', 'locked'))).toBe(false); // never in the repo, where test runners look
     expect(readManifest(JSON.parse(fs.readFileSync(path.join(repo, '.petal', 'lock.json'), 'utf8'))).sessions).toEqual({ tester: { role: 'tester', taskId: 't-cart' } });
   });
 
@@ -194,7 +197,7 @@ describe('what is locked', () => {
     expect(asked(loadManifest(repo))).toHaveLength(1); // Dismiss clears Restored lines, not questions
 
     expect(resolveUnconfirmed(repo, 'src/cart.test.ts', true)).toBeNull();
-    expect(fs.readFileSync(path.join(repo, '.petal', 'locked', 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds, her edit")\n');
+    expect(fs.readFileSync(path.join(lockedCopiesDir(repo), 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds, her edit")\n');
     expect(asked(refreshLock(repo, inputs, {}))).toEqual([]);
     expect(resolveUnconfirmed(repo, 'src/cart.test.ts', true)).toBe('That change was already handled.');
 
@@ -208,6 +211,70 @@ describe('what is locked', () => {
     refreshLock(repo, inputs, {});
     fs.writeFileSync(test, 'it("rounds, her edit")\n'); // she put it back herself: the question drops
     expect(asked(refreshLock(repo, inputs, {}))).toEqual([]);
+  });
+});
+
+describe('copies an older build kept in the repo', () => {
+  const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
+  const legacy = (repo: string, ...rel: string[]) => path.join(repo, '.petal', 'locked', ...rel);
+  const copy = (repo: string, ...rel: string[]) => path.join(lockedCopiesDir(repo), ...rel);
+
+  it('the first refresh moves them to Petal’s storage, paths kept, and removes the in-repo folder', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    put(path.join(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'it("vn")\n');
+    put(legacy(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'it("vn")\n');
+    put(legacy(repo, 'src', 'cart.test.ts'), 'it("rounds")\n');
+    setLock(repo, true);
+    refreshLock(repo, { suiteTasks: [], criteria: null, agents: [], touches: [] }, {});
+    expect(fs.readFileSync(copy(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'utf8')).toBe('it("vn")\n');
+    expect(fs.readFileSync(copy(repo, 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds")\n');
+    expect(fs.existsSync(legacy(repo))).toBe(false);
+    expect(fs.existsSync(path.join(repo, '.petal', 'lock.json'))).toBe(true);
+  });
+
+  it('moves them with the lock off too, so a runner stops finding them', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    put(legacy(repo, 'a.test.ts'), 'a\n');
+    refreshLock(repo, { suiteTasks: [], criteria: null, agents: [], touches: [] }, {});
+    expect(fs.readFileSync(copy(repo, 'a.test.ts'), 'utf8')).toBe('a\n');
+    expect(fs.existsSync(legacy(repo))).toBe(false);
+  });
+
+  it('never loses a copy: the approved one wins a clash, two unapproved ones both stay, a link stays put', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    const sha = (text: string) => crypto.createHash('sha256').update(text).digest('hex');
+    put(legacy(repo, 'approved.test.ts'), 'new\n');
+    put(copy(repo, 'approved.test.ts'), 'old\n');
+    put(legacy(repo, 'stale.test.ts'), 'stale\n');
+    put(copy(repo, 'stale.test.ts'), 'approved\n');
+    put(legacy(repo, 'both.test.ts'), 'one\n');
+    put(copy(repo, 'both.test.ts'), 'two\n');
+    fs.symlinkSync('/etc/hosts', legacy(repo, 'link.test.ts'));
+    migrateLegacyCopies(repo, { 'approved.test.ts': sha('new\n'), 'stale.test.ts': sha('approved\n'), 'both.test.ts': sha('three\n') });
+    expect(fs.readFileSync(copy(repo, 'approved.test.ts'), 'utf8')).toBe('new\n');
+    expect(fs.existsSync(legacy(repo, 'approved.test.ts'))).toBe(false);
+    expect(fs.readFileSync(copy(repo, 'stale.test.ts'), 'utf8')).toBe('approved\n');
+    expect(fs.existsSync(legacy(repo, 'stale.test.ts'))).toBe(false);
+    expect(fs.readFileSync(copy(repo, 'both.test.ts'), 'utf8')).toBe('two\n');
+    expect(fs.readFileSync(legacy(repo, 'both.test.ts'), 'utf8')).toBe('one\n');
+    expect(fs.lstatSync(legacy(repo, 'link.test.ts')).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(copy(repo, 'link.test.ts'))).toBe(false);
+  });
+
+  it('a locked test that is a link is never copied or approved', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    put(path.join(repo, 'real.ts'), 'x\n');
+    fs.mkdirSync(path.join(repo, 'src'));
+    fs.symlinkSync(path.join(repo, 'real.ts'), path.join(repo, 'src', 'cart.test.ts'));
+    setLock(repo, true);
+    const criteria = parseCriteria('## Scenarios\n- [pass] rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n');
+    const after = refreshLock(repo, { suiteTasks: [], criteria, agents: [], touches: [] }, {});
+    expect(after.approved['src/cart.test.ts']).toBeUndefined();
+    expect(fs.existsSync(copy(repo, 'src', 'cart.test.ts'))).toBe(false);
   });
 });
 

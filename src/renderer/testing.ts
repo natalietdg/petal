@@ -6,7 +6,7 @@ import * as tabs from './tabs';
 import * as composer from './composer';
 import { byId, el, isIpcError } from './dom';
 import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
-import { historyList, pipelineStrip, stackList, stageResults, trend } from './testing-view';
+import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhere } from './testing-view';
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
@@ -16,6 +16,7 @@ import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
 import { createAgents } from './testing-agents';
+import { sentBug, type SentBug } from '../shared/bug-queue';
 import { lockBar, noSuite, noTasks, prdOverview, sessionPicker, suiteChangeLine, taskPicker } from './testing-tasks-view';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
@@ -346,9 +347,14 @@ function drawEditor(): void {
   );
 }
 
+// A failed test or stage goes to this task's bug fix agent, or with "Ask in this session instead", to this tab's Claude.
+function fix(stage: StageResult, test: TestCase | null, where: FixWhere): void {
+  const prompt = buildFixPrompt({ stage: stage.name, command: stage.command, tests: test ? [test] : stage.tests, output: stage.output });
+  void (where === 'session' ? askFix(prompt) : sendToFixer(sentBug(stage.name, test, prompt)));
+}
 const fixHandlers = {
-  fixTest: (stage: StageResult, test: TestCase) => void askFix(buildFixPrompt({ stage: stage.name, command: stage.command, tests: [test], output: stage.output })),
-  fixStage: (stage: StageResult) => void askFix(buildFixPrompt({ stage: stage.name, command: stage.command, tests: stage.tests, output: stage.output })),
+  fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => fix(stage, test, where),
+  fixStage: (stage: StageResult, where: FixWhere) => fix(stage, null, where),
 };
 
 function drawResults(): void {
@@ -503,6 +509,7 @@ function drawLoop(): void {
   const stages = suite()?.stages ?? [];
   const names = data?.agentNames ?? {};
   const why = !stages.length ? 'Add stages to this task’s suite first. The loop runs them each round.'
+    : record && !record.stoppedAt && record.fixer && !record.tester ? `Start opens ${agentName(names, 'tester')} in a new tab. ${agentName(names, 'fixer')} keeps fixing what you sent it. Neither commits.`
     : `Start opens two tabs. ${agentName(names, 'tester')} writes and runs tests and files the bugs it finds; ${agentName(names, 'fixer')} fixes them at the same time. Neither commits.`;
   loopPanel.update({
     status, progress, criteria: taskCriteria(), why,
@@ -557,6 +564,12 @@ function toSessionTab(): void {
 async function askFix(prompt: string): Promise<void> {
   toSessionTab();
   await composer.askClaude(prompt);
+}
+
+async function sendToFixer(bug: SentBug): Promise<void> {
+  message = await agents.sendToFixer(bug);
+  drawNote();
+  await refresh(); // its lane and the queue show now
 }
 
 function insertSkill(item: StackItem): void {

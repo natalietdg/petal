@@ -84,7 +84,7 @@ export function loopsOf(root: string): Record<string, SavedLoop> {
 // Saved only when its sessions are this task's agents in those roles; false otherwise.
 export function saveLoop(root: string, taskId: string, loop: SavedLoop): boolean {
   const roleOf = (sessionId: string) => agentsOf(root, taskId).find((a) => a.sessionId === sessionId)?.role;
-  if (roleOf(loop.tester.sessionId) !== 'tester' || (loop.fixer && roleOf(loop.fixer.sessionId) !== 'fixer')) return false;
+  if ((loop.tester && roleOf(loop.tester.sessionId) !== 'tester') || (loop.fixer && roleOf(loop.fixer.sessionId) !== 'fixer')) return false;
   const data = store.load(root);
   store.save({ ...data, loops: { ...(data.loops ?? {}), [taskId]: loop } });
   return true;

@@ -197,7 +197,7 @@ fit();
 
 export const focus = (): void => input.focus();
 
-// Sends a message from another view (Testing's Ask Claude to fix) the way the box sends; her draft stays.
+// Sends a message from another view (Testing's Ask in this session instead) the way the box sends; her draft stays.
 export async function askClaude(text: string): Promise<void> {
   await deliver(stripControls(text).trim(), () => {});
 }
