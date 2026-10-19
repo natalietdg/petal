@@ -30,6 +30,7 @@ import { statusStripCheck } from './snapshot-status-strip';
 import { notesCheck } from './snapshot-notes';
 import { notesSideCheck } from './snapshot-notes-side';
 import { historyReplyCheck } from './snapshot-history-reply';
+import { codeReviewCheck } from './snapshot-code-review';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -419,6 +420,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['notes', () => notesCheck(kit)],
     ['notes side', () => notesSideCheck(kit, win)],
     ['history reply', () => historyReplyCheck(kit)],
+    ['code review', () => codeReviewCheck(kit, fakeTranscript() ?? '')], // a stubbed reviewer only, never a real claude; puts the fixture log back
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
     ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],

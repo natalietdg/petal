@@ -16,6 +16,7 @@ import { noticeLines } from './reader-notice';
 import * as mentions from './mentions';
 import * as setupHints from './reader-setup-hints';
 import * as distillCard from './distill-card';
+import * as codeReviewTab from './code-review-tab';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
@@ -119,10 +120,15 @@ function olderTurn(reply: Reply): HTMLElement {
   turn.className = 'reply older-turn';
   turn.dataset.replyId = reply.id;
   const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) });
-  turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), ...replyBody(reply));
+  const body = replyBody(reply);
+  turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), ...body);
+  codeReviewTab.attach(turn, body, reviewSource(), { replyId: reply.id });
   diagrams.render(turn);
   return turn;
 }
+
+// The tab's own session, for its replies' Code review tabs.
+const reviewSource = (): { tabId: string } | null => (lastUpdate?.tabId ? { tabId: lastUpdate.tabId } : null);
 
 const column = query(byId('reader'), '.reader-column');
 
@@ -196,7 +202,9 @@ export function update(shown: ShownUpdate): void {
   appendStop();
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
   const needsYou = live && !busy ? distillCard.card(shown.tabId ?? null, 'reader') : null; // a test-loop round waiting on her
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...replyBody(newest), ...(needsYou ? [needsYou] : []), ...writing);
+  const body = replyBody(newest);
+  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...body, ...(needsYou ? [needsYou] : []), ...writing);
+  codeReviewTab.attach(latest, body, reviewSource(), { replyId: newest.id });
   latest.dataset.replyId = newest.id;
   older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
   diagrams.render(latest);
