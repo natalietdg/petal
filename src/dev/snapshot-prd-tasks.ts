@@ -120,6 +120,9 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     fs.mkdirSync(testingFixture.claudeDir, { recursive: true });
     writeSuite(repo, 't-cart', [['Unit', 'npm test'], ['Lint', 'npm run lint']]);
     writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test']]);
+    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+    fs.utimesSync(path.join(repo, '.petal', 'suites', 't-cart.json'), ago(5), ago(5)); // fixture suite times, so the picker order is fixed
+    fs.utimesSync(path.join(repo, '.petal', 'suites', 't-coupon.json'), ago(120), ago(120));
     for (const r of [run('prd-run-old', 300, 'passed', null), run('prd-run-sub', 90, 'failed', subtask?.id ?? null), run('prd-run-c', 80, 'passed', 't-coupon'), run('prd-run-a1', 60, 'failed', 't-cart'), run('prd-run-a2', 20, 'passed', 't-cart')]) store.putRun(repo, r);
     put(path.join(repo, '.petal', 'test-criteria.md'), `# Test criteria\n\n## Scenarios\n- [pass] cart total rounds to the cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] two coupons stack · round 1 · task: ${subtask?.id ?? 'none'}\n- [pass] an old scenario · round 1\n\n## Bugs\n- [fixed] total off by a cent · test: src/cart.test.ts::cent · round 1 · task: t-cart\n- [fail] coupon API 500s · round 1 · task: ${subtask?.id ?? 'none'}\n`);
     await js('document.getElementById("testing-button").click()');
@@ -127,7 +130,8 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(cart && JSON.stringify(cart.stages) === JSON.stringify(['Unit', 'Lint']), `opens on the session's task with its own 2 stages and 2 runs: ${JSON.stringify(cart ?? await testing())}`);
     check(cart?.head === 'Fix the cart total · PRD Checkout · 2 stages' && !/shop/.test(cart.head), `the header names the task and its PRD, never the project: ${cart?.head}`);
     const listed = await picker();
-    check(JSON.stringify(listed.groups) === JSON.stringify(['PRD · Checkout', 'No PRD']) && JSON.stringify(listed.options) === JSON.stringify(['All tasks in Checkout', 'Fix the cart total', 'Coupons', '↳ Coupon API', '↳ Coupon UI', 'Document the cart API']), `the picker groups tasks by PRD, subtasks nested: ${JSON.stringify(listed)}`);
+    // Coupons' subtasks were made seconds ago, newer than the cart suite's 5 min; Document the cart API dates from 3 h ago.
+    check(JSON.stringify(listed.groups) === JSON.stringify(['PRD · Checkout', 'No PRD']) && JSON.stringify(listed.options) === JSON.stringify(['All tasks in Checkout', 'Coupons', '↳ Coupon API', '↳ Coupon UI', 'Fix the cart total', 'Document the cart API']), `the picker groups tasks by PRD, newest activity first, subtasks nested: ${JSON.stringify(listed)}`);
     const crit: string[] = await js("[...document.querySelectorAll('#testing .tst-crit-name')].map((n) => n.textContent)");
     check(JSON.stringify(crit) === JSON.stringify(['cart total rounds to the cent', 'total off by a cent']), `criteria show this task's scenario and bug only: ${JSON.stringify(crit)}`);
     const projectWords: string = await js("[...document.querySelectorAll('#testing .tst-head, #testing .tst-pickerbox, #testing .tst-editor')].map((n) => n.textContent).join(' ')");

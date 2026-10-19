@@ -99,7 +99,7 @@ export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow, wr
 // After Petal writes the file itself (her edit, a seed, an Undo).
 export const writtenRecord = (suite: TaskSuite | null): SuiteRecord => ({ text: suite ? suiteText(suite) : null, good: suite, change: null, problem: null });
 
-export interface TaskSuiteView { suite: TaskSuite | null; change: SuiteChange | null; problem: string | null }
+export interface TaskSuiteView { suite: TaskSuite | null; change: SuiteChange | null; problem: string | null; at?: number } // at: the file's last change
 export type SuiteViews = Record<string, TaskSuiteView>;
 
 // The suite to send for editing: every stage good, or nothing. No stages removes the suite.

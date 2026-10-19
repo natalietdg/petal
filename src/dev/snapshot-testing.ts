@@ -320,8 +320,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
 
-    // A tab in the home folder is not a project: pick one of her Claude sessions instead, live first, its repo and status as the small line.
-    // Fixture sessions only: a live one in acme with no task, a live one in ~ (left out), a recent one in notes-app holding a task with a suite.
+    // A tab in the home folder is not a project: pick one of her Claude sessions instead, newest activity first, its repo and status as the small line.
+    // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (1 min ago).
     testingFixture.project = os.homedir();
     const before = { panel: panelFixture.sessions, records: historyFixture.records, acme: fs.readFileSync(tasksJson(project), 'utf8'), notes: fs.readFileSync(tasksJson(bare), 'utf8') };
     const notesTask = { id: 't-notes-sort', title: 'Sort by date', notes: '', status: 'working', owner: { sessionId: PICK_NOTES, name: 'Notes sorting', branch: 'main' }, createdAt: Date.now() - 7_200_000, claimedAt: Date.now() - 3_600_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
@@ -329,17 +329,17 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     put(tasksJson(bare), JSON.stringify({ ...notesData, tasks: [...notesData.tasks, notesTask] }, null, 2));
     put(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npx jest' }], keepGoing: false, autoRun: false }, null, 2));
     panelFixture.sessions = [
-      { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() },
+      { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() - 3_600_000 },
       { pid: 0, sessionId: PICK_LOOSE, cwd: os.homedir(), kind: 'interactive', status: 'idle', name: 'home', updatedAt: Date.now() },
     ];
-    const record = (sessionId: string, cwd: string, title: string) => ({ sessionId, file: path.join(claudeDir, `${sessionId}.jsonl`), cwd, title, firstPrompt: title, lastAt: Date.now() - 600_000, messages: 4, messagesExact: true });
-    historyFixture.records = [record(PICK_NEW, project, 'Polish the settings copy'), record(PICK_LOOSE, os.homedir(), 'Loose ends'), record(PICK_NOTES, bare, 'Notes sorting')];
+    const record = (sessionId: string, cwd: string, title: string, lastAt: number) => ({ sessionId, file: path.join(claudeDir, `${sessionId}.jsonl`), cwd, title, firstPrompt: title, lastAt, messages: 4, messagesExact: true });
+    historyFixture.records = [record(PICK_NEW, project, 'Polish the settings copy', Date.now() - 3_600_000), record(PICK_LOOSE, os.homedir(), 'Loose ends', Date.now() - 600_000), record(PICK_NOTES, bare, 'Notes sorting', Date.now() - 60_000)];
     try {
       await js('PastelTerm.overlays.hideCurrent()');
       await click('#testing-button');
       const home = await settle((p) => p.state.elsewhere?.reason === 'home');
-      const wantRows = [['Polish the settings copy', 'acme · busy'], ['Notes sorting', 'notes-app · closed has a suite']];
-      check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, live first, ~ left out: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+      const wantRows = [['Notes sorting', 'notes-app · closed has a suite'], ['Polish the settings copy', 'acme · busy']];
+      check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, newest first, ~ left out: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
       check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
       await capture('testing-picker');
 

@@ -22,6 +22,13 @@ describe('listedSessions', () => {
     expect(listedSessions([live('a', '/r'), live('b', '/r')], [recent('c', '/r')], 2).map((s) => s.sessionId)).toEqual(['a', 'b']);
     expect(listedSessions([], [], 5)).toEqual([]);
   });
+
+  it('sorts by newest activity, live and recent mixed, a session listed twice keeping its newest time', () => {
+    const at = (s: SessionCandidate, time: number | null): SessionCandidate => ({ ...s, at: time });
+    const rows = listedSessions([at(live('a', '/r'), 10), at(live('b', '/r'), null)], [at(recent('c', '/r'), 30), at(recent('a', '/r'), 50), at(recent('d', '/r'), 20)], 10);
+    expect(rows.map((s) => `${s.sessionId}:${s.status}`)).toEqual(['a:idle', 'c:closed', 'd:closed', 'b:idle']);
+    expect(listedSessions([at(live('a', '/r'), 1)], [at(recent('c', '/r'), 2), at(recent('d', '/r'), 3)], 2).map((s) => s.sessionId)).toEqual(['d', 'c']);
+  });
 });
 
 describe('listedSession', () => {
