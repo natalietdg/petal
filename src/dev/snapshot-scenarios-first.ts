@@ -1,7 +1,7 @@
 // Scenarios first (PASTEL_SNAPSHOT_MODE=scenarios-first), against a stand-in ~/.claude, userData and repo: Ask Claude
 // sends the task's notes and its PRD as the source of scenarios; once the drafting agent writes [todo] scenarios and goes
 // idle, its lane reads Scenarios ready with the list, not "stopped without a suite"; Edit scenarios opens the task's own
-// criteria file; Looks right sends the go-ahead into its tab once and saves the approved names. Then a task that already
+// criteria file; Looks right sends the go-ahead into its terminal once and saves the approved names. Then a task that already
 // has a suite and no criteria file: Start test loop stops round 1 for the same review, and after approval only a scenario
 // added later shows again. Fixture sessions only, never a real claude.
 import fs from 'node:fs';
@@ -13,6 +13,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { writeSuite } from '../main/task-suites';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { closeExtraTabs, hostOf } from './snapshot-testing';
 import { scenariosApprovedText } from '../shared/suite-draft';
 import { emptySuite } from '../shared/task-suite';
 
@@ -40,7 +41,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
   const entry = (sessionId: string, fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, cwd: repo, sessionId, timestamp: new Date().toISOString(), ...fields })}\n`;
   const say = (sessionId: string, uuid: string, prompt: string, text: string) => entry(sessionId, { type: 'user', uuid: `${uuid}-u`, message: { role: 'user', content: prompt } })
     + entry(sessionId, { type: 'assistant', uuid, message: { id: `msg-${uuid}`, role: 'assistant', content: [{ type: 'text', text }] } });
-  const tabOf = (sessionId: string) => waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(sessionId)}) ?? null`), 10000);
+  const tabOf = (sessionId: string) => waitFor(() => hostOf(win.webContents.id, repo, sessionId), 10000); // its agent terminal, as main says
   const reopen = async () => { await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`); await js("document.getElementById('testing-button').click()"); };
   const pickTask = (id: string) => js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); s.value = 'task:${id}'; s.dispatchEvent(new Event('change')); })()`);
   type Screen = { lane: string | null; scenarios: string[]; sources: string[]; edit: boolean; approve: boolean; drawing: string | null; ended: boolean };
@@ -56,7 +57,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     };
   })()`);
   const waitScreen = (want: (s: Screen) => boolean, ms = 12000) => waitFor(async () => { const s = await screen(); return want(s) ? s : null; }, ms);
-  // Looks right: the go-ahead pasted once into that tab, and the names saved with the task's loop or draft.
+  // Looks right: the go-ahead pasted once into that terminal, and the names saved with the task's loop or draft.
   const approve = async (taskId: string, tabId: string | null, names: string[]) => {
     const before = pasteWrites.length;
     await js("document.querySelector('#testing .tst-approve-scenarios').click()");
@@ -121,7 +122,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     const opened = await waitFor(() => testingFixture.opened[0] ?? null, 4000);
     check(opened === criteriaOf('t-scen') && testingFixture.opened.length === 1, `Edit scenarios opens the task's criteria file: ${JSON.stringify(testingFixture.opened)}`);
 
-    // 4 Looks right: the go-ahead goes into its tab once, the names are saved, and the review leaves the lane.
+    // 4 Looks right: the go-ahead goes into its terminal once, the names are saved, and the review leaves the lane.
     const draftOk = await approve('t-scen', drafterTab, ready?.scenarios ?? []);
     check(draftOk.go && draftOk.approved?.length === 3 && draftOk.gone, `the draft's go-ahead is pasted once and the approval saved: ${JSON.stringify(draftOk)}`);
 
@@ -163,8 +164,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     extraTabFixtures.length = 0;
     testingFixture.agentIds.length = 0;
     testingFixture.opened.length = 0;
-    for (const t of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((id) => !startTabs.includes(id))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
-    await waitFor(async () => (((await js('PastelTerm.tabs.ids()')) as string[]).length === startTabs.length ? true : null), 8000);
+    await closeExtraTabs(kit, startTabs);
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     testingFixture.project = saved.project;
     testingFixture.claudeDir = saved.claudeDir;

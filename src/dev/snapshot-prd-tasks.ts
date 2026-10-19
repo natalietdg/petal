@@ -13,6 +13,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import * as store from '../main/testing-store';
 import { lockedCopiesDir } from '../main/test-lock';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { closeExtraTabs, hostOf } from './snapshot-testing';
 import type { PipelineRun, RunState } from '../shared/testing';
 
 const SESSION = '7a5c0000-0000-4000-8000-0000000000d1';
@@ -312,11 +313,11 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js("document.querySelector('#testing .tst-loop-go').click()");
     const loopStarts = await waitFor(() => (testingFixture.loopStarts.length === startsBefore10 + 2 ? testingFixture.loopStarts.slice(startsBefore10) : null), 6000);
     check(loopStarts && loopStarts[0]?.command.includes(`--session-id ${TESTER} --`) && loopStarts[0].brief?.startsWith('You are Quinn, this task\'s testing agent.') && loopStarts[1]?.command.includes(`--session-id ${FIXER} --`) && loopStarts[1].brief?.startsWith('You are Fixie, the bug fix agent'), `Start opens the testing agent and the bug fix agent, named: ${JSON.stringify(loopStarts?.map((l) => l.brief?.slice(0, 50)))}`);
-    const tabOfAgent = (id: string): Promise<string | null> => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(id)}) ?? null`);
+    const tabOfAgent = (id: string): string | null => hostOf(win.webContents.id, repo, id); // its agent terminal, as main says
     const testerTab = await waitFor(() => tabOfAgent(TESTER), 8000);
     const fixerTab = await waitFor(() => tabOfAgent(FIXER), 8000);
     const titles = await waitFor(async () => { const t: string[] = await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`); return t[0]?.startsWith('Quinn') && t[1]?.startsWith('Fixie') ? t : null; }, 8000);
-    check(titles && titles[0] === 'Quinn · Fix the cart total' && titles[1] === 'Fixie · Fix the cart total', `each agent's tab is titled with its name and the task: ${JSON.stringify(titles ?? await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`))}`);
+    check(titles && titles[0] === 'Quinn · Fix the cart total' && titles[1] === 'Fixie · Fix the cart total', `each agent's terminal is titled with its name and the task: ${JSON.stringify(titles ?? await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`))}`);
 
     // Quinn files a bug; the idle Fixie gets it. Then both work at once, and a failure seen mid-edit waits for a recheck.
     const criteriaFile = path.join(repo, '.petal', 'test-criteria.md');
@@ -375,16 +376,16 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js("document.querySelector('#testing .tst-stop').click()");
     check(await waitFor(async () => ((await js('PastelTerm.testing.state().loop')) === 'stopped' ? true : null), 15000), 'Stop halts both agents');
 
-    // Quinn's tab gone (closed, or after a restart): the lane still takes a message and reopens its saved session for it.
+    // Quinn's terminal gone (closed, or after a restart): the lane still takes a message and main resumes its session for it.
     historyFixture.records.push({ sessionId: TESTER, file: testerLog, cwd: repo, title: 'Quinn', firstPrompt: 'You are Quinn.', lastAt: Date.now(), messages: 1, messagesExact: true });
     await js(`PastelTerm.tabs.requestClose(${JSON.stringify(testerTab)})`);
-    const reopenBox = await waitFor<{ placeholder: string; open: boolean } | null>(() => js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); return i && !i.disabled && !PastelTerm.tabs.get(${JSON.stringify(testerTab)}) ? { placeholder: i.placeholder, open: Boolean(document.querySelector('${lane('tester')} .tst-agent-tab')) } : null; })()`), 10000);
-    check(reopenBox?.placeholder === 'Message Quinn. Reopens its session' && reopenBox.open, `with its tab closed Quinn's box stays on and Open tab stays: ${JSON.stringify(reopenBox)}`);
-    const resumesBefore = historyFixture.resumes.length;
+    const reopenBox = await waitFor<{ placeholder: string; terminal: string | null } | null>(() => js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); return i && !i.disabled && !PastelTerm.tabs.get(${JSON.stringify(testerTab)}) && i.placeholder.includes('Resumes') ? { placeholder: i.placeholder, terminal: document.querySelector('${lane('tester')} .tst-agent-terminal')?.textContent ?? null } : null; })()`), 10000);
+    check(reopenBox?.placeholder === 'Message Quinn. Resumes its session' && reopenBox.terminal === 'Terminal', `with its terminal closed Quinn's box stays on and Terminal stays: ${JSON.stringify(reopenBox)}`);
+    const resumesBefore = testingFixture.resumes.length;
     await js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); i.value = 'Still there?'; i.dispatchEvent(new Event('input')); document.querySelector('${lane('tester')} .tst-agent-send').requestSubmit(); })()`);
-    const reopened = await waitFor(() => (historyFixture.resumes.slice(resumesBefore).includes(TESTER) ? true : null), 6000);
-    const reopenLine: string = await js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent ?? ''`);
-    check(reopened && reopenLine === 'Reopening Quinn’s session in a new tab. Your message goes once it’s ready.', `Send resumed Quinn's own session in a background tab: ${JSON.stringify({ resumes: historyFixture.resumes.slice(resumesBefore), reopenLine })}`);
+    const reopened = await waitFor(() => (testingFixture.resumes.slice(resumesBefore).some((r) => r.sessionId === TESTER) ? true : null), 6000);
+    const reopenLine: string = await waitFor(() => js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent || null`), 4000) ?? '';
+    check(reopened && reopenLine === 'Resuming Quinn’s session. Your message goes once it’s ready.', `Send resumed Quinn's own session in an agent terminal: ${JSON.stringify({ resumes: testingFixture.resumes.slice(resumesBefore), reopenLine })}`);
 
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
@@ -410,9 +411,8 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js('PastelTerm.testing.close()');
     await js('PastelTerm.sessionsBoard.close()');
     extraTabFixtures.length = 0;
-    const opened: string[] = (await js('PastelTerm.tabs.ids()')).filter((t: string) => !startTabs.includes(t));
-    for (const t of opened) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
-    await waitFor(async () => ((await js('PastelTerm.tabs.ids()')).length === startTabs.length ? true : null), 8000);
+    testingFixture.resumes.length = 0;
+    await closeExtraTabs(kit, startTabs);
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     panelFixture.sessions = saved.panel;
     folderFixture.home = saved.home;

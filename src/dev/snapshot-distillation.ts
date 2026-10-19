@@ -310,7 +310,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     check(asked?.data === `${PASTE_START}Is tax rounded per line in the API as well? Check: read the helper in the tax package${PASTE_END}\r`, `a thread card sends "Question? Check: ..." to the session: ${JSON.stringify(asked?.data)}`);
 
   } finally {
-    check(await endLoop(kit, startTabs), `the loop stops and its two agent tabs close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
+    check(await endLoop(kit, startTabs), `the loop stops and its two agent terminals close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     testingFixture.agentIds.length = 0;
     testingFixture.project = null;
     testingFixture.claudeDir = null;

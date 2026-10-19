@@ -1,7 +1,7 @@
 // Drawing up a task's suite (PASTEL_SNAPSHOT_MODE=suite-draft), against a stand-in ~/.claude, userData and repo:
 // Ask Claude updates Petal's unedited old testing skill first and says so; an edited copy is left alone and the brief
-// carries the bundled instructions instead; a draft that goes idle or loses its tab says it stopped without a suite and
-// offers Ask again (a follow-up in its tab, else a fresh start); a suite file Petal can't use goes back to it once;
+// carries the bundled instructions instead; a draft that goes idle or loses its terminal says it stopped without a suite
+// and offers Ask again (a follow-up to the same agent, resumed if no claude runs it); a suite file Petal can't use goes back to it once;
 // a bug it records as a [fail] line reaches the bug fix agent; Start reuses the drafting agent as the loop's testing
 // agent, and an older testing agent can no longer write the suite. Fixture sessions only, never a real claude.
 import fs from 'node:fs';
@@ -16,6 +16,7 @@ import { rememberAgent, syncSuites } from '../main/task-suites';
 import { loadTasks } from '../main/tasks-store';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { closeExtraTabs, hostOf } from './snapshot-testing';
 import { OUTSIDE_AGENT } from '../shared/task-suite';
 import { TESTING_SKILL } from '../shared/suite-draft';
 
@@ -58,7 +59,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
   const say = (sessionId: string, uuid: string, prompt: string, text: string) => entry(sessionId, { type: 'user', uuid: `${uuid}-u`, message: { role: 'user', content: prompt } })
     + entry(sessionId, { type: 'assistant', uuid, message: { id: `msg-${uuid}`, role: 'assistant', content: [{ type: 'text', text }] } });
   const writes = (sessionId: string, uuid: string, target: string) => entry(sessionId, { type: 'assistant', uuid, message: { role: 'assistant', content: [{ type: 'tool_use', id: `toolu_${uuid}`, name: 'Write', input: { file_path: target, content: '{}' } }] } });
-  type View = { task: string | null; stages: string[]; suiteProblem: string | null; agents: { kind: string | null; draft: { tabId: string | null; ended: boolean } | null; queue: { name: string; state: string }[] } };
+  type View = { task: string | null; stages: string[]; suiteProblem: string | null; agents: { kind: string | null; draft: { ended: boolean } | null; queue: { name: string; state: string }[] } };
   const view = (): Promise<View | null> => js('PastelTerm.testing.isOpen() ? PastelTerm.testing.state() : null');
   const waitView = (want: (v: View) => boolean, ms = 8000) => waitFor(async () => { const v = await view(); return v && want(v) ? v : null; }, ms);
   const screen = (): Promise<{ ended: string | null; askAgain: boolean; show: boolean; drawing: boolean; ask: boolean; note: string }> => js(`(() => {
@@ -100,18 +101,17 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(fs.existsSync(criteriaFile), 'the task’s own criteria file exists for the bugs it records');
     check(Boolean(started?.brief?.includes('Write its scenarios and record its bugs in .petal/criteria/t-draft.md.')), 'the brief names the task’s own criteria file');
 
-    // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show its tab.
-    const drafterTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(DRAFTER)}) ?? null`), 10000);
-    await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
+    // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show terminal.
+    const drafterTab = await waitFor(() => hostOf(win.webContents.id, repo, DRAFTER), 10000);
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()"); // the button toggles; Testing may still be open from step 1
     fs.appendFileSync(drafterLog, say(DRAFTER, 'd1', 'go on', 'I looked at the refunds code and need to think about the stages.'));
     const ended = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
-    check(drafterTab && ended?.ended === 'The testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show its tab: ${JSON.stringify(ended)}`);
+    check(drafterTab && ended?.ended === 'The testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show terminal: ${JSON.stringify(ended)}`);
     await capture('suite-draft-ended');
     const pastesBefore = pasteWrites.length;
     await js("document.querySelector('#testing .tst-ask-again').click()");
     const again = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('You stopped without writing .petal/suites/t-draft.json')) ?? null, 5000);
-    check(again && again.tabId === drafterTab && testingFixture.loopStarts.length === startsBefore + 1, `Ask again pastes a follow-up into its open tab, no new agent: ${JSON.stringify(again?.data.slice(0, 80))}`);
+    check(again && again.tabId === drafterTab && testingFixture.loopStarts.length === startsBefore + 1, `Ask again pastes a follow-up into its terminal, no new agent: ${JSON.stringify(again?.data.slice(0, 80))}`);
     check(await waitFor(async () => { const s = await screen(); return s.drawing && !s.ended ? true : null; }, 5000), 'it reads as drawing again after the follow-up');
 
     // 3 A suite file Petal can't use goes back to it once, with a fix request.
@@ -129,7 +129,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }] }));
     check(await waitView((v) => v.stages.length === 1 && v.suiteProblem === null, 10000), 'its fixed suite is taken');
 
-    // 5 Start reuses the drafting agent's tab as the loop's testing agent; only the bug fix agent starts new.
+    // 5 Start reuses the drafting agent as the loop's testing agent; only the bug fix agent starts new.
     const fixer: FixtureSession = { sessionId: FIXER, transcript: fixerLog, status: 'idle', cwd: repo };
     testingFixture.agentIds.splice(0, Infinity, FIXER);
     extraTabFixtures.push(fixer);
@@ -137,13 +137,13 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await js("document.querySelector('#testing .tst-loop-go').click()");
     const fixerStart = await waitFor(() => testingFixture.loopStarts[startsBefore + 1] ?? null, 6000);
     await wait(1000);
-    check(fixerStart?.command.includes(`--session-id ${FIXER} --`) && testingFixture.loopStarts.length === startsBefore + 2, `only the bug fix agent starts in a new tab: ${JSON.stringify(testingFixture.loopStarts.slice(startsBefore + 1).map((l) => l.command.slice(-80)))}`);
+    check(fixerStart?.command.includes(`--session-id ${FIXER} --`) && testingFixture.loopStarts.length === startsBefore + 2, `only the bug fix agent starts: ${JSON.stringify(testingFixture.loopStarts.slice(startsBefore + 1).map((l) => l.command.slice(-80)))}`);
     const brief = await waitFor(() => pasteWrites.slice(loopPastes).find((w) => w.tabId === drafterTab && w.data.includes('this task\'s testing agent. Run a test loop')) ?? null, 5000);
     const loop = store.load(repo).loops?.['t-draft'];
-    check(brief && loop?.kind === 'loop' && loop.testerSessionId === DRAFTER && loop.fixerSessionId === FIXER, `the loop brief goes to the drafting agent's tab, which is the loop's tester: ${JSON.stringify(loop && { kind: loop.kind, tester: loop.testerSessionId })}`);
+    check(brief && loop?.kind === 'loop' && loop.testerSessionId === DRAFTER && loop.fixerSessionId === FIXER, `the loop brief goes to the drafting agent's terminal, which is the loop's tester: ${JSON.stringify(loop && { kind: loop.kind, tester: loop.testerSessionId })}`);
 
     // 6 The bug it recorded while drafting reaches the bug fix agent.
-    const fixerTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(FIXER)}) ?? null`), 10000);
+    const fixerTab = await waitFor(() => hostOf(win.webContents.id, repo, FIXER), 10000);
     const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes(`Bug: ${BUG}.`)) ?? null, 12000);
     check(handed, `the drafting agent's [fail] line reaches the bug fix agent: ${JSON.stringify((await view())?.agents.queue)}`);
 
@@ -171,24 +171,25 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(inline?.brief?.startsWith('for task t-edit: "Receipts".') && inline.brief.includes('Write `.petal/suites/<task id>.json`') && /^- \[fail\] .* · test: .*::.* · task: /m.test(inline.brief) && !/[—–]/.test(inline.brief), `the brief carries the bundled instructions: ${JSON.stringify(inline?.brief?.slice(0, 80))}`);
     check(fs.readFileSync(skillFile, 'utf8') === edited && !inlineNote.startsWith('Updated'), `her edited copy is untouched: ${inlineNote}`);
 
-    // 9 Its tab closes with no suite: stopped, Ask again starts a fresh one, no Show its tab.
+    // 9 Its terminal closes with no suite: stopped, and Ask again resumes the same agent; no second agent starts.
     const editSession = store.load(repo).loops?.['t-edit']?.testerSessionId ?? null;
-    const editTab = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(editSession)}) ?? null`) as string | null;
-    await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
+    const editTab = await waitFor(() => hostOf(win.webContents.id, repo, editSession), 10000);
     if (editTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(editTab)})`);
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()");
     await pickTask('t-edit');
     const gone = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
-    check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && !gone.show, `a closed tab ends the draft, Ask again without Show its tab: ${JSON.stringify(gone)}`);
+    check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && gone.show, `a closed terminal ends the draft, with Ask again and Show terminal: ${JSON.stringify(gone)}`);
+    const resumesBefore = testingFixture.resumes.length;
     await js("document.querySelector('#testing .tst-ask-again').click()");
-    const fresh = await waitFor(() => testingFixture.loopStarts[startsBefore + 3] ?? null, 5000);
-    check(fresh?.brief?.startsWith('for task t-edit:'), `Ask again starts a fresh testing agent: ${JSON.stringify(fresh?.command.slice(-60))}`);
+    const resumed = await waitFor(() => testingFixture.resumes.slice(resumesBefore).find((r) => r.sessionId === editSession) ?? null, 5000);
+    await wait(1000);
+    check(resumed?.command.includes(`--resume '${editSession}'`) && testingFixture.loopStarts.length === startsBefore + 3, `Ask again resumes the same testing agent, no new one: ${JSON.stringify(resumed?.command.slice(-80))}`);
   } finally {
     await js('PastelTerm.testing.close()');
     extraTabFixtures.length = 0;
     testingFixture.agentIds.length = 0;
-    for (const t of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((id) => !startTabs.includes(id))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
-    await waitFor(async () => (((await js('PastelTerm.tabs.ids()')) as string[]).length === startTabs.length ? true : null), 8000);
+    testingFixture.resumes.length = 0;
+    await closeExtraTabs(kit, startTabs);
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     if (recordBefore === null) fs.rmSync(recordFile, { force: true }); else fs.writeFileSync(recordFile, recordBefore);
     testingFixture.project = saved.project;

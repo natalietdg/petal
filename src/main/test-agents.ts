@@ -241,6 +241,7 @@ async function resume(root: string, agent: TestAgent, preferred: number | null):
   resumeTries.set(agent.sessionId, (resumeTries.get(agent.sessionId) ?? 0) + 1);
   notes.delete(agent.sessionId);
   await reopenInFlight(root, agent);
+  if (isSnapshotRun()) testingFixture.resumes.push({ sessionId: agent.sessionId, command: buildResumeCommand(agent.cwd, agent.sessionId, (await claudeLaunch()).command) });
   const command = isSnapshotRun() ? harnessLine(RESUME_STAND_IN) : buildResumeCommand(agent.cwd, agent.sessionId, (await claudeLaunch()).command);
   openHost(contents, agent.sessionId, command);
   return null;

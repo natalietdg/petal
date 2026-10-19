@@ -119,7 +119,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     ended.setAttribute('role', 'status');
     row.append(button('tst-ask-again', 'Ask again', actions.askAgain, true));
     if (actions.showDraft) {
-      const show = button('tst-show-draft', 'Show its tab', actions.showDraft);
+      const show = button('tst-show-draft', 'Show terminal', actions.showDraft);
       show.disabled = false;
       row.append(show);
     }
@@ -128,8 +128,8 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     const status = el('span', 'tst-button tst-drawing', actions.scenariosReady ? 'Scenarios ready for your review above' : 'Testing agent is drawing up the suite');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-disabled', 'true');
-    const show = button('tst-show-draft', 'Show its tab', actions.showDraft, true);
-    show.disabled = false; // a run in progress doesn't stop her looking at the tab
+    const show = button('tst-show-draft', 'Show terminal', actions.showDraft, true);
+    show.disabled = false; // a run in progress doesn't stop her looking at its terminal
     row.append(status, show);
   } else row.append(button('tst-ask-suite', 'Ask Claude to draw one up', actions.askClaude, true));
   if (actions.seed) row.append(button('tst-seed-suite', 'Start from the project’s commands', actions.seed));

@@ -1,10 +1,9 @@
 // Loop signals (PASTEL_SNAPSHOT_MODE=loop-signals): fixture project and fixture agent tabs only, never a real claude.
-// 1. A loop started, then forgotten as after a restart (no run tabs, no window copy), still steps its bug queue.
-// 2. The starting window owns it: a second bug fix agent is refused, a bug sent around the owner joins the saved queue
-//    and survives the owner's next save, ownership comes back from a window without the agent tabs, and a save from a
-//    live non-owner is refused until that window is gone.
-// 3. A prompt on the bug fix agent's screen: Needs you on its lane with Show its tab, a dot on the dock's Testing
-//    button, a recorded notification (never shown); a fix landing records one too.
+// 1. A loop started with Testing closed: main steps its bug queue and saves it. (Reload and restart are the journey's.)
+// 2. One bug fix agent per task: a second is refused, a bug she sends joins the saved queue once and survives main's
+//    next saves, and no new agent starts for it.
+// 3. A prompt on the bug fix agent's screen: Needs you on its lane with Show terminal (its terminal mounts in the lane),
+//    a dot on the dock's Testing button, a recorded notification (never shown); a fix landing records one too.
 // 4. Two tasks in one repo run at once; the same task stays one at a time.
 // 5. A stage log over 2 MB is read from its tail and says so.
 import fs from 'node:fs';
@@ -15,7 +14,6 @@ import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtu
 import { CRITERIA_FIXTURE } from './snapshot-test-loop';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { pasteWrites, testingFixture } from '../main/snapshot-mode';
-import { snapshotLoops } from '../main/testing-ipc';
 import { syncSuites } from '../main/task-suites';
 import { loadTasks } from '../main/tasks-store';
 import { LOG_TAIL_BYTES, trimmedNote } from '../main/testing-runner';
@@ -59,33 +57,31 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     resizeOffscreen(win, 1280, 900);
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(fixtureTab)})?.update?.state`)) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
 
-    // 1. Start both agents, then forget what only this run of Petal knew: the tabs runs opened and the window's copy.
+    // 1. Start both agents; main hands the bug out with Testing closed.
     const started = await js(`window.pastel.testing.loopStart({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, testerBrief: 'Snapshot testing agent brief.', fixerBrief: 'Snapshot bug fix agent brief.' })`) as { tester?: { hostTabId: string | null }; fixer?: { hostTabId: string | null }; note?: string };
     const fixerTab = started.fixer?.hostTabId ?? null;
     check(fixerTab && started.tester?.hostTabId && testingFixture.loopStarts.length === 2, `both agents start in fixture tabs: ${JSON.stringify(started)}`);
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(fixerTab)})?.update?.sessionId`)) === FIXER_SESSION || null, 10000), 'the bug fix agent tab follows its fixture session');
-    snapshotLoops.forgetRunTabs();
-    await js('PastelTerm.testing.forgetLoops()');
     const pastesBefore = pasteWrites.length;
     put(path.join(project, '.petal', 'test-criteria.md'), CRITERIA_FIXTURE);
     const handed = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.tabId === fixerTab && w.data.includes('Bug: ')) ?? null, 25000);
-    check(handed, `after a restart the saved loop still hands a bug to the bug fix agent: ${JSON.stringify(handed?.data.slice(0, 80))}`);
+    check(handed, `main hands a bug to the bug fix agent with Testing closed: ${JSON.stringify(handed?.data.slice(0, 80))}`);
     const fixing = await waitFor(() => savedLoop()?.queue.find((b) => b.state === 'fixing') ?? null, 6000);
     check(fixing, `and saves the queue: ${JSON.stringify(savedLoop()?.queue.map((b) => [b.name, b.state]))}`);
 
-    // 2. One owner: no second bug fix agent while one is live; a bug sent around the owner joins the saved queue.
+    // 2. One bug fix agent per task; a bug she sends joins the saved queue.
     const startsBefore = testingFixture.loopStarts.length;
     const second = await js(`window.pastel.testing.loopStart({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, fixerBrief: 'Another bug fix agent.' })`) as { note?: string };
     check(/already running for this task/.test(second.note ?? '') && testingFixture.loopStarts.length === startsBefore, `a second bug fix agent is refused: ${JSON.stringify(second)}`);
     const sent = { name: 'cart badge shows a stale count', test: null, sent: { stage: 'Unit', failure: 'expected 2, got 3' } };
     const added = await js(`window.pastel.testing.sendBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { outcome?: string };
-    check(added.outcome === 'queued' && testingFixture.loopStarts.length === startsBefore, `a bug sent around the owner joins the saved queue, no new agent: ${JSON.stringify(added)}`);
-    await wait(4000); // a few owner ticks and saves
-    check(savedLoop()?.queue.some((b) => b.name === sent.name), `the owner's next saves keep it: ${JSON.stringify(savedLoop()?.queue.map((b) => [b.name, b.state]))}`);
+    check(added.outcome === 'queued' && testingFixture.loopStarts.length === startsBefore, `a bug she sends joins the saved queue, no new agent: ${JSON.stringify(added)}`);
+    await wait(4000); // a few of main's steps and saves
+    check(savedLoop()?.queue.some((b) => b.name === sent.name), `main's next saves keep it: ${JSON.stringify(savedLoop()?.queue.map((b) => [b.name, b.state]))}`);
     const again = await js(`window.pastel.testing.sendBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { outcome?: string };
     check(again.outcome === 'already', `sent twice, it is added once: ${JSON.stringify(again)}`);
 
-    // 3. A permission prompt on the bug fix agent's screen: badge, notification, Needs you with Show its tab.
+    // 3. A permission prompt on the bug fix agent's screen: badge, notification, Needs you with Show terminal.
     const drawIn = (tabId: string | null, text: string) => js(`new Promise((done) => PastelTerm.tabs.get(${JSON.stringify(tabId)}).term.write(${JSON.stringify(text)}, done))`);
     await drawIn(fixerTab, `\x1b[2J\x1b[H${ASK_SCREEN.join('\r\n')}`);
     const badge = await waitFor(async () => (await js("(() => { const d = document.querySelector('#testing-button .dock-badge'); return d && !d.hidden ? document.getElementById('testing-button').dataset.needsYou : null; })()")) as string | null, 5000);
@@ -99,10 +95,11 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
       return l.some(([role, status]) => role === 'fixer' && status === 'Needs you') ? l : null;
     }, 8000);
     const show = await waitFor(() => js("document.querySelector('#testing .tst-agent-lane.is-fixer.is-needs-you .tst-agent-show')?.textContent ?? null"), 4000);
-    check(lanes && show === 'Show its tab', `the bug fix agent's lane reads Needs you with Show its tab: ${JSON.stringify({ lanes, show })}`);
+    check(lanes && show === 'Show terminal', `the bug fix agent's lane reads Needs you with Show terminal: ${JSON.stringify({ lanes, show })}`);
     await capture('loop-signals-needs-you');
     await js("document.querySelector('#testing .tst-agent-lane.is-fixer .tst-agent-show')?.click()");
-    check(await waitFor(async () => ((await js('PastelTerm.tabs.active()?.id')) === fixerTab ? true : null), 3000), 'Show its tab switches to the agent');
+    const mounted = await waitFor(() => js(`(() => { const lane = PastelTerm.testing.state().agents.lanes.find((l) => l.role === 'fixer'); const box = document.querySelector('#testing .tst-agent-lane.is-fixer .tst-agent-term'); return lane?.mounted === ${JSON.stringify(fixerTab)} && box?.querySelector('.term-host') ? lane.mounted : null; })()`), 3000);
+    check(mounted && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab ?? ''), `Show terminal mounts its terminal in the lane, with no tab-bar entry: ${JSON.stringify(mounted)}`);
     await drawIn(fixerTab, '\x1b[2J\x1b[H');
     check(await waitFor(async () => ((await js("document.querySelector('#testing-button .dock-badge')?.hidden")) ? true : null), 5000), 'the dot goes once the prompt leaves the screen');
 
@@ -159,7 +156,6 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     await js('PastelTerm.overlays.hideCurrent()');
     await js(`PastelTerm.tabs.activate(${JSON.stringify(fixtureTab)})`);
     check(await endLoop(kit, startTabs), `the agent and run tabs close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
-    await js('PastelTerm.testing.forgetLoops()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

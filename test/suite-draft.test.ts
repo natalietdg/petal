@@ -73,18 +73,19 @@ describe('updatePetalSkill', () => {
 });
 
 describe('draft finished rule', () => {
-  const base: DraftFacts = { suite: false, tab: 'open', busy: false, asking: false, worked: true };
-  it('ends when it worked and sits idle, or its tab is gone, with no suite', () => {
+  const base: DraftFacts = { suite: false, state: 'idle', worked: true };
+  it('ends when it worked and sits idle, or no claude runs it any more, with no suite', () => {
     expect(draftEnded(base)).toBe(true);
-    expect(draftEnded({ ...base, tab: 'gone', worked: false })).toBe(true);
+    expect(draftEnded({ ...base, state: 'ended', worked: false })).toBe(true);
+    expect(draftEnded({ ...base, state: 'closed', worked: false })).toBe(true);
   });
-  it('keeps drawing while busy, asking her, starting, not yet worked, or once a suite exists', () => {
-    expect(draftEnded({ ...base, busy: true })).toBe(false);
-    expect(draftEnded({ ...base, asking: true })).toBe(false);
+  it('keeps drawing while working, asking her, starting, not yet worked, or once a suite exists', () => {
+    expect(draftEnded({ ...base, state: 'working' })).toBe(false);
+    expect(draftEnded({ ...base, state: 'asking' })).toBe(false);
     expect(draftEnded({ ...base, worked: false })).toBe(false);
-    expect(draftEnded({ ...base, tab: 'starting' })).toBe(false);
+    expect(draftEnded({ ...base, state: 'starting' })).toBe(false);
     expect(draftEnded({ ...base, suite: true })).toBe(false);
-    expect(draftEnded({ ...base, tab: 'gone', suite: true })).toBe(false);
+    expect(draftEnded({ ...base, state: 'ended', suite: true })).toBe(false);
   });
   it('follow-ups name the task’s suite file', () => {
     expect(askAgainText('t-1a2b')).toContain('.petal/suites/t-1a2b.json');
