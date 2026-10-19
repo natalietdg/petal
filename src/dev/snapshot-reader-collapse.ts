@@ -8,7 +8,8 @@ import { addStatusFixture, FIXTURE_STATUS } from './snapshot-history-fixture';
 import { READING_CHOICES } from '../main/menu';
 
 // Other checks that measure inside sections open them first; idempotent, and the reader remembers it per reply.
-export const OPEN_SECTIONS = "document.querySelectorAll('.story-section.folded > h2.foldable').forEach((h) => h.click())";
+// Skips Customize: a closed Customize keeps its last tab in the DOM, and the formatting guide's samples must stay folded.
+export const OPEN_SECTIONS = "document.querySelectorAll('.story-section.folded > h2.foldable').forEach((h) => { if (!h.closest('#customize')) h.click(); })";
 
 const SECTIONED = [
   '**Sections now fold under the summary.**',
