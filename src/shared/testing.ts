@@ -2,9 +2,9 @@
 import type { Prd, Task } from './tasks';
 import type { SuiteRecord, SuiteViews } from './task-suite';
 import type { AgentNames, AgentRole } from './agent-names';
-import type { RestoredFlag } from './test-lock';
+import type { LockRefusal, RestoredFlag } from './test-lock';
 import type { PickSession } from './task-testing';
-import type { QueuedBug } from './bug-queue';
+import type { QueuedBug, SentBug } from './bug-queue';
 import type { CriteriaItem } from './test-loop';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
@@ -72,6 +72,7 @@ export interface ProjectTesting {
   agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
   agentNames?: AgentNames; // her names for the two agents, for every task in the project
   loops?: Record<string, SavedLoop>; // per task: its agents' lanes and bug queue, so they outlive a reload
+  autoTasks?: string[]; // tasks Testing made for a session itself, the only ones it may prune
 }
 
 export interface AgentRecord { sessionId: string; role: AgentRole }
@@ -92,8 +93,10 @@ export interface SavedLoop {
   events: Record<AgentRole, LoopEvent[]>;
 }
 
-// A running loop whose agents have a tab in the asking window, with what stepping its queue needs.
-export interface LoopFacts { root: string; taskId: string; loop: SavedLoop; bugs: CriteriaItem[]; runs: PipelineRun[]; names: AgentNames }
+// A loop the asking window can step or shows, with what stepping its queue needs. Only the owner steps and saves;
+// added holds bugs sent from another window since its last tick.
+export interface LoopFacts { root: string; taskId: string; loop: SavedLoop; bugs: CriteriaItem[]; runs: PipelineRun[]; names: AgentNames; owner: boolean; added: AddedBug[] }
+export interface AddedBug { bug: SentBug; at: number }
 
 export type StackKind = 'unit' | 'e2e' | 'mobile' | 'load' | 'lint' | 'ci' | 'skill' | 'agent' | 'command';
 
@@ -122,7 +125,7 @@ export interface TestingState {
   lock: LockView; // the project's test lock
   agentNames: AgentNames; // her names for the testing and bug fix agents
   runs: PipelineRun[];
-  running: string | null; // the run id still going
+  running: string[]; // the project's run ids still going, one at most per task
   sessionTab: string | null; // the tab with this project's Claude, where Ask in this session instead and skills go
   changed: string[]; // files changed recently (git), for Suite health's core stage
   tasks: Task[]; // the project's tasks and PRDs; Testing is organised by them
@@ -131,8 +134,8 @@ export interface TestingState {
 }
 
 // The test lock as the Testing tab shows it.
-export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[] }
-export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [] };
+export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[]; refusals: LockRefusal[] } // refusals: the main session's
+export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [], refusals: [] };
 
 // The project's commands from before suites were per task: .petal/pipeline.json, else the pipeline she saved. A seed only.
 export type SuiteSeed = { stages: StageConfig[] } | { problem: string };
@@ -267,6 +270,10 @@ export function buildFixPrompt({ stage, command, tests, output }: { stage: strin
   const block = parts.length ? `\n\n\`\`\`\n${parts.join('\n\n').replace(/```/g, "'''")}\n\`\`\`` : '';
   return `${head}${block}`.slice(0, FIX_PROMPT_CAP);
 }
+
+// One run at a time per task; other tasks in the repo run alongside.
+export const runGoing = (going: readonly { root: string; taskId: string | null }[], root: string, taskId: string | null): boolean =>
+  going.some((w) => w.root === root && w.taskId === taskId);
 
 // A run's overall state from its stages.
 export function runStateOf(stages: StageResult[]): RunState {

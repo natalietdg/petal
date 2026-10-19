@@ -1,5 +1,5 @@
 // The Library: domain knowledge Petal collects from sessions, one Markdown note per topic. Shapes and the list's sort and filter.
-import { usedText, type LastLibraryRun, type TokenEstimate, type TokenUsage } from './library-cost';
+import { estimateText, lastRunText, usedText, type LastLibraryRun, type TokenEstimate, type TokenUsage } from './library-cost';
 
 export interface LibraryEntry {
   slug: string; // the note's file name without .md
@@ -119,6 +119,13 @@ export function addResultText(result: LibraryRunResult): string {
   const parts = [result.added ? `Added ${result.added} note${result.added === 1 ? '' : 's'}` : '', result.updated ? `updated ${result.updated}` : ''].filter(Boolean);
   const text = parts.join(', ');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.${used}`;
+}
+
+// The muted line under the button: the estimate while there is something new, else this tab's last add, as the Library words it.
+export function addCostText(estimate: TokenEstimate | null, lastRun: LastLibraryRun | null): string {
+  if (estimate?.calls) return estimateText(estimate);
+  if (lastRun) return lastRunText(lastRun);
+  return estimate ? 'Nothing new to read.' : '';
 }
 
 // ---- Reading past sessions.

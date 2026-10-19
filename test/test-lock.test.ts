@@ -7,11 +7,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 // @ts-expect-error: a plain .mjs shipped as the hook, no type declarations
-import { bashWrites, decide, isTestPath } from '../resources/hooks/petal-test-lock.mjs';
-import { LOCK_COMMAND, hasLockHook, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
-import { TOUCH_SLACK_MS, integrityStep, lastToucher, lockedFiles, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
+import { bashWrites, configNote, decide, isTestConfig, isTestPath, logRefusal } from '../resources/hooks/petal-test-lock.mjs';
+import { LEGACY_LOCK_COMMAND, hasLockHook, lockCommand, lockHookStale, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
+import { TOUCH_SLACK_MS, emptyManifest, integrityStep, isTestConfig as sharedIsTestConfig, lastToucher, lockedFiles, mainRefusals, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
-import { dismissRestored, loadManifest, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock } from '../src/main/test-lock';
+import { dismissRestored, loadManifest, lockRefusals, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
 
 afterEach(removeTempDirs);
@@ -71,6 +71,40 @@ describe('the hook’s decision', () => {
     expect(['src/a.ts', 'src/testing.ts', 'latest/a.ts'].some(isTestPath)).toBe(false);
   });
 
+  it('the testing agent may add runner setup; other sessions edit it too, noted in the lock log', () => {
+    const configs = ['conftest.py', 'tests/conftest.py', 'jest.config.ts', 'vitest.config.mts', 'playwright.config.ts', 'pytest.ini', 'pyproject.toml', 'package.json', 'apps/web/package.json', 'vitest.setup.ts', 'src/setupTests.ts', '.mocharc.json'];
+    expect(configs.every(isTestConfig)).toBe(true);
+    expect(['src/config.ts', 'tsconfig.json', 'package-lock.json', 'jest.ts'].some(isTestConfig)).toBe(false);
+    for (const file of configs) expect(decide(edit('tester', file), manifest, ROOT), file).toBeNull();
+    expect(decide(edit('main', 'jest.config.ts'), manifest, ROOT)).toBeNull();
+    expect(decide(edit('fixer', 'package.json'), manifest, ROOT)).toBeNull();
+    expect(configNote(edit('main', 'jest.config.ts'), manifest, ROOT)).toBe('main edited test config jest.config.ts');
+    expect(configNote(edit('tester', 'jest.config.ts'), manifest, ROOT)).toBeNull();
+    expect(configNote(edit('main', 'src/cart.ts'), manifest, ROOT)).toBeNull();
+    for (const file of [...configs, 'src/config.ts', 'tsconfig.json', 'jest.ts']) expect(sharedIsTestConfig(file), file).toBe(isTestConfig(file)); // one list in both places
+    const owners = lockedFiles({ root: ROOT, suiteTasks: [], criteria: null, agents: [{ sessionId: 'tester', role: 'tester', taskId: 't' }], touches: ['package.json', 'jest.config.ts', 'src/a.test.ts'].map((target, at) => ({ target, at, sessionId: 'tester', kind: 'edit' as const, cwd: ROOT })) });
+    expect(owners).toEqual({ 'src/a.test.ts': 't' }); // config the tester touched stays editable by everyone
+  });
+
+  it('per task: a testing agent edits unowned tests and its own task’s, never another task’s', () => {
+    const two = {
+      ...manifest,
+      lockedPaths: ['src/cart.test.ts', 'src/coupon.test.ts', '.petal/suites/t-cart.json', '.petal/suites/t-coupon.json'],
+      owners: { 'src/cart.test.ts': 't-cart', 'src/coupon.test.ts': 't-coupon', '.petal/suites/t-cart.json': 't-cart', '.petal/suites/t-coupon.json': 't-coupon' },
+      sessions: { ...manifest.sessions, couponTester: { role: 'tester', taskId: 't-coupon' } },
+    };
+    const OTHER = (rel: string) => `${rel} belongs to another task's Testing agent. Ask that one to change it.`;
+    expect(decide(edit('tester', 'src/cart.test.ts'), two, ROOT)).toBeNull();
+    expect(decide(edit('tester', 'src/new.test.ts'), two, ROOT)).toBeNull();
+    expect(decide(edit('tester', 'src/coupon.test.ts'), two, ROOT)).toBe(OTHER('src/coupon.test.ts'));
+    expect(decide(edit('tester', '.petal/suites/t-coupon.json'), two, ROOT)).toBe(OTHER('.petal/suites/t-coupon.json'));
+    expect(decide(edit('tester', '.petal/suites/t-later.json'), two, ROOT)).toBe(OTHER('.petal/suites/t-later.json')); // named by its file
+    expect(decide(edit('couponTester', 'src/coupon.test.ts'), two, ROOT)).toBeNull();
+    expect(decide(edit('couponTester', 'src/cart.test.ts'), two, ROOT)).toBe(OTHER('src/cart.test.ts'));
+    expect(decide(bash('tester', 'echo x > src/coupon.test.ts'), two, ROOT)).toBe(OTHER('src/coupon.test.ts'));
+    expect(decide(bash('tester', 'echo x > src/cart.test.ts'), two, ROOT)).toBeNull();
+  });
+
   it('no manifest or a bad one lets everything through', () => {
     expect(decide(edit('main', 'src/cart.test.ts'), null, ROOT)).toBeNull();
     expect(decide(edit('main', 'src/cart.test.ts'), 'junk', ROOT)).toBeNull();
@@ -93,20 +127,69 @@ describe('the hook script', () => {
     expect(run(repo, { ...edit('main', 'src/cart.test.ts'), cwd: repo })).toBe('');
     expect(fs.readFileSync(path.join(repo, '.petal', 'lock.log'), 'utf8')).toMatch(/lock\.json unreadable/);
   });
+
+  it('keeps only the newest 200 refusals', () => {
+    const file = path.join(tempDir('petal-refusals-'), 'lock-refusals.jsonl');
+    for (let i = 0; i < 205; i += 1) logRefusal(file, { at: i, session: 'main' });
+    const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(200);
+    expect(JSON.parse(lines[0] as string).at).toBe(5);
+    expect(JSON.parse(lines[199] as string).at).toBe(204);
+  });
+
+  it('a copy in <repo>/.petal finds its own repo, whatever folder the session started in', () => {
+    const repo = tempDir('petal-repo-');
+    fs.mkdirSync(path.join(repo, '.petal'));
+    fs.mkdirSync(path.join(repo, 'apps', 'web'), { recursive: true });
+    fs.copyFileSync(script, path.join(repo, '.petal', 'test-lock.mjs'));
+    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), JSON.stringify({ ...manifest, lockedPaths: ['apps/web/a.test.ts'] }));
+    const sub = path.join(repo, 'apps', 'web');
+    const out = execFileSync(process.execPath, [path.join(repo, '.petal', 'test-lock.mjs')], { input: JSON.stringify({ ...edit('main', 'a.test.ts'), cwd: sub }), env: { ...process.env, CLAUDE_PROJECT_DIR: sub }, encoding: 'utf8' });
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe('deny');
+  });
 });
 
 describe('settings.local.json', () => {
   it('adds the lock once, keeps every other key and hook, and removes only its own entry', () => {
     const hers = { permissions: { allow: ['Bash(npm test)'] }, hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] }], Stop: [{ hooks: [] }] } };
-    const on = mergeLockHook(hers);
+    const on = mergeLockHook(hers, ROOT);
     expect(hasLockHook(on)).toBe(true);
-    expect(mergeLockHook(on)).toEqual(on);
+    expect(mergeLockHook(on, ROOT)).toEqual(on);
     expect(on.permissions).toEqual(hers.permissions);
     expect((on.hooks as { PreToolUse: unknown[] }).PreToolUse).toHaveLength(2);
-    expect(JSON.stringify(on)).toContain(LOCK_COMMAND.replace(/"/g, '\\"'));
+    expect(JSON.stringify(on)).toContain(`"command":"node '/r/shop/.petal/test-lock.mjs'"`);
     expect(unmergeLockHook(on)).toEqual(hers);
-    expect(unmergeLockHook(mergeLockHook({}))).toEqual({});
+    expect(unmergeLockHook(mergeLockHook({}, ROOT))).toEqual({});
     expect(unmergeLockHook(hers)).toBe(hers);
+  });
+
+  it('the command holds the repo’s absolute path, shell-quoted; the old $CLAUDE_PROJECT_DIR entry upgrades in place', () => {
+    expect(lockCommand("/Users/n/it's mono/")).toBe(`node '/Users/n/it'\\''s mono/.petal/test-lock.mjs'`);
+    const old = { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] }, { matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', hooks: [{ type: 'command', command: LEGACY_LOCK_COMMAND }] }] } };
+    expect(hasLockHook(old)).toBe(true);
+    expect(lockHookStale(old, ROOT)).toBe(true);
+    const upgraded = mergeLockHook(old, ROOT);
+    const groups = (upgraded.hooks as { PreToolUse: { hooks: { command: string }[] }[] }).PreToolUse;
+    expect(groups.map((g) => g.hooks[0]?.command)).toEqual(['echo mine', lockCommand(ROOT)]);
+    expect(lockHookStale(upgraded, ROOT)).toBe(false);
+    expect(lockHookStale(upgraded, '/elsewhere')).toBe(true); // a moved repo gets its new path
+    expect(unmergeLockHook(old)).toEqual({ hooks: { PreToolUse: [old.hooks.PreToolUse[0]] } });
+  });
+
+  it('an older install is upgraded: the bundled script and the absolute command replace the old ones', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    expect(setLock(repo, true)).toBeNull();
+    const settingsFile = path.join(repo, '.claude', 'settings.local.json');
+    fs.writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', hooks: [{ type: 'command', command: LEGACY_LOCK_COMMAND }] }] } }));
+    fs.writeFileSync(path.join(repo, '.petal', 'test-lock.mjs'), '// old build\n');
+    upgradeLock(repo);
+    expect(fs.readFileSync(settingsFile, 'utf8')).toContain(repo);
+    expect(fs.readFileSync(settingsFile, 'utf8')).not.toContain('CLAUDE_PROJECT_DIR');
+    expect(fs.readFileSync(path.join(repo, '.petal', 'test-lock.mjs'), 'utf8')).toContain('isTestConfig');
+    fs.writeFileSync(settingsFile, '{ broken');
+    upgradeLock(repo);
+    expect(fs.readFileSync(settingsFile, 'utf8')).toBe('{ broken');
   });
 
   it('turning the lock on writes the script and the project’s settings; a broken settings file is left alone', () => {
@@ -149,6 +232,34 @@ describe('what is locked', () => {
     expect(integrityStep('a', 'h1', undefined, 'main', sessions)).toEqual({ kind: 'approve', path: 'a' });
     expect(restoredText({ path: 'a', at: 1, taskId: 't', by: 'main' }, 'Fixie')).toBe('Main session changed a test. Restored.');
     expect(restoredText({ path: 'a', at: 1, taskId: 't', by: 'fixer' }, 'Fixie')).toBe('Fixie changed a test. Restored.');
+  });
+
+  it('per task: another task’s testing agent changing a locked test is put back', () => {
+    const sessions = { tester: { role: 'tester' as const, taskId: 't' }, other: { role: 'tester' as const, taskId: 'u' } };
+    expect(integrityStep('a', 'h2', 'h1', 'tester', sessions, 't')).toEqual({ kind: 'approve', path: 'a' });
+    expect(integrityStep('a', 'h2', 'h1', 'other', sessions, 't')).toEqual({ kind: 'restore', path: 'a', by: 'tester' });
+    expect(restoredText({ path: 'a', at: 1, taskId: 't', by: 'tester' }, 'Fixie')).toBe('Another task’s testing agent changed a test. Restored.');
+  });
+
+  it('refusals of sessions that aren’t agents show in the lock bar until dismissed', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    setLock(repo, true);
+    refreshLock(repo, { suiteTasks: [], criteria: null, agents: [{ sessionId: 'fixer', role: 'fixer', taskId: 't' }], touches: [] }, {});
+    const lines = [
+      { at: 10, session: 'main', tool: 'Edit', target: `${repo}/src/cart.test.ts`, reason: 'x' },
+      { at: 11, session: 'fixer', tool: 'Edit', target: 'src/cart.test.ts', reason: 'x' },
+      { at: 12, session: 'main', tool: 'Bash', target: 'rm src/cart.test.ts', reason: 'x' },
+    ];
+    fs.writeFileSync(path.join(repo, '.petal', 'lock-refusals.jsonl'), `${lines.map((l) => JSON.stringify(l)).join('\n')}\nnot json\n`);
+    expect(lockRefusals(repo, loadManifest(repo))).toEqual([
+      { at: 10, text: 'Main session tried to edit src/cart.test.ts. Refused.' },
+      { at: 12, text: 'Main session tried to run rm src/cart.test.ts. Refused.' },
+    ]);
+    dismissRestored(repo, 't', 11);
+    expect(lockRefusals(repo, loadManifest(repo)).map((r) => r.at)).toEqual([12]);
+    expect(mainRefusals('', emptyManifest(), repo)).toEqual([]);
+    expect(lockRefusals(tempDir('petal-repo-'), emptyManifest())).toEqual([]);
   });
 
   it('restores a locked test the main session changed, and keeps the testing agent’s change', () => {

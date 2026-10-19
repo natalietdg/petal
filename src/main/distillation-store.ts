@@ -1,5 +1,5 @@
 // Per project: each test-loop round's distillation in <repo>/.petal/distillation.jsonl, so it survives restarts.
-// Written only where a loop was started (.petal/test-criteria.md exists); every new Course is also an Activity item.
+// Written only where a loop was started (a criteria file exists); every new Course is also an Activity item.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureSelfIgnore } from './factory-store';
@@ -7,7 +7,7 @@ import { writeFileDurable } from './atomic-file';
 import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
 import { sessionTitleFor } from './session-title';
-import { CRITERIA_PATH } from '../shared/test-loop';
+import { loopPrepared } from './criteria-store';
 import { loadTasks } from './tasks-store';
 import { taskIdAt } from './testing-tasks';
 import {
@@ -16,7 +16,6 @@ import {
 } from '../shared/distillation';
 
 const fileOf = (root: string): string => path.join(root, ...DISTILL_PATH.split('/'));
-const loopPrepared = (root: string): boolean => fs.existsSync(path.join(root, ...CRITERIA_PATH.split('/')));
 
 // Read only, capped; a link (a cloned repo's trick) or a missing file reads as none.
 export function readDistillation(root: string): DistillRecord[] {

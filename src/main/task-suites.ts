@@ -8,13 +8,15 @@ import { ensureSelfIgnore } from './factory-store';
 import * as store from './testing-store';
 import type { SuiteWrite } from './testing-claude';
 import {
-  SUITE_FILE_BYTES, isTaskId, suitePath, suiteText, takeSuiteFile, writtenRecord,
+  SUITE_FILE_BYTES, isTaskId, outsideText, suitePath, suiteText, takeSuiteFile, useOutsideFile, writtenRecord,
   type SuiteFileNow, type SuiteRecord, type SuiteViews, type TaskSuite,
 } from '../shared/task-suite';
+import { loadManifest } from './test-lock';
 import type { Task } from '../shared/tasks';
 import type { AgentRecord, SavedLoop } from '../shared/testing';
 import type { AgentRole } from '../shared/agent-names';
 import { loopFromAgents } from '../shared/agent-loop';
+import { suiteWriters } from '../shared/suite-draft';
 
 export const suiteFile = (root: string, taskId: string): string => path.join(root, ...suitePath(taskId).split('/'));
 
@@ -46,7 +48,6 @@ const agentMap = (root: string): Record<string, AgentRecord[]> => store.load(roo
 
 // The sessions Petal launched as this task's agents, oldest first.
 export const agentsOf = (root: string, taskId: string): AgentRecord[] => agentMap(root)[taskId] ?? [];
-export const testersOf = (agents: readonly AgentRecord[]): string[] => agents.filter((a) => a.role === 'tester').map((a) => a.sessionId);
 
 // The task and role of one of Petal's agent sessions; null for any other session.
 export function agentOf(root: string, sessionId: string | null | undefined): { taskId: string; role: AgentRole } | null {
@@ -96,13 +97,16 @@ export function syncSuites(root: string, tasks: readonly Task[], writes: readonl
   const records: Record<string, SuiteRecord> = { ...(data.suites ?? {}) };
   let changed = false;
   const views: SuiteViews = {};
+  const locked = loadManifest(root).enabled;
   for (const task of tasks) {
     if (!isTaskId(task.id)) continue;
     const before = records[task.id] ?? null;
     const file = readSuiteFile(root, task.id);
-    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), testersOf(data.agents?.[task.id] ?? []));
+    const agents = data.agents?.[task.id] ?? [];
+    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), suiteWriters(loopFromAgents(data.loops?.[task.id], agents), agents));
     if (after && JSON.stringify(after) !== JSON.stringify(before)) { records[task.id] = after; changed = true; }
-    if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem, ...(file.at ? { at: file.at } : {}) };
+    const outside = after?.outside ? { problem: outsideText(after.outside, locked), outside: after.outside } : {};
+    if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem, ...outside, ...(file.at ? { at: file.at } : {}) };
   }
   if (changed) store.save({ ...data, suites: records });
   return views;
@@ -121,6 +125,20 @@ export function writeSuite(root: string, taskId: string, suite: TaskSuite | null
   }
   const data = store.load(root);
   store.save({ ...data, suites: { ...(data.suites ?? {}), [taskId]: writtenRecord(suite) } });
+}
+
+// Her answer to a file changed outside the testing agent: take it (with Undo), or write the suite in use back over it.
+// Null when done, else why not.
+export function settleOutsideChange(root: string, taskId: string, use: boolean): string | null {
+  if (!isTaskId(taskId)) return 'That task id can’t name a file.';
+  const data = store.load(root);
+  const record = data.suites?.[taskId] ?? null;
+  if (!record?.outside) return 'That change was already handled.';
+  if (!use) { writeSuite(root, taskId, record.good); return null; }
+  const next = useOutsideFile(record, readSuiteFile(root, taskId), Date.now());
+  if (typeof next === 'string') return next;
+  store.save({ ...data, suites: { ...(data.suites ?? {}), [taskId]: next } });
+  return null;
 }
 
 // Puts back the suite from before the last outside change; false when there is nothing to undo.

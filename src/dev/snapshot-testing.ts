@@ -55,6 +55,7 @@ export const FIXTURE_TASK = 't-settings';
 const PICK_NEW = '5e550000-0000-4000-8000-0000000000a1'; // the session picker's fixture sessions
 const PICK_LOOSE = '5e550000-0000-4000-8000-0000000000a2';
 const PICK_NOTES = '5e550000-0000-4000-8000-0000000000a3';
+const PICK_AGENT = '5e550000-0000-4000-8000-0000000000a4'; // the notes task's testing agent
 const tasksJson = (repo: string): string => path.join(repo, '.petal', 'tasks.json');
 export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
 
@@ -132,7 +133,7 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-pick-suite, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
+  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-pick-agents, .tst-pick-suite, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const chips = [...view.querySelectorAll('.tst-stage-item')].map((li) => [li.querySelector('.tst-stage-name')?.textContent, [...li.classList].find((c) => c.startsWith('is-'))?.slice(3)]);
   const history = [...view.querySelectorAll('.tst-day, .tst-runs > li > .tst-run, .tst-other')].map((n) => n.textContent);
@@ -148,7 +149,7 @@ const PROBE = `(() => {
     history,
     chartLabels: [...view.querySelectorAll('.tst-trend-label')].map((n) => n.textContent),
     timedParts: [...view.querySelectorAll('.tst-durations .tst-part')].filter((p) => parseFloat(p.style.height) > 0).length,
-    picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent]),
+    picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent, b.querySelector('.tst-pick-agents')?.textContent ?? null]),
     noSuite: Boolean(view.querySelector('.tst-no-suite')),
     askSuite: Boolean(view.querySelector('.tst-ask-suite')),
     drawing: view.querySelector('.tst-drawing')?.textContent ?? null,
@@ -316,6 +317,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     // shown, the failure as its brief and the bug already fixing in its queue. Nothing is pasted into the session.
     await click('#testing-button');
     await settle((p) => (p.failRows as string[]).length > 0);
+    const fixEstimate: string = await js("document.querySelector('#testing .tst-fix-stage + .tst-ask-here + .tst-fix-estimate')?.textContent ?? ''");
+    check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(fixEstimate), `a one-line estimate under Send to bug fix agent: ${JSON.stringify(fixEstimate)}`);
     const pastesBefore = pasteWrites.length;
     const startsBefore = testingFixture.loopStarts.length;
     await click('#testing .tst-row.is-failed .tst-fix');
@@ -347,9 +350,11 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await waitFor(async () => (fixerTab && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab)) || null, 8000), 'the bug fix agent tab closes again');
 
     // A tab in the home folder is not a project: pick one of her Claude sessions instead, newest activity first, its repo and status as the small line.
-    // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (1 min ago).
+    // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (2 h ago).
+    // The notes task's busy testing agent is not a row of its own: its owner shows its status and sorts first by the agent's activity.
     testingFixture.project = os.homedir();
-    const before = { panel: panelFixture.sessions, records: historyFixture.records, acme: fs.readFileSync(tasksJson(project), 'utf8'), notes: fs.readFileSync(tasksJson(bare), 'utf8') };
+    const before = { panel: panelFixture.sessions, records: historyFixture.records, acme: fs.readFileSync(tasksJson(project), 'utf8'), notes: fs.readFileSync(tasksJson(bare), 'utf8'), notesStore: store.load(bare) };
+    store.save({ ...before.notesStore, agents: { ...(before.notesStore.agents ?? {}), 't-notes-sort': [{ sessionId: PICK_AGENT, role: 'tester' }] } });
     const notesTask = { id: 't-notes-sort', title: 'Sort by date', notes: '', status: 'working', owner: { sessionId: PICK_NOTES, name: 'Notes sorting', branch: 'main' }, createdAt: Date.now() - 7_200_000, claimedAt: Date.now() - 3_600_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
     const notesData = JSON.parse(before.notes) as { tasks: unknown[] };
     put(tasksJson(bare), JSON.stringify({ ...notesData, tasks: [...notesData.tasks, notesTask] }, null, 2));
@@ -357,15 +362,16 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     panelFixture.sessions = [
       { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() - 3_600_000 },
       { pid: 0, sessionId: PICK_LOOSE, cwd: os.homedir(), kind: 'interactive', status: 'idle', name: 'home', updatedAt: Date.now() },
+      { pid: 0, sessionId: PICK_AGENT, cwd: bare, kind: 'interactive', status: 'busy', name: 'Testing agent · Sort by date', updatedAt: Date.now() - 60_000 },
     ];
     const record = (sessionId: string, cwd: string, title: string, lastAt: number) => ({ sessionId, file: path.join(claudeDir, `${sessionId}.jsonl`), cwd, title, firstPrompt: title, lastAt, messages: 4, messagesExact: true });
-    historyFixture.records = [record(PICK_NEW, project, 'Polish the settings copy', Date.now() - 3_600_000), record(PICK_LOOSE, os.homedir(), 'Loose ends', Date.now() - 600_000), record(PICK_NOTES, bare, 'Notes sorting', Date.now() - 60_000)];
+    historyFixture.records = [record(PICK_NEW, project, 'Polish the settings copy', Date.now() - 3_600_000), record(PICK_LOOSE, os.homedir(), 'Loose ends', Date.now() - 600_000), record(PICK_NOTES, bare, 'Notes sorting', Date.now() - 7_200_000)];
     try {
       await js('PastelTerm.overlays.hideCurrent()');
       await click('#testing-button');
       const home = await settle((p) => p.state.elsewhere?.reason === 'home');
-      const wantRows = [['Notes sorting', 'notes-app · closed has a suite'], ['Polish the settings copy', 'acme · busy']];
-      check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, newest first, ~ left out: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+      const wantRows = [['Notes sorting', 'notes-app · closed has a suite', 'Testing agent · busy'], ['Polish the settings copy', 'acme · busy', null]];
+      check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, newest first, ~ and the agent session left out, the agent's status on its owner: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
       check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
       await capture('testing-picker');
 
@@ -396,6 +402,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     } finally {
       panelFixture.sessions = before.panel;
       historyFixture.records = before.records;
+      store.save({ ...store.load(bare), agents: before.notesStore.agents });
       put(tasksJson(project), before.acme);
       put(tasksJson(bare), before.notes);
       fs.rmSync(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), { force: true });
@@ -415,18 +422,22 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       const made = fs.existsSync(tasksJson(emptyRepo)) ? (JSON.parse(fs.readFileSync(tasksJson(emptyRepo), 'utf8')) as { tasks: { id: string; owner: { sessionId: string } | null }[] }).tasks : [];
       check(given && made.length === 1 && made[0]?.owner?.sessionId === 'snapshot-fixture' && JSON.stringify(given.state.target) === JSON.stringify({ kind: 'task', id: made[0]?.id }), `the tab's session gets one task and its no-suite screen: ${JSON.stringify({ target: given?.state.target, made })}`);
       check(!(await js("document.querySelector('#testing .tst-no-tasks')")), 'no "add a task on the Board" dead end');
+      const askEstimate: string = await js("document.querySelector('#testing .tst-no-suite .tst-ask-estimate')?.textContent ?? ''");
+      check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(askEstimate), `a one-line estimate under Ask Claude to draw one up: ${JSON.stringify(askEstimate)}`);
+
 
       // Ask Claude: the testing agent drawing up the suite gets a lane (chat, action log, tokens) before any suite exists.
       const startsBefore = testingFixture.loopStarts.length;
       await click('#testing .tst-ask-suite');
-      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
+      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
+      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `.petal/suites/<task id>.json`') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
       const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
         const box = document.querySelector('#testing .tst-agentsbox');
         const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];
         const tokens = box?.querySelector('.tst-agent-tokens')?.textContent ?? null;
         return lanes.length && tokens ? { roles: lanes.map((l) => l.dataset.role), chat: !!box.querySelector('.tst-agent-chat'), views: box.querySelectorAll('.tst-agent-view').length, tokens, queue: !!box.querySelector('.tst-queue'), events: PastelTerm.testing.state().agents.events.tester.map((e) => e.text) } : null;
       })()`), 8000);
-      check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
+      check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens( \([\d.]+k? of them cached reads\))?$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
       check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
       await capture('testing-draft-lane');

@@ -88,6 +88,9 @@ export const handoffWrites: { tabId: string; data: string }[] = [];
 // Every close a "conclude" set off, with how it ended; snapshot runs stop before the signal.
 export const concludeCloses: { sessionId: string; outcome: string }[] = [];
 
+// Every agent Testing's Close agents tried to close, with how it ended; snapshot runs stop before the signal.
+export const agentCloses: { sessionId: string; outcome: string; note: string }[] = [];
+
 // A stand-in ~/.claude for the reply box's "/" menu (read only); null reads the real one.
 export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
 
@@ -102,4 +105,5 @@ export const testingFixture: {
   loopStarts: { command: string; brief?: string }[]; // an agent started in a new tab: the line it would have typed, and its brief
   changed: string[] | null; // the project's recently changed files, instead of asking git
   agentIds: string[]; // session ids for the next agents Testing starts, so their fixture tabs match; taken in order
-} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [] };
+  notices: { title: string; body: string; tabId: string | null; focused: boolean }[]; // loop notifications, recorded instead of shown
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [] };

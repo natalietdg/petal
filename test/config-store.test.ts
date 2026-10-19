@@ -18,9 +18,9 @@ afterEach(removeTempDirs);
 const configFile = () => path.join(dir, 'config.json');
 
 describe('config-store defaults and load', () => {
-  it('has nineteen sections with the documented defaults', () => {
+  it('has twenty sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -41,6 +41,7 @@ describe('config-store defaults and load', () => {
     expect(d.organizer.prompt).toMatch(/^You label a Claude Code work session/);
     expect(d.flowTitles.prompt).toMatch(/^You turn a work log into STATE CHANGES/);
     expect(d.responseHook).toEqual({ command: '', notify: false });
+    expect(d.testing).toEqual({ notify: true }); // Testing notifications are on until she turns them off
     expect(config.MODELS).toEqual(['haiku', 'sonnet', 'opus']);
   });
 
@@ -82,6 +83,14 @@ describe('config-store defaults and load', () => {
     expect(fs.readFileSync(path.join(dir, aside[0]), 'utf8')).toBe('{"claudeFolder": {"choice": "allowed"}');
     expect(fs.readdirSync(dir).filter((f) => f.includes('.broken-'))).toHaveLength(1);
     warn.mockRestore();
+  });
+
+  it('a config saved before the Testing notifications switch reads it as on; off is kept', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ sessions: { maxOpen: 9 }, welcome: { seen: true } }));
+    expect(config.load().testing.notify).toBe(true);
+    expect(config.save({ testing: { notify: false } }).testing.notify).toBe(false);
+    expect(config.load().testing.notify).toBe(false);
+    expect(config.save({ testing: { notify: 'no' } }).testing.notify).toBe(false); // a non-boolean keeps the saved value
   });
 
   it('a partial file is filled in from defaults and invalid values fall back to defaults', () => {
@@ -159,7 +168,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 

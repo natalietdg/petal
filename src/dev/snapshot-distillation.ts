@@ -112,6 +112,7 @@ const PROBE = `(() => {
     rounds: rounds.map((r) => ({
       title: r.querySelector('.tst-distill-round-title')?.textContent, course: r.querySelector('.tst-course')?.textContent,
       qs: r.querySelectorAll('.tst-distill-q').length,
+      threadsTitle: r.querySelector('.tst-distill-threads-title')?.textContent ?? null,
       threads: [...r.querySelectorAll('.tst-thread')].map((t) => [t.querySelector('.thread-question')?.textContent, t.querySelector('.tst-thread-word')?.textContent, t.classList.contains('is-needs-you')]),
     })),
     historyDistill: view.querySelectorAll('.tst-runs .tst-distill').length,
@@ -134,7 +135,7 @@ const READER_CARD = `(() => {
     inWindow: b.left >= -1 && b.right <= window.innerWidth + 1, overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth };
 })()`;
 
-type Probe = { state: { loop: string; distillation: number; stages: string[] }; rounds: { title: string; course: string; qs: number; threads: [string, string, boolean][] }[]; [k: string]: unknown };
+type Probe = { state: { loop: string; distillation: number; stages: string[] }; rounds: { title: string; course: string; qs: number; threadsTitle: string | null; threads: [string, string, boolean][] }[]; [k: string]: unknown };
 
 export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, outDir } = kit;
@@ -194,6 +195,8 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
       [['Does the retry test fail on a slow network too?', 'settled in round 2', false], ['Is tax rounded per line in the API as well?', 'carried to round 2', false]],
       [['Is tax rounded per line in the API as well?', 'open', false], [NEEDS_YOU, 'open', true]],
     ]), `round 1 leaves two threads, round 2 settles one and carries one; the needs-you thread is marked: ${JSON.stringify(threads)}`);
+    check(rounds.length === 2 && rounds.every((r) => r.threadsTitle === 'Questions to follow up'),
+      `each round's threads sit under "Questions to follow up", not the reader's "Open threads": ${JSON.stringify(rounds.map((r) => r.threadsTitle))}`);
     check(opened?.historyDistill === 1, 'the Claude session in History has its own Distillation section');
     await wait(300);
     await capture('distillation');

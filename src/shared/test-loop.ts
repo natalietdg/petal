@@ -2,10 +2,11 @@
 // Petal only sends the brief, reads the criteria file and the Loop lines, and can stop it. Pure helpers both sides share.
 import { isTerminal, type LoopProgress } from './loop-line';
 import type { StackItem, StageConfig } from './testing';
-import { suitePath } from './task-suite';
+import { isTaskId, suitePath } from './task-suite';
 import { DEFAULT_AGENT_NAMES, type AgentRole } from './agent-names';
 
-export const CRITERIA_PATH = '.petal/test-criteria.md';
+export const LEGACY_CRITERIA_PATH = '.petal/test-criteria.md'; // the one shared file from before criteria were per task
+export const CRITERIA_DIR = '.petal/criteria';
 export const CRITERIA_CAP = 64 * 1024; // bytes read; a bigger file shows its first part
 export const ITEMS_CAP = 200; // per section
 export const DEFAULT_ROUNDS = 5;
@@ -79,6 +80,59 @@ export function parseCriteria(text: string, truncated = false): Criteria {
   return out;
 }
 
+// Each task's own criteria file, so parallel loops never edit one file; with no task, the old shared one.
+export const criteriaPath = (taskId: string | null): string => (taskId && isTaskId(taskId) ? `${CRITERIA_DIR}/${taskId}.md` : LEGACY_CRITERIA_PATH);
+
+// Every item in a task's own file belongs to that task, tagged or not; untaggedOnly gives it the untagged ones alone.
+export const ownedBy = (criteria: Criteria, taskId: string, { untaggedOnly = false } = {}): Criteria => {
+  const own = (items: CriteriaItem[]) => items.map((item) => (item.taskId === taskId || (untaggedOnly && item.taskId) ? item : { ...item, taskId }));
+  return { ...criteria, scenarios: own(criteria.scenarios), bugs: own(criteria.bugs) };
+};
+
+export const mergeCriteria = (list: readonly Criteria[]): Criteria => list.reduce((all, c) => ({
+  scenarios: [...all.scenarios, ...c.scenarios], bugs: [...all.bugs, ...c.bugs], malformed: all.malformed + c.malformed, truncated: all.truncated || c.truncated,
+}), { scenarios: [], bugs: [], malformed: 0, truncated: false } as Criteria);
+
+// ---- Moving the old shared file's tagged lines into each task's own file, once.
+export interface CriteriaLines { scenarios: string[]; bugs: string[] }
+export interface CriteriaSplit { keep: string; moved: Record<string, CriteriaLines> }
+
+// Lines tagged "task: <id>" leave the old file, by section; everything else stays as written.
+export function splitLegacyCriteria(text: string): CriteriaSplit {
+  const moved: Record<string, CriteriaLines> = {};
+  const keep: string[] = [];
+  let section: 'scenarios' | 'bugs' | null = null;
+  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const heading = HEADING.exec(line);
+    if (heading?.[1]) section = heading[1].toLowerCase() as 'scenarios' | 'bugs';
+    else if (OTHER_HEADING.test(line)) section = null;
+    const item = section && !heading ? parseItem(line, section) : null;
+    if (section && item?.taskId && isTaskId(item.taskId)) {
+      (moved[item.taskId] ??= { scenarios: [], bugs: [] })[section].push(line.trim());
+      continue;
+    }
+    keep.push(line);
+  }
+  return { keep: keep.join('\n'), moved };
+}
+
+// A task's file with these lines at the end of their sections; a missing file starts from the skeleton. A line already there is skipped.
+export function addCriteriaLines(existing: string | null, add: CriteriaLines): string {
+  const lines = (existing ?? CRITERIA_SKELETON).replace(/\r\n?/g, '\n').split('\n');
+  for (const section of ['scenarios', 'bugs'] as const) {
+    const fresh = add[section].filter((line) => !lines.some((l) => l.trim() === line));
+    if (!fresh.length) continue;
+    const start = lines.findIndex((l) => HEADING.exec(l)?.[1]?.toLowerCase() === section);
+    if (start < 0) { lines.push('', `## ${section === 'bugs' ? 'Bugs' : 'Scenarios'}`, ...fresh); continue; }
+    let end = lines.findIndex((l, i) => i > start && OTHER_HEADING.test(l));
+    if (end < 0) end = lines.length;
+    while (end > start + 1 && !lines[end - 1].trim()) end -= 1; // before the blank lines ending the section
+    lines.splice(end, 0, ...fresh);
+  }
+  const text = lines.join('\n');
+  return text.endsWith('\n') ? text : `${text}\n`;
+}
+
 export const openBugs = (criteria: Criteria): number => criteria.bugs.filter((b) => b.status === 'fail').length;
 
 export const CRITERIA_SKELETON = '# Test criteria\n\nKept by Claude during Petal’s test loop.\n\n## Scenarios\n\n## Bugs\n';
@@ -127,7 +181,7 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, ag
     `${taskId ? 'This task’s suite' : 'Pipeline'}, in this order:`,
     ...stages.map((s, i) => `${i + 1}. ${s.name}: \`${s.command}\``),
     ...(tester && taskId ? [`The suite lives in ${suitePath(taskId)}. You own it and the tests: you may change it during the loop (add, fix or remove stages), keeping its shape: {"stages": [{"name": "Unit", "command": "npm test"}]}. Petal takes the change and shows it with an Undo.`] : []),
-    `Criteria file: ${CRITERIA_PATH}`,
+    `Criteria file: ${criteriaPath(taskId)}`,
     '',
     'Each round:',
     `1. Scenarios: write new scenarios for the focus as real tests in the project's existing test folders, using its own frameworks${maestro ? ', plus Maestro flows next to the existing ones' : ''}. Add each under Scenarios in the criteria file.`,

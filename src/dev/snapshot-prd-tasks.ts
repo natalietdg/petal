@@ -1,7 +1,8 @@
 // PRDs and per-task suites (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2,
 // a PRD made through the task store grouping two tasks, one task split into subtasks, then Testing opened from the session that
 // holds a task: that task's own suite, another task's different stages a pick away, a subtask running its task's suite,
-// the PRD's overview of both, the coding session's suite write refused, and a task with no suite starting its testing
+// the PRD's overview of both, the coding session's suite write refused, the test lock (absolute hook path, the main session's
+// refusals, her own suite edits: Use this file or Keep the old suite), and a task with no suite starting its testing
 // agent, whose write is taken with Undo. Never runs a command.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -197,8 +198,56 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     const red: string = await js("(() => { const probe = document.createElement('span'); probe.style.color = 'var(--decide-ink)'; document.getElementById('testing').append(probe); const c = getComputedStyle(probe).color; probe.remove(); return c === getComputedStyle(document.querySelector('#testing .tst-lock-flag')).color ? c : ''; })()");
     check(red, `the flag shows in the warning colour: ${red}`);
     await capture('testing-lock');
+    check(settings.includes(`node '${repo}/.petal/test-lock.mjs'`) && !settings.includes('CLAUDE_PROJECT_DIR'), `the hook names this repo's script by its absolute path, so a subfolder session finds it: ${settings.slice(0, 200)}`);
+
+    // 7c The main session's refusals, never shown before, show in the lock bar; Dismiss clears them.
+    put(path.join(repo, '.petal', 'lock-refusals.jsonl'), `${JSON.stringify({ at: Date.now(), session: SESSION, tool: 'Edit', target: cartTest, reason: 'Tests belong to Testing agent. Ask it to change them.' })}\n`);
+    const refusal = await waitFor<string | null>(async () => {
+      const lines: string[] = await js("[...document.querySelectorAll('#testing .tst-lock-flag')].map((n) => n.textContent)");
+      return lines.find((l) => l.startsWith('Main session tried to edit')) ?? null;
+    }, 8000);
+    check(refusal && /^Main session tried to edit src\/cart\.test\.ts\. Refused\. · (just now|\d+ min ago)$/.test(refusal), `the main session's refusal shows in the lock bar: ${refusal ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
+    await capture('testing-lock-refusal');
+    await js("document.querySelector('#testing .tst-lock-dismiss').click()");
+    check(await waitFor(async () => ((await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")).includes('tried to edit') ? null : true), 6000), 'Dismiss clears the refusal line');
+
+    // 7d Her hand edit of a suite with the lock on: still refused, but Use this file is hers; Keep the old suite isn't offered.
+    const couponFile = path.join(repo, '.petal', 'suites', 't-coupon.json');
+    const couponBefore = fs.readFileSync(couponFile, 'utf8');
+    await pickTarget('task:t-coupon');
+    await waitTesting((s) => s.task === 'Coupons');
+    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test'], ['Hers', 'npm run hers']]);
+    const lockedOutside = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent, not applied.', 8000);
+    const lockedButtons: string[] = await js("[...document.querySelectorAll('#testing .tst-suite-change button')].map((b) => b.textContent)");
+    check(lockedOutside && JSON.stringify(lockedButtons) === JSON.stringify(['Use this file']) && lockedOutside.stages.length === 2, `with the lock on her edit is refused and only Use this file is offered: ${JSON.stringify(lockedButtons)} ${JSON.stringify(lockedOutside ?? await testing())}`);
+    put(couponFile, couponBefore);
+    await waitTesting((s) => s.suiteProblem === null, 8000);
+    await pickTarget('task:t-cart');
+    await waitTesting((s) => s.task === 'Fix the cart total');
+
     await js("document.querySelector('#testing .tst-lock-toggle input').click()");
     check(await waitFor(() => (fs.readFileSync(settingsFile, 'utf8').includes('test-lock') ? null : true), 6000), `turning it off removes only the lock's entry: ${fs.readFileSync(settingsFile, 'utf8').trim()}`);
+
+    // 7e Lock off: her hand edit says so plainly, with Use this file and Keep the old suite. Use it, then Undo; then Keep.
+    await pickTarget('task:t-coupon');
+    await waitTesting((s) => s.task === 'Coupons');
+    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test'], ['Hers', 'npm run hers']]);
+    const plain = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent.', 8000);
+    const plainButtons: string[] = await js("[...document.querySelectorAll('#testing .tst-suite-change button')].map((b) => b.textContent)");
+    check(plain && JSON.stringify(plainButtons) === JSON.stringify(['Use this file', 'Keep the old suite']), `lock off: her edit is flagged plainly with both answers: ${JSON.stringify(plainButtons)} ${JSON.stringify(plain ?? await testing())}`);
+    await capture('testing-suite-outside');
+    await js("document.querySelector('#testing .tst-use-file').click()");
+    const used = await waitTesting((s) => s.stages.length === 3 && s.suiteProblem === null && s.suiteChange, 8000);
+    const usedLine: string = await js("document.querySelector('#testing .tst-suite-change')?.textContent ?? ''");
+    check(used && /^You took this file · (just now|\d+ min ago) · Undo$/.test(usedLine), `Use this file takes her stages, with Undo: ${usedLine} ${JSON.stringify(used ?? await testing())}`);
+    await js("document.querySelector('#testing .tst-undo-suite').click()");
+    check(await waitTesting((s) => s.stages.length === 2 && !s.suiteChange, 8000), 'Undo puts the old suite back');
+    writeSuite(repo, 't-coupon', [['Oops', 'npm run oops']]);
+    await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent.', 8000);
+    await js("document.querySelector('#testing .tst-keep-suite').click()");
+    const kept = await waitTesting((s) => s.suiteProblem === null && s.stages.length === 2, 8000);
+    check(kept && fs.readFileSync(couponFile, 'utf8') === couponBefore, `Keep the old suite writes the suite in use back over her file: ${fs.readFileSync(couponFile, 'utf8').slice(0, 120)}`);
+    fs.utimesSync(couponFile, new Date(Date.now() - 120 * 60_000), new Date(Date.now() - 120 * 60_000)); // fixture time back, so later order holds
 
     // 8 A task with no suite: Ask Claude starts its testing agent under a session id Petal remembers.
     await pickTarget('task:t-docs');
@@ -207,7 +256,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(docs && docs.stages.length === 0 && noSuite === 'No suite for this task yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
     const startsBefore = testingFixture.loopStarts.length;
     await js("document.querySelector('#testing .tst-ask-suite').click()");
-    const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
+    const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
     const agent = store.load(repo).agents?.['t-docs']?.[0]?.sessionId ?? '';
     check(started && agent && started.command.includes(`--session-id ${agent} --`) && started.command.includes('for task t-docs:') && started.command.includes('testing agent') && !/[—–]/.test(started.command), `the testing agent starts in a new tab with its own session id: ${JSON.stringify(started?.command.slice(0, 160))}`);
 
@@ -313,7 +362,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(refusalLine === 'Refused: Fixie tried to edit src/cart.test.ts', `the lock's refusal shows in Fixie's lane: ${refusalLine}`);
     const tokens: string[] = await js("[...document.querySelectorAll('#testing .tst-agent-tokens')].map((n) => n.textContent)");
     const total: string = await js("document.querySelector('#testing .tst-agent-total')?.textContent ?? ''");
-    check(tokens.length === 2 && tokens.every((t) => /^[\d.]+k tokens$/.test(t)) && /tokens so far for both agents/.test(total), `tokens per lane from each session's usage, and a total: ${JSON.stringify(tokens)} ${total}`);
+    check(tokens.length === 2 && tokens.every((t) => /^[\d.]+k tokens \([\d.]+k of them cached reads\)$/.test(t)) && /so far for both agents$/.test(total), `tokens per lane from each session's usage, cache reads named apart, and a total: ${JSON.stringify(tokens)} ${total}`);
     await js(`document.querySelector('${lane('fixer')} .tst-agent-view[data-view="actions"]').click()`);
     const fixerLogLines = await waitFor<string[] | null>(async () => { const l: string[] = await js(`[...document.querySelectorAll('${lane('fixer')} .tst-agent-step-text')].map((n) => n.textContent)`); return l.some((x) => x.startsWith('Edited src/cart.ts')) ? l : null; }, 6000);
     const roundLine: string = await js(`document.querySelector('${lane('fixer')} .tst-agent-rounds li')?.textContent ?? ''`);
@@ -328,6 +377,24 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
 
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
+
+    // 11 A second Claude session in this repo, which already has tasks, gets its own task named for it, once, however
+    // fast Testing refreshes; the testing agent's session gets none.
+    const SECOND = '7a5c0000-0000-4000-8000-0000000000d2';
+    const secondLog = path.join(dir, 'tabs', `${SECOND}.jsonl`);
+    writeTranscript(secondLog, repo, SECOND);
+    extraTabFixtures.push({ sessionId: SECOND, transcript: secondLog, status: 'idle', cwd: repo });
+    openTab(win.webContents);
+    const secondTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(SECOND)}) ?? null`), 15000);
+    type Detected = { sessionTaskId: string | null; tasks: { id: string; title: string; owner: { sessionId: string } | null }[] };
+    const detect = (tabId: string | null): Promise<Detected> => js(`window.pastel.testing.detect(${JSON.stringify(tabId)})`);
+    const [one, two] = await Promise.all([detect(secondTab), detect(secondTab)]);
+    const ownedBySecond = (await detect(secondTab)).tasks.filter((t) => t.owner?.sessionId === SECOND);
+    check(secondTab && ownedBySecond.length === 1 && one.sessionTaskId === ownedBySecond[0]?.id && two.sessionTaskId === ownedBySecond[0]?.id, `the second session gets exactly one task of its own: ${JSON.stringify({ owned: ownedBySecond, one: one.sessionTaskId, two: two.sessionTaskId })}`);
+    check(ownedBySecond[0]?.title && ownedBySecond[0].title !== 'Fix the cart total' && one.tasks.find((t) => t.id === 't-cart')?.owner?.sessionId === SESSION, `named for its session, and the first session keeps its task: ${JSON.stringify(ownedBySecond[0]?.title)}`);
+    check(JSON.stringify(store.load(repo).autoTasks ?? []).includes(ownedBySecond[0]?.id ?? 'none'), 'the task is remembered as made by Testing, the only kind it may prune');
+    const asAgent = await detect(testerTab);
+    check(!asAgent.tasks.some((t) => t.owner?.sessionId === TESTER), `the testing agent's session gets no task: ${JSON.stringify(asAgent.tasks.map((t) => t.owner?.sessionId))}`);
   } finally {
     await js('PastelTerm.testing.close()');
     await js('PastelTerm.sessionsBoard.close()');

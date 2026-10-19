@@ -122,7 +122,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   function criteriaBlock(criteria: Criteria | null): HTMLElement {
     const box = el('div', 'tst-criteria');
     if (!criteria || (!criteria.scenarios.length && !criteria.bugs.length)) {
-      box.append(el('p', 'tst-muted', 'No scenarios or bugs in .petal/test-criteria.md yet. Claude adds them as the loop runs.'));
+      box.append(el('p', 'tst-muted', 'No scenarios or bugs in this task’s criteria file yet. Claude adds them as the loop runs.'));
       return box;
     }
     const column = (title: string, items: CriteriaItem[], tally: string, empty: string) => {

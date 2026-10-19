@@ -335,6 +335,9 @@
 .library-add-open { flex: none; padding: 0; border: 0; background: none; color: var(--link); font: 600 13px var(--ui-font); text-decoration: underline; cursor: pointer; }
 .library-add-open:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .library-add-status { transition: none; } }
+/* The token line under the button, muted like the Library's own cost line. */
+.library-add-cost { margin: 4px 0 0; overflow: hidden; text-align: right; white-space: nowrap; text-overflow: ellipsis; font: 500 13px/1.3 var(--ui-font); color: var(--muted); }
+.library-add-cost[hidden] { display: none; }
 
 /* ---- Lessons: cards in one scrolling column, swapped in for the dial. Text sits on the reader or code background only. */
 .lib-lessons-button[aria-pressed="true"] { background: var(--reader-fg); color: var(--reader-bg); }

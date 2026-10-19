@@ -86,3 +86,4 @@
 
 .session-agent.opens-agent { cursor: pointer; }
 .session-agent.opens-agent:hover .agent-task { text-decoration: underline; }
+.session-agent.opens-agent:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; border-radius: 4px; }

@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes, testing notifications. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -60,6 +60,8 @@ export interface Config {
   updates: { lastNotifiedVersion: string; lastSeenVersion: string };
   // View › Bigger / Smaller Text: the terminal font in px and the reader's text as a percent of today's size.
   text: { terminalFontSize: number; readerPercent: number };
+  // OS notifications from the Testing loop (needs you, fix landed, loop finished); the dock badge and lanes show regardless.
+  testing: { notify: boolean };
 }
 
 type Section = keyof Config;
@@ -100,6 +102,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   background: { model: 'haiku' as BackgroundModel },
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
   text: { terminalFontSize: TERMINAL_FONT.initial, readerPercent: READER_PERCENT.initial },
+  testing: { notify: true },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -170,6 +173,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const bg = raw.background ?? {};
   const up = raw.updates ?? {};
   const tx = raw.text ?? {};
+  const te = raw.testing ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -211,6 +215,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       terminalFontSize: sizeOr(tx.terminalFontSize, TERMINAL_FONT, b.text.terminalFontSize),
       readerPercent: sizeOr(tx.readerPercent, READER_PERCENT, b.text.readerPercent),
     },
+    testing: { notify: boolOr(te.notify, b.testing.notify) },
   };
 }
 

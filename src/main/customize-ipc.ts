@@ -13,8 +13,8 @@ import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from
 import { handle, on } from './ipc';
 import { activeStyleName, listOutputStyles, setOutputStyle, type OutputStyles } from './output-styles';
 import { installPetalStyles, petalStyles, type PetalPaths, type PetalStyles } from './petal-styles';
-import { installPetalSkills, petalSkills, type PetalSkillPaths, type PetalSkills } from './petal-skills';
-import { libraryDir } from './library-store';
+import { installPetalSkills, petalSkills, type PetalSkills } from './petal-skills';
+import { petalSkillPaths } from './testing-skill';
 import { isSnapshotRun, stylesFixture } from './snapshot-mode';
 import { allowedClaudeHome } from './claude-folder';
 import type { StyleSwitch } from './output-styles';
@@ -66,13 +66,11 @@ function addPetalStyles(): PetalStyles {
   return installPetalStyles(petalPaths());
 }
 
-// Packaged: Contents/Resources/skills; dev: the repo's resources folder.
-export const skillsBundleDir = (): string => (app.isPackaged ? path.join(process.resourcesPath, 'skills') : path.join(app.getAppPath(), 'resources', 'skills'));
-const petalSkillPaths = (): PetalSkillPaths => ({ claudeDir: claudeDirOrRefuse(), bundleDir: skillsBundleDir(), recordFile: path.join(app.getPath('userData'), 'petal-skills.json'), libraryDir: libraryDir() });
+export { skillsBundleDir } from './testing-skill';
 
 function addPetalSkills(): PetalSkills {
   refuseRealWriteInSnapshot();
-  return installPetalSkills(petalSkillPaths());
+  return installPetalSkills(petalSkillPaths(claudeDirOrRefuse()));
 }
 
 const HANDOFF_SAMPLE = {
@@ -109,7 +107,7 @@ function customizeState(): CustomizeState {
     outputStyle: dir ? activeStyleName(dir) : null,
     outputStyles: dir ? listOutputStyles(dir) : NO_STYLES,
     petalStyles: dir ? petalStyles(petalPaths()) : NO_PETAL_STYLES,
-    petalSkills: dir ? petalSkills(petalSkillPaths()) : NO_PETAL_SKILLS,
+    petalSkills: dir ? petalSkills(petalSkillPaths(dir)) : NO_PETAL_SKILLS,
     magazinePath,
     organizer: organizer.status(),
     backgroundCalls: callsToday(),

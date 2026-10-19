@@ -6,10 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 import { addTask, assignTask, type Task, type TaskData } from '../src/shared/tasks';
 import { addPrd, setTaskPrd, splitTask } from '../src/shared/task-groups';
-import { OUTSIDE_AGENT, checkSuite, parseSuiteText, suiteFor, suiteText, takeSuiteFile, type SuiteViews, type TaskSuite } from '../src/shared/task-suite';
+import { OUTSIDE_AGENT, OUTSIDE_CHANGE, checkSuite, outsideText, parseSuiteText, suiteFor, suiteText, takeSuiteFile, useOutsideFile, type SuiteViews, type TaskSuite } from '../src/shared/task-suite';
 import { defaultTarget, keepTarget, parseTarget, prdOverview, targetValue, tasksInOrder } from '../src/shared/task-testing';
 import { parseCriteria, buildLoopBrief } from '../src/shared/test-loop';
-import { agentTaskOf, rememberAgent, suiteFile, syncSuites, undoSuiteChange, writeSuite } from '../src/main/task-suites';
+import { agentTaskOf, rememberAgent, settleOutsideChange, suiteFile, syncSuites, undoSuiteChange, writeSuite } from '../src/main/task-suites';
+import { setLock } from '../src/main/test-lock';
 import { updateTasks } from '../src/main/tasks-store';
 import { taskIdAt } from '../src/main/testing-tasks';
 import { projectSeed } from '../src/main/testing-ipc';
@@ -74,7 +75,7 @@ describe('taking a change to the file', () => {
   it('any other session, even the one holding the task, is not applied and is flagged', () => {
     for (const writer of ['coding-session', null]) {
       const next = takeSuiteFile(before, { text: suiteText(suite('Wipe')), at: 5 }, writer, agents);
-      expect(next).toEqual({ ...before, problem: OUTSIDE_AGENT });
+      expect(next).toEqual({ ...before, problem: OUTSIDE_AGENT, outside: writer ? 'session' : 'nobody' });
     }
     expect(OUTSIDE_AGENT).toBe('Changed outside the testing agent, not applied.');
   });
@@ -99,8 +100,24 @@ describe('taking a change to the file', () => {
   it('a first file on a task with a testing agent waits for its log, then is taken with Undo', () => {
     const file = { text: suiteText(suite('Docs')), at: 5 };
     const waiting = takeSuiteFile(null, file, null, agents);
-    expect(waiting).toEqual({ text: null, good: null, change: null, problem: OUTSIDE_AGENT });
+    expect(waiting).toEqual({ text: null, good: null, change: null, problem: OUTSIDE_AGENT, outside: 'nobody' });
     expect(takeSuiteFile(waiting, file, 'agent-1', agents)).toEqual({ text: file.text, good: suite('Docs'), change: { at: 5, previous: null }, problem: null });
+  });
+
+  it('an outside change: her own edit with the lock off is hers to take; locked, or another session, is refused', () => {
+    expect(outsideText('nobody', false)).toBe(OUTSIDE_CHANGE);
+    expect(OUTSIDE_CHANGE).toBe('Changed outside the testing agent.');
+    expect(outsideText('nobody', true)).toBe(OUTSIDE_AGENT);
+    expect(outsideText('session', false)).toBe(OUTSIDE_AGENT);
+  });
+
+  it('Use this file takes it with Undo, even before the agent’s log; a broken file is refused', () => {
+    const waiting = takeSuiteFile(null, { text: suiteText(suite('Docs')), at: 5 }, null, agents);
+    expect(useOutsideFile(waiting, { text: suiteText(suite('Docs')), at: 5 }, 9)).toEqual({ text: suiteText(suite('Docs')), good: suite('Docs'), change: { at: 9, previous: null, by: 'you' }, problem: null });
+    const rejected = takeSuiteFile(before, { text: suiteText(suite('Lint')), at: 5 }, null, agents);
+    expect(useOutsideFile(rejected, { text: suiteText(suite('Lint')), at: 5 }, 9)).toMatchObject({ good: suite('Lint'), change: { previous: suite('Unit'), by: 'you' } });
+    expect(useOutsideFile(rejected, { text: null, at: 0 }, 9)).toMatchObject({ good: null, change: { previous: suite('Unit') } });
+    expect(useOutsideFile(rejected, { text: '{', at: 5 }, 9)).toBe('This file can’t be used: it isn’t valid JSON.');
   });
 });
 
@@ -149,8 +166,41 @@ describe('suites on disk', () => {
     fs.writeFileSync(suiteFile(root, 'a'), suiteText(suite('Wipe')));
     for (const sessionId of ['s1', 'agent-c']) {
       const read = syncSuites(root, tasks, [{ taskId: 'a', at: Date.now(), sessionId }]);
-      expect(read.a).toEqual({ suite: suite('Unit'), change: null, problem: OUTSIDE_AGENT, at: fs.statSync(suiteFile(root, 'a')).mtimeMs });
+      expect(read.a).toEqual({ suite: suite('Unit'), change: null, problem: OUTSIDE_AGENT, outside: 'session', at: fs.statSync(suiteFile(root, 'a')).mtimeMs });
     }
+  });
+
+  it('her hand edit: lock off says so plainly and offers both answers; Use this file then Undo, or Keep the old suite', () => {
+    useTempUserData();
+    const root = repo();
+    const { tasks } = board();
+    writeSuite(root, 'a', suite('Unit'));
+    rememberAgent(root, 'a', 'agent-1');
+    fs.writeFileSync(suiteFile(root, 'a'), suiteText(suite('Unit', 'Hers')));
+    expect(syncSuites(root, tasks).a).toMatchObject({ suite: suite('Unit'), problem: OUTSIDE_CHANGE, outside: 'nobody' });
+    expect(settleOutsideChange(root, 'a', true)).toBeNull();
+    expect(syncSuites(root, tasks).a).toMatchObject({ suite: suite('Unit', 'Hers'), problem: null, change: { previous: suite('Unit'), by: 'you' } });
+    expect(settleOutsideChange(root, 'a', true)).toBe('That change was already handled.');
+    expect(undoSuiteChange(root, 'a')).toBe(true);
+    expect(fs.readFileSync(suiteFile(root, 'a'), 'utf8')).toBe(suiteText(suite('Unit')));
+
+    fs.writeFileSync(suiteFile(root, 'a'), suiteText(suite('Oops')));
+    syncSuites(root, tasks);
+    expect(settleOutsideChange(root, 'a', false)).toBeNull();
+    expect(fs.readFileSync(suiteFile(root, 'a'), 'utf8')).toBe(suiteText(suite('Unit')));
+    expect(syncSuites(root, tasks).a).toMatchObject({ suite: suite('Unit'), problem: null });
+  });
+
+  it('with the lock on, her hand edit is still refused, and Use this file still takes it', () => {
+    useTempUserData();
+    const root = repo();
+    const { tasks } = board();
+    writeSuite(root, 'a', suite('Unit'));
+    expect(setLock(root, true)).toBeNull();
+    fs.writeFileSync(suiteFile(root, 'a'), suiteText(suite('Hers')));
+    expect(syncSuites(root, tasks).a).toMatchObject({ suite: suite('Unit'), problem: OUTSIDE_AGENT, outside: 'nobody' });
+    expect(settleOutsideChange(root, 'a', true)).toBeNull();
+    expect(syncSuites(root, tasks).a).toMatchObject({ suite: suite('Hers'), problem: null });
   });
 
   it('the session log names who wrote a suite file; reading it does not count', async () => {

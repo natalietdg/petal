@@ -93,6 +93,7 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
     await wait(400);
   };
   const saved = () => configStore.load().text;
+  const [startWidth, startHeight] = win.getContentSize(); // put back at the end, for the full sequence's later steps
 
   appendReply(fixtureFile() ?? '');
   await js('PastelTerm.getStarted.close()');
@@ -234,6 +235,6 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
   check(room[12].share > room[16].share && room[16].share > room[22].share, `and gives the reader ${room[12].share}% / ${room[16].share}% / ${room[22].share}% at 12 / 16 / 22px`);
   await js('PastelTerm.layout.makeRoomForClaudeSetup(false)');
   await menu(0);
-  resizeOffscreen(win, 1280, 900);
+  resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   await wait(400);
 }

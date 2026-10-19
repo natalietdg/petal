@@ -1,5 +1,5 @@
 // Pictures in Claude's replies: paths and Markdown images become thumbnails in the reader, History and focus mode,
-// open in a lightbox, and a missing one is a quiet chip. Run under a fake HOME: the fixture PNGs are written into it.
+// open in a lightbox, and a missing one is a quiet chip. The fixture PNGs go into a scratch HOME, or under the snapshot folder when HOME is hers.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,16 +35,17 @@ const write = (file: string, bytes: Buffer): string => {
   return file;
 };
 
-const replyText = (outside: string) => [
+// desk: the pictures' folder as the reply writes it, ~/Desktop/petal-discord or an absolute path under the snapshot folder.
+const replyText = (desk: string, outside: string) => [
   '**The two screenshots are on your Desktop.**',
   '',
-  'The pipeline view is `~/Desktop/petal-discord/1-testing-pipeline.png`, and the board is the second one.',
+  `The pipeline view is \`${desk}/1-testing-pipeline.png\`, and the board is the second one.`,
   '',
-  '![Sessions board](~/Desktop/petal-discord/2-board.png)',
+  `![Sessions board](${desk}/2-board.png)`,
   '',
   'The repo copy lives at docs/reader.png in this session’s folder.',
   '',
-  'The first draft at ~/Desktop/petal-discord/0-draft.png was deleted, and the logo stays a link: ![Petal logo](https://example.com/logo.png).',
+  `The first draft at ${desk}/0-draft.png was deleted, and the logo stays a link: ![Petal logo](https://example.com/logo.png).`,
   '',
   `A system icon is never shown: \`${outside}\``,
 ].join('\n');
@@ -79,23 +80,43 @@ interface Prose {
   figureRights: number[];
 }
 
+const isInside = (child: string, dir: string): boolean => {
+  const rel = path.relative(fs.realpathSync(dir), fs.realpathSync(child));
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
+};
+
+// Where the fixture pictures go. A scratch HOME (snapshot or temp folder) gets them on its Desktop, written as ~/.
+// Under her real HOME (the official gate) they go under the snapshot folder, written as absolute paths; her HOME is never written.
+function pictureRoot(outDir: string): { root: string; desk: string } | { skip: string } {
+  const home = os.homedir();
+  if (isInside(home, outDir) || isInside(home, os.tmpdir())) return { root: home, desk: '~/Desktop/petal-discord' };
+  const root = path.join(outDir, 'reply-images-home');
+  fs.mkdirSync(root, { recursive: true });
+  if (!isInside(root, home)) return { skip: `the snapshot folder ${outDir} is outside HOME and every tab folder, so the reader would refuse its pictures` };
+  if (/\s/.test(root)) return { skip: `the snapshot folder path has a space, which a bare path in a reply can't carry: ${root}` };
+  return { root, desk: path.join(root, 'Desktop', 'petal-discord') };
+}
+
 export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, themes, outDir } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} reply images: ${what}`);
 
-  const home = os.homedir();
-  // Never her real Desktop: HOME must sit inside the snapshot folder (HOME=$PASTEL_SNAPSHOT_DIR/home).
-  const fakeHome = !path.relative(fs.realpathSync(outDir), fs.realpathSync(home)).startsWith('..');
-  check(fakeHome, `running under a fake HOME inside the snapshot folder: ${home}`);
-  if (!fakeHome) return;
-  const desktop = path.join(home, 'Desktop', 'petal-discord');
+  const place = pictureRoot(outDir);
+  if ('skip' in place) {
+    log(`skip reply images: ${place.skip}`);
+    return;
+  }
+  const { root, desk } = place;
+  if (root === os.homedir()) check(true, `running under a scratch HOME: ${root}`);
+  else log(`skip reply images: the ~/ form of a path (HOME is hers, so the pictures sit under ${root} as absolute paths)`);
+  const desktop = path.join(root, 'Desktop', 'petal-discord');
   write(path.join(desktop, '1-testing-pipeline.png'), fixturePng(1200, 760, [150, 110, 180]));
   write(path.join(desktop, '2-board.png'), fixturePng(900, 1400, [110, 160, 150])); // tall: held to 420px
-  const repo = path.join(home, 'repo-fixture');
+  const repo = path.join(root, 'repo-fixture');
   write(path.join(repo, 'docs', 'reader.png'), fixturePng(640, 360, [190, 140, 110]));
   fs.rmSync(path.join(desktop, '0-draft.png'), { force: true });
   const outside = '/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.png';
-  const markdown = replyText(outside);
+  const markdown = replyText(desk, outside);
 
   await js('PastelTerm.getStarted.close()');
   const update = { state: 'live', cwd: repo, replies: [{ id: 'reply-images-new', timestamp: '2026-10-16T09:40:00.000Z', prompt: 'where are the screenshots?', markdown }] };

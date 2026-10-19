@@ -8,12 +8,12 @@ import { COURSE_WORDS, statusWord, threadStatus, type DistillRecord } from '../s
 const opened = new Set<string>(); // sections she opened; the 1.5s loop refresh rebuilds them
 const roundLabel = (r: DistillRecord, i: number): string => (r.round ? `Round ${r.round}${r.total ? ` of ${r.total}` : ''}` : `Review ${i + 1}`);
 
-// One round's Open threads: the reader's cards, a status under each; a click asks it in the session.
+// One round's Open threads, headed "Questions to follow up": the reader's cards, a status under each; a click asks it in the session.
 function threadsBlock(records: readonly DistillRecord[], i: number, ask: (prompt: string) => void): HTMLElement | null {
   const record = records[i];
   if (!record.threads.length) return null;
   const box = el('div', 'tst-distill-threads');
-  box.append(el('h6', 'tst-distill-threads-title', 'Open threads'));
+  box.append(el('h6', 'tst-distill-threads-title', 'Questions to follow up')); // "Open threads" names the reader's own cards
   const list = el('ul', 'threads');
   for (const thread of record.threads) {
     const status = threadStatus(records, i, thread);
