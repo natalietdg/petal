@@ -259,7 +259,7 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
   if (!lane.started) return box;
   if (lane.terminalNote) box.append(el('p', 'tst-muted tst-agent-where', lane.terminalNote));
   if (lane.termBox) box.append(lane.termBox);
-  if (lane.review) { box.append(scenarioReview(lane, lane.review.scenarios, on)); return box; } // her review comes before chat
+  if (lane.review) box.append(scenarioReview(lane, lane.review.scenarios, on)); // her review comes before chat, which stays open
   const view = model.view[lane.role] ?? 'chat';
   const switcher = el('div', 'tst-agent-views');
   switcher.setAttribute('role', 'group');
