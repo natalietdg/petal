@@ -6,7 +6,7 @@ import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, parseCriteria, st
 import { estimateRoundTokens, sumUsage, tokenText, totalTokens, CHARS_PER_TOKEN, TURNS_PER_ROUND, BASE_CONTEXT_TOKENS } from '../src/shared/token-usage';
 import { actionsFrom, roundSummaries } from '../src/shared/agent-actions';
 import { agentTabTitle } from '../src/shared/agent-names';
-import { ASKING_NOTE, chatPlaceholder, chatTurns, laneReach, reopenNote, REOPEN_MS, routeMessage } from '../src/shared/agent-chat';
+import { agentTab, ASKING_NOTE, chatPlaceholder, chatTurns, laneReach, reopenNote, REOPEN_MS, routeMessage } from '../src/shared/agent-chat';
 
 const words = { tester: 'Quinn', fixer: 'Fixie', failure: () => 'Failure output:\nexpected 10 to be 9' };
 const bugs = (text: string) => parseCriteria(`## Bugs\n${text}`).bugs;
@@ -234,6 +234,20 @@ describe('chatting with an agent', () => {
     expect(laneReach(null, null, null, 0)).toBe('none'); // never started: the box stays off
     expect(chatPlaceholder('Quinn', 'reopen')).toBe('Message Quinn. Reopens its session');
     expect(chatPlaceholder('Quinn', 'tab')).toBe('Message Quinn');
+  });
+  it('finds an agent only by its session: a saved tab id that now names an unrelated tab is not adopted', () => {
+    const agent = { sessionId: 'tester-1', tabId: 'm3' }; // saved before a restart
+    expect(agentTab(agent, [{ id: 'm3', sessionId: 'her-own', live: true }])).toBeNull();
+    expect(agentTab(agent, [{ id: 'm3', sessionId: null, live: false }])).toBeNull(); // a plain shell that reused the id
+    expect(agentTab(agent, [{ id: 'm3', sessionId: 'her-own', live: true }, { id: 'm7', sessionId: 'tester-1', live: true }])).toBe('m7');
+    expect(agentTab(agent, [{ id: 'm5', sessionId: 'tester-1', live: false }, { id: 'm6', sessionId: 'tester-1', live: true }])).toBe('m6'); // a live one first
+    expect(agentTab(null, [{ id: 'm3', sessionId: null, live: false }])).toBeNull();
+  });
+  it('just started with no session reported yet reads as starting, not reopened', () => {
+    const agent = { sessionId: 'tester-1' };
+    expect(laneReach(agent, null, null, 0, true)).toBe('starting');
+    expect(chatPlaceholder('Quinn', 'starting')).toBe('Quinn is starting…');
+    expect(laneReach(agent, 'm2', null, 0, true)).toBe('tab');
   });
   it('reopening holds the box until a tab picks the session up, then reads as failed', () => {
     const agent = { sessionId: 'tester-1' };

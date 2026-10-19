@@ -18,7 +18,7 @@ import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalToken
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
 import { askAgainText, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
-import { chatTurns, laneReach, reopenNote, reopenStalledNote, routeMessage, type LaneReach } from '../shared/agent-chat';
+import { agentTab, chatTurns, laneReach, reopenNote, reopenStalledNote, routeMessage, type LaneReach } from '../shared/agent-chat';
 import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
 import type { Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
@@ -80,11 +80,15 @@ export function createAgents(ctx: AgentContext) {
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
   const shownLoop = (): AgentLoop | null => { const r = record(); return r?.kind === 'loop' ? r : null; };
-  const tabOf = (agent: LoopAgent | null | undefined): string | null => {
-    if (!agent) return null;
-    const matches = tabs.ids().filter((id) => tabs.get(id)?.update?.sessionId === agent.sessionId);
-    const bySession = matches.find((id) => tabs.get(id)?.update?.state === 'live') ?? matches[0]; // a live one first
-    return bySession ?? (agent.tabId && tabs.get(agent.tabId) ? agent.tabId : null);
+  const tabOf = (agent: LoopAgent | null | undefined): string | null =>
+    agentTab(agent, tabs.ids().map((id) => { const update = tabs.get(id)?.update; return { id, sessionId: update?.sessionId ?? null, live: update?.state === 'live' }; }));
+  const isStarting = (r: AgentLoop | null): boolean => Boolean(r && !r.stoppedAt && Date.now() - r.startedAt < STARTING_MS); // its Claude may not have reported its session yet
+  // Starting, and its tab is still opening: not opened yet, or open with no session reported. A closed one reads as gone.
+  // The saved id only rules a tab out here; it never makes one the agent's.
+  const opening = (r: AgentLoop | null, agent: LoopAgent | null): boolean => {
+    if (!isStarting(r) || !agent) return false;
+    const tab = agent.tabId ? tabs.get(agent.tabId) : null;
+    return agent.tabId === null || Boolean(tab && !tab.update?.sessionId);
   };
   const askedAt = new Map<string, number>(); // `${root}:${taskId}` -> when Petal last pasted a follow-up to its drafting agent
   const pastedProblems = new Set<string>(); // `${key}:${problem}` pasted back once each
@@ -99,7 +103,7 @@ export function createAgents(ctx: AgentContext) {
     const replies = updateOf(r.tester)?.replies ?? [];
     const ended = draftEnded({
       suite: Boolean(ctx.suite()),
-      tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
+      tab: id ? 'open' : opening(r, r.tester) ? 'starting' : 'gone',
       busy: Boolean(screen?.busy), asking: Boolean(screen?.asking),
       worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
     });
@@ -140,7 +144,7 @@ export function createAgents(ctx: AgentContext) {
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
   const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
   // Its bug fix agent can take bugs: running, and its tab is open here or still starting.
-  const fixerLive = (r: AgentLoop): boolean => isRunning(r) && r.fixer !== null && (tabOf(r.fixer) !== null || Date.now() - r.startedAt < STARTING_MS);
+  const fixerLive = (r: AgentLoop): boolean => isRunning(r) && r.fixer !== null && (tabOf(r.fixer) !== null || isStarting(r));
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
   function facts(): { record: AgentLoop | null; testerTab: string | null; progress: LoopProgress | null; status: LoopStatus } {
@@ -510,7 +514,7 @@ export function createAgents(ctx: AgentContext) {
   function laneStatus(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): string {
     const agent = r ? agentOf(r, role) : null;
     return laneWord({
-      role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: Boolean(r && Date.now() - r.startedAt < STARTING_MS),
+      role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: isStarting(r),
       testerLine: progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : null, fixing: r?.queue.find((b) => b.state === 'fixing')?.name ?? null, draftEnded: r?.kind === 'draft' && Boolean(draft()?.ended),
     });
   }
@@ -539,7 +543,8 @@ export function createAgents(ctx: AgentContext) {
     reopened.set(agent.sessionId, Date.now());
     notes[role] = reopenNote(name, null, Boolean(text));
     draw();
-    const outcome = text ? await historyReply.sendReply(agent.sessionId, text) : await historyReply.openSession(agent.sessionId);
+    const limitAction = `reopen ${name}`;
+    const outcome = text ? await historyReply.sendReply(agent.sessionId, text, false, limitAction) : await historyReply.openSession(agent.sessionId, limitAction);
     const problem = 'note' in outcome ? outcome.note || 'Try again.' : 'confirm' in outcome ? outcome.confirm : null;
     if (problem) reopened.delete(agent.sessionId);
     notes[role] = reopenNote(name, problem, Boolean(text));
@@ -555,12 +560,12 @@ export function createAgents(ctx: AgentContext) {
   }
 
   // Reopening ends when a tab picks the session up, or reads as failed once REOPEN_MS passes without one.
-  function reachOf(role: AgentRole, agent: LoopAgent | null, tabId: string | null): LaneReach {
+  function reachOf(role: AgentRole, r: AgentLoop | null, agent: LoopAgent | null, tabId: string | null): LaneReach {
     const at = agent ? reopened.get(agent.sessionId) ?? null : null;
-    const reach = laneReach(agent, tabId, at, Date.now());
+    const reach = laneReach(agent, tabId, at, Date.now(), opening(r, agent));
     if (agent && at !== null && reach !== 'reopening') {
       reopened.delete(agent.sessionId);
-      if (reach === 'reopen') notes[role] = reopenStalledNote(nameOf(role));
+      if (reach !== 'tab') notes[role] = reopenStalledNote(nameOf(role));
     }
     return reach;
   }
@@ -579,7 +584,7 @@ export function createAgents(ctx: AgentContext) {
       const status = laneStatus(role, r, progress);
       const tabId = tabOf(agent);
       return {
-        role, name: nameOf(role), started: Boolean(agent), tabId, reach: reachOf(role, agent, tabId), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
+        role, name: nameOf(role), started: Boolean(agent), tabId, reach: reachOf(role, r, agent, tabId), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
       };

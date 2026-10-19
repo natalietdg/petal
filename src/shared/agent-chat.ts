@@ -19,16 +19,26 @@ export function routeMessage(role: AgentRole, agents: Record<AgentRole, { sessio
 
 export const REOPEN_MS = 60_000; // a reopened session with no tab by then didn't come back
 
-// How her message reaches an agent: its open tab; else its saved session, reopened in a new tab; nothing before it started.
-export type LaneReach = 'tab' | 'reopen' | 'reopening' | 'none';
-export function laneReach(agent: { sessionId: string } | null, tabId: string | null, reopenedAt: number | null, now: number): LaneReach {
+// An agent's tab: an open tab whose Claude reports the agent's session, a live one first. Never the tab id saved when it
+// started: ids restart each launch, so after a restart that id can name an unrelated tab.
+export function agentTab(agent: { sessionId: string } | null | undefined, open: readonly { id: string; sessionId: string | null; live: boolean }[]): string | null {
+  if (!agent) return null;
+  const matches = open.filter((t) => t.sessionId === agent.sessionId);
+  return (matches.find((t) => t.live) ?? matches[0])?.id ?? null;
+}
+
+// How her message reaches an agent: its open tab; else its saved session, reopened in a new tab; nothing before it
+// started. starting: it was just started and its Claude hasn't reported its session yet, so it isn't reopened.
+export type LaneReach = 'tab' | 'starting' | 'reopen' | 'reopening' | 'none';
+export function laneReach(agent: { sessionId: string } | null, tabId: string | null, reopenedAt: number | null, now: number, starting = false): LaneReach {
   if (tabId) return 'tab';
   if (!agent?.sessionId) return 'none';
-  return reopenedAt !== null && now - reopenedAt < REOPEN_MS ? 'reopening' : 'reopen';
+  if (reopenedAt !== null && now - reopenedAt < REOPEN_MS) return 'reopening';
+  return starting ? 'starting' : 'reopen';
 }
 
 export const chatPlaceholder = (name: string, reach: LaneReach): string =>
-  reach === 'reopen' ? `Message ${name}. Reopens its session` : reach === 'reopening' ? `Reopening ${name}’s session…` : `Message ${name}`;
+  reach === 'reopen' ? `Message ${name}. Reopens its session` : reach === 'reopening' ? `Reopening ${name}’s session…` : reach === 'starting' ? `${name} is starting…` : `Message ${name}`;
 
 // The lane's note after asking to reopen: on its way, or why not in plain words.
 export function reopenNote(name: string, problem: string | null, withMessage: boolean): string {
