@@ -1,5 +1,5 @@
 // Messages between sessions (PASTEL_SNAPSHOT_MODE=mentions): the "@" picker, the To line, exactly what each tab gets pasted,
-// Board's Message…, and a reply's Send to button. Every paste is recorded, none typed.
+// Board's Message…, a reply's Send to button, skipping a tab that is asking, and an image mention's late Enter. Every paste is recorded, none typed.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -17,6 +17,8 @@ const PRICES: Fixture = { id: id(1), folder: 'billing-service', branch: 'fix-pri
 const EMAIL: Fixture = { id: id(2), folder: 'widget-service', branch: null, status: 'busy', prompt: 'welcome email locale', reply: '**Adding the locale to the welcome email.**' };
 const DOCS: Fixture = { id: id(3), folder: 'docs-site', branch: null, status: 'idle', prompt: 'docs site build', reply: '**The docs build is green.**' };
 const FIXTURES = [PRICES, EMAIL, DOCS];
+// A permission prompt on a target's screen: an Enter pasted now would approve it.
+const ASK_SCREEN = ['─'.repeat(40), ' Bash command', '', '   npm test', '', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', '', ' Esc to cancel · Tab to amend'];
 
 const entry = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
 const turn = (sessionId: string, n: string, prompt: string, reply: string, cwd?: string) =>
@@ -209,7 +211,35 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
     const afterClick = await js("(() => { const b = document.querySelector('#latest .reply-mention-send'); return { disabled: b.disabled, note: b.parentElement.querySelector('.reply-mention-note').textContent }; })()");
     check(afterClick.disabled && afterClick.note.startsWith('Sent to'), `then it says sent and can't double-send: ${JSON.stringify(afterClick)}`);
 
-    // 10 Every theme: To line and Send to text stay readable.
+    // 10 A target showing a prompt gets nothing, from the box or straight from main, and the result line says why.
+    const drawIn = (tabId: string | null, text: string) => js(`new Promise((done) => PastelTerm.tabs.get(${JSON.stringify(tabId)}).term.write(${JSON.stringify(text)}, done))`);
+    await drawIn(emailTab, `\x1b[2J\x1b[H${ASK_SCREEN.join('\r\n')}`);
+    const before7 = pasteWrites.length;
+    await type(`${tEmail} ${tPrices} is the cron back?`);
+    await js("document.getElementById('composer-send').click()");
+    await waitFor(() => (pastesSince(before7).length ? true : null), 4000);
+    await wait(300);
+    check(JSON.stringify(pastesSince(before7)) === JSON.stringify([{ tabId: pricesTab, data: pasted(wrapMessage({ name: me, place: senderPlace }, 'is the cron back?')) }]), `the asking tab gets nothing, the other gets its paste: ${JSON.stringify(pastesSince(before7))}`);
+    const askingResult = (await toLine()).result;
+    check(askingResult.includes(`Sent to ${prices}`) && askingResult.includes(`${email} is asking something; answer it there first`), `the result line says who is asking: ${JSON.stringify(askingResult)}`);
+    const before8 = pasteWrites.length;
+    const refused = await js(`window.pastel.sendMention(${JSON.stringify(sender)}, [${JSON.stringify(emailTab)}], 'hello', [${JSON.stringify(emailTab)}])`);
+    check(refused.deliveries?.[0]?.outcome === 'asking' && pastesSince(before8).length === 0, `main skips a tab reported asking: ${JSON.stringify(refused)}`);
+    await drawIn(emailTab, '\x1b[2J\x1b[3J\x1b[H');
+
+    // 11 An image path: the paste goes first, its Enter only once the target shows its [Image #n].
+    const shot = 'look at /tmp/petal-mention-shot.png';
+    const before9 = pasteWrites.length;
+    await type(`${tPrices} ${shot}`);
+    await js("document.getElementById('composer-send').click()");
+    await waitFor(() => (pastesSince(before9).length ? true : null), 4000);
+    await wait(500);
+    check(JSON.stringify(pastesSince(before9)) === JSON.stringify([{ tabId: pricesTab, data: pasted(wrapMessage({ name: me, place: senderPlace }, shot), false) }]), `the image mention is pasted without its Enter, which waits: ${JSON.stringify(pastesSince(before9))}`);
+    await drawIn(pricesTab, '\r\n[Image #1]');
+    await waitFor(() => (pastesSince(before9).length >= 2 ? true : null), 3000);
+    check(JSON.stringify(pastesSince(before9).slice(1)) === JSON.stringify([{ tabId: pricesTab, data: '\r' }]), `the Enter follows on its own once Claude has read the image: ${JSON.stringify(pastesSince(before9))}`);
+
+    // 12 Every theme: To line and Send to text stay readable.
     await type(`${tPrices} ${tDocs} hi`);
     const failing: unknown[] = [];
     for (const theme of Object.keys(themes)) {

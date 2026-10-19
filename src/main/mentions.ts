@@ -1,5 +1,6 @@
-// Delivers one session's message to the sessions it mentions: wrapped, bracket-pasted, never to a tab without Claude.
+// Delivers one session's message to the sessions it mentions: wrapped, bracket-pasted, never to a tab without Claude or one asking.
 import { wrapMessage, type Delivery, type Sender } from '../shared/mentions';
+import { pastesImagePath } from '../shared/quote-path';
 import type { MessageActivity } from './activity-feed';
 
 // One tab as the send sees it; main builds these from its own tab table, never from renderer-supplied ptys.
@@ -18,6 +19,7 @@ export interface MentionRequest {
   from: string | null;
   to: readonly string[];
   text: string;
+  asking?: readonly string[]; // tabs whose screen shows a prompt the renderer saw; a pasted Enter would answer it
 }
 
 export const MAX_TARGETS = 12;
@@ -28,7 +30,7 @@ const PASTE_END = '\x1b[201~';
 // eslint-disable-next-line no-control-regex -- C0 controls other than newline and tab could end the paste early
 const stripControls = (text: string): string => text.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, '');
 
-export const pasted = (text: string): string => `${PASTE_START}${text}${PASTE_END}\r`;
+export const pasted = (text: string, enter = true): string => `${PASTE_START}${text}${PASTE_END}${enter ? '\r' : ''}`;
 
 // One Activity message per session it reached; tabs it skipped are not recorded (the send's result line names them).
 export function deliverMentions(request: MentionRequest, lookup: (tabId: string) => MentionPort | undefined, now = new Date()): { deliveries: Delivery[]; messages: MessageActivity[] } {
@@ -37,7 +39,11 @@ export function deliverMentions(request: MentionRequest, lookup: (tabId: string)
   const sender: Sender | null = fromPort?.running ? { name: fromPort.name, place: fromPort.place } : null;
   const to = [...new Set(request.to)].filter((tabId) => tabId !== request.from).slice(0, MAX_TARGETS);
   if (!text || !to.length) return { deliveries: [], messages: [] };
-  const wrapped = pasted(wrapMessage(sender, text));
+  const message = wrapMessage(sender, text);
+  // Claude Code drops an Enter sent while it reads a pasted image; the renderer sends it once the [Image #n] shows.
+  const enterLater = pastesImagePath(message);
+  const wrapped = pasted(message, !enterLater);
+  const asking = new Set(request.asking ?? []);
   const from: MessageActivity['from'] = fromPort?.running
     ? { sessionId: fromPort.sessionId, name: fromPort.name, branch: fromPort.branch, repo: fromPort.repo }
     : { sessionId: null, name: 'Petal' };
@@ -46,9 +52,11 @@ export function deliverMentions(request: MentionRequest, lookup: (tabId: string)
     const port = lookup(tabId);
     if (!port) return { tabId, name: tabId, outcome: 'closed' };
     if (!port.running) return { tabId, name: port.name, outcome: 'not-running' };
+    if (asking.has(tabId)) return { tabId, name: port.name, outcome: 'asking' };
     port.write(wrapped);
     messages.push({ from, to: { sessionId: port.sessionId, name: port.name }, text, at: now.getTime() });
-    return { tabId, name: port.name, outcome: port.busy ? 'queued' : 'sent' };
+    const outcome = port.busy ? 'queued' : 'sent';
+    return enterLater ? { tabId, name: port.name, outcome, enterLater } : { tabId, name: port.name, outcome };
   });
   return { deliveries, messages };
 }

@@ -25,13 +25,14 @@ function portOf(session: TabSession): MentionPort {
 }
 
 export function registerMentionsIpc(): void {
-  handle('mentions:send', (event, { from, to, text }) => {
+  handle('mentions:send', (event, { from, to, text, asking }) => {
     if (!Array.isArray(to) || typeof text !== 'string') throw new Error('A message needs its sessions and its text.');
     const lookup = (tabId: string) => {
       const session = typeof tabId === 'string' ? tabSession(event.sender.id, tabId) : undefined;
       return session ? portOf(session) : undefined;
     };
-    const { deliveries, messages } = deliverMentions({ from: typeof from === 'string' ? from : null, to: to.filter((t) => typeof t === 'string'), text }, lookup);
+    const strings = (list: unknown): string[] => (Array.isArray(list) ? list.filter((t): t is string => typeof t === 'string') : []);
+    const { deliveries, messages } = deliverMentions({ from: typeof from === 'string' ? from : null, to: strings(to), text, asking: strings(asking) }, lookup);
     for (const message of messages) recordMessage(message);
     return { deliveries };
   });

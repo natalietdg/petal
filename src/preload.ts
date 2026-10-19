@@ -48,7 +48,7 @@ const api = {
   startClaude: (tabId: TabId, prompt: string) => send('tab:start-claude', { tabId, prompt }),
   pickSession: (tabId: TabId, sessionId: string) => send('reader:pick-session', { tabId, sessionId }),
   savePastedImage: (bytes: Uint8Array) => invoke('paste:save-image', { bytes }),
-  sendMention: (from: TabId | null, to: TabId[], text: string) => invoke('mentions:send', { from, to, text }),
+  sendMention: (from: TabId | null, to: TabId[], text: string, asking: TabId[] = []) => invoke('mentions:send', { from, to, text, asking }),
   promptImage: (file: string, prompt: string) => invoke('paste:image', { file, prompt }),
   replyImage: {
     status: (path: string, cwd: string | null) => invoke('reply-image:status', { path, cwd }),
