@@ -66,7 +66,7 @@ export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<voi
   };
 
   try {
-    await js('PastelTerm.welcome?.close?.()');
+    await js('PastelTerm.getStarted.close()');
     resizeOffscreen(win, WIDTH, HEIGHT);
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
 

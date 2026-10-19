@@ -39,7 +39,7 @@ export async function libraryCostCheck(kit: Kit, win: BrowserWindow): Promise<vo
     return JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify({ topics: [] }), usage: USAGE });
   };
   try {
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, 1280, 900);
     await wait(300);

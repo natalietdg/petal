@@ -119,7 +119,7 @@ export async function readerStepsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   };
   const stepsOnlyOpen = (p: { steps: boolean[]; folded: boolean[] }) => p.steps.every((isSteps, i) => p.folded[i] === !isSteps);
 
-  await js('PastelTerm.welcome.close()'); // a fresh profile opens on the welcome screen, over the reader
+  await js('PastelTerm.getStarted.close()'); // a fresh profile opens on Get started, over the reader
   await js("PastelTerm.reader.setView('replies')");
   const [startWidth, startHeight] = win.getContentSize();
   resizeOffscreen(win, 800, 2000); // the narrow width she reads at; tall enough for a whole reply

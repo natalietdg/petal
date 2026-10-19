@@ -1,4 +1,4 @@
-/* Shortcuts guide (shortcuts.ts): the welcome's frame (welcome.css), rows of kbd chips beside plain words. */
+/* Shortcuts guide (shortcuts.ts): the shared overlay frame (welcome.css), rows of kbd chips beside plain words. */
 #shortcuts {
   position: absolute;
   inset: 0;

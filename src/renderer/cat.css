@@ -91,7 +91,7 @@
   #reader-area:not(.cat-docked) :is(#cat, .scene-tip, .scene-popover) { display: none; }
 }
 /* Overlays use the whole column; her corner waits for the reader. */
-#reader-area:has(> :is(#history, #workflow, #customize, #repos, #welcome, #agents, #board, #pet-guide):not([hidden])) :is(#cat, .scene-tip, .scene-popover) { display: none; }
+#reader-area:has(> :is(#history, #workflow, #customize, #repos, #agents, #board, #pet-guide):not([hidden])) :is(#cat, .scene-tip, .scene-popover) { display: none; }
 .cat-sprite svg { width: 100%; height: 100%; image-rendering: pixelated; }
 
 .px-O { fill: var(--cat-ink, var(--reader-fg)); }

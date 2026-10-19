@@ -80,7 +80,7 @@ export async function lessonsCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     configStore.save({ library: { autoBuild: true }, lessons: { learn: true }, background: { model: 'haiku' } });
     libraryFixture.extract = async (prompt) => { prompts.push(prompt); return JSON.stringify({ result: JSON.stringify({ topics: [], lessons: LESSONS }) }); };
     resizeOffscreen(win, 1280, 900);
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await js('PastelTerm.overlays.hideCurrent()');
 
     // One call returns both shapes; the repeat of CLAUDE.md is dropped.

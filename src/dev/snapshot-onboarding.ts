@@ -1,38 +1,20 @@
-// Launch checks for a stranger: the first-run screen with no token-spending offer, the organizer staying off, and Workflow › Setup on an empty ~/.claude.
+// Launch checks for a stranger: an older install goes straight to Get started, the organizer stays off, and Workflow › Setup on an empty ~/.claude.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { BrowserWindow } from 'electron';
 import * as configStore from '../main/config-store';
 import * as organizer from '../main/session-organizer';
 import { counters, setupFixture } from '../main/snapshot-mode';
-import { resizeOffscreen } from '../main/snapshot-window';
-import { send } from '../main/ipc';
 import type { Kit } from './snapshot';
 
-const TAGLINE = 'A terminal for Claude Code, with a reader for its replies and a pet who keeps you company.';
-const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash';
 const FIRST_PASS_DELAY_S = 20; // session-organizer's FIRST_RUN_DELAY_MS
 
-const welcomeState = `(() => {
-  const view = document.getElementById('welcome');
-  return {
-    shown: !view.hidden,
-    tagline: view.querySelector('.welcome-tagline')?.textContent ?? null,
-    cats: [...view.querySelectorAll('.welcome-cat')].map((b) => ({ name: b.querySelector('.welcome-cat-name')?.textContent, picture: Boolean(b.querySelector('.cat-portrait svg rect')) })),
-    scenes: view.querySelectorAll('.welcome-section .cz-chip').length,
-    claude: (() => {
-      const list = view.querySelector('.gs-list');
-      const install = list?.querySelector('.gs-step[data-step="install"]');
-      if (!list) return 'none';
-      return list.classList.contains('all-set') || install?.classList.contains('done') ? 'found' : install ? 'missing' : 'none';
-    })(),
-    command: view.querySelector('.gs-command code')?.textContent ?? null,
-    recheck: Boolean(view.querySelector('.gs-recheck')),
-    organizerSwitch: Boolean(view.querySelector('.welcome-switch')),
-    emDashes: (view.innerText.match(/—/g) ?? []).length,
-    reader: !document.getElementById('reader').hidden,
-  };
-})()`;
+const launchState = `(() => ({
+  open: PastelTerm.overlays.current(),
+  welcome: Boolean(PastelTerm.welcome || document.querySelector('.welcome-cat, .welcome-styles')),
+  reader: !document.getElementById('reader').hidden,
+  reopens: PastelTerm.getStarted.reopensOnLaunch(),
+  emDashes: (document.getElementById('get-started').innerText.match(/—/g) ?? []).length,
+}))()`;
 
 async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Promise<void> {
   for (const [id, look] of [['paleSky', 'light'], ['nightPastel', 'dark']]) {
@@ -43,81 +25,24 @@ async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Pr
   applyTheme('paleSky', { persist: false });
 }
 
-// Window sizes Start must fit without scrolling: the default and a small laptop window.
-const FOOTER_SIZES: [width: number, height: number][] = [[1280, 900], [990, 800]];
+// The run's fresh launch is an older install that hasn't finished setup: Get started comes up, never the old welcome screen.
+// What the welcome offered beyond that, Petal's reply styles, stays reachable in Customize › Formatting.
+export async function launchCheck(kit: Kit): Promise<void> {
+  const { js, log, waitFor } = kit;
+  const first = await js(launchState);
+  const expected = first.reopens ? 'get-started' : null;
+  log(`${first.open === expected && !first.welcome && first.emDashes === 0 ? 'ok' : 'FAIL'} launch opens Get started exactly while setup is unfinished, no welcome screen: ${JSON.stringify(first)}`);
+  if (first.open === 'get-started') await captureBoth(kit, 'launch-get-started');
+  await js('PastelTerm.getStarted.close()');
+  const closed = await js(launchState);
+  log(`${closed.open === null && closed.reader ? 'ok' : 'FAIL'} closing Get started shows the reader: ${JSON.stringify({ open: closed.open, reader: closed.reader })}`);
 
-const footerRects = `(() => {
-  const inside = (r, box) => r.width > 0 && r.height > 0 && r.top >= box.top && r.left >= box.left && r.bottom <= box.bottom && r.right <= box.right;
-  const view = document.getElementById('welcome').getBoundingClientRect();
-  const port = { top: 0, left: 0, bottom: window.innerHeight, right: window.innerWidth };
-  const start = document.querySelector('.welcome-start').getBoundingClientRect();
-  const cat = document.getElementById('cat').getBoundingClientRect();
-  const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  return {
-    window: [window.innerWidth, window.innerHeight],
-    start: [Math.round(start.left), Math.round(start.top), Math.round(start.right), Math.round(start.bottom)],
-    startVisible: inside(start, port) && inside(start, view),
-    startUnderCat: overlaps(start, cat),
-    scrolled: document.querySelector('.welcome-pane').scrollTop,
-  };
-})()`;
-
-async function footerInViewCheck({ js, log, wait, capture }: Kit, win: BrowserWindow): Promise<void> {
-  const [width, height] = win.getContentSize();
-  for (const [w, h] of FOOTER_SIZES) {
-    resizeOffscreen(win, w, h);
-    await wait(700);
-    const r = await js(footerRects);
-    const ok = r.startVisible && !r.startUnderCat && r.scrolled === 0;
-    log(`${ok ? 'ok' : 'FAIL'} welcome Start in view without scrolling at ${w}x${h}: ${JSON.stringify(r)}`);
-    await capture(`welcome-${w}x${h}`);
-  }
-  resizeOffscreen(win, width, height);
-  await wait(500);
-}
-
-// Needs a fresh userData (a new PASTEL_SNAPSHOT_DIR); a reused one has already seen the screen.
-export async function welcomeCheck(kit: Kit, win: BrowserWindow): Promise<void> {
-  const { js, log, waitFor, wait } = kit;
-  const first = await js(welcomeState);
-  const catsOk = first.cats.length === 4 && first.cats.every((c: { picture: boolean }) => c.picture) && first.cats.map((c: { name: string }) => c.name).join() === 'Mika,Miki,Kira,Hoshi';
-  log(`${first.shown && !first.reader ? 'ok' : 'FAIL'} first launch shows the welcome screen over the reader: ${JSON.stringify({ shown: first.shown, reader: first.reader })}`);
-  log(`${first.tagline === TAGLINE ? 'ok' : 'FAIL'} welcome tagline: ${JSON.stringify(first.tagline)}`);
-  log(`${catsOk ? 'ok' : 'FAIL'} welcome cats each show their picture: ${JSON.stringify(first.cats)}`);
-  log(`${first.scenes > 1 && first.emDashes === 0 ? 'ok' : 'FAIL'} welcome scenes and copy: scenes=${first.scenes} emDashes=${first.emDashes}`);
-  log(`${!first.organizerSwitch && !configStore.load().organizer.enabled ? 'ok' : 'FAIL'} welcome offers nothing that spends tokens, organizer off: ${JSON.stringify({ switch: first.organizerSwitch, enabled: configStore.load().organizer.enabled })}`);
-  log(`${first.claude === 'found' ? 'ok' : 'FAIL'} welcome's Get started finds claude on this Mac: ${first.claude}`);
-  const styleOffer = await js("({ installable: null, button: document.querySelector('#welcome .welcome-styles-add')?.textContent ?? null })");
-  styleOffer.installable = (await js('window.pastel.config.get()')).petalStyles?.installable;
-  log(`${(styleOffer.button === 'Add Petal’s reply styles') === styleOffer.installable ? 'ok' : 'FAIL'} welcome offers Petal's reply styles only while some are missing, opt-in: ${JSON.stringify(styleOffer)}`);
-  log(`${configStore.load().welcome.seen ? 'ok' : 'FAIL'} welcome.seen saved once shown`);
-  await captureBoth(kit, 'welcome');
-  await footerInViewCheck(kit, win);
-
-  await js('PastelTerm.welcome.open({ claudeFound: false })');
-  const missing = await js(welcomeState);
-  log(`${missing.claude === 'missing' && missing.command === INSTALL_COMMAND && missing.recheck ? 'ok' : 'FAIL'} PATH-missing variant: Get started step 1 shows the install command and Check again: ${JSON.stringify({ claude: missing.claude, command: missing.command, recheck: missing.recheck })}`);
-  await captureBoth(kit, 'welcome-no-claude');
-  await js("document.querySelector('#welcome .gs-recheck').click()");
-  const rechecked = await waitFor(async () => ((await js(welcomeState)).claude === 'found' ? true : null), 8000);
-  log(`${rechecked ? 'ok' : 'FAIL'} Check again looks for claude afresh and finds it`);
-
-  await js("document.querySelector('.welcome-start').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
-  const afterEsc = await js(welcomeState);
-  log(`${!afterEsc.shown && afterEsc.reader ? 'ok' : 'FAIL'} Esc closes the welcome screen: ${JSON.stringify({ shown: afterEsc.shown, reader: afterEsc.reader })}`);
-
-  send(win.webContents, 'welcome:open'); // the welcome reopened, as a launch would
-  const reopened = await waitFor(async () => ((await js(welcomeState)).shown ? true : null), 5000);
-  await js("document.querySelector('.welcome-start').click()");
-  await wait(300);
-  const started = await js(`({ shown: !document.getElementById('welcome').hidden, tabs: document.querySelectorAll('#tab-strip [role="tab"]').length, active: Boolean(PastelTerm.tabs.active()) })`);
-  log(`${reopened && !started.shown && started.active ? 'ok' : 'FAIL'} reopened, Start goes to the tab: ${JSON.stringify({ reopened: Boolean(reopened), ...started })}`);
-}
-
-// PASTEL_SNAPSHOT_MODE=welcome-relaunch on the same userData: the second launch skips it.
-export async function welcomeRelaunchCheck({ js, log }: Kit): Promise<void> {
-  const state = await js(welcomeState);
-  log(`${!state.shown && state.reader && configStore.load().welcome.seen ? 'ok' : 'FAIL'} second launch skips the welcome screen: ${JSON.stringify({ shown: state.shown, reader: state.reader })}`);
+  await js("PastelTerm.customize.open('formatting')");
+  await waitFor(() => js("document.querySelector('#customize-body .cz-preview') ? true : null"), 5000);
+  const installable = (await js('window.pastel.config.get()')).petalStyles?.installable === true;
+  const button = await js("document.querySelector('#customize-body .cz-petal-add')?.textContent ?? null");
+  log(`${(button === 'Add Petal’s reply styles') === installable ? 'ok' : 'FAIL'} Customize › Formatting offers Petal's reply styles while some are missing: ${JSON.stringify({ installable, button })}`);
+  await js('PastelTerm.customize.close()');
 }
 
 // A new user's config: no schedule, and no organizer pass all run long (the first one would come after 20s).

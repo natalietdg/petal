@@ -363,7 +363,6 @@ export interface EventChannels {
   'claude:stop': void; // ⌘.: Esc to the active tab's working Claude
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
-  'welcome:open': void; // snapshot runs only
   'get-started:open': void; // snapshot runs only
   'pet-guide:open': void; // Help › Get started
   'claude-folder:changed': boolean; // reading ~/.claude allowed or not

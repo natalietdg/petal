@@ -118,7 +118,7 @@ export interface StepIsolation {
 
 const sameJson = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
-// Call once the run is at its resting state (after the welcome step closes the first-run screen).
+// Call once the run is at its resting state (after the launch step closes Get started).
 export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<StepIsolation> {
   const { js, log, waitFor } = kit;
   flushActivity();

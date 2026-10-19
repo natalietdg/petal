@@ -196,7 +196,7 @@ export async function petSizeCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   appendReply(file);
   check(await waitFor(() => js(`document.getElementById('latest').innerText.includes(${JSON.stringify(MARKER)})`), 10000), 'fixture reply shown');
   await js(OPEN_SECTIONS); // her size is measured against the full reply
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js("PastelTerm.reader.setView('replies')");
   await js("PastelTerm.cat.setScene('cherry')");
 

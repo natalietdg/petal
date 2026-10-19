@@ -229,7 +229,7 @@ export async function questionPickerCheck(kit: Kit, { win, activeSession, file }
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} ${what}`);
   const { card, click, show, clearScreen, cardWhen, capturePair } = screenDriver(kit, session);
   const latestText = (): Promise<string> => js("document.getElementById('latest').innerText");
-  await js('PastelTerm.welcome.close()'); // her state: the first-run screen is long gone
+  await js('PastelTerm.getStarted.close()'); // her state: Get started is long gone
 
   appendOpenTurn(file);
   const open = await waitFor(async () => ((await latestText()).includes('so combine both') ? true : null), 10000);

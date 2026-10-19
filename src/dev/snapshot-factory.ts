@@ -63,7 +63,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const savedLine = () => waitFor(async () => (await js(SAVED_LINE)) === 'Saved. Claude follows this from your next message.', 5000);
 
   try {
-    await run('PastelTerm.welcome?.close?.()');
+    await run('PastelTerm.getStarted.close()');
     resizeOffscreen(win, WIDTH, HEIGHT);
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
     await js('window.__fxConfirms = 0; window.__fxConfirm = window.confirm; window.confirm = () => { window.__fxConfirms++; return true; }; true');

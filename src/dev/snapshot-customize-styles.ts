@@ -103,7 +103,7 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
   })).sort((a, b) => a.name.localeCompare(b.name));
 
   try {
-    await js('PastelTerm.welcome?.close?.()');
+    await js('PastelTerm.getStarted.close()');
     resizeOffscreen(win, WIDTH, HEIGHT);
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
 

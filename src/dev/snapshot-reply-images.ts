@@ -97,7 +97,7 @@ export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const outside = '/System/Library/CoreServices/Finder.app/Contents/Resources/Finder.png';
   const markdown = replyText(outside);
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   const update = { state: 'live', cwd: repo, replies: [{ id: 'reply-images-new', timestamp: '2026-10-16T09:40:00.000Z', prompt: 'where are the screenshots?', markdown }] };
   const showSample = async () => {
     await js(`PastelTerm.reader.update(${JSON.stringify(update)})`);
