@@ -5,6 +5,9 @@ import { repoBranch, repoRoot } from './repo-label';
 import { loadTasks, newPrdId, newTaskId, updateTasks } from './tasks-store';
 import { listActivity, recordActivity } from './activity-feed';
 import * as coord from './coord';
+import { claudeFolderAllowed } from './claude-folder';
+import { recentProjects } from './testing-ipc';
+import { listedRoot } from '../shared/task-testing';
 import { addTask, assignTask, editTask, moveTask, releaseTask, removeTask, taskBrief, type Prd, type Task, type TaskData, type TaskOwner } from '../shared/tasks';
 import { addPrd, editPrd, removePrd, setTaskPrd, splitTask } from '../shared/task-groups';
 import type { TaskChangeResult, TaskOp, TasksView } from '../shared/coord';
@@ -31,8 +34,16 @@ export function registerTasksIpc({ sessions }: { sessions: TabSessions }): void 
 
   handle('tasks:get', (event, { tabId }) => viewOf(projectOf(event.sender.id, tabId)));
 
-  handle('tasks:change', async (event, { tabId, op }) => {
-    const project = projectOf(event.sender.id, tabId);
+  // Testing's first task for a tab in ~: an add to one of the recent projects main lists, never any path the renderer names.
+  const pickedProject = async (picked: unknown, op: TaskOp): Promise<TabProject> => {
+    if (op.kind !== 'add' || !claudeFolderAllowed()) throw new Error('Tasks can only be added to a recent project here.');
+    const root = listedRoot(picked, await recentProjects(sessions));
+    if (!root) throw new Error('That project isn’t one of your recent projects.');
+    return { root, sessionId: null, cwd: root };
+  };
+
+  handle('tasks:change', async (event, { tabId, op, root: picked }) => {
+    const project = picked == null ? projectOf(event.sender.id, tabId) : await pickedProject(picked, op as TaskOp);
     const root = project.root;
     if (!root) throw new Error('Open a Claude session in a git repo to keep tasks for it.');
     const result = changeTasks(root, op as TaskOp, (toTabId) => {
@@ -57,7 +68,11 @@ function changeTasks(root: string, op: TaskOp, ownerOf: (tabId: string) => TaskO
   let extra: Partial<TaskChangeResult> = {};
   updateTasks(root, (tasks, data): { tasks: Task[]; prds?: Prd[] } | null => {
     switch (op.kind) {
-      case 'add': return { tasks: addTask(tasks, op, newTaskId(), now, data.prds.some((p) => p.id === op.prdId) ? op.prdId ?? null : null) };
+      case 'add': {
+        const id = newTaskId();
+        extra = { added: id };
+        return { tasks: addTask(tasks, op, id, now, data.prds.some((p) => p.id === op.prdId) ? op.prdId ?? null : null) };
+      }
       case 'edit': return { tasks: editTask(tasks, op.id, op) };
       case 'move': return { tasks: moveTask(tasks, op.id, op.to) };
       case 'delete': return { tasks: removeTask(tasks, op.id) };

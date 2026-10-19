@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { addTask, type Task } from '../src/shared/tasks';
 import { addPrd, setTaskPrd, splitTask } from '../src/shared/task-groups';
-import { pickGroups, type ProjectTasks } from '../src/shared/task-testing';
+import { listedRoot, pickGroups, type ProjectTasks } from '../src/shared/task-testing';
 
 // acme: PRD "Checkout" holds a, split into a1; b is ungrouped. a1 has a suite.
 function acme(): ProjectTasks {
@@ -33,5 +33,18 @@ describe('pickGroups', () => {
     const groups = pickGroups([empty, acme(), second]);
     expect(groups.map((g) => `${g.project}:${g.prd ?? '-'}`)).toEqual(['acme:Checkout', 'acme:-', 'second:Checkout', 'second:-']);
     expect(pickGroups([empty])).toEqual([]);
+  });
+});
+
+describe('listedRoot', () => {
+  const projects = [{ root: '/r/acme', name: 'acme' }, { root: '/r/notes', name: 'notes' }];
+
+  it('keeps a root that is exactly one of the listed projects', () => {
+    expect(listedRoot('/r/notes', projects)).toBe('/r/notes');
+  });
+
+  it('refuses anything else the renderer sends', () => {
+    for (const root of ['/r/other', '/r/acme/', '/r/acme/src', '/r/../r/acme', '', null, undefined, 42, { root: '/r/acme' }]) expect(listedRoot(root, projects)).toBeNull();
+    expect(listedRoot('/r/acme', [])).toBeNull();
   });
 });

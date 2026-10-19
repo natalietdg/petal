@@ -86,8 +86,8 @@ export interface StackItem {
 
 export interface ProjectRef { root: string; name: string }
 
-// Why the tab's folder is not a project, and the recent projects' tasks she can pick instead.
-export interface Elsewhere { reason: 'home' | 'no-repo'; groups: PickGroup[] }
+// Why the tab's folder is not a project, the recent projects' tasks she can pick instead, and those projects (newest first) to add one to.
+export interface Elsewhere { reason: 'home' | 'no-repo'; groups: PickGroup[]; projects: ProjectRef[] }
 
 export interface TestingState {
   allowed: boolean; // the folder gate; false reads nothing

@@ -5,7 +5,7 @@ import { groupTasks } from '../shared/task-groups';
 import { parseTarget, targetValue, type OverviewRow, type PickGroup, type TestTarget } from '../shared/task-testing';
 import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
-import type { LockView } from '../shared/testing';
+import type { Elsewhere, LockView, ProjectRef } from '../shared/testing';
 import { restoredText, type RestoredFlag } from '../shared/test-lock';
 
 // Grouped by PRD, then No PRD; each PRD opens with its overview, subtasks sit under their task.
@@ -61,14 +61,48 @@ export function prdOverview(rows: OverviewRow[], open: (taskId: string) => void)
   return box;
 }
 
-// The tab is in ~ or outside a repo: recent projects' tasks by PRD; a row opens that task's suite.
-export function elsewherePicker(groups: readonly PickGroup[], choose: (root: string, taskId: string) => void): HTMLElement {
+// The tab is in ~ or outside a repo: recent projects' tasks by PRD; a row opens that task's suite. With none, add the first one here.
+export function elsewherePicker({ groups, projects }: Elsewhere, choose: (root: string, taskId: string) => void, add: (root: string, title: string) => Promise<void>): HTMLElement {
   const box = el('div', 'tst-picker');
   box.append(el('p', 'tst-picker-title', 'This tab isn’t in a project. Pick a task:'));
   if (!groups.length) {
-    box.append(el('p', 'tst-muted', 'None of your recent projects has tasks yet. Add tasks on the Board.'));
+    box.append(projects.length ? firstTaskForm(projects, add) : el('p', 'tst-muted', 'No recent projects yet. Open a tab in a repo (cd into it) first.'));
     return box;
   }
+  pickList(box, groups, choose);
+  return box;
+}
+
+// Project (newest first), title, Add task. Enter submits; an empty title does nothing.
+function firstTaskForm(projects: readonly ProjectRef[], add: (root: string, title: string) => Promise<void>): HTMLElement {
+  const form = el('form', 'tst-add-first');
+  const project = el('select', 'tst-task-select tst-add-project');
+  project.setAttribute('aria-label', 'Project');
+  for (const p of projects) {
+    const option = new Option(p.name, p.root);
+    option.title = p.root;
+    project.append(option);
+  }
+  const title = el('input', 'tst-input tst-add-title');
+  title.type = 'text';
+  title.placeholder = 'What are you building?';
+  title.setAttribute('aria-label', 'Task title');
+  const submit = el('button', 'tst-button tst-primary tst-add-task', 'Add task');
+  submit.type = 'submit';
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const text = title.value.trim();
+    if (!text || submit.disabled) return;
+    submit.disabled = true;
+    void add(project.value, text).finally(() => { submit.disabled = false; });
+  });
+  const row = el('div', 'tst-add-row');
+  row.append(project, title, submit);
+  form.append(el('p', 'tst-muted', 'No tasks yet. Add one to start its test suite:'), row);
+  return form;
+}
+
+function pickList(box: HTMLElement, groups: readonly PickGroup[], choose: (root: string, taskId: string) => void): void {
   for (const group of groups) {
     const list = el('ul', 'tst-picker-list');
     list.setAttribute('aria-label', `${group.prd ?? 'No PRD'} in ${group.project}`);
@@ -87,7 +121,6 @@ export function elsewherePicker(groups: readonly PickGroup[], choose: (root: str
     }
     box.append(el('h3', 'tst-pick-group', group.prd ? `PRD · ${group.prd}` : 'No PRD'), list);
   }
-  return box;
 }
 
 export function noTasks(openBoard: () => void): HTMLElement {

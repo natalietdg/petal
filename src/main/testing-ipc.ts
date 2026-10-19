@@ -272,7 +272,7 @@ const named = (runs: PipelineRun[]): PipelineRun[] => {
 const PICK_MAX = 8;
 
 // Projects whose tasks to offer when the tab is in ~ or outside a repo: open tabs', where Claude ran checks, recent sessions'.
-async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
+export async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
   const seen = new Map<string, number>(); // root -> most recent use
   const note = (root: string | null, at: number) => { if (root) seen.set(root, Math.max(seen.get(root) ?? 0, at)); };
   for (const s of sessions.values()) note(await projectOf(s), Date.now());
@@ -285,7 +285,8 @@ async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
 async function elsewhereFor(session: TabSession | undefined, sessions: TabSessions): Promise<Elsewhere | null> {
   const cwd = session ? await cwdOf(session) : null;
   if (!cwd) return null;
-  return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', groups: pickGroups((await recentProjects(sessions)).map(projectTasks)) };
+  const projects = await recentProjects(sessions);
+  return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', groups: pickGroups(projects.map(projectTasks)), projects };
 }
 
 // A project's tasks for the picker, read only; a tasks file that doesn't parse lists nothing.

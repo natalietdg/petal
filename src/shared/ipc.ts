@@ -298,7 +298,7 @@ export interface InvokeChannels {
   'activity:list': { args: []; result: Guarded<ActivityEvent[]> };
   // The Board's Tasks: the tab's project list, and one change to it (giving a task returns the brief to send).
   'tasks:get': { args: [request: { tabId: TabId }]; result: Guarded<TasksView> };
-  'tasks:change': { args: [request: { tabId: TabId; op: TaskOp }]; result: Guarded<TaskChangeResult> };
+  'tasks:change': { args: [request: { tabId: TabId; op: TaskOp; root?: string | null }]; result: Guarded<TaskChangeResult> };
   // Every live session's repo, branch, task and file clashes.
   'coord:get': { args: []; result: Guarded<CoordView> };
   // A picture a reply names (main/reply-image.ts checks each): why it isn't shown, Show in Finder, Open in its default app.
