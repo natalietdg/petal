@@ -8,7 +8,7 @@ import { roundSummaries, type AgentAction } from '../shared/agent-actions';
 import { AGENT_NAME_MAX, type AgentRole } from '../shared/agent-names';
 import { tokenText, usageText, type RoundEstimate } from '../shared/token-usage';
 import { render } from './markdown';
-import type { ChatTurn } from '../shared/agent-chat';
+import { chatPlaceholder, type ChatTurn, type LaneReach } from '../shared/agent-chat';
 import type { LoopEvent } from '../shared/testing';
 
 const LOG_PAGE = 20;
@@ -20,6 +20,7 @@ export interface LaneModel {
   name: string;
   started: boolean; // Petal started this agent for the task
   tabId: string | null; // its tab, when open here
+  reach: LaneReach; // how her message gets to it
   status: string; // what it is doing now
   busy: boolean;
   needsYou: boolean; // a prompt on its screen waits on her
@@ -51,6 +52,7 @@ export interface AgentsHandlers {
   rename: (role: AgentRole | null) => void; // start or cancel renaming
   saveName: (role: AgentRole, name: string) => void;
   openTab: (tabId: string) => void;
+  reopen: (role: AgentRole) => void; // its saved session in a new tab
   toggleLog: (role: AgentRole) => void;
   showOlder: (role: AgentRole) => void;
   setView: (role: AgentRole, view: 'chat' | 'actions') => void;
@@ -102,14 +104,15 @@ function chat(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElem
   const refusal = lane.actions.filter((a) => a.kind === 'refused' && a.at >= lane.startedAt).at(-1); // the newest since the loop started
   const form = el('form', 'tst-agent-send');
   const input = el('textarea', 'tst-input tst-agent-input');
-  Object.assign(input, { rows: 2, value: model.drafts[lane.role] ?? '', placeholder: `Message ${lane.name}` });
+  const reachable = lane.reach === 'tab' || lane.reach === 'reopen';
+  Object.assign(input, { rows: 2, value: model.drafts[lane.role] ?? '', placeholder: chatPlaceholder(lane.name, lane.reach) });
   input.setAttribute('aria-label', `Message ${lane.name}`);
-  input.disabled = !lane.tabId;
+  input.disabled = !reachable;
   input.addEventListener('input', () => on.draft(lane.role, input.value));
   input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
   const send = el('button', 'tst-button tst-agent-send-button', 'Send');
   send.type = 'submit';
-  send.disabled = !lane.tabId;
+  send.disabled = !reachable;
   form.addEventListener('submit', (event) => { event.preventDefault(); on.send(lane.role, input.value); });
   form.append(input, send);
   box.append(turns);
@@ -176,10 +179,10 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
     rename.addEventListener('click', () => on.rename(lane.role));
     head.append(name, rename);
   }
-  if (lane.tabId && !lane.needsYou) { // Needs you has its own Show its tab
+  if ((lane.tabId && !lane.needsYou) || lane.reach === 'reopen') { // Needs you has its own Show its tab
     const open = el('button', 'tst-link tst-agent-tab', 'Open tab');
     open.type = 'button';
-    open.addEventListener('click', () => on.openTab(lane.tabId as string));
+    open.addEventListener('click', () => (lane.tabId ? on.openTab(lane.tabId) : on.reopen(lane.role)));
     head.append(open);
   }
   const facts = el('p', 'tst-agent-status');
