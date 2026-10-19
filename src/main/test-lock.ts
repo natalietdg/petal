@@ -9,10 +9,10 @@ import lockScript from '../../resources/hooks/petal-test-lock.mjs?raw';
 import { writeFileDurable } from './atomic-file';
 import { ensureSelfIgnore } from './factory-store';
 import { projectHash, testingDir } from './testing-store';
-import { LOCK_SCRIPT, hasLockHook, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
+import { LOCK_SCRIPT, hasLockHook, lockHookStale, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
 import {
-  LEGACY_LOCKED_COPIES, LOCK_FILE, SUITE_PREFIX, emptyManifest, integrityStep, lastToucher, lockedFiles, readManifest,
-  type LockInputs, type LockManifest, type RestoredFlag,
+  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, SUITE_PREFIX, emptyManifest, integrityStep, lastToucher, lockedFiles, mainRefusals, readManifest,
+  type LockInputs, type LockManifest, type LockRefusal, type RestoredFlag,
 } from '../shared/test-lock';
 import type { AgentNames } from '../shared/agent-names';
 
@@ -53,7 +53,7 @@ export const lockHookPresent = (root: string): boolean => { const s = readSettin
 export function setLock(root: string, on: boolean): string | null {
   const settings = readSettings(root);
   if (!settings.ok) return 'This repo’s Claude settings.local.json isn’t valid JSON. Fix it first; Petal won’t write over it.';
-  const next = on ? mergeLockHook(settings.value) : unmergeLockHook(settings.value);
+  const next = on ? mergeLockHook(settings.value, root) : unmergeLockHook(settings.value);
   if (on) {
     fs.mkdirSync(path.join(root, '.petal'), { recursive: true });
     ensureSelfIgnore(path.join(root, '.petal'), root);
@@ -65,6 +65,27 @@ export function setLock(root: string, on: boolean): string | null {
   }
   saveManifest(root, { ...loadManifest(root), enabled: on });
   return null;
+}
+
+// An install from an older build: the bundled script and the absolute hook command replace the old ones. A broken
+// settings file is left alone.
+export function upgradeLock(root: string): void {
+  if (!loadManifest(root).enabled) return;
+  const script = at(root, LOCK_SCRIPT);
+  let current = '';
+  try { current = fs.readFileSync(script, 'utf8'); } catch { /* missing: written below */ }
+  if (current !== lockScript) writeFileDurable(script, lockScript, undefined, { within: root });
+  const settings = readSettings(root);
+  if (settings.ok && lockHookStale(settings.value, root)) writeFileDurable(settingsFile(root), `${JSON.stringify(mergeLockHook(settings.value, root), null, 2)}\n`, undefined, { within: root });
+}
+
+// Refusals of sessions that aren't agents, since she last dismissed them.
+export function lockRefusals(root: string, manifest: LockManifest): LockRefusal[] {
+  try {
+    return mainRefusals(fs.readFileSync(at(root, REFUSALS_FILE), 'utf8'), manifest, root);
+  } catch {
+    return [];
+  }
 }
 
 const sha = (bytes: Buffer): string => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -171,7 +192,7 @@ export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, name
   const unconfirmed: RestoredFlag[] = [];
   for (const rel of Object.keys(owners)) {
     if (rel.startsWith(SUITE_PREFIX)) continue;
-    const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root, changedAt(root, rel)), sessions);
+    const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root, changedAt(root, rel)), sessions, owners[rel] ?? null);
     const kept = step.kind === 'approve' ? keepCopy(root, rel) : null;
     if (kept) approved[rel] = kept;
     if (step.kind === 'restore' && restoreCopy(root, rel)) restored.push({ path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: step.by });
@@ -205,8 +226,8 @@ export function resolveUnconfirmed(root: string, rel: string, keep: boolean): st
   return null;
 }
 
-// Clears the task's "Restored" lines; questions still waiting for Keep or Restore stay.
-export function dismissRestored(root: string, taskId: string): void {
+// Clears the task's "Restored" lines and the main session's refusals; questions still waiting for Keep or Restore stay.
+export function dismissRestored(root: string, taskId: string, now = Date.now()): void {
   const manifest = loadManifest(root);
-  saveManifest(root, { ...manifest, restored: manifest.restored.filter((f) => f.taskId !== taskId || isUnconfirmed(f)) });
+  saveManifest(root, { ...manifest, restored: manifest.restored.filter((f) => f.taskId !== taskId || isUnconfirmed(f)), refusalsSeen: now });
 }

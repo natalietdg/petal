@@ -2,7 +2,7 @@
 import type { Prd, Task } from './tasks';
 import type { SuiteRecord, SuiteViews } from './task-suite';
 import type { AgentNames, AgentRole } from './agent-names';
-import type { RestoredFlag } from './test-lock';
+import type { LockRefusal, RestoredFlag } from './test-lock';
 import type { PickSession } from './task-testing';
 import type { QueuedBug } from './bug-queue';
 import type { CriteriaItem } from './test-loop';
@@ -131,8 +131,8 @@ export interface TestingState {
 }
 
 // The test lock as the Testing tab shows it.
-export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[] }
-export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [] };
+export interface LockView { enabled: boolean; hookPresent: boolean; restored: RestoredFlag[]; refusals: LockRefusal[] } // refusals: the main session's
+export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored: [], refusals: [] };
 
 // The project's commands from before suites were per task: .petal/pipeline.json, else the pipeline she saved. A seed only.
 export type SuiteSeed = { stages: StageConfig[] } | { problem: string };

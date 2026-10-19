@@ -21,11 +21,11 @@ import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
-import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, settleOutsideChange, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
 import { setAgentTitle } from './agent-titles';
 import { readAgentLog } from './agent-log';
 import { NO_TOKENS } from '../shared/token-usage';
-import { dismissRestored, lockHookPresent, loadManifest, refreshLock, resolveUnconfirmed, setLock } from './test-lock';
+import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import { cleanSavedLoop, noEvents, withEvent } from '../shared/agent-loop';
 import type { LockManifest } from '../shared/test-lock';
@@ -210,12 +210,8 @@ export interface ProjectChecks { suites: SuiteViews; lock: LockView }
 async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<ProjectChecks> {
   const { tasks } = loadTasks(root);
   if (!claudeFolderAllowed()) return { suites: syncSuites(root, tasks), lock: lockView(root, loadManifest(root)) };
-  const logs = openLogs(sessions);
-  const { found, writes, touches } = await logCalls(logs);
-  const closed = await closedAgentFinds(root, logs);
-  const allTouches = [...touches, ...closed.touches];
-  const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
-  const suites = syncSuites(root, tasks, [...writes, ...closed.writes]);
+  const { found, writes, manifest } = await lockFromLogs(root, sessions, tasks);
+  const suites = syncSuites(root, tasks, writes);
   const names = store.load(root).agentNames;
   for (const agent of allAgents(root)) {
     const task = tasks.find((t) => t.id === agent.taskId);
@@ -225,7 +221,54 @@ async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<Pro
   return { suites, lock: lockView(root, manifest) };
 }
 
-const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored });
+const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored, refusals: lockRefusals(root, manifest) });
+
+// Every open and closed agent log read, then the lock's integrity check with what they touched.
+async function lockFromLogs(root: string, sessions: TabSessions, tasks: readonly Task[]): Promise<{ found: LogFinds['found']; writes: SuiteWrite[]; manifest: LockManifest }> {
+  const logs = openLogs(sessions);
+  const { found, writes, touches } = await logCalls(logs);
+  const closed = await closedAgentFinds(root, logs);
+  const inputs = { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: [...touches, ...closed.touches] };
+  return { found, writes: [...writes, ...closed.writes], manifest: refreshLock(root, inputs, store.load(root).agentNames ?? {}) };
+}
+
+// ---- The lock keeps up with Testing closed: on a timer and after each Claude turn, for repos with the lock on.
+const LOCK_TICK_MS = 10_000;
+const lockBusy = new Set<string>(); // roots mid-refresh, so a slow read never stacks up
+
+async function refreshRepoLock(root: string, sessions: TabSessions): Promise<void> {
+  if (lockBusy.has(root) || !claudeFolderAllowed() || !loadManifest(root).enabled) return;
+  lockBusy.add(root);
+  try {
+    upgradeLock(root);
+    await lockFromLogs(root, sessions, loadTasks(root).tasks);
+  } catch (error) {
+    console.error(`[petal] test lock refresh failed for ${root}:`, error);
+  } finally {
+    lockBusy.delete(root);
+  }
+}
+
+// The repos of open Claude sessions and run tabs.
+function openRepos(sessions: TabSessions): Set<string> {
+  const roots = new Set(runTabs.values());
+  for (const { feed } of sessions.values()) {
+    const root = projectRootOf(feed.session?.cwd ?? null);
+    if (root) roots.add(root);
+  }
+  return roots;
+}
+
+function startLockTimer(sessions: TabSessions): void {
+  setInterval(() => { for (const root of openRepos(sessions)) void refreshRepoLock(root, sessions); }, LOCK_TICK_MS).unref();
+}
+
+// After a Claude turn ends: its repo's lock catches up at once instead of on the next tick.
+export async function refreshLockAfterTurn(session: TabSession): Promise<void> {
+  if (!deps) return;
+  const root = await projectOf(session);
+  if (root) await refreshRepoLock(root, deps.sessions);
+}
 
 // Claude's runs in these logs that ran in this project, added once each; used for a concluded session's This session line.
 export async function mergeLogRuns(root: string, logs: readonly SessionLog[]): Promise<void> {
@@ -499,6 +542,7 @@ const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): 
 
 export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   deps = { sessions, openTab };
+  startLockTimer(sessions);
   // The project and one of its tasks, for the calls that act on a task's suite.
   const taskTarget = async (contentsId: number, tabId: unknown, picked: unknown, taskId: unknown): Promise<{ root: string; task: Task; tasks: Task[] } | { note: string }> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
@@ -687,6 +731,14 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (clean === null) delete names[role as AgentRole]; else names[role as AgentRole] = clean;
     store.save({ ...data, agentNames: names });
     return { ok: true };
+  });
+
+  // Her Use this file or Keep the old suite, for a suite file changed outside the testing agent.
+  handle('testing:suite-outside', async (event, { tabId, root: picked, taskId, use }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const problem = settleOutsideChange(target.root, target.task.id, use === true);
+    return problem ? { note: problem } : { ok: true };
   });
 
   handle('testing:undo-suite', async (event, { tabId, root: picked, taskId }) => {

@@ -262,6 +262,7 @@ export interface InvokeChannels {
   'testing:lock-dismiss': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:lock-resolve': { args: [request: { tabId: TabId; root?: string | null; taskId: string; path: string; keep: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:agent-name': { args: [request: { tabId: TabId; root?: string | null; role: AgentRole; name: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:suite-outside': { args: [request: { tabId: TabId; root?: string | null; taskId: string; use: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:run': { args: [request: { tabId: TabId; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
