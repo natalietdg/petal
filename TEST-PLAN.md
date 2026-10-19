@@ -20,7 +20,7 @@ Test launches: run the Electron binary directly under `perl -e 'alarm N; exec @A
 - [ ] B2 History → Open a past session lands in a new tab.
 - [ ] B3 History → Send to Claude types the read line into the active tab.
 - [ ] B4 Tags: + Tag, × on a chip, filter bar.
-- [ ] B5 Workflow button: all four sections load.
+- [ ] B5 Customize › Today, Setup, Time, Handoffs and Factory: all five Workflow tabs load.
 
 ## C. Release (after A and B pass)
 - [ ] C1 Developer ID Application certificate installed.

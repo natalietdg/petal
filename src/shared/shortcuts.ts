@@ -124,7 +124,7 @@ export const GUIDE: readonly GuideGroup[] = [
     rows: [
       { word: 'conclude', does: 'Pins the Conclusion / Result / Impact banner, then ends the session after the reply' },
       { word: 'conclude: note', does: 'Pins the banner with your note; the session stays open' },
-      { word: '/factory', does: 'Follows the stations you set in Workflow › Factory' },
+      { word: '/factory', does: 'Follows the stations you set in Customize › Factory' },
       { word: 'Doing: · Recommend: · Next:', does: 'Lines Claude starts this way show in the status strip' },
     ],
   },

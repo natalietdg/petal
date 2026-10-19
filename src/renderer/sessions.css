@@ -12,8 +12,8 @@
   gap: 10px;
   font-family: var(--ui-font);
 }
-/* Over History, Workflow, Customize or Open Repo the band goes clear, so their own top shows through as before. */
-#reader-area:has(> :is(#history, #workflow, #customize, #repos):not([hidden])) #sessions-dock { background: none; }
+/* Over History, Customize or Open Repo the band goes clear, so their own top shows through as before. */
+#reader-area:has(> :is(#history, #customize, #repos):not([hidden])) #sessions-dock { background: none; }
 
 /* History sits beside the Sessions pill, quieter so the pill stays the obvious one. */
 .dock-button {

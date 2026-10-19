@@ -1,4 +1,4 @@
-// Workflow › Factory (PASTEL_SNAPSHOT_MODE=factory), against a stand-in ~/.claude and a fixture repo in the snapshot folder:
+// Customize › Factory (PASTEL_SNAPSHOT_MODE=factory), against a stand-in ~/.claude and a fixture repo in the snapshot folder:
 // the seven default stations in order; an edit, an add, a remove, a button move and a drag each land in SKILL.md;
 // removing asks inline, never with a browser dialog; the project override goes to the fixture repo's .petal and the
 // scope line switches; Use global takes it away again; nothing spills sideways at 800px. The Test badge reads Claude,
@@ -16,16 +16,16 @@ const HEIGHT = 900;
 const NEW_TEXT = 'Quote her words exactly. Snapshot edit 7f3a.';
 const PROJECT_TEXT = 'Project-only intake rule 91c2.';
 
-const NAMES = "[...document.querySelectorAll('#workflow .fx-chart .fx-node')].map((n) => n.querySelector('.fx-name').textContent)";
-const FOLLOWS = "document.querySelector('#workflow .fx-follows')?.textContent ?? ''";
-const SAVED_LINE = "document.querySelector('#workflow .fx-saved')?.textContent ?? ''";
-const click = (selector: string): string => `document.querySelector(${JSON.stringify(`#workflow ${selector}`)}).click()`;
+const NAMES = "[...document.querySelectorAll('#customize .fx-chart .fx-node')].map((n) => n.querySelector('.fx-name').textContent)";
+const FOLLOWS = "document.querySelector('#customize .fx-follows')?.textContent ?? ''";
+const SAVED_LINE = "document.querySelector('#customize .fx-saved')?.textContent ?? ''";
+const click = (selector: string): string => `document.querySelector(${JSON.stringify(`#customize ${selector}`)}).click()`;
 const type = (selector: string, value: string, event = 'input'): string =>
-  `(() => { const e = document.querySelector(${JSON.stringify(`#workflow ${selector}`)}); e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event(${JSON.stringify(event)}, { bubbles: true })); })()`;
+  `(() => { const e = document.querySelector(${JSON.stringify(`#customize ${selector}`)}); e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event(${JSON.stringify(event)}, { bubbles: true })); })()`;
 const drag = (from: string, to: string): string => `(() => {
   const dt = new DataTransfer();
-  const src = document.querySelector('#workflow [data-station="${from}"]');
-  const dst = document.querySelector('#workflow [data-station="${to}"]');
+  const src = document.querySelector('#customize [data-station="${from}"]');
+  const dst = document.querySelector('#customize [data-station="${to}"]');
   src.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
   dst.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
   dst.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
@@ -33,7 +33,7 @@ const drag = (from: string, to: string): string => `(() => {
 })()`;
 const FIT = `(() => {
   const W = window.innerWidth;
-  const pane = document.getElementById('workflow');
+  const pane = document.getElementById('customize');
   const outside = [...pane.querySelectorAll('.fx-node, .fx-scope, .fx-editor, .fx-follows')].filter((e) => e.getBoundingClientRect().right > W + 1).map((e) => e.className);
   return { doc: document.documentElement.scrollWidth, pane: [pane.scrollWidth, pane.clientWidth], inner: W, outside };
 })()`;
@@ -68,16 +68,16 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === WIDTH; }, 3000), `${WIDTH}px window sized`);
     await js('window.__fxConfirms = 0; window.__fxConfirm = window.confirm; window.confirm = () => { window.__fxConfirms++; return true; }; true');
 
-    await run('PastelTerm.workflow.open()');
-    await run("document.querySelector('#workflow-tabs button[data-tab=\"factory\"]').click()");
-    check(await nodeCount(7), 'Workflow › Factory opens with seven cards');
+    await run('PastelTerm.customize.open()');
+    await run("document.querySelector('#customize-tabs button[data-section=\"factory\"]').click()");
+    check(await nodeCount(7), 'Customize › Factory opens with seven cards');
     check(JSON.stringify(await js(NAMES)) === JSON.stringify(DEFAULT_STATIONS.map((s) => s.name)), `default stations in order: ${JSON.stringify(await js(NAMES))}`);
-    const badges: string[] = await js("[...document.querySelectorAll('#workflow .fx-runner')].map((b) => b.textContent)");
+    const badges: string[] = await js("[...document.querySelectorAll('#customize .fx-runner')].map((b) => b.textContent)");
     check(badges.length === 7 && badges[1] === 'Subagent · Plan' && badges[3] === 'Claude' && badges[5] === 'You approve', `who-runs badges: ${JSON.stringify(badges)}`);
-    check((await js("document.querySelectorAll('#workflow .fx-arrow svg').length")) === 6, 'six arrows between seven cards');
+    check((await js("document.querySelectorAll('#customize .fx-arrow svg').length")) === 6, 'six arrows between seven cards');
     check(/isn’t following a factory yet/.test(await js(FOLLOWS)), `before any save: ${await js(FOLLOWS)}`);
     check(!fs.existsSync(skill), 'opening writes nothing');
-    const addText = await js("document.querySelector('#workflow [data-station=\"build\"] [data-tool=\"add\"]')?.textContent ?? ''");
+    const addText = await js("document.querySelector('#customize [data-station=\"build\"] [data-tool=\"add\"]')?.textContent ?? ''");
     check(addText === 'Add', `the add button shows “Add”: ${JSON.stringify(addText)}`);
     const fit = await js(FIT);
     check(fit.doc <= fit.inner && fit.pane[0] <= fit.pane[1] && !fit.outside.length, `fits ${WIDTH}px with no sideways scroll: ${JSON.stringify(fit)}`);
@@ -105,7 +105,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
 
     // Remove it, through the inline confirm.
     await run(click('[data-station="review"] [data-tool="remove"]'));
-    check(await waitFor(() => js("Boolean(document.querySelector('#workflow .fx-remove-yes'))"), 3000), 'Remove asks inline first');
+    check(await waitFor(() => js("Boolean(document.querySelector('#customize .fx-remove-yes'))"), 3000), 'Remove asks inline first');
     await run(click('.fx-remove-yes'));
     check(await nodeCount(7) && !headings(skill).some((h) => h.includes('Review')), `removed from SKILL.md: ${JSON.stringify(headings(skill))}`);
     check((await js('window.__fxConfirms')) === 0, 'no browser dialog was used');
@@ -120,7 +120,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
 
     // Project override: copied from global into the fixture repo's .petal, and the scope line switches.
     await run(click('.fx-scope [data-scope="project"]'));
-    check(new RegExp(`This project \\(${path.basename(repo)}\\)`).test(await js("document.querySelector('#workflow .fx-scope [data-scope=\"project\"]').textContent")), 'scope switch names the fixture repo');
+    check(new RegExp(`This project \\(${path.basename(repo)}\\)`).test(await js("document.querySelector('#customize .fx-scope [data-scope=\"project\"]').textContent")), 'scope switch names the fixture repo');
     await run(click('.fx-customise'));
     check(await waitFor(() => fs.existsSync(projectMd) && fs.existsSync(path.join(repo, '.petal', 'factory.json')), 5000), 'Customise for this project writes .petal/factory.json and factory.md');
     const ignores = [path.join(repo, '.petal', '.gitignore'), path.join(path.dirname(projectSkill), '.gitignore')].map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null));
@@ -128,7 +128,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await waitFor(async () => /this project’s factory/.test(await js(FOLLOWS)), 3000), `scope line follows the project: ${await js(FOLLOWS)}`);
     const globalBefore = fs.readFileSync(skill, 'utf8');
     await run(click('[data-station="intake"] .fx-card'));
-    await waitFor(() => js("Boolean(document.querySelector('#workflow #fx-instructions'))"), 3000);
+    await waitFor(() => js("Boolean(document.querySelector('#customize #fx-instructions'))"), 3000);
     await run(type('#fx-instructions', PROJECT_TEXT));
     await run(click('.fx-save'));
     await savedLine();
@@ -150,7 +150,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(/A factory skill you wrote already exists/.test(refused?.error ?? '') && fs.readFileSync(skill, 'utf8') === hers, `her own skill is never overwritten: ${JSON.stringify(refused)}`);
   } finally {
     await js('if (window.__fxConfirm) window.confirm = window.__fxConfirm; true');
-    await run('PastelTerm.workflow.close()');
+    await run('PastelTerm.customize.close()');
     Object.assign(factoryFixture, saved);
     resizeOffscreen(win, startWidth, startHeight);
   }

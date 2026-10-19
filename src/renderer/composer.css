@@ -27,7 +27,7 @@
   cursor: pointer;
 }
 #composer-send:hover, .send-button:hover { filter: brightness(1.08); }
-/* Hidden while History, Workflow or Customize covers the reader (overlays.ts). */
+/* Hidden while History or Customize covers the reader (overlays.ts). */
 #composer[hidden] { display: none; }
 /* Pasted images: a row of thumbnails above the text, each removable before sending. */
 #composer-attachments {

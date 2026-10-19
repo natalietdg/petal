@@ -1,4 +1,4 @@
-// Launch checks for a stranger: the first-run screen with no token-spending offer, the organizer staying off, and Workflow › Setup on an empty ~/.claude.
+// Launch checks for a stranger: the first-run screen with no token-spending offer, the organizer staying off, and Customize › Setup on an empty ~/.claude.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -130,7 +130,7 @@ export function organizerOffCheck({ log }: Kit, when: 'start' | 'end'): void {
 }
 
 const setupState = `(() => {
-  const body = document.getElementById('workflow-body');
+  const body = document.getElementById('customize-body');
   return {
     empty: Boolean(body.querySelector('.wf-setup-empty')),
     text: body.querySelector('.wf-setup-empty .wf-empty-lead')?.textContent ?? null,
@@ -143,9 +143,9 @@ const setupState = `(() => {
 })()`;
 
 async function showSetup({ js, waitFor, wait }: Kit, ready: string): Promise<{ [key: string]: unknown }> {
-  await js('PastelTerm.workflow.close()');
-  await js('PastelTerm.workflow.open()');
-  await js(`document.querySelector('#workflow-tabs button[data-tab="setup"]').click()`);
+  await js('PastelTerm.customize.close()');
+  await js('PastelTerm.customize.open()');
+  await js(`document.querySelector('#customize-tabs button[data-section="setup"]').click()`);
   await waitFor(async () => ((await js(ready)) ? true : null), 15000);
   await wait(400);
   return js(setupState);
@@ -159,7 +159,7 @@ export async function setupEmptyCheck(kit: Kit): Promise<void> {
   const empty = path.join(outDir, 'fake-claude-empty');
   fs.mkdirSync(empty, { recursive: true });
   setupFixture.claudeDir = empty;
-  const none = await showSetup(kit, "Boolean(document.querySelector('#workflow-body .wf-setup-empty'))");
+  const none = await showSetup(kit, "Boolean(document.querySelector('#customize-body .wf-setup-empty'))");
   const linksOk = JSON.stringify(none.links) === JSON.stringify(DOCS);
   log(`${none.empty && !none.graph && linksOk && none.text === 'Your Claude Code setup shows here: CLAUDE.md, skills, agents and output style.' ? 'ok' : 'FAIL'} Setup empty state on an empty ~/.claude: ${JSON.stringify(none)}`);
   await capture('setup-empty');
@@ -169,16 +169,16 @@ export async function setupEmptyCheck(kit: Kit): Promise<void> {
   fs.writeFileSync(path.join(partial, 'CLAUDE.md'), '# Me\n## Style\n- short answers\n## Tests\n- run them\n');
   fs.writeFileSync(path.join(partial, 'skills', 'notes', 'SKILL.md'), '---\nname: notes\ndescription: Keeps notes.\n---\n');
   setupFixture.claudeDir = partial;
-  const some = await showSetup(kit, "Boolean(document.querySelector('#workflow-body .wf-graph svg'))");
+  const some = await showSetup(kit, "Boolean(document.querySelector('#customize-body .wf-graph svg'))");
   log(`${!some.empty && some.graphSvg && !some.routingNode && /^CLAUDE\.md has 2 sections\. 1 skill and 0 agents installed\./.test(String(some.summary)) ? 'ok' : 'FAIL'} Setup without routing: ${JSON.stringify(some)}`);
   await capture('setup-no-routing');
 
   setupFixture.claudeDir = writeRoutedClaudeDir(path.join(outDir, 'fake-claude-routed'));
-  const routed = await showSetup(kit, "Boolean(document.querySelector('#workflow-body .wf-graph svg'))");
+  const routed = await showSetup(kit, "Boolean(document.querySelector('#customize-body .wf-graph svg'))");
   log(`${!routed.empty && routed.graphSvg && routed.routingNode && /route requests to 2 skills/.test(String(routed.summary)) ? 'ok' : 'FAIL'} Setup with a routing table, skills and agents: ${JSON.stringify(routed)}`);
   await capture('setup-routed');
   setupFixture.claudeDir = null;
-  await js('PastelTerm.workflow.close()');
+  await js('PastelTerm.customize.close()');
 }
 
 // A full setup like a power user's: CLAUDE.md with a skills routing table, three skills (two routed) and an agent.
