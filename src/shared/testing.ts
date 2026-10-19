@@ -84,7 +84,7 @@ export interface LoopAgent { tabId: string | null; sessionId: string }
 // A task's agents as Petal last left them. draft: the testing agent alone, drawing up the suite before one exists.
 export interface SavedLoop {
   kind: 'loop' | 'draft';
-  tester: LoopAgent;
+  tester: LoopAgent | null; // null for a loop whose bug fix agent started alone, from a failed run
   fixer: LoopAgent | null; // null for a draft
   startedAt: number; // 0 when rebuilt from agent records saved before loops were
   stoppedAt: number | null;
@@ -123,7 +123,7 @@ export interface TestingState {
   agentNames: AgentNames; // her names for the testing and bug fix agents
   runs: PipelineRun[];
   running: string | null; // the run id still going
-  sessionTab: string | null; // the tab with this project's Claude, where Ask Claude to fix and skills go
+  sessionTab: string | null; // the tab with this project's Claude, where Ask in this session instead and skills go
   changed: string[]; // files changed recently (git), for Suite health's core stage
   tasks: Task[]; // the project's tasks and PRDs; Testing is organised by them
   prds: Prd[];
@@ -244,7 +244,7 @@ export function trimOutput(text: string, cap: number): string {
   return `[earlier output trimmed]\n${cut >= 0 && cut < 200 ? tail.slice(cut + 1) : tail}`;
 }
 
-// What "Ask Claude to fix" sends: the stage, its command, the failing tests and their output, capped near 3k characters.
+// What a fix sends, to the bug fix agent or this session: the stage, its command, the failing tests and their output, capped near 3k characters.
 export function buildFixPrompt({ stage, command, tests, output }: { stage: string; command: string; tests: TestCase[]; output?: string }): string {
   const failing = tests.filter((t) => t.status === 'failed');
   const head = failing.length === 1

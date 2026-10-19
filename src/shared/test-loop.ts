@@ -176,6 +176,25 @@ export function buildFixerBrief({ taskId, taskTitle, stages, names = DEFAULT_AGE
   ].join('\n');
 }
 
+export interface SentFixerBriefInput { taskId: string; taskTitle: string; bugName: string; prompt: string; names?: Record<AgentRole, string> }
+
+// The bug fix agent started alone from her "Send to bug fix agent": the failure she sent, app code only, a Fix line to end on.
+export function buildSentFixerBrief({ taskId, taskTitle, bugName, prompt, names = DEFAULT_AGENT_NAMES }: SentFixerBriefInput): string {
+  return [
+    `You are ${names.fixer}, the bug fix agent for the task "${taskTitle.replace(/[.!?]+$/, '')}" (${taskId}). She sent you this failure from Petal's Testing tab:`,
+    '',
+    prompt,
+    '',
+    `Fix the app code only. Never edit tests, test data, snapshot baselines or ${suitePath(taskId)}: only ${names.tester} changes those.`,
+    'Run the failing tests to confirm, plus a quick check of the code around them.',
+    `End your reply with this line: **Fix:** ${bugName} · done`,
+    `If you can’t fix it, end with **Fix:** ${bugName} · blocked, and say why in one line.`,
+    'Petal may send you more bugs after this one, one at a time, each with the Fix line to end on.',
+    '',
+    'Never commit, push, or change git history. Messages I send come first: read them before your next step and follow them.',
+  ].join('\n');
+}
+
 // ---- Where the brief goes: the project's live Claude tab, else a new tab that starts claude with it.
 export type LoopTarget = { kind: 'paste'; tabId: string } | { kind: 'new-tab' };
 

@@ -1,6 +1,6 @@
 // A task's saved loop, pure: one queue step with Petal's events, the check on a loop the renderer saves, lanes rebuilt
 // from agent records saved before loops were, and the tokens of the loop's last round.
-import { BUG_STATES, BUG_STATE_WORDS, stepQueue, type QueuedBug, type QueueMessage } from './bug-queue';
+import { BUG_STATES, BUG_STATE_WORDS, SENT_FAILURE_CAP, stepQueue, type QueuedBug, type QueueMessage, type RunResult, type SentFrom } from './bug-queue';
 import type { AgentAction } from './agent-actions';
 import type { AgentRole } from './agent-names';
 import type { CriteriaItem } from './test-loop';
@@ -19,8 +19,11 @@ export const agentOf = (loop: SavedLoop, role: AgentRole): LoopAgent | null => (
 export const withEvent = (events: Record<AgentRole, LoopEvent[]>, role: AgentRole, text: string, at: number): Record<AgentRole, LoopEvent[]> =>
   ({ ...events, [role]: [...events[role], { at, text }].slice(-EVENTS_KEPT) });
 
-// The failure to hand the fixer: the test's output from the task's newest run that has it.
+const sameFile = (a: string, b: string): boolean => a.endsWith(b) || b.endsWith(a);
+
+// The failure to hand the fixer: what she sent, else the test's output from the task's newest run that has it.
 export function failureText(runs: readonly PipelineRun[], bug: QueuedBug): string {
+  if (bug.sent) return bug.sent.failure;
   const [file, name] = (bug.test ?? '').split('::');
   for (const run of runs) {
     for (const stage of run.stages) {
@@ -29,6 +32,20 @@ export function failureText(runs: readonly PipelineRun[], bug: QueuedBug): strin
     }
   }
   return 'Run the test to see the failure.';
+}
+
+// A sent bug's result in the task's newest run since it entered its state: its test, else its whole stage.
+export function rerunOf(runs: readonly PipelineRun[], bug: QueuedBug): RunResult {
+  if (!bug.sent) return null;
+  const [file, name] = (bug.test ?? '').split('::');
+  for (const run of runs) {
+    if (run.startedAt < bug.since) continue;
+    for (const stage of run.stages) {
+      const status = bug.test ? stage.tests.find((t) => t.name === name && sameFile(t.file, file ?? ''))?.status : stage.name === bug.sent.stage ? stage.status : undefined;
+      if (status === 'passed' || status === 'failed') return status;
+    }
+  }
+  return null;
 }
 
 export interface LoopInputs {
@@ -44,7 +61,7 @@ export interface LoopStep { queue: QueuedBug[]; events: Record<AgentRole, LoopEv
 
 // One queue step: bugs join and move, each move is noted in the lane it concerns, and the handoffs to send come back.
 export function stepLoop(loop: Pick<SavedLoop, 'queue' | 'events'>, inputs: LoopInputs, names: { tester: string; fixer: string }): LoopStep {
-  const result = stepQueue(loop.queue, inputs, { ...names, failure: (bug) => failureText(inputs.runs, bug) });
+  const result = stepQueue(loop.queue, { ...inputs, rerun: (bug) => rerunOf(inputs.runs, bug) }, { ...names, failure: (bug) => failureText(inputs.runs, bug) });
   let events = loop.events;
   for (const move of result.moves) {
     const to = BUG_STATE_WORDS[move.to].toLowerCase();
@@ -83,10 +100,13 @@ function cleanAgent(v: unknown): LoopAgent | null {
   return { tabId: v.tabId, sessionId: v.sessionId };
 }
 
+const cleanSent = (v: unknown): SentFrom | null => (isObject(v) && isText(v.stage) && isText(v.failure, SENT_FAILURE_CAP) ? { stage: v.stage, failure: v.failure } : null);
+
 function cleanBug(v: unknown): QueuedBug | null {
   if (!isObject(v) || !isText(v.key) || !isText(v.name) || !(v.test === null || isText(v.test)) || !BUG_STATES.includes(v.state as QueuedBug['state'])) return null;
   if (!isTime(v.since) || !isTime(v.testerRound) || typeof v.asked !== 'boolean' || typeof v.rechecked !== 'boolean') return null;
-  return { key: v.key, name: v.name, test: v.test, state: v.state as QueuedBug['state'], since: v.since, asked: v.asked, testerRound: v.testerRound, rechecked: v.rechecked };
+  const sent = cleanSent(v.sent);
+  return { key: v.key, name: v.name, test: v.test, state: v.state as QueuedBug['state'], since: v.since, asked: v.asked, testerRound: v.testerRound, rechecked: v.rechecked, ...(sent ? { sent } : {}) };
 }
 
 const cleanEvents = (v: unknown): LoopEvent[] => (Array.isArray(v) ? v : [])
@@ -94,9 +114,9 @@ const cleanEvents = (v: unknown): LoopEvent[] => (Array.isArray(v) ? v : [])
 
 export function cleanSavedLoop(v: unknown): SavedLoop | null {
   if (!isObject(v) || (v.kind !== 'loop' && v.kind !== 'draft') || !isTime(v.startedAt) || !(v.stoppedAt === null || isTime(v.stoppedAt))) return null;
-  const tester = cleanAgent(v.tester);
+  const tester = v.tester === null ? null : cleanAgent(v.tester);
   const fixer = v.fixer === null ? null : cleanAgent(v.fixer);
-  if (!tester || (v.kind === 'loop') !== (fixer !== null) || !Array.isArray(v.queue) || !isObject(v.events)) return null;
+  if ((v.kind === 'loop' ? !fixer || (v.tester !== null && !tester) : !tester || fixer) || !Array.isArray(v.queue) || !isObject(v.events)) return null;
   const queue = v.queue.map(cleanBug);
   if (queue.some((b) => b === null)) return null;
   return {

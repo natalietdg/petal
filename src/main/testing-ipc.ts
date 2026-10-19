@@ -549,14 +549,21 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   };
 
   // The loop for a task: its testing agent and its bug fix agent, each in its own new tab, working at once.
-  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief }) => {
+  // One brief starts that agent alone: the bug fix agent for a failed run, or the testing agent joining a running one.
+  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief, show }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
-    for (const brief of [testerBrief, fixerBrief]) if (typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP) return { note: 'A loop brief is empty or too long.' };
+    const briefs = [testerBrief, fixerBrief].filter((brief) => brief !== null && brief !== undefined);
+    if (!briefs.length || briefs.some((brief) => typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP)) return { note: 'A loop brief is empty or too long.' };
+    const prior = loopsOf(target.root)[target.task.id];
+    const running = prior?.kind === 'loop' && prior.stoppedAt === null && briefs.length === 1 ? prior : null;
+    if (!fixerBrief && !running?.fixer) return { note: 'Start the loop to start its testing agent.' };
     prepareLoop(target.root);
-    const tester = await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true);
-    const fixer = await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, true);
-    saveLoop(target.root, target.task.id, { kind: 'loop', tester, fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
+    const tester = testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null;
+    const fixer = fixerBrief ? await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, show !== true) : null;
+    saveLoop(target.root, target.task.id, running
+      ? { ...running, tester: tester ?? running.tester, fixer: fixer ?? running.fixer }
+      : { kind: 'loop', tester, fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
     return { tester, fixer };
   });
 
@@ -564,7 +571,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   const draftLive = (root: string, taskId: string): boolean => {
     const loop = loopsOf(root)[taskId];
     if (loop?.kind !== 'draft' || loop.stoppedAt !== null) return false;
-    return [...sessions.values()].some((s) => s.tabId === loop.tester.tabId || s.feed.session?.sessionId === loop.tester.sessionId);
+    return [...sessions.values()].some((s) => s.tabId === loop.tester?.tabId || s.feed.session?.sessionId === loop.tester?.sessionId);
   };
   const drafting = new Set<string>(); // `${root}:${taskId}` while its draft agent is being started
 
@@ -599,7 +606,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const open = new Set([...sessions.values()].flatMap((s) => (s.contentsId === event.sender.id && s.feed.session ? [s.feed.session.sessionId] : [])));
     const loops: LoopFacts[] = [];
     for (const root of roots) {
-      const running = Object.entries(loopsOf(root)).filter(([, loop]) => loop.kind === 'loop' && loop.stoppedAt === null && (open.has(loop.tester.sessionId) || open.has(loop.fixer?.sessionId ?? '')));
+      const running = Object.entries(loopsOf(root)).filter(([, loop]) => loop.kind === 'loop' && loop.stoppedAt === null && (open.has(loop.tester?.sessionId ?? '') || open.has(loop.fixer?.sessionId ?? '')));
       if (!running.length) continue;
       const bugs = readCriteria(root)?.bugs ?? [];
       const data = store.load(root);
