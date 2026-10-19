@@ -29,6 +29,7 @@ import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } 
 import { AGENT_NAME_MAX, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, suiteFor, type SuiteViews } from '../shared/task-suite';
+import { pickGroups, type ProjectTasks } from '../shared/task-testing';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
 import { writeFileDurable } from './atomic-file';
@@ -270,7 +271,7 @@ const named = (runs: PipelineRun[]): PipelineRun[] => {
 
 const PICK_MAX = 8;
 
-// Projects to offer when the tab is in ~ or outside a repo: open tabs', where Claude ran checks, recent sessions'.
+// Projects whose tasks to offer when the tab is in ~ or outside a repo: open tabs', where Claude ran checks, recent sessions'.
 async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
   const seen = new Map<string, number>(); // root -> most recent use
   const note = (root: string | null, at: number) => { if (root) seen.set(root, Math.max(seen.get(root) ?? 0, at)); };
@@ -284,8 +285,13 @@ async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
 async function elsewhereFor(session: TabSession | undefined, sessions: TabSessions): Promise<Elsewhere | null> {
   const cwd = session ? await cwdOf(session) : null;
   if (!cwd) return null;
-  const folder = path.resolve(cwd);
-  return { reason: folder === os.homedir() ? 'home' : 'no-repo', folder: path.basename(folder), projects: await recentProjects(sessions) };
+  return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', groups: pickGroups((await recentProjects(sessions)).map(projectTasks)) };
+}
+
+// A project's tasks for the picker, read only; a tasks file that doesn't parse lists nothing.
+function projectTasks({ root, name }: ProjectRef): ProjectTasks {
+  const { tasks, prds } = loadTasks(root);
+  return { root, name, tasks, prds, suited: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))) };
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.

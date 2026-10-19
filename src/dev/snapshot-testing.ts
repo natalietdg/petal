@@ -127,7 +127,7 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
+  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-pick-suite, .tst-pick-group, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const chips = [...view.querySelectorAll('.tst-stage-item')].map((li) => [li.querySelector('.tst-stage-name')?.textContent, [...li.classList].find((c) => c.startsWith('is-'))?.slice(3)]);
   const history = [...view.querySelectorAll('.tst-day, .tst-runs > li > .tst-run, .tst-other')].map((n) => n.textContent);
@@ -143,7 +143,8 @@ const PROBE = `(() => {
     history,
     chartLabels: [...view.querySelectorAll('.tst-trend-label')].map((n) => n.textContent),
     timedParts: [...view.querySelectorAll('.tst-durations .tst-part')].filter((p) => parseFloat(p.style.height) > 0).length,
-    picker: [...view.querySelectorAll('.tst-pick-name')].map((n) => n.textContent),
+    picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent]),
+    pickerGroups: [...view.querySelectorAll('.tst-pick-group')].map((n) => n.textContent),
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
     makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
     head: view.querySelector('.tst-summary')?.textContent ?? '',
@@ -159,7 +160,7 @@ const PROBE = `(() => {
   };
 })()`;
 
-type Probe = { state: { project: string | null; stages: string[]; runs: number; editing: boolean; confirming: string[] | null; elsewhere: { reason: string } | null }; history: string[]; [k: string]: unknown };
+type Probe = { state: { project: string | null; task: string | null; target: unknown; stages: string[]; runs: number; editing: boolean; confirming: string[] | null; elsewhere: { reason: string } | null }; history: string[]; [k: string]: unknown };
 
 export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, outDir } = kit;
@@ -312,16 +313,19 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
 
-    // A tab in the home folder is not a project: pick one instead; a task with no suite starts from Claude's checks.
+    // A tab in the home folder is not a project: pick a task instead, its project as the small line; one with no suite starts from Claude's checks.
     testingFixture.project = os.homedir();
     await js('PastelTerm.overlays.hideCurrent()');
     await click('#testing-button');
     const home = await settle((p) => p.state.elsewhere?.reason === 'home');
-    check(home && /^This tab is in your home folder, not a project\. Pick a project:/.test(home.pickerTitle as string) && JSON.stringify(home.picker) === JSON.stringify(['acme', 'notes-app']), `home folder shows the picker: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+    const wantRows = [['Settings screen', 'acme · has a suite'], ['Sort notes by date', 'notes-app']];
+    check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a task:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the task picker: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+    check(home && JSON.stringify(home.pickerGroups) === JSON.stringify(['No PRD', 'No PRD']), `tasks grouped by PRD per project: ${JSON.stringify(home?.pickerGroups)}`);
     check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
     await capture('testing-picker');
-    await js(`document.querySelector(${JSON.stringify(`#testing .tst-pick[data-root="${bare}"]`)})?.click()`);
-    const notes = await settle((p) => p.state.project === 'notes-app' && Boolean(p.makePipeline));
+    await js(`document.querySelector(${JSON.stringify(`#testing .tst-pick[data-root="${bare}"][data-task="t-notes"]`)})?.click()`);
+    const notes = await settle((p) => p.state.project === 'notes-app' && p.state.task === 'Sort notes by date' && JSON.stringify(p.state.target) === JSON.stringify({ kind: 'task', id: 't-notes' }) && Boolean(p.makePipeline));
+    check(notes, `a task row opens that task's suite: ${JSON.stringify(notes?.state.target)}`);
     check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
     await click('#testing .tst-make-pipeline');
     const made = await settle((p) => p.state.editing);
@@ -329,8 +333,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
     await capture('testing-make-pipeline');
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
-    await click('#testing .tst-change-project');
-    check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change project goes back to the picker');
+    await click('#testing .tst-change-task');
+    check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change task goes back to the picker');
     testingFixture.project = project;
 
     // Esc closes it.

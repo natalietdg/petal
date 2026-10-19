@@ -3,6 +3,7 @@ import type { Prd, Task } from './tasks';
 import type { SuiteRecord, SuiteViews } from './task-suite';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { RestoredFlag } from './test-lock';
+import type { PickGroup } from './task-testing';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -85,8 +86,8 @@ export interface StackItem {
 
 export interface ProjectRef { root: string; name: string }
 
-// Why the tab's folder is not a project, and the projects she can look at instead.
-export interface Elsewhere { reason: 'home' | 'no-repo'; folder: string; projects: ProjectRef[] }
+// Why the tab's folder is not a project, and the recent projects' tasks she can pick instead.
+export interface Elsewhere { reason: 'home' | 'no-repo'; groups: PickGroup[] }
 
 export interface TestingState {
   allowed: boolean; // the folder gate; false reads nothing
