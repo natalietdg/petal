@@ -56,6 +56,8 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
       here: document.getElementById('composer-to-here').checked, result: bar.querySelector('.composer-to-result').hidden ? '' : bar.querySelector('.composer-to-result').textContent };
   })()`);
   const pastesSince = (n: number) => pasteWrites.slice(n);
+  const startTabs: string[] = await js('PastelTerm.tabs.ids()');
+  const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
 
   try {
     applyTheme('paleSky', { persist: false });
@@ -252,6 +254,14 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
     applyTheme('paleSky', { persist: false });
     await type('');
   } finally {
+    // Back to the tabs the run had, so the full sequence's later steps start clean.
     slashFixture.claudeDir = null;
+    applyTheme('paleSky', { persist: false });
+    await js('PastelTerm.sessionsBoard.close()');
+    extraTabFixtures.length = 0;
+    const opened: string[] = (await js('PastelTerm.tabs.ids()')).filter((t: string) => !startTabs.includes(t));
+    for (const t of opened) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(t)})`);
+    await waitFor(async () => ((await js('PastelTerm.tabs.ids()')).length === startTabs.length ? true : null), 8000); // closing is async
+    if (startActive) await js(`PastelTerm.tabs.activate(${JSON.stringify(startActive)})`);
   }
 }

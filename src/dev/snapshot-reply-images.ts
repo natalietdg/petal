@@ -1,5 +1,5 @@
 // Pictures in Claude's replies: paths and Markdown images become thumbnails in the reader, History and focus mode,
-// open in a lightbox, and a missing one is a quiet chip. Run under a fake HOME: the fixture PNGs are written into it.
+// open in a lightbox, and a missing one is a quiet chip. Run under a fake HOME (the snapshot or temp folder): the fixture PNGs are written into it.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -84,9 +84,10 @@ export async function replyImagesCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} reply images: ${what}`);
 
   const home = os.homedir();
-  // Never her real Desktop: HOME must sit inside the snapshot folder (HOME=$PASTEL_SNAPSHOT_DIR/home).
-  const fakeHome = !path.relative(fs.realpathSync(outDir), fs.realpathSync(home)).startsWith('..');
-  check(fakeHome, `running under a fake HOME inside the snapshot folder: ${home}`);
+  // Never her real Desktop: HOME must sit inside the snapshot folder or the temp folder (the full gate's scratch HOME).
+  const inside = (dir: string) => { const rel = path.relative(fs.realpathSync(dir), fs.realpathSync(home)); return !rel.startsWith('..') && !path.isAbsolute(rel); };
+  const fakeHome = inside(outDir) || inside(os.tmpdir());
+  check(fakeHome, `running under a fake HOME inside the snapshot or temp folder: ${home}`);
   if (!fakeHome) return;
   const desktop = path.join(home, 'Desktop', 'petal-discord');
   write(path.join(desktop, '1-testing-pipeline.png'), fixturePng(1200, 760, [150, 110, 180]));
