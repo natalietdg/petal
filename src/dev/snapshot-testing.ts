@@ -150,6 +150,8 @@ const PROBE = `(() => {
     timedParts: [...view.querySelectorAll('.tst-durations .tst-part')].filter((p) => parseFloat(p.style.height) > 0).length,
     picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent]),
     noSuite: Boolean(view.querySelector('.tst-no-suite')),
+    askSuite: Boolean(view.querySelector('.tst-ask-suite')),
+    drawing: view.querySelector('.tst-drawing')?.textContent ?? null,
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
     makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
     head: view.querySelector('.tst-summary')?.textContent ?? '',
@@ -402,6 +404,18 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
       check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
       await capture('testing-draft-lane');
+
+      // Ask Claude shows her the agent's tab, and while it draws, a status replaces the button and main refuses a second.
+      const agentTab = draft?.tester.tabId ?? null;
+      check(agentTab && (await js('PastelTerm.tabs.active()?.id')) === agentTab, `the drafting agent's tab is shown, not opened in the background: ${agentTab}`);
+      const drawing = await settle((p) => p.drawing !== null);
+      check(drawing && drawing.drawing === 'Testing agent is drawing up the suite' && !drawing.askSuite, `a status replaces Ask Claude while the agent draws: ${JSON.stringify({ drawing: drawing?.drawing, ask: drawing?.askSuite })}`);
+      const startsNow = testingFixture.loopStarts.length;
+      const again = await js(`window.pastel.testing.agentStart({ tabId: ${JSON.stringify(agentTab)}, root: ${JSON.stringify(emptyRepo)}, taskId: ${JSON.stringify(made[0]?.id)}, prompt: 'again' })`) as { note?: string };
+      check(again?.note === 'This task’s testing agent is already drawing up its suite.' && testingFixture.loopStarts.length === startsNow, `a second start for the task is refused: ${JSON.stringify(again)}`);
+      await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
+      await click('#testing .tst-show-draft');
+      check(await waitFor(async () => ((await js('PastelTerm.tabs.active()?.id')) === agentTab ? true : null), 3000), 'Show its tab switches to the drafting agent');
 
       // A tab with no Claude in a repo with no tasks: one line, and no task is made.
       testingFixture.project = noClaudeRepo;

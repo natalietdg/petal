@@ -255,8 +255,10 @@ function drawStrip(): void {
   if (!p) {
     if (draft) return;
     const fromClaude = stagesFromRuns(taskRuns());
+    const drawingTab = agents.draftTab();
     strip.append(noSuite({
       askClaude: () => void askForSuite(task),
+      showDraft: drawingTab ? () => tabs.activate(drawingTab) : null,
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
@@ -563,7 +565,7 @@ function insertSkill(item: StackItem): void {
   composer.insertCommand(item.insert);
 }
 
-// Ask Claude to draw one up: starts this task's testing agent in a new tab on the testing-suite skill. Only it may write the suite.
+// Ask Claude to draw one up: starts this task's testing agent in a new tab, shown, on the testing-suite skill. Only it may write the suite.
 async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
   if (!id) return;

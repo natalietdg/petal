@@ -37,7 +37,7 @@
 .tst-button:hover { background: var(--code-bg); }
 .tst-primary { border-color: var(--reader-fg); background: var(--reader-fg); color: var(--reader-bg); }
 .tst-primary:hover { background: var(--reader-fg); opacity: 0.88; }
-.tst-button:disabled { border-color: var(--rule); background: var(--reader-bg); color: var(--muted); cursor: default; opacity: 1; }
+.tst-button:disabled, .tst-drawing, .tst-drawing:hover { border-color: var(--rule); background: var(--reader-bg); color: var(--muted); cursor: default; opacity: 1; }
 .tst-link { padding: 0; border: 0; background: none; color: var(--link); font: 600 14px var(--ui-font); text-decoration: underline; cursor: pointer; }
 .tst-muted { margin: 0; color: var(--muted); }
 .tst-empty { margin: 8px 0; color: var(--muted); }
