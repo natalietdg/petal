@@ -35,6 +35,7 @@ import type { LockView, LoopFacts, PipelineRun, RunReply, SavedLoop, SuiteSeed, 
 import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
+import type { SentBug } from './bug-queue';
 
 export interface AgentStart { tabId: string | null; sessionId: string }
 export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage }
@@ -245,14 +246,19 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, SavedLoop>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, SavedLoop>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
   // One brief starts that agent alone; show opens the bug fix agent's tab in front.
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null; show?: boolean }]; result: Guarded<{ tester: AgentStart | null; fixer: AgentStart | null } | { note: string }> };
   // The testing agent alone, to draw up a task's suite; only its writes change the suite.
   'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null } | { note: string }> };
-  // The loop timer: saves one task's loop, then lists the running loops with an agent tab in this window.
-  'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null }]; result: Guarded<{ loops: LoopFacts[] }> };
+  // The loop timer: saves one task's loop (from its owner window only), then lists the running loops with an agent
+  // session open in this window, plus the known ones this window shows, each marked with whether this window steps it.
+  'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null; known?: { root: string; taskId: string }[] }]; result: Guarded<{ loops: LoopFacts[] }> };
+  // A bug sent from a window that doesn't step the loop: added to the saved queue when its bug fix agent is live anywhere.
+  'testing:loop-add-bug': { args: [request: { tabId: TabId; root?: string | null; taskId: string; bug: SentBug }]; result: Guarded<{ queued: boolean; added: boolean } | { note: string }> };
+  // An OS notification for the loop, shown only while no Petal window is focused; a click shows that tab.
+  'testing:notify': { args: [request: { title: string; body: string; tabId?: string | null }]; result: Guarded<{ shown: boolean }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
   'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
@@ -375,6 +381,7 @@ export interface EventChannels {
   'conclusion:info-changed': { sessionId: string }; // the Library started or finished reading that session
   'library:backfill': BackfillState; // reading past sessions moved on
   'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished
+  'testing:show-tab': { tabId: string }; // a loop notification was clicked
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };

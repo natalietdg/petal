@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { BrowserWindow, webContents, type WebContents } from 'electron';
+import { BrowserWindow, Notification, webContents, type WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { allowedClaudeHome, claudeFolderAllowed, projectClaudeDir } from './claude-folder';
 import { isSnapshotRun, slashFixture, testingFixture } from './snapshot-mode';
@@ -14,7 +14,7 @@ import { harnessLine } from './snapshot-shell';
 import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
-import { pipelineScript, runLine, stageFiles, withReporter, type StagePlan } from './testing-runner';
+import { pipelineScript, readLogTail, runLine, stageFiles, trimmedNote, withReporter, type StagePlan } from './testing-runner';
 import { claudeRun, scanLog, type ClaudeCall, type FileTouch, type SuiteWrite } from './testing-claude';
 import { projectRootOf, ranIn, repoRoot, runProject } from './testing-project';
 import * as history from './history';
@@ -27,7 +27,9 @@ import { readAgentLog } from './agent-log';
 import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, loadManifest, refreshLock, resolveUnconfirmed, setLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
-import { cleanSavedLoop, noEvents, withEvent } from '../shared/agent-loop';
+import { cleanSavedLoop, cleanSentBug, noEvents, withEvent } from '../shared/agent-loop';
+import { addSent } from '../shared/bug-queue';
+import { hasAgentIn, loopOwner, runningHere, takesSave } from '../shared/loop-signals';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, forTask, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
 import { foldAgents, listedSession, listedSessions, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
@@ -41,8 +43,8 @@ import { buildStartCommand, shellQuote } from './resume-command';
 import { claudeLaunch } from './claude-launch';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
-  normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type Elsewhere, type LoopFacts, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
+  normalizeCommand, runGoing, runStateOf, unconfirmed, addCounts, emptyCounts,
+  type AddedBug, type Elsewhere, type LoopFacts, type SavedLoop, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -61,11 +63,23 @@ const BRIEF_CAP = 12000;
 const CHANGED_DAYS = 7; // Suite health's core stage counts files changed this recently
 const CHANGED_CAP = 300;
 const LOOP_RUNS = 10; // a loop's newest task runs, where a bug's failure output is looked up
+const STARTING_MS = 120_000; // a loop's bug fix agent counts as live this long after the loop started, while its tab opens
+const ADDED_CAP = 50; // bugs from other windows waiting for one loop's owner
+const KNOWN_CAP = 50; // loops one window asks about per tick
+const NOTICE_MAX = 200;
 
 interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
 const watching = new Map<string, Watched>(); // run id -> its watch
 const editsSeen = new Map<string, number>(); // transcript -> edits counted at the last auto check
 const runTabs = new Map<string, string>(); // `${contentsId}:${tabId}` of a tab a run opened -> its project root
+const loopOwners = new Map<string, number>(); // `${root}:${taskId}` -> the window (contents id) that steps that loop
+const addedBugs = new Map<string, AddedBug[]>(); // `${root}:${taskId}` -> bugs sent from other windows, for the owner's next tick
+const notices = new Set<Notification>(); // held until clicked or closed, so the click still lands
+const loopKey = (root: string, taskId: string): string => `${root}:${taskId}`;
+
+// The repo's runs still going, and whether one blocks this task: one run at a time per task.
+const runsGoing = (): { root: string; taskId: string | null }[] => [...watching.values()].map((w) => ({ root: w.root, taskId: w.run.taskId ?? null }));
+const runningIn = (root: string): string[] => [...watching.values()].filter((w) => w.root === root).map((w) => w.run.id);
 
 // ---- Which project: the tab's claude folder, else its shell's, walked up to the repo root.
 const shellCwd = (pid: number): Promise<string | null> => new Promise((resolve) => {
@@ -375,7 +389,7 @@ async function stateFor(root: string, sessions: TabSessions, onProject: TabSessi
   const stack = [...detectStack(root), ...skillsFor(root)];
   const { suites, lock } = await mergeClaudeRuns(root, sessions);
   const data = store.load(root);
-  const running = [...watching.values()].find((w) => w.root === root)?.run.id ?? null;
+  const running = runningIn(root);
   return {
     allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, runs: named(data.runs), running,
     sessionTab: onProject?.tabId ?? null, changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
@@ -391,14 +405,15 @@ function finishStage(w: Watched, i: number, exitCode: number): StageResult {
   } catch (error) {
     console.warn('[petal] test report unreadable, reading the log instead:', error);
   }
-  const log = fs.existsSync(files.log) ? fs.readFileSync(files.log, 'utf8') : '';
+  const tail = readLogTail(files.log); // a huge log is read from its end only
+  const log = tail.text;
   parsed = shortenPaths(parsed ?? parseText(log, plan.runner), w.root);
   const failed = exitCode !== 0 || parsed.counts.failed > 0;
   const began = fs.existsSync(files.log) ? fs.statSync(files.log).birthtimeMs : w.started;
   const ended = fs.statSync(files.exit).mtimeMs;
   return {
     ...w.run.stages[i], status: failed ? 'failed' : 'passed', exitCode, counts: parsed.counts, tests: parsed.tests,
-    durationMs: parsed.durationMs ?? Math.max(0, Math.round(ended - began)), output: failed ? shortenText(keepOutput(log), w.root) : '', runner: parsed.runner ?? plan.runner,
+    durationMs: parsed.durationMs ?? Math.max(0, Math.round(ended - began)), output: failed ? `${tail.trimmed ? `${trimmedNote()}\n` : ''}${shortenText(keepOutput(log), w.root)}` : '', runner: parsed.runner ?? plan.runner,
   };
 }
 
@@ -508,7 +523,21 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const task = tasks.find((t) => t.id === taskId);
     return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
   };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: null, sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
+  // ---- One owner per loop: the window that steps its queue and saves it.
+  const windowOpen = (id: number): boolean => { const c = webContents.fromId(id); return Boolean(c && !c.isDestroyed()); };
+  const sessionsIn = (id: number): Set<string> => new Set([...sessions.values()].flatMap((s) => (s.contentsId === id && s.feed.session ? [s.feed.session.sessionId] : [])));
+  const ownerOf = (root: string, taskId: string, loop: SavedLoop, asking: number): number | null => {
+    const key = loopKey(root, taskId);
+    const owner = loopOwner(loopOwners.get(key) ?? null, asking, { open: windowOpen, hasAgents: (id) => hasAgentIn(loop, sessionsIn(id)) });
+    if (owner === null) loopOwners.delete(key); else loopOwners.set(key, owner);
+    return owner;
+  };
+  // The loop's bug fix agent has a session open in some window.
+  const fixerOpen = (loop: SavedLoop): boolean => loop.fixer !== null && [...sessions.values()].some((s) => s.feed.session?.sessionId === loop.fixer?.sessionId);
+  const fixerTakesBugs = (loop: SavedLoop): boolean => loop.kind === 'loop' && loop.stoppedAt === null && loop.fixer !== null && (fixerOpen(loop) || Date.now() - loop.startedAt < STARTING_MS);
+  const takeAdded = (key: string): AddedBug[] => { const list = addedBugs.get(key) ?? []; addedBugs.delete(key); return list; };
+
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
   // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
   handle('testing:detect', async (event, { tabId, root: picked, session }) => {
@@ -526,7 +555,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    const none = { runs: [], running: null, sessionTab: null, criteria: null, seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, distillation: [], loops: {}, tasks: [], prds: [], sessionTaskId: null };
+    const none = { runs: [], running: [], sessionTab: null, criteria: null, seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, distillation: [], loops: {}, tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
@@ -536,7 +565,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const data = store.load(root);
     const onProject = await sessionOnProject(root, sessions, asking);
     return {
-      runs: named(data.runs), running: [...watching.values()].find((w) => w.root === root)?.run.id ?? null, sessionTab: onProject?.tabId ?? null,
+      runs: named(data.runs), running: runningIn(root), sessionTab: onProject?.tabId ?? null,
       criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopsOf(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
@@ -564,12 +593,14 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const prior = loopsOf(target.root)[target.task.id];
     const running = prior?.kind === 'loop' && prior.stoppedAt === null && briefs.length === 1 ? prior : null;
     if (!fixerBrief && !running?.fixer) return { note: 'Start the loop to start its testing agent.' };
+    if (fixerBrief && prior?.kind === 'loop' && prior.stoppedAt === null && fixerOpen(prior)) return { note: `${agentName(store.load(target.root).agentNames ?? {}, 'fixer')} is already running for this task, maybe in another window.` };
     prepareLoop(target.root);
     const tester = testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null;
     const fixer = fixerBrief ? await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, show !== true) : null;
     saveLoop(target.root, target.task.id, running
       ? { ...running, tester: tester ?? running.tester, fixer: fixer ?? running.fixer }
       : { kind: 'loop', tester, fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
+    loopOwners.set(loopKey(target.root, target.task.id), event.sender.id); // the window that started it steps it
     return { tester, fixer };
   });
 
@@ -595,30 +626,96 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
       const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
       const now = Date.now();
       saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
+      loopOwners.set(loopKey(target.root, target.task.id), event.sender.id);
       return { tabId: tester.tabId };
     } finally {
       drafting.delete(key);
     }
   });
 
-  // The renderer's timer: saves one loop when asked, then lists the running loops whose agents have a tab in this window.
-  handle('testing:loops', async (event, { save }) => {
+  // The renderer's timer: saves one loop when its owner asks, then lists the loops this window steps or shows. Roots come
+  // from the saved loops of this window's open sessions too, so a loop keeps stepping after a restart or in a new window.
+  // The save comes first and nothing awaits, so the next tick always reads it.
+  handle('testing:loops', async (event, { save, known }) => {
     if (!claudeFolderAllowed()) return { loops: [] };
-    const roots = new Set([...runTabs].filter(([key]) => key.startsWith(`${event.sender.id}:`)).map(([, root]) => root));
+    const me = event.sender.id;
+    const roots = new Set([...runTabs].filter(([key]) => key.startsWith(`${me}:`)).map(([, root]) => root));
     if (save && typeof save.root === 'string' && projectRootOf(save.root) === save.root && isTaskId(save.taskId)) {
       const loop = cleanSavedLoop(save.loop);
-      if (loop && saveLoop(save.root, save.taskId, loop)) roots.add(save.root);
+      if (loop && takesSave(ownerOf(save.root, save.taskId, loop, me), me) && saveLoop(save.root, save.taskId, loop)) {
+        loopOwners.set(loopKey(save.root, save.taskId), me);
+        roots.add(save.root);
+      }
     }
-    const open = new Set([...sessions.values()].flatMap((s) => (s.contentsId === event.sender.id && s.feed.session ? [s.feed.session.sessionId] : [])));
+    const shown = new Set<string>();
+    for (const k of Array.isArray(known) ? known.slice(0, KNOWN_CAP) : []) {
+      if (typeof k?.root !== 'string' || projectRootOf(k.root) !== k.root || !isTaskId(k.taskId)) continue;
+      roots.add(k.root);
+      shown.add(loopKey(k.root, k.taskId));
+    }
+    const open = sessionsIn(me);
+    for (const s of sessions.values()) {
+      if (s.contentsId !== me || !s.feed.session) continue;
+      const root = projectRootOf((isSnapshotRun() && testingFixture.project) || s.feed.session.cwd || null); // Claude's folder only, no lsof each tick
+      if (root) roots.add(root);
+    }
     const loops: LoopFacts[] = [];
     for (const root of roots) {
-      const running = Object.entries(loopsOf(root)).filter(([, loop]) => loop.kind === 'loop' && loop.stoppedAt === null && (open.has(loop.tester?.sessionId ?? '') || open.has(loop.fixer?.sessionId ?? '')));
-      if (!running.length) continue;
+      const saved = loopsOf(root);
+      const listed = new Map(runningHere(saved, open));
+      for (const [taskId, loop] of Object.entries(saved)) if (loop.kind === 'loop' && shown.has(loopKey(root, taskId))) listed.set(taskId, loop);
+      if (!listed.size) continue;
       const bugs = readCriteria(root)?.bugs ?? [];
       const data = store.load(root);
-      for (const [taskId, loop] of running) loops.push({ root, taskId, loop, bugs: forTask(bugs, taskId), runs: forTask(data.runs, taskId).slice(0, LOOP_RUNS), names: data.agentNames ?? {} });
+      for (const [taskId, loop] of listed) {
+        const owner = ownerOf(root, taskId, loop, me) === me;
+        loops.push({ root, taskId, loop, bugs: forTask(bugs, taskId), runs: forTask(data.runs, taskId).slice(0, LOOP_RUNS), names: data.agentNames ?? {}, owner, added: owner ? takeAdded(loopKey(root, taskId)) : [] });
+      }
     }
     return { loops };
+  });
+
+  // A bug sent from a window that doesn't step the loop: it joins the saved queue while the bug fix agent is live
+  // anywhere, and the owner merges it on its next tick. queued false: no live bug fix agent, so the sender starts one.
+  handle('testing:loop-add-bug', async (event, { tabId, root: picked, taskId, bug }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const clean = cleanSentBug(bug);
+    if (!clean) return { note: 'That failure can’t be sent.' };
+    const loop = loopsOf(target.root)[target.task.id];
+    if (!loop || !fixerTakesBugs(loop)) return { queued: false, added: false };
+    const now = Date.now();
+    const { queue, added } = addSent(loop.queue, clean, now);
+    if (!added) return { queued: true, added: false };
+    const fixer = agentName(store.load(target.root).agentNames ?? {}, 'fixer');
+    saveLoop(target.root, target.task.id, { ...loop, queue, events: withEvent(loop.events, 'fixer', `You → ${fixer} · ${clean.name}`, now) });
+    const key = loopKey(target.root, target.task.id);
+    addedBugs.set(key, [...(addedBugs.get(key) ?? []), { bug: clean, at: now }].slice(-ADDED_CAP));
+    return { queued: true, added: true };
+  });
+
+  // A loop notification: only while no Petal window is focused. Snapshot runs record it, never show it.
+  handle('testing:notify', (event, { title, body, tabId }) => {
+    if (typeof title !== 'string' || typeof body !== 'string' || !title.trim()) return { shown: false };
+    const tab = typeof tabId === 'string' ? tabId : null;
+    const focused = BrowserWindow.getFocusedWindow() !== null;
+    if (isSnapshotRun()) { testingFixture.notices.push({ title, body, tabId: tab, focused }); return { shown: false }; }
+    if (focused || !Notification.isSupported()) return { shown: false };
+    const sender = event.sender;
+    const notice = new Notification({ title: title.slice(0, NOTICE_MAX), body: body.slice(0, NOTICE_MAX) });
+    notices.add(notice);
+    notice.on('close', () => notices.delete(notice));
+    notice.on('click', () => {
+      notices.delete(notice);
+      const win = sender.isDestroyed() ? null : BrowserWindow.fromWebContents(sender);
+      if (!win) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      if (tab) send(sender, 'testing:show-tab', { tabId: tab });
+    });
+    notice.show();
+    return { shown: true };
   });
 
   // An agent's action log and tokens, from its transcript: the open tab's log, else History's copy.
@@ -700,7 +797,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     const { root, task } = target;
-    if ([...watching.values()].some((w) => w.root === root)) return { note: 'A run is still going for this project.' };
+    if (runGoing(runsGoing(), root, task.id)) return { note: 'A run is still going for this task.' };
     const suite = suiteFor(target.tasks, syncSuites(root, target.tasks), task.id)?.suite;
     if (!suite) return { note: 'This task has no suite yet.' };
     const stages = stageId ? suite.stages.filter((s) => s.id === stageId) : suite.stages;
@@ -721,6 +818,13 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 }
 
+// Snapshot runs only: forget the tabs runs opened, as a restart does, and read or set the window that owns a loop.
+export const snapshotLoops = {
+  forgetRunTabs: (): void => { if (isSnapshotRun()) runTabs.clear(); },
+  owner: (root: string, taskId: string): number | null => loopOwners.get(loopKey(root, taskId)) ?? null,
+  setOwner: (root: string, taskId: string, id: number): void => { if (isSnapshotRun()) loopOwners.set(loopKey(root, taskId), id); },
+};
+
 // After a Claude turn: run its task's suite if she turned auto-run on for it, the turn edited files, every command was
 // confirmed before, nothing is running, and no claude on this project is mid-turn. Still a visible new tab.
 export async function onTurnFinished(session: TabSession): Promise<void> {
@@ -736,7 +840,7 @@ export async function onTurnFinished(session: TabSession): Promise<void> {
   const taskId = taskIdAt(root, s.sessionId, Date.now(), tasks);
   const suite = suiteFor(tasks, syncSuites(root, tasks), taskId)?.suite; // the session's task's suite, if it asked to run after edits
   if (!suite?.autoRun || edits <= before || !suite.stages.length || unconfirmed(confirmedOf(root), suite.stages).length) return;
-  if ([...watching.values()].some((w) => w.root === root)) return;
+  if (runGoing(runsGoing(), root, taskId)) return;
   for (const other of deps.sessions.values()) {
     const o = other.feed.session;
     if (o?.status === 'busy' && o.cwd && repoRoot(o.cwd) === root) return;

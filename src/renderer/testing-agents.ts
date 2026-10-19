@@ -1,6 +1,8 @@
 // A task's test loop as two agents at once: the testing agent and the bug fix agent, each in its own tab Petal started.
 // A timer steps every running loop's bug queue whether Testing is open or not, and sends each handoff through the reply
 // box's paste path. The queue and Petal's events are saved next to the agent records, so lanes come back after a reload.
+// With two windows on one task only the owner main names steps and saves; the other mirrors the saved loop. An agent
+// waiting on a prompt reads Needs you and badges the dock's Testing button; that, a fix landing and a loop ending notify.
 import * as tabs from './tabs';
 import * as composer from './composer';
 import { isIpcError } from './dom';
@@ -8,13 +10,14 @@ import { agentsPanel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
 import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
 import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../shared/bug-queue';
+import { finishNotice, fixesLanded, fixNotice, laneWord, needsNotice, newlyWaiting, NEEDS_YOU, type LoopNotice } from '../shared/loop-signals';
 import { agentOf, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { estimateRoundTokens, totalTokens } from '../shared/token-usage';
 import type { TaskSuite } from '../shared/task-suite';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
-import type { LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
+import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
 import type { Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
 
@@ -56,6 +59,9 @@ const fromSaved = (root: string, taskId: string, saved: SavedLoop): AgentLoop =>
 
 export function createAgents(ctx: AgentContext) {
   const loops = new Map<string, AgentLoop>(); // `${root}:${taskId}` -> its loop or draft, this window's copy
+  const owned = new Set<string>(); // loops this window steps, as main last said; their saved copy was taken once
+  const elsewhere = new Set<string>(); // loops another window steps; this window mirrors their saved copy
+  let waiting = new Set<string>(); // agent sessions with a prompt on screen here, at the last tick
   const element = document.createElement('div');
   element.className = 'tst-agentsbox';
   let renaming: AgentRole | null = null;
@@ -121,10 +127,17 @@ export function createAgents(ctx: AgentContext) {
   async function step(r: AgentLoop): Promise<void> {
     if (!r.inputs || !isRunning(r) || r.sending || !r.fixer) return;
     const progress = latestLoop(updateOf(r.tester)?.replies ?? [], r.startedAt);
-    if (progress && isTerminal(progress.phase) && !activeBugs(r.queue).length) { r.stoppedAt = Date.now(); persist(r); ctx.redraw(); return; }
+    if (progress && isTerminal(progress.phase) && !activeBugs(r.queue).length) {
+      r.stoppedAt = Date.now();
+      persist(r);
+      notify(finishNotice(r.queue, tabOf(r.tester)));
+      ctx.redraw();
+      return;
+    }
     const names = { tester: nameOf('tester', r.inputs.names), fixer: nameOf('fixer', r.inputs.names) };
     const fixer = updateOf(r.fixer);
     const before = JSON.stringify([r.queue, r.events]);
+    const queueBefore = r.queue;
     // With no testing agent yet, criteria lines wait for it; only the bugs she sent move.
     const result = stepLoop(r, {
       bugs: r.tester ? r.inputs.bugs : [], runs: r.inputs.runs, testerRound: progress?.round ?? 0,
@@ -139,34 +152,103 @@ export function createAgents(ctx: AgentContext) {
       r.sending = false;
     }
     if (JSON.stringify([r.queue, r.events]) === before) return;
+    for (const bug of fixesLanded(queueBefore, r.queue)) notify(fixNotice(bug, names.fixer, tabOf(r.fixer)));
     persist(r);
     ctx.redraw();
   }
 
-  // Every tick while a loop runs: main lists this window's running loops with their bugs, then each one steps.
+  // The saved copy becomes this window's, keeping what only this window reads (logs, tokens); true when it changed.
+  function takeSaved(r: AgentLoop, saved: SavedLoop): boolean {
+    const before = JSON.stringify(toSaved(r));
+    Object.assign(r, saved);
+    return JSON.stringify(toSaved(r)) !== before;
+  }
+
+  // Bugs sent from another window join this owner's queue, once each.
+  function mergeAdded(r: AgentLoop, added: readonly AddedBug[]): void {
+    for (const { bug, at } of added) {
+      const result = addSent(r.queue, bug, at);
+      if (!result.added) continue;
+      r.queue = result.queue;
+      note(r, 'fixer', `You → ${nameOf('fixer', r.inputs?.names)} · ${bug.name}`);
+    }
+  }
+
+  const notify = (notice: LoopNotice): void => { void window.pastel.testing.notify(notice); };
+
+  // Agents with a prompt on screen in this window, across every loop and live draft: the lane word, the dock badge,
+  // and one notification per new prompt.
+  function scanWaiting(): void {
+    const now = new Map<string, { name: string; tabId: string }>();
+    for (const r of loops.values()) {
+      if (r.stoppedAt) continue;
+      for (const role of ROLES) {
+        const agent = agentOf(r, role);
+        const id = tabOf(agent);
+        const tab = id ? tabs.get(id) : null;
+        if (agent && id && tab && composer.claudeIsAsking(tab)) now.set(agent.sessionId, { name: nameOf(role, r.inputs?.names), tabId: id });
+      }
+    }
+    for (const sessionId of newlyWaiting(waiting, new Set(now.keys()))) {
+      const agent = now.get(sessionId);
+      if (agent) notify(needsNotice(agent.name, agent.tabId));
+    }
+    const changed = now.size !== waiting.size || [...now.keys()].some((id) => !waiting.has(id));
+    waiting = new Set(now.keys());
+    if (changed) { badge(now.size); ctx.redraw(); }
+  }
+
+  // The dock's Testing button: a dot while any agent waits on her.
+  function badge(count: number): void {
+    const button = document.getElementById('testing-button');
+    if (!button) return;
+    let dot = button.querySelector<HTMLElement>('.dock-badge');
+    if (!dot) {
+      dot = document.createElement('span');
+      dot.className = 'dock-badge';
+      dot.setAttribute('aria-hidden', 'true');
+      button.append(dot);
+    }
+    dot.hidden = count === 0;
+    button.dataset.needsYou = String(count);
+    button.dataset.title ??= button.title; // its own tooltip, put back once nobody waits
+    button.title = count ? `${count === 1 ? 'An agent needs' : `${count} agents need`} you in its tab` : button.dataset.title;
+  }
+
+  // Every tick: Needs you is read from this window's screens; while a loop runs, main lists the loops this window steps
+  // or shows. The owner steps each; another window's loop is mirrored from what its owner saved.
   let ticks = 0;
   let ticking = false;
   async function tick(): Promise<void> {
     ticks += 1;
+    scanWaiting();
     if (ticking || (![...loops.values()].some(isRunning) && ticks % FIND_EVERY)) return;
     ticking = true;
     try {
-      const reply = await window.pastel.testing.loops({});
+      const known = [...loops.values()].filter(isRunning).map((r) => ({ root: r.root, taskId: r.taskId }));
+      const reply = await window.pastel.testing.loops({ known });
       if (isIpcError(reply)) return;
-      let adopted = false;
-      for (const f of reply.loops) adopted = adopt(f.root, f.taskId, f.loop) || adopted;
-      if (adopted) ctx.redraw();
+      let changed = false;
+      for (const f of reply.loops) changed = adopt(f.root, f.taskId, f.loop) || changed;
       for (const f of reply.loops) {
-        const r = loops.get(keyOf(f.root, f.taskId));
+        const k = keyOf(f.root, f.taskId);
+        const r = loops.get(k);
         if (!r) continue;
         r.inputs = { bugs: f.bugs, runs: f.runs, names: f.names };
+        if (!f.owner) { owned.delete(k); elsewhere.add(k); changed = takeSaved(r, f.loop) || changed; continue; }
+        elsewhere.delete(k);
+        if (!owned.has(k)) { owned.add(k); changed = takeSaved(r, f.loop) || changed; } // just became the owner: the saved copy is the truth
+        if (f.added.length) { mergeAdded(r, f.added); persist(r); changed = true; }
         await step(r);
       }
+      if (changed) ctx.redraw();
     } finally {
       ticking = false;
     }
   }
   setInterval(() => void tick(), TICK_MS);
+  // A clicked loop notification shows that agent's tab.
+  window.pastel.testing.onShowTab(({ tabId }) => { if (tabs.get(tabId)) tabs.activate(tabId); });
 
   // The shown task's agents: their action logs and tokens, from each session's transcript.
   async function refreshLogs(): Promise<void> {
@@ -228,6 +310,8 @@ export function createAgents(ctx: AgentContext) {
     note(r, 'tester', `Started ${nameOf('tester')} in a new tab`);
     note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
     loops.set(keyOf(root, task.id), r);
+    owned.add(keyOf(root, task.id)); // main made this window its owner
+    elsewhere.delete(keyOf(root, task.id));
     persist(r);
     ctx.say(reply.tester.tabId && reply.fixer.tabId ? `${nameOf('tester')} and ${nameOf('fixer')} are starting in two new tabs.` : 'Couldn’t open both tabs. Close the loop and try again.');
   }
@@ -241,13 +325,23 @@ export function createAgents(ctx: AgentContext) {
     if (!from || !task || !root) return 'Pick a task first.';
     const fixer = nameOf('fixer');
     const shown = shownLoop();
-    if (shown && fixerLive(shown)) {
+    const k = keyOf(root, task.id);
+    if (shown && fixerLive(shown) && owned.has(k)) {
       const { queue, added } = addSent(shown.queue, bug, Date.now());
       if (!added) return `${fixer} already has "${bug.name}" in its queue.`;
       shown.queue = queue;
       note(shown, 'fixer', `You → ${fixer} · ${bug.name}`);
       persist(shown);
       ctx.redraw();
+      return `Sent "${bug.name}" to ${fixer}'s queue. Run the suite again once it says done, to verify.`;
+    }
+    // Not stepped here: main adds it to the saved queue while the bug fix agent is live in any window.
+    const queued = await window.pastel.testing.loopAddBug({ tabId: from, root: ctx.picked(), taskId: task.id, bug });
+    if (isIpcError(queued)) return `Couldn’t send it: ${queued.error}`;
+    if ('note' in queued) return queued.note;
+    if (queued.queued) {
+      if (!queued.added) return `${fixer} already has "${bug.name}" in its queue.`;
+      if (shown) { shown.queue = addSent(shown.queue, bug, Date.now()).queue; ctx.redraw(); } // shown at once; the next tick takes the saved copy
       return `Sent "${bug.name}" to ${fixer}'s queue. Run the suite again once it says done, to verify.`;
     }
     const brief = buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: bug.name, prompt: bug.sent.failure, names: { tester: nameOf('tester'), fixer } });
@@ -263,7 +357,9 @@ export function createAgents(ctx: AgentContext) {
     r.queue = addSent(r.queue, bug, now, 'fixing').queue;
     r.tokens = { tester: keep ? keep.tokens.tester : null, fixer: 0 };
     note(r, 'fixer', `Started ${fixer} in a new tab on ${bug.name}`);
-    loops.set(keyOf(root, task.id), r);
+    loops.set(k, r);
+    owned.add(k); // main made this window its owner
+    elsewhere.delete(k);
     persist(r);
     return `Started ${fixer} on "${bug.name}". Run the suite again once it says done, to verify.`;
   }
@@ -272,6 +368,7 @@ export function createAgents(ctx: AgentContext) {
   async function stop(): Promise<void> {
     const r = shownLoop();
     if (!r || r.stopping) return;
+    if (elsewhere.has(keyOf(r.root, r.taskId))) { ctx.say('This loop runs in another window, where its agents’ tabs are. Stop it there.'); return; }
     r.stopping = true;
     ctx.say('Interrupting both agents, then asking them to stop and summarise.');
     ctx.redraw();
@@ -290,16 +387,19 @@ export function createAgents(ctx: AgentContext) {
     ctx.redraw();
   }
 
+  // Its tab here: busy, and whether a prompt on its screen waits on her.
+  function screenOf(agent: LoopAgent | null): { busy: boolean; asking: boolean } | null {
+    const id = tabOf(agent);
+    const tab = id ? tabs.get(id) : null;
+    return tab?.update ? { busy: Boolean(tab.update.busy), asking: composer.claudeIsAsking(tab) } : null;
+  }
+
   function laneStatus(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): string {
     const agent = r ? agentOf(r, role) : null;
-    if (!r || !agent) return 'Not started';
-    if (r.stoppedAt) return 'Stopped';
-    const update = updateOf(agent);
-    if (!update) return Date.now() - r.startedAt < STARTING_MS ? 'Starting in its tab' : 'Its tab isn’t open here';
-    if (r.kind === 'draft') return update.busy ? 'Drawing up the suite' : 'Idle';
-    if (role === 'tester') return progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : update.busy ? 'Working' : 'Idle';
-    const fixing = r.queue.find((b) => b.state === 'fixing');
-    return fixing ? `Fixing ${fixing.name}` : update.busy ? 'Working' : 'Idle, waiting for bugs';
+    return laneWord({
+      role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: Boolean(r && Date.now() - r.startedAt < STARTING_MS),
+      testerLine: progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : null, fixing: r?.queue.find((b) => b.state === 'fixing')?.name ?? null,
+    });
   }
 
   // Her message to one agent, through the reply box's paste path; refused while that agent is asking something.
@@ -329,8 +429,9 @@ export function createAgents(ctx: AgentContext) {
     const roles = ctx.suite() || r?.kind === 'loop' ? ROLES : ROLES.filter((role) => r && agentOf(r, role));
     const lanes: LaneModel[] = roles.map((role) => {
       const agent = r ? agentOf(r, role) : null;
+      const status = laneStatus(role, r, progress);
       return {
-        role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status: laneStatus(role, r, progress), busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy),
+        role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent ? r?.tokens[role] ?? null : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
       };
@@ -368,7 +469,7 @@ export function createAgents(ctx: AgentContext) {
     return { kind: r?.kind ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => loops.clear() };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => { loops.clear(); owned.clear(); elsewhere.clear(); } };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

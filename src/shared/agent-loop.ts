@@ -1,6 +1,6 @@
 // A task's saved loop, pure: one queue step with Petal's events, the check on a loop the renderer saves, lanes rebuilt
 // from agent records saved before loops were, and the tokens of the loop's last round.
-import { BUG_STATES, BUG_STATE_WORDS, SENT_FAILURE_CAP, stepQueue, type QueuedBug, type QueueMessage, type RunResult, type SentFrom } from './bug-queue';
+import { BUG_STATES, BUG_STATE_WORDS, SENT_FAILURE_CAP, stepQueue, type QueuedBug, type QueueMessage, type RunResult, type SentBug, type SentFrom } from './bug-queue';
 import type { AgentAction } from './agent-actions';
 import type { AgentRole } from './agent-names';
 import type { CriteriaItem } from './test-loop';
@@ -101,6 +101,13 @@ function cleanAgent(v: unknown): LoopAgent | null {
 }
 
 const cleanSent = (v: unknown): SentFrom | null => (isObject(v) && isText(v.stage) && isText(v.failure, SENT_FAILURE_CAP) ? { stage: v.stage, failure: v.failure } : null);
+
+// A bug another window sends to the saved queue: a name, its test or null, and what she sent.
+export function cleanSentBug(v: unknown): SentBug | null {
+  if (!isObject(v) || !isText(v.name) || !v.name.trim() || !(v.test === null || isText(v.test))) return null;
+  const sent = cleanSent(v.sent);
+  return sent ? { name: v.name, test: v.test, sent } : null;
+}
 
 function cleanBug(v: unknown): QueuedBug | null {
   if (!isObject(v) || !isText(v.key) || !isText(v.name) || !(v.test === null || isText(v.test)) || !BUG_STATES.includes(v.state as QueuedBug['state'])) return null;
