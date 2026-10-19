@@ -349,7 +349,9 @@
 .tst-agent-name { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .tst-agent-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tst-agent-name-input { width: 16em; max-width: 100%; }
-.tst-agent-tab { margin-left: auto; font-size: 13px; }
+/* The lane's terminal controls, right of the name: Terminal, Pop out, or Show its tab. */
+.tst-agent-controls { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-left: auto; }
+:is(.tst-agent-tab, .tst-agent-terminal, .tst-agent-popout) { font-size: 13px; }
 .tst-agent-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--reader-fg); font-size: 13px; }
 .tst-agent-tokens, .tst-agent-step-tokens, .tst-agent-step-time { color: var(--muted); font-size: 12px; }
 .tst-agent-log-head { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }

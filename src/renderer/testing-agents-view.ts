@@ -237,7 +237,12 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
     rename.addEventListener('click', () => on.rename(lane.role));
     head.append(name, rename);
   }
-  head.append(...terminalButtons(lane, on));
+  const controls = terminalButtons(lane, on);
+  if (controls.length) {
+    const group = el('span', 'tst-agent-controls');
+    group.append(...controls);
+    head.append(group);
+  }
   const facts = el('p', 'tst-agent-status');
   const dot = el('span', `tst-dot is-${lane.needsYou ? 'needs-you' : lane.busy ? 'running' : 'waiting'}`);
   dot.setAttribute('aria-hidden', 'true');
