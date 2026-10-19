@@ -575,8 +575,9 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (owner === null) loopOwners.delete(key); else loopOwners.set(key, owner);
     return owner;
   };
-  // The loop's bug fix agent has a session open in some window.
-  const fixerOpen = (loop: SavedLoop): boolean => loop.fixer !== null && [...sessions.values()].some((s) => s.feed.session?.sessionId === loop.fixer?.sessionId);
+  // An agent's session is open in some window.
+  const sessionOpen = (sessionId: string): boolean => [...sessions.values()].some((s) => s.feed.session?.sessionId === sessionId);
+  const fixerOpen = (loop: SavedLoop): boolean => loop.fixer !== null && sessionOpen(loop.fixer.sessionId);
   const fixerTakesBugs = (loop: SavedLoop): boolean => loop.kind === 'loop' && loop.stoppedAt === null && loop.fixer !== null && (fixerOpen(loop) || Date.now() - loop.startedAt < STARTING_MS);
   const takeAdded = (key: string): AddedBug[] => { const list = addedBugs.get(key) ?? []; addedBugs.delete(key); return list; };
 
@@ -655,7 +656,8 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   const draftLive = (root: string, taskId: string): boolean => {
     const loop = loopsOf(root)[taskId];
     if (loop?.kind !== 'draft' || loop.stoppedAt !== null) return false;
-    return [...sessions.values()].some((s) => s.tabId === loop.tester?.tabId || s.feed.session?.sessionId === loop.tester?.sessionId);
+    const tester = loop.tester;
+    return tester !== null && ([...sessions.values()].some((s) => s.tabId === tester.tabId) || sessionOpen(tester.sessionId));
   };
   const drafting = new Set<string>(); // `${root}:${taskId}` while its draft agent is being started
 
@@ -666,7 +668,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
-    const key = `${target.root}:${target.task.id}`;
+    const key = loopKey(target.root, target.task.id);
     if (drafting.has(key) || draftLive(target.root, target.task.id)) return { note: 'This task’s testing agent is already drawing up its suite.' };
     drafting.add(key);
     try {
@@ -676,7 +678,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
       const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
       const now = Date.now();
       saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
-      loopOwners.set(loopKey(target.root, target.task.id), event.sender.id);
+      loopOwners.set(key, event.sender.id);
       return { tabId: tester.tabId, updatedSkill: skill.updated };
     } finally {
       drafting.delete(key);

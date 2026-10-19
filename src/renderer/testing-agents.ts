@@ -91,13 +91,13 @@ export function createAgents(ctx: AgentContext) {
     const r = drafting();
     if (!r?.tester) return null;
     const id = tabOf(r.tester);
-    const tab = id ? tabs.get(id) ?? null : null;
+    const screen = screenOf(r.tester);
     const since = Math.max(r.startedAt, askedAt.get(keyOf(r.root, r.taskId)) ?? 0);
-    const replies = tab?.update?.replies ?? [];
+    const replies = updateOf(r.tester)?.replies ?? [];
     const ended = draftEnded({
       suite: Boolean(ctx.suite()),
       tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
-      busy: Boolean(tab?.update?.busy), asking: tab ? composer.claudeIsAsking(tab) : false,
+      busy: Boolean(screen?.busy), asking: Boolean(screen?.asking),
       worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
     });
     return { tabId: id, ended };

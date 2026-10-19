@@ -80,7 +80,7 @@ describe('the per-round estimate', () => {
 
 describe('what Testing prunes', () => {
   const base = (over: Partial<PruneFacts> = {}): PruneFacts => ({
-    tasks: [task('t-auto'), task('t-mine')], autoTasks: ['t-auto'], recordTasks: [], suiteTasks: new Set(), runTasks: new Set(), openSessions: new Set(), now: NOW, ...over,
+    tasks: [task('t-auto'), task('t-mine')], autoTasks: ['t-auto'], recordTasks: [], suiteTasks: new Set(), runTasks: new Set(), liveTasks: new Set(), openSessions: new Set(), now: NOW, ...over,
   });
 
   it('an auto task whose session closed, older than 30 days, with no suite and no runs', () => {
@@ -92,6 +92,7 @@ describe('what Testing prunes', () => {
     expect(prunePlan(base({ tasks: [task('t-auto', { createdAt: NOW - (AUTO_TASK_DAYS - 1) * DAY })] })).tasks).toEqual([]);
     expect(prunePlan(base({ suiteTasks: new Set(['t-auto']) })).tasks).toEqual([]);
     expect(prunePlan(base({ runTasks: new Set(['t-auto']) })).tasks).toEqual([]);
+    expect(prunePlan(base({ liveTasks: new Set(['t-auto']) })).tasks).toEqual([]); // its drafting agent is still open
     expect(prunePlan(base({ tasks: [task('t-auto'), task('t-sub', { parentId: 't-auto' })] })).tasks).toEqual([]);
     expect(prunePlan(base({ autoTasks: [] })).tasks).toEqual([]);
   });

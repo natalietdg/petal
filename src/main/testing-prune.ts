@@ -6,6 +6,7 @@ import { loadTasks, updateTasks } from './tasks-store';
 import { suiteFile } from './task-suites';
 import { prunePlan } from '../shared/testing-prune';
 import { removeTask } from '../shared/tasks';
+import { hasAgentIn } from '../shared/loop-signals';
 
 const PRUNE_EVERY_MS = 60 * 60 * 1000;
 const lastPruned = new Map<string, number>(); // root -> when it was last tidied
@@ -23,7 +24,8 @@ export function pruneProject(root: string, openSessions: ReadonlySet<string>, no
   const plan = prunePlan({
     tasks, autoTasks: data.autoTasks ?? [], recordTasks: [...Object.keys(data.agents ?? {}), ...Object.keys(data.loops ?? {})],
     suiteTasks: new Set(tasks.map((t) => t.id).filter((id) => data.suites?.[id] || fs.existsSync(suiteFile(root, id)))),
-    runTasks: new Set(data.runs.flatMap((r) => (r.taskId ? [r.taskId] : []))), openSessions, now,
+    runTasks: new Set(data.runs.flatMap((r) => (r.taskId ? [r.taskId] : []))),
+    liveTasks: new Set(Object.entries(data.loops ?? {}).filter(([, loop]) => loop.stoppedAt === null && hasAgentIn(loop, openSessions)).map(([id]) => id)), openSessions, now,
   });
   if (plan.tasks.length) {
     updateTasks(root, (current) => {
