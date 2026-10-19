@@ -16,7 +16,7 @@ import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
 import { createAgents } from './testing-agents';
-import { elsewherePicker, lockBar, noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { lockBar, noSuite, noTasks, prdOverview, sessionPicker, suiteChangeLine, taskPicker } from './testing-tasks-view';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
 import { forTask, suiteFor, suitePath, type SuiteFor, type TaskSuite } from '../shared/task-suite';
@@ -75,7 +75,7 @@ let confirming: { stageId: string | null; commands: { name: string; command: str
 let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
-const pickedFor = new Map<string, string>(); // tab id -> the project of the task she picked there, when the tab is in ~ or outside a repo
+const pickedFor = new Map<string, string>(); // tab id -> the repo of the session she picked there, when the tab is in ~ or outside a repo
 const expanded = new Set<string>(); // history rows opened to their repeats or other commands
 let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
@@ -177,7 +177,7 @@ function drawHead(): void {
   const onTask = Boolean(shownTask());
   summary.replaceChildren(data?.project ? headLine() : '');
   if (data?.project && picked()) {
-    const change = el('button', 'tst-link tst-change-task', 'Change task');
+    const change = el('button', 'tst-link tst-change-session', 'Change session');
     change.type = 'button';
     change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); target = null; targetPicked = false; selectedRun = null; selectedStage = null; void load(); });
     summary.append(' · ', change);
@@ -353,7 +353,7 @@ function drawResults(): void {
   results.replaceChildren();
   if (!folderAllowed || !data) return;
   if (!data.project) {
-    results.append(data.elsewhere ? elsewherePicker(data.elsewhere.groups, chooseTask) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
+    results.append(data.elsewhere ? sessionPicker(data.elsewhere.sessions, (id) => void chooseSession(id)) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
   if (!data.tasks.length) { results.append(noTasks(openBoard)); return; }
@@ -375,14 +375,22 @@ function drawResults(): void {
   results.append(top, stageResults(shown?.stage ?? null, shown?.run ?? null, fixHandlers));
 }
 
-// A task from the picker: its project stands in for the tab's, then that task's suite shows.
-function chooseTask(root: string, id: string): void {
-  if (sourceTab) pickedFor.set(sourceTab, root);
-  target = { kind: 'task', id };
+// A session from the picker: its repo stands in for the tab's, then its task's suite shows; main makes the task when it has none.
+async function chooseSession(sessionId: string): Promise<void> {
+  const id = tabId();
+  if (!id) return;
+  const result = await window.pastel.testing.detect(id, null, sessionId);
+  if (isIpcError(result)) { message = result.error; drawAll(); return; }
+  if (sourceTab && result.project) pickedFor.set(sourceTab, result.project.root);
+  data = result;
+  folderAllowed = result.allowed;
+  target = result.sessionTaskId ? { kind: 'task', id: result.sessionTaskId } : null;
   targetPicked = true;
   selectedRun = null;
   selectedStage = null;
-  void load().then(refresh);
+  message = '';
+  drawAll();
+  await refresh();
 }
 
 // Each Claude session's distillation goes under that session's newest row in History, once.

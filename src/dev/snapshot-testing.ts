@@ -3,7 +3,7 @@
 // Run suite confirms the exact commands, then records the line a new tab would run (never executed);
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
 // records the paste; Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
-// how long it took; a tab in ~ picks a project instead; a task with no suite starts one from Claude's checks;
+// how long it took; a tab in ~ picks a Claude session instead; a task with no suite starts one from Claude's checks;
 // editing saves; every theme, style and width fits.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { extraTabFixtures, fixtureFile, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
+import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
@@ -51,6 +51,10 @@ export function seedTestingProject(outDir: string): { project: string; claudeDir
 }
 
 export const FIXTURE_TASK = 't-settings';
+const PICK_NEW = '5e550000-0000-4000-8000-0000000000a1'; // the session picker's fixture sessions
+const PICK_LOOSE = '5e550000-0000-4000-8000-0000000000a2';
+const PICK_NOTES = '5e550000-0000-4000-8000-0000000000a3';
+const tasksJson = (repo: string): string => path.join(repo, '.petal', 'tasks.json');
 export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
 
 // A loop step's cleanup: Stop if the loop still runs, then close the two agent tabs Start opened; true once only startTabs remain.
@@ -127,7 +131,7 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-pick-suite, .tst-pick-group, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
+  const texts = [...view.querySelectorAll('.tst-run-why, .tst-run-result, .tst-run-change, .tst-run-failing, .tst-day, .tst-other, .tst-axis, .tst-pick-name, .tst-pick-path, .tst-pick-suite, .tst-picker-title, .tst-title, .tst-summary, .tst-button:not(:disabled), .tst-link, .tst-note span, .tst-stage-name, .tst-stage-meta, .tst-stage-run:not(:disabled), .tst-section-title, .tst-sub, .tst-count, .tst-facts span, .tst-command, .tst-fix, .tst-group-file, .tst-group-tally, .tst-row-name, .tst-row-time, .tst-failure code, .tst-trend-label, .tst-run-name, .tst-by, .tst-run-meta, .tst-tool-name, .tst-kind, .tst-tool-detail, .tst-found, .tst-insert, .tst-muted, .tst-empty, .tst-confirm-title, .tst-confirm code, .tst-confirm-name, .tst-new, .tst-input, .tst-toggle span')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const chips = [...view.querySelectorAll('.tst-stage-item')].map((li) => [li.querySelector('.tst-stage-name')?.textContent, [...li.classList].find((c) => c.startsWith('is-'))?.slice(3)]);
   const history = [...view.querySelectorAll('.tst-day, .tst-runs > li > .tst-run, .tst-other')].map((n) => n.textContent);
@@ -144,7 +148,7 @@ const PROBE = `(() => {
     chartLabels: [...view.querySelectorAll('.tst-trend-label')].map((n) => n.textContent),
     timedParts: [...view.querySelectorAll('.tst-durations .tst-part')].filter((p) => parseFloat(p.style.height) > 0).length,
     picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent]),
-    pickerGroups: [...view.querySelectorAll('.tst-pick-group')].map((n) => n.textContent),
+    noSuite: Boolean(view.querySelector('.tst-no-suite')),
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
     makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
     head: view.querySelector('.tst-summary')?.textContent ?? '',
@@ -313,29 +317,61 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
 
-    // A tab in the home folder is not a project: pick a task instead, its project as the small line; one with no suite starts from Claude's checks.
+    // A tab in the home folder is not a project: pick one of her Claude sessions instead, live first, its repo and status as the small line.
+    // Fixture sessions only: a live one in acme with no task, a live one in ~ (left out), a recent one in notes-app holding a task with a suite.
     testingFixture.project = os.homedir();
-    await js('PastelTerm.overlays.hideCurrent()');
-    await click('#testing-button');
-    const home = await settle((p) => p.state.elsewhere?.reason === 'home');
-    const wantRows = [['Settings screen', 'acme · has a suite'], ['Sort notes by date', 'notes-app']];
-    check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a task:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the task picker: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
-    check(home && JSON.stringify(home.pickerGroups) === JSON.stringify(['No PRD', 'No PRD']), `tasks grouped by PRD per project: ${JSON.stringify(home?.pickerGroups)}`);
-    check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
-    await capture('testing-picker');
-    await js(`document.querySelector(${JSON.stringify(`#testing .tst-pick[data-root="${bare}"][data-task="t-notes"]`)})?.click()`);
-    const notes = await settle((p) => p.state.project === 'notes-app' && p.state.task === 'Sort notes by date' && JSON.stringify(p.state.target) === JSON.stringify({ kind: 'task', id: 't-notes' }) && Boolean(p.makePipeline));
-    check(notes, `a task row opens that task's suite: ${JSON.stringify(notes?.state.target)}`);
-    check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
-    await click('#testing .tst-make-pipeline');
-    const made = await settle((p) => p.state.editing);
-    const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('input')].map((i) => i.value))") as string[][];
-    check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
-    await capture('testing-make-pipeline');
-    await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
-    await click('#testing .tst-change-task');
-    check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change task goes back to the picker');
-    testingFixture.project = project;
+    const before = { panel: panelFixture.sessions, records: historyFixture.records, acme: fs.readFileSync(tasksJson(project), 'utf8'), notes: fs.readFileSync(tasksJson(bare), 'utf8') };
+    const notesTask = { id: 't-notes-sort', title: 'Sort by date', notes: '', status: 'working', owner: { sessionId: PICK_NOTES, name: 'Notes sorting', branch: 'main' }, createdAt: Date.now() - 7_200_000, claimedAt: Date.now() - 3_600_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
+    const notesData = JSON.parse(before.notes) as { tasks: unknown[] };
+    put(tasksJson(bare), JSON.stringify({ ...notesData, tasks: [...notesData.tasks, notesTask] }, null, 2));
+    put(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npx jest' }], keepGoing: false, autoRun: false }, null, 2));
+    panelFixture.sessions = [
+      { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() },
+      { pid: 0, sessionId: PICK_LOOSE, cwd: os.homedir(), kind: 'interactive', status: 'idle', name: 'home', updatedAt: Date.now() },
+    ];
+    const record = (sessionId: string, cwd: string, title: string) => ({ sessionId, file: path.join(claudeDir, `${sessionId}.jsonl`), cwd, title, firstPrompt: title, lastAt: Date.now() - 600_000, messages: 4, messagesExact: true });
+    historyFixture.records = [record(PICK_NEW, project, 'Polish the settings copy'), record(PICK_LOOSE, os.homedir(), 'Loose ends'), record(PICK_NOTES, bare, 'Notes sorting')];
+    try {
+      await js('PastelTerm.overlays.hideCurrent()');
+      await click('#testing-button');
+      const home = await settle((p) => p.state.elsewhere?.reason === 'home');
+      const wantRows = [['Polish the settings copy', 'acme · busy'], ['Notes sorting', 'notes-app · closed has a suite']];
+      check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, live first, ~ left out: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
+      check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
+      await capture('testing-picker');
+
+      // A session holding a task lands on that task's suite; the task select still switches within its repo.
+      await click(`#testing .tst-pick[data-session="${PICK_NOTES}"]`);
+      const held = await settle((p) => p.state.project === 'notes-app' && JSON.stringify(p.state.target) === JSON.stringify({ kind: 'task', id: 't-notes-sort' }));
+      check(held && held.state.task === 'Sort by date' && JSON.stringify(held.state.stages) === JSON.stringify(['Unit']), `a session with a task opens that task's suite: ${JSON.stringify(held?.state.target)} ${JSON.stringify(held?.state.stages)}`);
+      await js("(() => { const s = document.querySelector('#testing .tst-task-select'); s.value = 'task:t-notes'; s.dispatchEvent(new Event('change')); })()");
+      const notes = await settle((p) => p.state.task === 'Sort notes by date' && Boolean(p.makePipeline));
+      check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
+      await click('#testing .tst-make-pipeline');
+      const made = await settle((p) => p.state.editing);
+      const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('input')].map((i) => i.value))") as string[][];
+      check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
+      await capture('testing-make-pipeline');
+      await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
+      await click('#testing .tst-change-session');
+      check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change session goes back to the picker');
+
+      // A session with no task gets exactly one, titled with its name and given to it, and lands on its no-suite screen.
+      await click(`#testing .tst-pick[data-session="${PICK_NEW}"]`);
+      const fresh = await settle((p) => p.state.project === 'acme' && p.state.task === 'Polish the settings copy' && Boolean(p.noSuite));
+      const owned = (JSON.parse(fs.readFileSync(tasksJson(project), 'utf8')) as { tasks: { id: string; title: string; owner: { sessionId: string } | null }[] }).tasks.filter((t) => t.owner?.sessionId === PICK_NEW);
+      check(owned.length === 1 && owned[0]?.title === 'Polish the settings copy', `one task made for the session, owned by it: ${JSON.stringify(owned)}`);
+      check(fresh && JSON.stringify(fresh.state.target) === JSON.stringify({ kind: 'task', id: owned[0]?.id }) && fresh.state.stages.length === 0, `it opens on that task's no-suite screen: ${JSON.stringify(fresh?.state.target)}`);
+      await click('#testing .tst-change-session');
+      check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change session goes back to the picker again');
+    } finally {
+      panelFixture.sessions = before.panel;
+      historyFixture.records = before.records;
+      put(tasksJson(project), before.acme);
+      put(tasksJson(bare), before.notes);
+      fs.rmSync(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), { force: true });
+      testingFixture.project = project;
+    }
 
     // Esc closes it.
     await click('#testing-button');

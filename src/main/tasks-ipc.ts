@@ -5,6 +5,7 @@ import { repoBranch, repoRoot } from './repo-label';
 import { loadTasks, newPrdId, newTaskId, updateTasks } from './tasks-store';
 import { listActivity, recordActivity } from './activity-feed';
 import * as coord from './coord';
+import { sessionTitleFor } from './session-title';
 import { addTask, assignTask, editTask, moveTask, releaseTask, removeTask, taskBrief, type Prd, type Task, type TaskData, type TaskOwner } from '../shared/tasks';
 import { addPrd, editPrd, removePrd, setTaskPrd, splitTask } from '../shared/task-groups';
 import type { TaskChangeResult, TaskOp, TasksView } from '../shared/coord';
@@ -89,4 +90,17 @@ function changeTasks(root: string, op: TaskOp, ownerOf: (tabId: string) => TaskO
   });
   const { tasks, prds } = loadTasks(root);
   return { data: { tasks, prds }, extra };
+}
+
+// Testing's session picker, for a session that owns no task: one titled with the session's name and given to it, no brief sent.
+export function giveSessionTask(root: string, { sessionId, cwd }: { sessionId: string; cwd: string | null }): string {
+  const id = newTaskId();
+  const now = Date.now();
+  const owner = { sessionId, name: coord.sessionName(sessionId, cwd), branch: repoBranch(cwd) };
+  updateTasks(root, (tasks) => {
+    const given = assignTask(addTask(tasks, { title: sessionTitleFor(sessionId, { cwd }) }, id, now), id, owner, now);
+    return 'tasks' in given ? given : null;
+  });
+  void coord.refresh(); // the Board sees it now, not on the next tick
+  return id;
 }

@@ -2,7 +2,7 @@
 import { el } from './dom';
 import { when } from './testing-view';
 import { groupTasks } from '../shared/task-groups';
-import { parseTarget, targetValue, type OverviewRow, type PickGroup, type TestTarget } from '../shared/task-testing';
+import { parseTarget, targetValue, type OverviewRow, type PickSession, type TestTarget } from '../shared/task-testing';
 import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
 import type { LockView } from '../shared/testing';
@@ -61,32 +61,29 @@ export function prdOverview(rows: OverviewRow[], open: (taskId: string) => void)
   return box;
 }
 
-// The tab is in ~ or outside a repo: recent projects' tasks by PRD; a row opens that task's suite.
-export function elsewherePicker(groups: readonly PickGroup[], choose: (root: string, taskId: string) => void): HTMLElement {
+// The tab is in ~ or outside a repo: her Claude sessions in a repo, live first; a row opens that session's suite.
+export function sessionPicker(sessions: readonly PickSession[], choose: (sessionId: string) => void): HTMLElement {
   const box = el('div', 'tst-picker');
-  box.append(el('p', 'tst-picker-title', 'This tab isn’t in a project. Pick a task:'));
-  if (!groups.length) {
-    box.append(el('p', 'tst-muted', 'None of your recent projects has tasks yet. Add tasks on the Board.'));
+  box.append(el('p', 'tst-picker-title', 'This tab isn’t in a project. Pick a session:'));
+  if (!sessions.length) {
+    box.append(el('p', 'tst-muted', 'No Claude sessions in a repo yet.'));
     return box;
   }
-  for (const group of groups) {
-    const list = el('ul', 'tst-picker-list');
-    list.setAttribute('aria-label', `${group.prd ?? 'No PRD'} in ${group.project}`);
-    for (const task of group.tasks) {
-      const item = el('li', task.subtask ? 'is-subtask' : '');
-      const button = el('button', 'tst-pick');
-      button.type = 'button';
-      Object.assign(button.dataset, { root: group.root, task: task.id });
-      button.title = group.root;
-      const meta = el('span', 'tst-pick-path', group.project);
-      if (task.suite) meta.append(' · ', el('span', 'tst-pick-suite', 'has a suite'));
-      button.append(el('span', 'tst-pick-name', task.subtask ? `↳ ${task.title}` : task.title), meta);
-      button.addEventListener('click', () => choose(group.root, task.id));
-      item.append(button);
-      list.append(item);
-    }
-    box.append(el('h3', 'tst-pick-group', group.prd ? `PRD · ${group.prd}` : 'No PRD'), list);
+  const list = el('ul', 'tst-picker-list');
+  for (const session of sessions) {
+    const item = el('li');
+    const button = el('button', 'tst-pick');
+    button.type = 'button';
+    button.dataset.session = session.sessionId;
+    button.title = session.root;
+    const meta = el('span', 'tst-pick-path', `${session.project} · ${session.status}`);
+    if (session.suite) meta.append(' ', el('span', 'tst-pick-suite', 'has a suite'));
+    button.append(el('span', 'tst-pick-name', session.name), meta);
+    button.addEventListener('click', () => choose(session.sessionId));
+    item.append(button);
+    list.append(item);
   }
+  box.append(list);
   return box;
 }
 

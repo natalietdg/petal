@@ -29,7 +29,9 @@ import { dismissRestored, lockHookPresent, loadManifest, refreshLock, setLock } 
 import { AGENT_NAME_MAX, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, suiteFor, type SuiteViews } from '../shared/task-suite';
-import { pickGroups, type ProjectTasks } from '../shared/task-testing';
+import { listedSession, listedSessions, ownedTask, type PickSession, type SessionCandidate } from '../shared/task-testing';
+import { panelSessions } from './agents-ipc';
+import { giveSessionTask } from './tasks-ipc';
 import * as store from './testing-store';
 import { ensureSelfIgnore } from './factory-store';
 import { writeFileDurable } from './atomic-file';
@@ -38,7 +40,7 @@ import { claudeLaunch } from './claude-launch';
 import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type Elsewhere, type PipelineConfig, type PipelineRun, type ProjectRef, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
+  type Elsewhere, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -147,8 +149,6 @@ const openLogs = (sessions: TabSessions): SessionLog[] => [...sessions.values()]
   const s = feed.session;
   return s?.transcript ? [{ transcript: s.transcript, sessionId: s.sessionId, cwd: (isSnapshotRun() && testingFixture.project) || s.cwd || null }] : [];
 });
-
-const openCalls = (sessions: TabSessions) => logCalls(openLogs(sessions));
 
 // Runs filed under the home folder before ~ stopped being a project; read only, each copied to the repo it ran in.
 const homeRuns = (): PipelineRun[] => store.load(os.homedir()).runs.filter((r) => r.by === 'claude');
@@ -269,29 +269,35 @@ const named = (runs: PipelineRun[]): PipelineRun[] => {
   });
 };
 
-const PICK_MAX = 8;
+const PICK_MAX = 20;
+type Candidate = SessionCandidate & { cwd: string | null };
 
-// Projects whose tasks to offer when the tab is in ~ or outside a repo: open tabs', where Claude ran checks, recent sessions'.
-async function recentProjects(sessions: TabSessions): Promise<ProjectRef[]> {
-  const seen = new Map<string, number>(); // root -> most recent use
-  const note = (root: string | null, at: number) => { if (root) seen.set(root, Math.max(seen.get(root) ?? 0, at)); };
-  for (const s of sessions.values()) note(await projectOf(s), Date.now());
-  for (const { call, project } of (await openCalls(sessions)).found) note(project, call.at);
-  for (const run of homeRuns()) note(runProject(run), run.startedAt);
-  for (const record of history.listSessions(new Set(), testingClaudeDir()).slice(0, 40)) note(projectRootOf(record.cwd), record.lastAt);
-  return [...seen].sort((a, b) => b[1] - a[1]).slice(0, PICK_MAX).map(([root]) => ({ root, name: path.basename(root) }));
+// Her Claude sessions in a repo, for a tab in ~ or outside a repo: the Sessions panel's live ones, then History's recent ones.
+function sessionPicks(): (Candidate & { root: string })[] {
+  const live = panelSessions().map((s): Candidate => ({ sessionId: s.sessionId, cwd: s.cwd, root: projectRootOf(s.cwd), status: s.status === 'busy' ? 'busy' : 'idle' }));
+  const recent = history.listSessions(new Set(), testingClaudeDir()).filter((r) => !r.live)
+    .map((r): Candidate => ({ sessionId: r.sessionId, cwd: r.cwd, root: projectRootOf(r.cwd), status: 'closed' }));
+  return listedSessions(live, recent, PICK_MAX);
 }
 
-async function elsewhereFor(session: TabSession | undefined, sessions: TabSessions): Promise<Elsewhere | null> {
+async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere | null> {
   const cwd = session ? await cwdOf(session) : null;
   if (!cwd) return null;
-  return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', groups: pickGroups((await recentProjects(sessions)).map(projectTasks)) };
+  const tasksIn = new Map<string, Task[]>(); // root -> its tasks, read once per listing
+  const rows = sessionPicks().map((s): PickSession => {
+    if (!tasksIn.has(s.root)) tasksIn.set(s.root, loadTasks(s.root).tasks);
+    const taskId = ownedTask(tasksIn.get(s.root) ?? [], s.sessionId)?.id ?? null;
+    return { sessionId: s.sessionId, name: sessionTitleFor(s.sessionId, { cwd: s.cwd }), root: s.root, project: path.basename(s.root), status: s.status, suite: Boolean(taskId && fs.existsSync(suiteFile(s.root, taskId))) };
+  });
+  return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', sessions: rows };
 }
 
-// A project's tasks for the picker, read only; a tasks file that doesn't parse lists nothing.
-function projectTasks({ root, name }: ProjectRef): ProjectTasks {
-  const { tasks, prds } = loadTasks(root);
-  return { root, name, tasks, prds, suited: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))) };
+// A session she picked from that list: its repo, and its task, made for it now if it owns none. Only a listed session is taken.
+function pickedSession(sessionId: unknown): { root: string; taskId: string } {
+  const picked = listedSession(sessionPicks(), sessionId);
+  if (!picked) throw new Error('That session isn’t one of your Claude sessions in a repo.');
+  const owned = ownedTask(loadTasks(picked.root).tasks, picked.sessionId);
+  return { root: picked.root, taskId: owned?.id ?? giveSessionTask(picked.root, { sessionId: picked.sessionId, cwd: picked.cwd }) };
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.
@@ -473,11 +479,16 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   };
   const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: null, sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
-  handle('testing:detect', async (event, { tabId, root: picked }) => {
+  // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
+  handle('testing:detect', async (event, { tabId, root: picked, session }) => {
     if (!claudeFolderAllowed()) return blank(false);
     const asking = sessionFor(sessions, event.sender.id, tabId);
+    if (session) {
+      const { root, taskId } = pickedSession(session);
+      return { ...(await stateFor(root, sessions, await sessionOnProject(root, sessions, asking))), sessionTaskId: taskId };
+    }
     const root = await rootFor(asking, picked);
-    return root ? stateFor(root, sessions, await sessionOnProject(root, sessions, asking)) : blank(true, await elsewhereFor(asking, sessions));
+    return root ? stateFor(root, sessions, await sessionOnProject(root, sessions, asking)) : blank(true, await elsewhereFor(asking));
   });
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.

@@ -240,7 +240,7 @@ export interface InvokeChannels {
   // A concluded session's This session line: its Library notes, test runs and test loop; null when its log can't be read.
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
-  'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
+  'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief: string; fixerBrief: string }]; result: Guarded<{ tester: AgentStart; fixer: AgentStart } | { note: string }> };
