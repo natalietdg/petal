@@ -9,14 +9,14 @@ import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
 import { historyList, pipelineStrip, stackList, stageResults, trend } from './testing-view';
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
-import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState, type Elsewhere } from '../shared/testing';
+import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
 import { isActive, type Criteria } from '../shared/test-loop';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
 import { createAgents } from './testing-agents';
-import { lockBar, noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { elsewherePicker, lockBar, noSuite, noTasks, prdOverview, suiteChangeLine, taskPicker } from './testing-tasks-view';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
 import { forTask, suiteFor, suitePath, type SuiteFor, type TaskSuite } from '../shared/task-suite';
@@ -75,7 +75,7 @@ let confirming: { stageId: string | null; commands: { name: string; command: str
 let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
-const pickedFor = new Map<string, string>(); // tab id -> the project she picked there, when the tab is in ~ or outside a repo
+const pickedFor = new Map<string, string>(); // tab id -> the project of the task she picked there, when the tab is in ~ or outside a repo
 const expanded = new Set<string>(); // history rows opened to their repeats or other commands
 let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
@@ -177,9 +177,9 @@ function drawHead(): void {
   const onTask = Boolean(shownTask());
   summary.replaceChildren(data?.project ? headLine() : '');
   if (data?.project && picked()) {
-    const change = el('button', 'tst-link tst-change-project', 'Change project');
+    const change = el('button', 'tst-link tst-change-task', 'Change task');
     change.type = 'button';
-    change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); selectedRun = null; selectedStage = null; void load(); });
+    change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); target = null; targetPicked = false; selectedRun = null; selectedStage = null; void load(); });
     summary.append(' · ', change);
   }
   const busy = Boolean(data?.running);
@@ -353,7 +353,7 @@ function drawResults(): void {
   results.replaceChildren();
   if (!folderAllowed || !data) return;
   if (!data.project) {
-    results.append(data.elsewhere ? projectPicker(data.elsewhere) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
+    results.append(data.elsewhere ? elsewherePicker(data.elsewhere.groups, chooseTask) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
   if (!data.tasks.length) { results.append(noTasks(openBoard)); return; }
@@ -375,34 +375,14 @@ function drawResults(): void {
   results.append(top, stageResults(shown?.stage ?? null, shown?.run ?? null, fixHandlers));
 }
 
-// The tab is in ~ or outside a repo: no pipeline for it, just the projects she can look at instead.
-function projectPicker(elsewhere: Elsewhere): HTMLElement {
-  const box = el('div', 'tst-picker');
-  const why = elsewhere.reason === 'home' ? 'This tab is in your home folder, not a project.' : `This tab is in ${elsewhere.folder}, which isn’t inside a git repo.`;
-  box.append(el('p', 'tst-picker-title', `${why} Pick a project:`));
-  if (!elsewhere.projects.length) {
-    box.append(el('p', 'tst-muted', 'No recent projects yet. Open a tab in a repo, or cd into one here.'));
-    return box;
-  }
-  const list = el('ul', 'tst-picker-list');
-  for (const project of elsewhere.projects) {
-    const item = el('li');
-    const button = el('button', 'tst-pick');
-    button.type = 'button';
-    button.dataset.root = project.root;
-    button.title = project.root;
-    button.append(el('span', 'tst-pick-name', project.name), el('span', 'tst-pick-path', project.root.replace(/^\/Users\/[^/]+/, '~')));
-    button.addEventListener('click', () => {
-      if (sourceTab) pickedFor.set(sourceTab, project.root);
-      selectedRun = null;
-      selectedStage = null;
-      void load().then(refresh);
-    });
-    item.append(button);
-    list.append(item);
-  }
-  box.append(list);
-  return box;
+// A task from the picker: its project stands in for the tab's, then that task's suite shows.
+function chooseTask(root: string, id: string): void {
+  if (sourceTab) pickedFor.set(sourceTab, root);
+  target = { kind: 'task', id };
+  targetPicked = true;
+  selectedRun = null;
+  selectedStage = null;
+  void load().then(refresh);
 }
 
 // Each Claude session's distillation goes under that session's newest row in History, once.

@@ -62,3 +62,16 @@ export function prdOverview(data: TaskData, prdId: string, suites: SuiteViews, r
     };
   });
 }
+
+// ---- The task picker for a tab outside any project: recent projects' tasks, grouped by PRD.
+export interface ProjectTasks extends TaskData { root: string; name: string; suited: readonly string[] }
+export interface PickTask { id: string; title: string; subtask: boolean; suite: boolean }
+export interface PickGroup { root: string; project: string; prd: string | null; tasks: PickTask[] }
+
+// Projects in the order given, each PRD then No PRD, a subtask right after its task; empty groups left out.
+export function pickGroups(projects: readonly ProjectTasks[]): PickGroup[] {
+  return projects.flatMap((p) => groupTasks(p).filter((g) => g.tasks.length).map((g) => ({
+    root: p.root, project: p.name, prd: g.prd?.title ?? null,
+    tasks: g.tasks.flatMap((tree) => [tree.task, ...tree.subtasks]).map((t) => ({ id: t.id, title: t.title, subtask: t.parentId !== null, suite: p.suited.includes(t.id) })),
+  })));
+}
