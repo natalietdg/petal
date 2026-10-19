@@ -16,7 +16,8 @@ import { CRITERIA_FIXTURE } from './snapshot-test-loop';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { snapshotLoops } from '../main/testing-ipc';
-import { rememberAgent } from '../main/task-suites';
+import { rememberAgent, syncSuites } from '../main/task-suites';
+import { loadTasks } from '../main/tasks-store';
 import { LOG_TAIL_BYTES, trimmedNote } from '../main/testing-runner';
 import { noEvents } from '../shared/agent-loop';
 import * as store from '../main/testing-store';
@@ -42,6 +43,7 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} loop signals: ${what}`);
   const { project, claudeDir } = seedTestingProject(outDir);
   seedOtherTask(project);
+  syncSuites(project, loadTasks(project).tasks); // Petal sees both suite files before any agent exists, as her first open of Testing would
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.loopStarts.length = 0;

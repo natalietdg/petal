@@ -81,7 +81,6 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     put(fixerLog, say(FIXER, 'f0', 'You are Bug fix agent.', 'Ready.'));
     testingFixture.project = repo;
     testingFixture.claudeDir = claudeDir;
-    rememberAgent(repo, 't-draft', OLD_TESTER, 'tester');
 
     // 1 Outdated, unedited skill: updated first, said so, and the brief runs the slash command.
     const drafter: FixtureSession = { sessionId: DRAFTER, transcript: drafterLog, status: 'idle', cwd: repo };
@@ -104,7 +103,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show its tab.
     const drafterTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(DRAFTER)}) ?? null`), 10000);
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
-    await js("document.getElementById('testing-button').click()");
+    await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()"); // the button toggles; Testing may still be open from step 1
     fs.appendFileSync(drafterLog, say(DRAFTER, 'd1', 'go on', 'I looked at the refunds code and need to think about the stages.'));
     const ended = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
     check(drafterTab && ended?.ended === 'The testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show its tab: ${JSON.stringify(ended)}`);
@@ -149,6 +148,8 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(handed, `the drafting agent's [fail] line reaches the bug fix agent: ${JSON.stringify((await view())?.agents.queue)}`);
 
     // 7 Write rights: the older testing agent's write is refused; the loop's tester's is taken.
+    // Recorded only now: at the start, a lone tester record would rebuild as an ended draft and hide Ask Claude.
+    rememberAgent(repo, 't-draft', OLD_TESTER, 'tester');
     const good = fs.readFileSync(suiteFile, 'utf8');
     put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }, { name: 'Lint', command: 'npm run lint' }] }));
     const { tasks } = loadTasks(repo);
@@ -174,7 +175,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     const editTab = store.load(repo).loops?.['t-edit']?.tester?.tabId ?? null;
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     if (editTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(editTab)})`);
-    await js("document.getElementById('testing-button').click()");
+    await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()");
     await pickTask('t-edit');
     const gone = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
     check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && !gone.show, `a closed tab ends the draft, Ask again without Show its tab: ${JSON.stringify(gone)}`);
