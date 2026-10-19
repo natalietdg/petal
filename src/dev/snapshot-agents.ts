@@ -281,6 +281,15 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await js(`document.querySelector('${row}').click()`);
   const fromPanel = await waitFor(async () => { const p = await panel(); return p.open && p.steps.length === 2 && p.title === 'Tidy the print styles' ? p : null; }, 5000);
   check(fromPanel?.id === RUNNING_ID && (await js("document.getElementById('sessions-panel').hidden")), `clicking it closes Sessions and opens the agent panel: ${JSON.stringify(fromPanel?.title)}`);
+  check(fromPanel && !(await menu()).open && !(await js("document.getElementById('agent-panel').hidden")), 'the Sessions row and the header menu open the same agent panel');
+  await js('PastelTerm.agentPanel.hide()');
+  await js('PastelTerm.sessionsPanel.setOpen(true)');
+  await waitFor(() => js(`Boolean(document.querySelector('${row}'))`), 5000);
+  const keyable = await js(`(() => { const r = document.querySelector('${row}'); r.focus(); return { focused: document.activeElement === r, role: r.getAttribute('role') }; })()`);
+  check(keyable.focused && keyable.role === 'button', `an agent row takes keyboard focus as a button: ${JSON.stringify(keyable)}`);
+  await key('Enter');
+  const byEnter = await waitFor(async () => { const p = await panel(); return p.open && p.id === RUNNING_ID && p.steps.length ? p : null; }, 5000);
+  check(byEnter && (await js("document.getElementById('sessions-panel').hidden")), 'Enter on a Sessions agent row opens the agent panel too');
   await js('PastelTerm.agentPanel.hide()');
 
   panelFixture.sessions = null;
