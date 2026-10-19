@@ -79,6 +79,12 @@ function wireFiles(container: HTMLElement, term: Terminal, tabId: TabId): void {
   });
 }
 
+// Now and after xterm's viewport catches up with the new size: its scroll sync can pull the view back up a line.
+function pinToBottom(term: Terminal): void {
+  term.scrollToBottom();
+  requestAnimationFrame(() => term.scrollToBottom());
+}
+
 // One xterm per tab; its pty output is routed in by tabs.ts.
 export function create(container: HTMLElement, theme: Theme, tabId: TabId): TermView {
   const term = new Terminal({
@@ -103,7 +109,10 @@ export function create(container: HTMLElement, theme: Theme, tabId: TabId): Term
   // Hidden pane (reader-only) has no size; fitting it would collapse the grid.
   const refit = () => {
     if (container.offsetHeight <= 0) return;
+    const buffer = term.buffer.active;
+    const atBottom = buffer.viewportY >= buffer.baseY;
     fit.fit();
+    if (atBottom) pinToBottom(term); // reflowing a long scrollback can leave the view short of the bottom
     const screen = container.querySelector<HTMLElement>('.xterm-screen');
     if (screen && term.rows > 0) noteTerminalRows(term.rows, screen.offsetHeight / term.rows);
   };
@@ -127,5 +136,5 @@ export function setFontSize({ term, refit }: Pick<TermView, 'term' | 'refit'>, p
   const atBottom = buffer.viewportY >= buffer.baseY;
   term.options.fontSize = px;
   refit(); // a hidden tab refits when it is activated
-  if (atBottom) term.scrollToBottom();
+  if (atBottom) pinToBottom(term);
 }
