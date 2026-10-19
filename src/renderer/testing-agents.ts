@@ -594,7 +594,7 @@ export function createAgents(ctx: AgentContext) {
 
   const testerHost = (): string | null => facts().record?.tester?.hostTabId ?? null;
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerHost, testerReplies: () => repliesOf(shownLoop(), 'tester'), draft, awaiting, askAgain, askTester, checkDraft, showTerminal, state };
+  return { element, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerHost, testerReplies: () => repliesOf(shownLoop(), 'tester'), draft, awaiting, askAgain, askTester, checkDraft, showTerminal, state };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

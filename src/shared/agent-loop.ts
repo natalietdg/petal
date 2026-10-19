@@ -105,7 +105,7 @@ const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 const isText = (v: unknown, max = TEXT_MAX): v is string => typeof v === 'string' && v.length <= max;
 const isSessionId = (v: unknown): v is string => isText(v, ID_MAX) && v.length > 0;
 
-export const isLegacyLoop = (v: unknown): boolean => isObject(v) && ('tester' in v || 'fixer' in v);
+const isLegacyLoop = (v: unknown): boolean => isObject(v) && ('tester' in v || 'fixer' in v);
 
 // A session id from either shape: the new field, else the old { tabId, sessionId } entry. undefined when malformed.
 function cleanSession(v: Record<string, unknown>, role: AgentRole): string | null | undefined {
@@ -153,7 +153,7 @@ export function cleanStoredLoop(v: unknown): StoredLoop | null {
 }
 
 // ---- The agent registry's rules. One open agent per role per task; an agent is only ever found by its session id.
-export const CLOSED_KEPT = 40; // closed agents kept per project; the agents ledger still names every one for the lock
+const CLOSED_KEPT = 40; // closed agents kept per project; the agents ledger still names every one for the lock
 export const CLOSED_EVENT = 'Closed';
 
 export const openAgent = (agents: readonly TestAgent[], taskId: string, role: AgentRole): TestAgent | null =>

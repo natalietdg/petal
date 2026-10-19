@@ -268,7 +268,7 @@ async function reopenInFlight(root: string, agent: TestAgent): Promise<void> {
 // ---- Replies: the live terminal's, else the end of its transcript, so a fix that landed while Petal was closed counts.
 const tailCache = new Map<string, { mtimeMs: number; size: number; replies: Reply[] }>();
 
-export function transcriptReplies(file: string): Reply[] {
+function transcriptReplies(file: string): Reply[] {
   let stat: fs.Stats;
   try { stat = fs.statSync(file); } catch { return []; }
   const cached = tailCache.get(file);

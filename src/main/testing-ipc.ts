@@ -885,11 +885,6 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 }
 
-// Snapshot runs only: forget the tabs runs opened, as a restart does.
-export const snapshotLoops = {
-  forgetRunTabs: (): void => { if (isSnapshotRun()) runTabs.clear(); },
-};
-
 // Each task's loop as a window shows it.
 const loopViews = (root: string, contentsId: number): Record<string, LoopView> =>
   Object.fromEntries(Object.entries(loopsOf(root)).map(([taskId, loop]) => [taskId, loopView(root, loop, contentsId)]));
