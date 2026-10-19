@@ -155,7 +155,7 @@ export function unmountAgent(id: TabId): void {
   stage.append(tab.host);
 }
 
-// The agent's terminal becomes an ordinary tab-bar tab, shown.
+// The agent's terminal becomes an ordinary tab-bar tab, shown; activating it tells main it now counts as one.
 export function popOut(id: TabId): void {
   const tab = tabs.get(id);
   if (!tab || !agents.has(id)) return;
