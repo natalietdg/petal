@@ -1,15 +1,15 @@
-// Workflow: how her Claude Code setup works, where the day went, and the factory Claude follows. Replaces the reader while open; Esc goes back.
+// Workflow tabs inside Customize: how her Claude Code setup works, where the day went, and the factory Claude follows.
+// customize.ts owns the page and tab bar; this draws one tab into the body it hands over.
 import * as diagrams from './diagrams';
-import * as overlays from './overlays';
-import { byId, el, query } from './dom';
+import { el } from './dom';
 import { timeOf } from './format';
 import { renderFactory } from './workflow-factory';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData, TodayRow } from '../main/workflow';
 import type { FactoryState } from '../main/factory-store';
 import type { IpcError } from '../shared/types';
 
-type TabId = 'today' | 'setup' | 'time' | 'handoffs' | 'factory';
-interface OpenOptions {
+export type TabId = 'today' | 'setup' | 'time' | 'handoffs' | 'factory';
+export interface OpenOptions {
   openTabs?: OpenTab[];
 }
 interface DataByTab {
@@ -21,10 +21,8 @@ interface DataByTab {
 }
 type Loaded = DataByTab[TabId] | IpcError;
 
-const view = byId('workflow');
-const button = byId('workflow-button');
 const LABELS = ['next', 'done', 'why', 'watch', 'decide'];
-const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<Loaded> }[] = [
+export const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<Loaded> }[] = [
   { id: 'today', name: 'Today', load: (o) => window.pastel.workflow.today(o.openTabs) },
   { id: 'setup', name: 'Setup', load: () => window.pastel.workflow.setup() },
   { id: 'time', name: 'Time', load: () => window.pastel.workflow.time() },
@@ -32,28 +30,9 @@ const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Promise<L
   { id: 'factory', name: 'Factory', load: () => window.pastel.factory.get() },
 ];
 const UNCACHED: TabId[] = ['factory']; // edited in place, so a return visit reads the files again
-let tab: TabId = 'today';
 let options: OpenOptions = {};
 let cache: Partial<Record<TabId, DataByTab[TabId]>> = {}; // tab id -> data, cleared on every open
 let drawn = 0; // stale async renders check this before writing
-
-view.innerHTML = `
-  <div class="workflow-pane">
-    <header class="workflow-head">
-      <h1 class="workflow-title">Workflow</h1>
-      <div id="workflow-tabs" class="view-toggle workflow-tabs" role="tablist" aria-label="Workflow sections"></div>
-    </header>
-    <div id="workflow-body" class="workflow-body"></div>
-  </div>`;
-const tabsBar = query(view, '#workflow-tabs');
-const body = query(view, '#workflow-body');
-for (const t of TABS) {
-  const b = el('button', '', t.name);
-  b.type = 'button';
-  b.dataset.tab = t.id;
-  b.setAttribute('role', 'tab');
-  tabsBar.append(b);
-}
 
 // ---- small pieces
 
@@ -341,10 +320,20 @@ const draw = <K extends TabId>(id: K, data: DataByTab[K], token: number): HTMLEl
 
 // ---- view plumbing
 
-async function show(id: TabId): Promise<void> {
-  tab = id;
+export const isTabId = (value: string | undefined): value is TabId => TABS.some((t) => t.id === value);
+
+// Customize calls this each time it opens, so every visit reads fresh data.
+export function reset(openOptions: OpenOptions = {}): void {
+  options = openOptions;
+  cache = {};
+  drawn += 1;
+}
+
+// Another tab took the body: a load still in flight must not write over it.
+export function cancel(): void { drawn += 1; }
+
+export async function show(id: TabId, body: HTMLElement): Promise<void> {
   const token = ++drawn;
-  for (const b of tabsBar.querySelectorAll<HTMLButtonElement>('button')) b.setAttribute('aria-selected', String(b.dataset.tab === id));
   if (!cache[id]) body.replaceChildren(el('p', 'status', id === 'time' ? 'Adding up this week…' : 'Loading…'));
   let data: Loaded;
   try {
@@ -361,22 +350,3 @@ async function show(id: TabId): Promise<void> {
   // The load for `id` returned `id`'s data; TypeScript can't tie the two through TABS.
   body.replaceChildren(...draw(id, data as DataByTab[typeof id], token));
 }
-
-export async function open(openOptions: OpenOptions = {}): Promise<void> {
-  options = openOptions;
-  cache = {};
-  if (!overlays.show('workflow')) return;
-  await show(tab);
-  tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-}
-
-export const close = (): void => overlays.hide('workflow');
-export const isOpen = (): boolean => overlays.isOpen('workflow');
-export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
-
-button.addEventListener('click', () => toggle());
-const isTabId = (value: string | undefined): value is TabId => TABS.some((t) => t.id === value);
-tabsBar.addEventListener('click', (event) => {
-  const id = (event.target as HTMLElement).dataset.tab;
-  if (isTabId(id)) show(id);
-});

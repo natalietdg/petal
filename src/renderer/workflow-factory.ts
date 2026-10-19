@@ -1,4 +1,4 @@
-// Workflow › Factory: the stations Claude follows, as a left-to-right chart she edits in place.
+// Customize › Factory: the stations Claude follows, as a left-to-right chart she edits in place.
 // Every change saves through main, which regenerates the skill Claude reads (main/factory-store.ts).
 import { el, isIpcError } from './dom';
 import { RUNNERS, newStationId, runnerLabel, validateFactory, type Runner, type Station } from '../shared/factory';

@@ -411,12 +411,12 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   const askedAgain = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
   check(askedAgain, 'existing config: the folder question shows on launch');
   check((await js("document.activeElement?.id")) === 'consent', `existing config: focus sits on the question, not Allow, so a stray Enter can't answer it: ${await js('document.activeElement?.className')}`);
-  for (const id of ['history-button', 'customize-button', 'workflow-button']) await js(`document.getElementById('${id}').click()`);
+  for (const id of ['history-button', 'customize-button']) await js(`document.getElementById('${id}').click()`);
   send(win.webContents, 'get-started:open');
   await wait(600);
   const stillAsked = await js(CONSENT);
   check(stillAsked.shown && (await js('PastelTerm.overlays.current()')) === 'consent' && configStore.load().claudeFolder.choice === 'unasked',
-    `existing config: History, Customize, Workflow and Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
+    `existing config: History, Customize and Get started wait behind the question: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), choice: configStore.load().claudeFolder.choice })}`);
   await js("document.querySelector('#consent .consent-later').click()");
   // With reading off, sign-in and ask are hand-ticked only, so Get started follows only while another step is open.
   await wait(800);

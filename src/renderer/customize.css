@@ -14,6 +14,8 @@
 .customize-tabs { margin: 0; flex-wrap: wrap; }
 .cz-summary { max-width: 46em; margin: 0 0 18px; font: 500 1.2em/1.4 var(--body-font); }
 .customize-body { display: flex; flex-direction: column; gap: 18px; }
+/* Workflow tabs space their own blocks with margins, as they did on their own page. */
+.customize-body.customize-body-workflow { display: block; }
 
 .cz-card { padding: 14px 16px 14px; border: 1px solid var(--rule); border-radius: 14px; }
 .cz-card-title { margin: 0 0 10px; font-size: 15px; font-weight: 600; }

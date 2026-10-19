@@ -15,7 +15,7 @@ const MEASURE = `(() => {
   return {
     dock: h('sessions-dock'), readerArea: h('reader-area'), reader: h('reader'), pane: h('terminal-pane'), strip: h('tab-strip'), terminal: h('terminal'),
     head: shown(document.getElementById('reader-head')),
-    dockButtons: ['customize-button', 'workflow-button', 'history-button', 'board-button', 'add-session-button'].filter((id) => shown(document.getElementById(id))),
+    dockButtons: ['customize-button', 'history-button', 'board-button', 'add-session-button'].filter((id) => shown(document.getElementById(id))),
     sessionsPill: shown(document.getElementById('sessions-pill')),
     updateDot: (() => { const p = document.getElementById('update-pill'); return shown(p) ? Math.round(p.getBoundingClientRect().width) : null; })(),
     headersButton: { shown: shown(document.getElementById('headers-min-toggle')), expanded: document.getElementById('headers-min-toggle').getAttribute('aria-expanded') },
