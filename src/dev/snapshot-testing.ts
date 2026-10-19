@@ -317,6 +317,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     // shown, the failure as its brief and the bug already fixing in its queue. Nothing is pasted into the session.
     await click('#testing-button');
     await settle((p) => (p.failRows as string[]).length > 0);
+    const fixEstimate: string = await js("document.querySelector('#testing .tst-fix-stage + .tst-ask-here + .tst-fix-estimate')?.textContent ?? ''");
+    check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(fixEstimate), `a one-line estimate under Send to bug fix agent: ${JSON.stringify(fixEstimate)}`);
     const pastesBefore = pasteWrites.length;
     const startsBefore = testingFixture.loopStarts.length;
     await click('#testing .tst-row.is-failed .tst-fix');
@@ -420,6 +422,9 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       const made = fs.existsSync(tasksJson(emptyRepo)) ? (JSON.parse(fs.readFileSync(tasksJson(emptyRepo), 'utf8')) as { tasks: { id: string; owner: { sessionId: string } | null }[] }).tasks : [];
       check(given && made.length === 1 && made[0]?.owner?.sessionId === 'snapshot-fixture' && JSON.stringify(given.state.target) === JSON.stringify({ kind: 'task', id: made[0]?.id }), `the tab's session gets one task and its no-suite screen: ${JSON.stringify({ target: given?.state.target, made })}`);
       check(!(await js("document.querySelector('#testing .tst-no-tasks')")), 'no "add a task on the Board" dead end');
+      const askEstimate: string = await js("document.querySelector('#testing .tst-no-suite .tst-ask-estimate')?.textContent ?? ''");
+      check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(askEstimate), `a one-line estimate under Ask Claude to draw one up: ${JSON.stringify(askEstimate)}`);
+
 
       // Ask Claude: the testing agent drawing up the suite gets a lane (chat, action log, tokens) before any suite exists.
       const startsBefore = testingFixture.loopStarts.length;
@@ -432,7 +437,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
         const tokens = box?.querySelector('.tst-agent-tokens')?.textContent ?? null;
         return lanes.length && tokens ? { roles: lanes.map((l) => l.dataset.role), chat: !!box.querySelector('.tst-agent-chat'), views: box.querySelectorAll('.tst-agent-view').length, tokens, queue: !!box.querySelector('.tst-queue'), events: PastelTerm.testing.state().agents.events.tester.map((e) => e.text) } : null;
       })()`), 8000);
-      check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
+      check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens( \([\d.]+k? of them cached reads\))?$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
       check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
       await capture('testing-draft-lane');

@@ -54,6 +54,9 @@
 .tst-lock-flag { margin: 0; color: var(--decide-ink); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .tst-no-suite, .tst-no-tasks { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .tst-no-suite-title { margin: 0; color: var(--reader-fg); font-weight: 600; }
+/* A one-line token estimate under the button that spends them, muted like the Library's. */
+.tst-estimate { margin: 0; color: var(--muted); font-size: 13px; }
+.tst-fix-actions .tst-estimate { flex-basis: 100%; }
 .tst-overview-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .tst-overview-list .is-subtask { padding-left: 22px; }
 .tst-overview-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; width: 100%; max-width: 760px; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 10px; background: none; color: var(--reader-fg); font: inherit; text-align: left; cursor: pointer; }
@@ -357,6 +360,8 @@
 .tst-agent-step-more > summary { cursor: pointer; list-style-position: outside; }
 .tst-agent-step-detail { max-height: 220px; margin: 4px 0; padding: 6px 8px; overflow: auto; border-radius: 6px; background: var(--code-bg); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tst-queue { display: flex; flex-direction: column; gap: 4px; }
+.tst-close-agents { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--reader-fg); font-size: 13px; }
+.tst-close-agents .tst-sep { color: var(--muted); }
 .tst-queue-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; font-size: 13px; }
 .tst-queue-count { color: var(--muted); }
 .tst-queue-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }

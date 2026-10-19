@@ -6,7 +6,7 @@ import { when } from './testing-view';
 import { BUG_STATES, BUG_STATE_WORDS, queueCounts, type QueuedBug } from '../shared/bug-queue';
 import { roundSummaries, type AgentAction } from '../shared/agent-actions';
 import { AGENT_NAME_MAX, type AgentRole } from '../shared/agent-names';
-import { tokenText } from '../shared/token-usage';
+import { tokenText, usageText, type RoundEstimate } from '../shared/token-usage';
 import { render } from './markdown';
 import type { ChatTurn } from '../shared/agent-chat';
 import type { LoopEvent } from '../shared/testing';
@@ -23,7 +23,7 @@ export interface LaneModel {
   status: string; // what it is doing now
   busy: boolean;
   needsYou: boolean; // a prompt on its screen waits on her
-  tokens: number | null; // null before it started
+  tokens: Spent | null; // null before it started
   actions: AgentAction[]; // oldest first
   events: PetalEvent[]; // Petal's own: handoffs, queue moves, restores, suite changes
   turns: ChatTurn[]; // the last few turns of its session, oldest first
@@ -31,12 +31,15 @@ export interface LaneModel {
   note: string; // why her last message didn't go, or that it did
 }
 
+export interface Spent { total: number; cached: number } // cached: the cache reads among them
+
 export interface AgentsModel {
   lanes: LaneModel[];
   queue: QueuedBug[] | null; // null until the loop starts
-  estimate: number | null; // tokens per round for both agents
-  round: { label: string; tokens: number } | null; // the last round's actual tokens, once the loop started
-  total: number | null; // tokens so far, once an agent started
+  estimate: RoundEstimate | null; // tokens per round for both agents
+  round: { label: string; tokens: number; cached: number } | null; // the last round's actual tokens, once the loop started
+  total: Spent | null; // tokens so far, once an agent started
+  close: { count: number; asking: boolean; closing: boolean } | null; // Close agents, once they are idle or the loop is over
   renaming: AgentRole | null;
   logOpen: ReadonlySet<AgentRole>;
   logShown: Partial<Record<AgentRole, number>>; // entries shown, grows with Show older
@@ -53,9 +56,11 @@ export interface AgentsHandlers {
   setView: (role: AgentRole, view: 'chat' | 'actions') => void;
   draft: (role: AgentRole, text: string) => void;
   send: (role: AgentRole, text: string) => void;
+  askClose: (asking: boolean) => void; // show or cancel the confirm
+  close: () => void;
 }
 
-type LogRow = { at: number; text: string; detail: string; kind: string; tokens: number };
+type LogRow = { at: number; text: string; detail: string; kind: string; tokens: number; cached: number };
 
 function nameEditor(lane: LaneModel, on: AgentsHandlers): HTMLElement {
   const form = el('form', 'tst-agent-rename');
@@ -76,8 +81,8 @@ function nameEditor(lane: LaneModel, on: AgentsHandlers): HTMLElement {
 
 function logRows(lane: LaneModel): LogRow[] {
   const rows: LogRow[] = [
-    ...lane.actions.map((a) => ({ at: a.at, text: a.kind === 'refused' ? a.text.replace(/^Refused: /, `Refused: ${lane.name} `) : a.text, detail: a.detail, kind: a.kind, tokens: a.tokens })),
-    ...lane.events.map((e) => ({ at: e.at, text: e.text, detail: '', kind: 'petal', tokens: 0 })),
+    ...lane.actions.map((a) => ({ at: a.at, text: a.kind === 'refused' ? a.text.replace(/^Refused: /, `Refused: ${lane.name} `) : a.text, detail: a.detail, kind: a.kind, tokens: a.tokens, cached: a.cached ?? 0 })),
+    ...lane.events.map((e) => ({ at: e.at, text: e.text, detail: '', kind: 'petal', tokens: 0, cached: 0 })),
   ];
   return rows.sort((a, b) => b.at - a.at); // newest first
 }
@@ -134,7 +139,7 @@ function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTM
     const item = el('li', `tst-agent-step is-${row.kind}`);
     const line = el('span', 'tst-agent-step-line');
     line.append(el('span', 'tst-agent-step-time', new Date(row.at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })), el('span', 'tst-agent-step-text', row.text));
-    if (row.tokens) line.append(el('span', 'tst-agent-step-tokens', `${tokenText(row.tokens)} tokens`));
+    if (row.tokens) line.append(el('span', 'tst-agent-step-tokens', usageText(row.tokens, row.cached)));
     if (row.detail) { // a diff, an output tail, the files read
       const more = el('details', 'tst-agent-step-more');
       const head = el('summary');
@@ -187,7 +192,7 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
     show.addEventListener('click', () => on.openTab(lane.tabId as string));
     facts.append(show);
   }
-  if (lane.tokens !== null) facts.append(el('span', 'tst-agent-tokens', `${tokenText(lane.tokens)} tokens`));
+  if (lane.tokens !== null) facts.append(el('span', 'tst-agent-tokens', usageText(lane.tokens.total, lane.tokens.cached)));
   box.append(head, facts);
   if (!lane.started) return box;
   const view = model.view[lane.role] ?? 'chat';
@@ -230,9 +235,34 @@ export function agentsPanel(model: AgentsModel, on: AgentsHandlers): HTMLElement
   const lanes = el('div', 'tst-agent-lanes');
   for (const lane of model.lanes) lanes.append(laneEl(lane, model, on));
   box.append(lanes);
-  if (!model.queue && model.estimate !== null) box.append(el('p', 'tst-muted tst-agent-estimate', `About ${tokenText(model.estimate)} tokens per round for both agents. An estimate from the briefs and the last run’s output.`));
-  if (model.round) box.append(el('p', 'tst-muted tst-agent-round', `${model.round.label}: ${tokenText(model.round.tokens)} tokens for both agents${model.estimate !== null ? ` · about ${tokenText(model.estimate)} estimated per round` : ''}`));
-  if (model.total !== null) box.append(el('p', 'tst-muted tst-agent-total', `${tokenText(model.total)} tokens so far${model.queue ? ' for both agents' : ''}`));
+  const e = model.estimate;
+  if (!model.queue && e) box.append(el('p', 'tst-muted tst-agent-estimate', `About ${tokenText(e.tokens)} tokens per round for both agents. ${e.rounds ? `The average of this task’s last ${e.rounds === 1 ? 'round' : `${e.rounds} rounds`}.` : 'A rough estimate from the briefs and the last run’s output.'}`));
+  if (model.round) box.append(el('p', 'tst-muted tst-agent-round', `${model.round.label}: ${usageText(model.round.tokens, model.round.cached)} for both agents${e ? ` · about ${tokenText(e.tokens)} estimated per round${e.rounds ? '' : ' (rough)'}` : ''}`));
+  if (model.total !== null) box.append(el('p', 'tst-muted tst-agent-total', `${usageText(model.total.total, model.total.cached)} so far${model.queue ? ' for both agents' : ''}`));
   if (model.queue) box.append(queueEl(model.queue));
+  if (model.close) box.append(closeRow(model.close, on));
   return box;
+}
+
+// Close agents, asking inline first like the Board's Close.
+function closeRow(close: NonNullable<AgentsModel['close']>, on: AgentsHandlers): HTMLElement {
+  const row = el('div', 'tst-close-agents');
+  if (close.asking) {
+    row.setAttribute('role', 'group');
+    const yes = el('button', 'tst-link tst-close-yes', 'Yes');
+    yes.type = 'button';
+    yes.addEventListener('click', () => on.close());
+    const no = el('button', 'tst-link tst-close-no', 'No');
+    no.type = 'button';
+    no.addEventListener('click', () => on.askClose(false));
+    row.append(el('span', null, close.count === 1 ? 'Close this agent?' : 'Close both agents?'), yes, el('span', 'tst-sep', '·'), no);
+    return row;
+  }
+  const button = el('button', 'tst-button tst-close-agents-button', close.closing ? 'Closing…' : 'Close agents');
+  button.type = 'button';
+  button.disabled = close.closing;
+  button.title = 'Close the agents’ Claude sessions and their tabs';
+  button.addEventListener('click', () => on.askClose(true));
+  row.append(button);
+  return row;
 }

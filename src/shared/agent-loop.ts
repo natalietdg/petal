@@ -133,19 +133,39 @@ export function cleanSavedLoop(v: unknown): SavedLoop | null {
 }
 
 // ---- Tokens: the loop's last finished round for both agents, else the round under way; the estimate's unit.
-export interface RoundTokens { round: number | null; done: boolean; tokens: number }
+export interface RoundTokens { round: number | null; done: boolean; tokens: number; cached: number }
 
-export function roundTokens(tester: readonly AgentAction[], fixer: readonly AgentAction[], startedAt: number): RoundTokens {
+type Spent = { tokens: number; cached: number };
+
+// Both agents' actions since the loop started, and the round each tester round began.
+function roundStarts(tester: readonly AgentAction[], fixer: readonly AgentAction[], startedAt: number): { rounds: number[]; starts: Map<number, number>; sum: (from: number, to: number) => Spent } {
   const mine = (actions: readonly AgentAction[]) => actions.filter((a) => a.at >= startedAt);
   const starts = new Map<number, number>(); // round -> its first tester action
   for (const a of mine(tester)) if (a.round !== null && (!starts.has(a.round) || a.at < (starts.get(a.round) as number))) starts.set(a.round, a.at);
-  const rounds = [...starts.keys()].sort((a, b) => a - b);
-  const sum = (from: number, to: number) => [...mine(tester), ...mine(fixer)].filter((a) => a.at >= from && a.at < to).reduce((n, a) => n + a.tokens, 0);
-  if (!rounds.length) return { round: null, done: false, tokens: sum(startedAt, Infinity) };
+  const both = [...mine(tester), ...mine(fixer)];
+  const sum = (from: number, to: number): Spent => both.filter((a) => a.at >= from && a.at < to)
+    .reduce((n, a) => ({ tokens: n.tokens + a.tokens, cached: n.cached + (a.cached ?? 0) }), { tokens: 0, cached: 0 });
+  return { rounds: [...starts.keys()].sort((a, b) => a - b), starts, sum };
+}
+
+export function roundTokens(tester: readonly AgentAction[], fixer: readonly AgentAction[], startedAt: number): RoundTokens {
+  const { rounds, starts, sum } = roundStarts(tester, fixer, startedAt);
+  if (!rounds.length) return { round: null, done: false, ...sum(startedAt, Infinity) };
   const current = rounds[rounds.length - 1];
-  if (rounds.length === 1) return { round: current, done: false, tokens: sum(startedAt, Infinity) };
+  if (rounds.length === 1) return { round: current, done: false, ...sum(startedAt, Infinity) };
   const last = rounds[rounds.length - 2];
-  return { round: last, done: true, tokens: sum(rounds.length === 2 ? startedAt : (starts.get(last) as number), starts.get(current) as number) };
+  return { round: last, done: true, ...sum(rounds.length === 2 ? startedAt : (starts.get(last) as number), starts.get(current) as number) };
+}
+
+// Each finished round's tokens for both agents, oldest first; once the loop is over its last round counts as finished too.
+export function finishedRounds(tester: readonly AgentAction[], fixer: readonly AgentAction[], startedAt: number, over: boolean): number[] {
+  const { rounds, starts, sum } = roundStarts(tester, fixer, startedAt);
+  const ends = over ? rounds.length : rounds.length - 1;
+  return rounds.slice(0, Math.max(0, ends)).map((round, i) => {
+    const from = i === 0 ? startedAt : (starts.get(round) as number);
+    const next = rounds[i + 1];
+    return sum(from, next === undefined ? Infinity : (starts.get(next) as number)).tokens;
+  });
 }
 
 // "Round 2", "Round 1 so far", "So far": the label next to the round's tokens.

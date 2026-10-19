@@ -177,6 +177,7 @@ const api = {
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
     agentStart: (request: InvokeArgs<'testing:agent-start'>[0]) => invoke('testing:agent-start', request),
     agentLog: (request: InvokeArgs<'testing:agent-log'>[0]) => invoke('testing:agent-log', request),
+    closeAgents: (request: InvokeArgs<'testing:close-agents'>[0]) => invoke('testing:close-agents', request),
     loops: (request: InvokeArgs<'testing:loops'>[0]) => invoke('testing:loops', request),
     loopAddBug: (request: InvokeArgs<'testing:loop-add-bug'>[0]) => invoke('testing:loop-add-bug', request),
     notify: (request: InvokeArgs<'testing:notify'>[0]) => invoke('testing:notify', request),

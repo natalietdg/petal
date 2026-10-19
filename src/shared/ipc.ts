@@ -37,6 +37,9 @@ import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
 import type { SentBug } from './bug-queue';
 
+// One agent's Close: closed, already not running, refused (not its claude), or still running after the wait.
+export interface AgentCloseResult { sessionId: string; outcome: 'closed' | 'gone' | 'refused' | 'running'; note: string }
+
 export interface AgentStart { tabId: string | null; sessionId: string }
 export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage }
 import type { SuiteViews, TaskSuite } from './task-suite';
@@ -260,6 +263,8 @@ export interface InvokeChannels {
   // An OS notification for the loop, shown only while no Petal window is focused; a click shows that tab.
   'testing:notify': { args: [request: { title: string; body: string; tabId?: string | null }]; result: Guarded<{ shown: boolean }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
+  // Close agents: each of a task's loop agents closed through the Sessions panel's Close, and the loop marked stopped.
+  'testing:close-agents': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ closed: AgentCloseResult[] } | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
   'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
