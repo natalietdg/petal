@@ -14,6 +14,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import * as store from '../main/testing-store';
+import { writeSuite } from '../main/task-suites';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
 
@@ -358,7 +359,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const notesTask = { id: 't-notes-sort', title: 'Sort by date', notes: '', status: 'working', owner: { sessionId: PICK_NOTES, name: 'Notes sorting', branch: 'main' }, createdAt: Date.now() - 7_200_000, claimedAt: Date.now() - 3_600_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
     const notesData = JSON.parse(before.notes) as { tasks: unknown[] };
     put(tasksJson(bare), JSON.stringify({ ...notesData, tasks: [...notesData.tasks, notesTask] }, null, 2));
-    put(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npx jest' }], keepGoing: false, autoRun: false }, null, 2));
+    // Written as a suite Petal already took: a bare file on a task with a testing agent waits for that agent's log.
+    writeSuite(bare, 't-notes-sort', { stages: [{ id: 'unit', name: 'Unit', command: 'npx jest' }], keepGoing: false, autoRun: false });
     panelFixture.sessions = [
       { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() - 3_600_000 },
       { pid: 0, sessionId: PICK_LOOSE, cwd: os.homedir(), kind: 'interactive', status: 'idle', name: 'home', updatedAt: Date.now() },
@@ -402,7 +404,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     } finally {
       panelFixture.sessions = before.panel;
       historyFixture.records = before.records;
-      store.save({ ...store.load(bare), agents: before.notesStore.agents });
+      store.save({ ...store.load(bare), agents: before.notesStore.agents, suites: before.notesStore.suites });
       put(tasksJson(project), before.acme);
       put(tasksJson(bare), before.notes);
       fs.rmSync(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), { force: true });
