@@ -217,7 +217,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
 // The CLI alias a background run passes to --model.
 export const backgroundModel = (config: Config): string => (config.background.model === 'organizer' ? config.organizer.model : config.background.model);
 
-// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the welcome and the pet guide.
+// Values a saved file doesn't record yet: people who used Petal before keep the organizer on and skip the pet guide.
 // The folder question and Get started are new to everyone, so they start unasked and open.
 function migratedBase(): Config {
   const base = defaults();

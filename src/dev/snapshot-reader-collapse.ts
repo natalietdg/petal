@@ -111,7 +111,7 @@ export async function readerCollapseCheck(kit: Kit, win: BrowserWindow): Promise
   };
   const allFolded = (p: { folded: boolean[]; bodyShown: boolean[] }) => p.folded.every(Boolean) && !p.bodyShown.some(Boolean);
 
-  await js('PastelTerm.welcome.close()'); // a fresh profile opens on the welcome screen, over the reader
+  await js('PastelTerm.getStarted.close()'); // a fresh profile opens on Get started, over the reader
   await js("PastelTerm.reader.setView('replies')");
   const [startWidth, startHeight] = win.getContentSize();
   resizeOffscreen(win, 1280, 2000); // tall enough that the reader pane holds a whole reply

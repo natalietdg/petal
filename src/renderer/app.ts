@@ -10,7 +10,6 @@ import * as sessionsPanel from './sessions-panel';
 import * as scenes from './scenes';
 import * as cat from './cat';
 import * as diagrams from './diagrams';
-import * as flow from './flow';
 import * as history from './history';
 import * as composer from './composer';
 import * as workflow from './workflow';
@@ -22,7 +21,6 @@ import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
 import * as colourKey from './colour-key';
 import './planet-reading';
-import * as welcome from './welcome';
 import * as getStarted from './get-started';
 import * as consent from './consent';
 import * as launchScreens from './launch-screens';
@@ -53,7 +51,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -94,7 +92,6 @@ async function start(): Promise<void> {
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
-    flow.followReaderSession(update.sessionId);
     favorites.followReader(tab.id, update.sessionId);
     libraryAdd.follow(tab.id, update.sessionId);
     cat.setBusy(update.busy);
@@ -227,7 +224,7 @@ async function start(): Promise<void> {
   // The first tab starts Claude too, once she has allowed the reader to follow it (a new install answers that first).
   const { term, renderer } = tabs.create({ startClaude: claudeFound && folderAllowed });
   await getStarted.load();
-  const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, the welcome, then Get started
+  const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, then Get started
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
 }
 

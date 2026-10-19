@@ -1,5 +1,5 @@
 // Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
-// In the welcome, and on launch for installs from before the pet guide until every step is done; Customize › Get started reopens it.
+// On launch for installs from before the pet guide until every step is done; Customize › Get started reopens it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
@@ -19,7 +19,7 @@ let pastSessions = false; // a conversation in History: an experienced user, all
 let folderOff = false; // reading the Claude folder is off: sign-in and ask can only be ticked by hand
 let loaded = false;
 let showSteps = false; // all set: the steps fold away until she asks to see them
-const lists = new Set<HTMLElement>(); // every checklist on screen: the overlay's and the welcome's
+const lists = new Set<HTMLElement>(); // every checklist drawn; the ones still on screen repaint
 
 function facts(): LiveFacts {
   const open = tabs.ids().flatMap((id) => {
@@ -53,11 +53,6 @@ function link(label: string, href: string): HTMLAnchorElement {
 
 const para = (text: string, className: string | null = null): HTMLParagraphElement => el('p', className, text);
 
-// The welcome's snapshot variant draws Claude Code as missing.
-export function setInstalled(found: boolean): void {
-  installed = found;
-  refresh();
-}
 
 // Recheck after installing: the reader and step 1 both follow.
 export async function recheckInstall(): Promise<boolean> {
@@ -156,8 +151,8 @@ function repaint(all: StepState[]): void {
   }
 }
 
-// A checklist to place anywhere (the welcome uses one); it repaints with every change.
-export function checklist(): HTMLElement {
+// The overlay's checklist; it repaints with every change.
+function checklist(): HTMLElement {
   const box = el('div', 'prose gs-list');
   lists.add(box);
   paintList(box, states());
@@ -223,7 +218,7 @@ export async function open(): Promise<void> {
   render();
 }
 
-// On launch, after the welcome and the folder question: only while a step Petal can tick is still open.
+// On launch, after the folder question: only while a step Petal can tick is still open.
 // Reloads, since Allow may have just made History readable.
 export async function openIfIncomplete(): Promise<boolean> {
   await load();

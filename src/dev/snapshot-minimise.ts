@@ -138,7 +138,7 @@ async function terminalCheck(kit: Kit, win: BrowserWindow, { activeSession }: Ta
 }
 
 export async function minimiseCheck(kit: Kit, win: BrowserWindow, tabs: TabsDeps): Promise<void> {
-  await kit.js('PastelTerm.welcome.close()');
+  await kit.js('PastelTerm.getStarted.close()');
   await kit.js("PastelTerm.focusMode.setLevel('normal')");
   await headersCheck(kit, win);
   await terminalCheck(kit, win, tabs);

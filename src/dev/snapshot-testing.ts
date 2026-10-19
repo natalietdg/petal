@@ -184,7 +184,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   testingFixture.runs.length = 0;
   const transcript = fixtureFile();
   if (transcript) appendClaudeRun(transcript, project, bare);
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs = await js('PastelTerm.tabs.ids()') as string[];

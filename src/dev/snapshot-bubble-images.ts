@@ -81,7 +81,7 @@ export async function bubbleImagesCheck(kit: Kit, win: BrowserWindow): Promise<v
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} bubble images: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
 
-  await js('PastelTerm.welcome.close()'); // a fresh profile opens on the welcome screen, over the reader
+  await js('PastelTerm.getStarted.close()'); // a fresh profile opens on Get started, over the reader
   const pasteFolder = path.join(outDir, PASTE_DIR_NAME);
   fs.mkdirSync(pasteFolder, { recursive: true });
   const image = path.join(pasteFolder, 'paste-2026-10-13T05-38-54-028Z-0b0b0b0b.png');

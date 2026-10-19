@@ -89,7 +89,7 @@ export async function windowFitCheck(kit: Kit, win: BrowserWindow): Promise<void
 
   try {
     await wait(2500); // login shell rc files
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await js("PastelTerm.reader.setView('replies')");
     await js("PastelTerm.cat.setScene('cherry')");
     // Nine sessions with long names in the panel, and six tabs with long names in the strip.

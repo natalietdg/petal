@@ -175,7 +175,7 @@ export async function dividerCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const { js, log } = kit;
   const [startWidth, startHeight] = win.getContentSize();
   log(`divider starts at ${await valueNow(kit)}% reader, saved ${JSON.stringify(configStore.load().layout.splits)}`);
-  await js('PastelTerm.welcome.close()'); // her state: the first-run screen is long gone
+  await js('PastelTerm.getStarted.close()'); // her state: Get started is long gone
   await js("PastelTerm.reader.setView('replies')");
   for (const [width, height] of [[1280, 900], [800, 700]] as const) await looksAtSize(kit, win, width, height);
   await js('PastelTerm.sessionsPanel.setOpen(false)');

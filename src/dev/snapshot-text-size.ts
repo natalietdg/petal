@@ -95,7 +95,7 @@ export async function textSizeCheck(kit: Kit, win: BrowserWindow, { activeSessio
   const saved = () => configStore.load().text;
 
   appendReply(fixtureFile() ?? '');
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   check(await waitFor(async () => (await js("document.getElementById('latest').innerText")).includes(MARKER) || null, 10000), 'the fixture reply with a section, table and code is on screen');
   resizeOffscreen(win, 1280, 900);

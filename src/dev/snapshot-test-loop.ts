@@ -99,7 +99,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
   testingFixture.claudeDir = claudeDir;
   testingFixture.loopStarts.length = 0;
   const { fixer, fixerLog } = useAgentFixtures(outDir);
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs = await js('PastelTerm.tabs.ids()') as string[];

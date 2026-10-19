@@ -1,4 +1,4 @@
-// History's preview pane: the hovered session's header and its whole conversation, flow or decisions; notes sit beside it.
+// History's preview pane: the hovered session's header and its whole conversation or its flow; notes sit beside it.
 // Replies end in a reply box; once a tab answers for the session, the conversation follows that tab live.
 import * as diagrams from './diagrams';
 import * as flow from './flow';
@@ -52,15 +52,11 @@ export async function renderPreview(): Promise<void> {
   resume.type = 'button';
   resume.addEventListener('click', () => doResume(session.sessionId, note, false));
   const toggle = el('div', 'view-toggle');
-  for (const mode of ['replies', 'flow', 'decisions'] as const) {
-    const b = el('button', '', { replies: 'Replies', flow: 'Flow', decisions: 'Decisions' }[mode]);
+  for (const mode of ['replies', 'flow'] as const) {
+    const b = el('button', '', { replies: 'Replies', flow: 'Flow' }[mode]);
     b.type = 'button';
     b.setAttribute('aria-selected', String(mode === state.previewMode));
     b.addEventListener('click', () => { state.previewMode = mode; renderPreview(); });
-    if (mode === 'decisions') {
-      b.hidden = true; // shown once the stored flow proves this session logged decisions
-      void window.pastel.flow.get({ kind: 'history', sessionId: session.sessionId }).then((result) => flow.showDecisionsTab(b, result), () => {});
-    }
     toggle.append(b);
   }
   const send = el('button', 'flow-button resume-button', 'Send to Claude');
@@ -176,12 +172,10 @@ function showNotes(session: Session): void {
 
 async function renderFlowBody(session: Session, body: HTMLElement): Promise<void> {
   const target = { kind: 'history', sessionId: session.sessionId } as const;
-  const draw = state.previewMode === 'decisions' ? flow.renderDecisions : flow.render;
-  draw(body, await window.pastel.flow.get(target), {
+  flow.render(body, await window.pastel.flow.get(target), {
     target,
     onJump: () => { state.previewMode = 'replies'; renderPreview(); },
     onCreated: () => { session.hasFlow = true; hooks.renderList(); },
-    onNoDecisions: () => { state.previewMode = 'flow'; renderPreview(); },
   });
 }
 

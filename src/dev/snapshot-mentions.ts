@@ -59,7 +59,7 @@ export async function mentionsCheck(kit: Kit, { win, openTab, sessions, fixtureF
 
   try {
     applyTheme('paleSky', { persist: false });
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     fs.rmSync(dir, { recursive: true, force: true });
     const claudeDir = path.join(dir, 'claude-home', '.claude');
     seedSlashFixture(claudeDir, path.join(dir, 'project'));

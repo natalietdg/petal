@@ -591,7 +591,7 @@ export async function resumeIfStarted(): Promise<boolean> {
   repliesAtStart = replyCount();
   const at = resumeAt(stage, facts());
   if (!at) return false;
-  await window.pastel.config.save({ welcome: { seen: true } }); // the old welcome screen never shows over it
+  await window.pastel.config.save({ welcome: { seen: true } }); // marks the install as used; What's new reads it
   await show(at);
   return true;
 }

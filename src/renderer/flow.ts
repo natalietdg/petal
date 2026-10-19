@@ -1,13 +1,12 @@
-// Renders a session's "flow of outcomes": step cards on a thin line, plus the Mermaid export bar.
+// Renders a session's "flow of outcomes": step cards on a thin line, each with the decisions logged during it, plus the Mermaid export bar.
 import * as diagrams from './diagrams';
 import { el, isIpcError } from './dom';
-import { hasDecisions, showDecisionsTab } from './flow-decisions';
-import { whoOf, type Who } from './ledger-actor';
-import type { AuditRow, FlowStep, Outcome, StateChange } from '../main/flow';
+import { decisionsByStep, hasDecision, type StepDecision } from './flow-decisions';
+import type { Who } from './ledger-actor';
+import type { FlowStep, Outcome, StateChange } from '../main/flow';
 import type { FlowView, Guarded } from '../shared/ipc';
 import type { FlowTarget } from '../shared/types';
 
-export { showDecisionsTab };
 export type FlowResult = Guarded<FlowView | null>;
 type StoredView = Extract<FlowView, { steps: FlowStep[] }>;
 
@@ -15,7 +14,6 @@ export interface FlowOptions {
   target: FlowTarget;
   onJump: (step: FlowStep) => void;
   onCreated?: () => void;
-  onNoDecisions?: () => void; // Decisions was asked for but the session logged none
 }
 
 // The export bar keeps its last chart source on the element, where the snapshot run reads it.
@@ -24,6 +22,7 @@ interface ExportBar extends HTMLDivElement {
 }
 
 const TITLES: Record<string, string> = { done: 'Done', decide: 'Decide', watch: 'Watch out', next: 'Next', why: 'Why' };
+const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
 const CREATING_RECHECK_MS = 3000;
 
 function outcomeLine({ label, text }: Outcome): HTMLParagraphElement {
@@ -44,8 +43,19 @@ function changeRow({ what, from, to }: StateChange): HTMLDivElement {
   return row;
 }
 
-// A step card lists what changed; the conversation itself lives in Replies.
-function stepCard(step: FlowStep, onJump: FlowOptions['onJump']): HTMLElement {
+// One ledger decision on its step: who made it, its number, and whether a later one replaced it.
+function decisionRow(decision: StepDecision): HTMLDivElement {
+  const row = el('div', `flow-decision${decision.superseded ? ' superseded' : ''}`);
+  const head = el('div', 'flow-decision-head');
+  head.append(el('span', `flow-actor actor-${decision.who}`, `Decided by ${WHO[decision.who]}`), el('span', 'flow-decision-tag', `#${decision.n}`));
+  if (decision.recommended) head.append(el('span', 'flow-decision-tag', 'Claude recommended'));
+  if (decision.superseded) head.append(el('span', 'flow-decision-tag', 'later replaced'));
+  row.append(head, el('p', 'flow-decision-what', decision.what));
+  return row;
+}
+
+// A step card lists what changed and what was decided; the conversation itself lives in Replies.
+function stepCard(step: FlowStep, onJump: FlowOptions['onJump'], decisions: StepDecision[] = []): HTMLElement {
   const card = el('article', `flow-step${step.waitingOnYou ? ' waiting' : ''}`);
   card.append(el('span', 'flow-dot'));
   const head = el('button', 'flow-step-head');
@@ -54,6 +64,7 @@ function stepCard(step: FlowStep, onJump: FlowOptions['onJump']): HTMLElement {
   head.addEventListener('click', () => onJump(step));
   card.append(head);
   for (const change of step.changes ?? []) card.append(changeRow(change));
+  if (decisions.length) card.append(...decisions.map(decisionRow));
   if (step.waitingOnYou) {
     const decide = step.outcomes.filter((o) => o.label === 'decide').at(-1);
     card.append(el('span', 'flow-waiting', 'waiting on you'), ...(decide ? [outcomeLine(decide)] : []));
@@ -61,8 +72,8 @@ function stepCard(step: FlowStep, onJump: FlowOptions['onJump']): HTMLElement {
   return card;
 }
 
-// Steps that changed nothing are just talk: they fold away.
-const changedNothing = (step: FlowStep): boolean => !(step.changes?.length) && !step.waitingOnYou;
+// Steps that changed and decided nothing are just talk: they fold away.
+const foldsAway = (step: FlowStep): boolean => !hasDecision(step) && (step.quiet || (!(step.changes?.length) && !step.waitingOnYou));
 
 // Runs of quiet steps fold into one "N quiet steps" row that expands on click.
 function quietRun(steps: FlowStep[], onJump: FlowOptions['onJump']): HTMLButtonElement {
@@ -165,7 +176,6 @@ function staleNote(flow: StoredView, container: HTMLElement, options: FlowOption
 
 export function render(container: HTMLElement, flow: FlowResult, options: FlowOptions): void {
   const { target, onJump } = options;
-  if (target.kind === 'current') showDecisionsTab(readerTab('decisions'), flow);
   container.classList.add('prose');
   if (!flow) {
     container.replaceChildren(el('p', 'status empty', 'No session to show a flow for.'));
@@ -181,6 +191,7 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
     container.replaceChildren(stale, el('p', 'status empty', 'No steps in this session yet.'));
     return;
   }
+  const decisions = decisionsByStep(flow.steps);
   const line = el('div', 'flow-line');
   let quiet: FlowStep[] = [];
   const flushQuiet = () => {
@@ -188,9 +199,9 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
     quiet = [];
   };
   for (const step of flow.steps) {
-    if (step.quiet || changedNothing(step)) { quiet.push(step); continue; }
+    if (foldsAway(step)) { quiet.push(step); continue; }
     flushQuiet();
-    line.append(stepCard(step, onJump));
+    line.append(stepCard(step, onJump, decisions.get(step)));
   }
   flushQuiet();
   if (flow.finalNext) {
@@ -201,83 +212,3 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
   container.replaceChildren(stale, exportBar(target), line);
 }
 
-
-// Decisions tab: every DECISION ledger row in the session, tagged by who made it.
-// Sessions without ledger rows keep the tab hidden (flow-decisions.ts).
-const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
-const SUPERSEDES = /supersedes\s+#(\d+)/i;
-const RECOMMENDED = /\(Claude (?:recommended|proposed|suggested|chose|scoped)[^)]*\)/i;
-
-interface DecisionRow extends AuditRow {
-  step: FlowStep;
-  who: Who;
-  superseded: boolean;
-}
-
-function decisionRows(flow: StoredView): DecisionRow[] {
-  const rows = flow.steps.flatMap((step) => step.audit
-    .filter((row) => row.kind === 'DECISION')
-    .map((row) => ({ ...row, step, who: whoOf(row.actor) })));
-  const superseded = new Set(rows.flatMap((row) => SUPERSEDES.exec(row.what)?.[1] ?? []).map(Number));
-  return rows.map((row) => ({ ...row, superseded: superseded.has(row.n) }));
-}
-
-function decisionCard(row: DecisionRow, onJump: FlowOptions['onJump']): HTMLElement {
-  const card = el('article', `decision${row.superseded ? ' superseded' : ''}`);
-  const head = el('div', 'decision-head');
-  head.append(el('span', `flow-actor actor-${row.who}`, `Decided by ${WHO[row.who]}`), el('span', 'decision-n', `#${row.n}`));
-  if (RECOMMENDED.test(row.what)) head.append(el('span', 'decision-rec', 'Claude recommended'));
-  if (row.superseded) head.append(el('span', 'decision-rec', 'later replaced'));
-  const what = el('button', 'decision-what', row.what.replace(RECOMMENDED, '').trim());
-  what.type = 'button';
-  what.addEventListener('click', () => onJump(row.step));
-  card.append(head, what, el('p', 'flow-asked', `During: ${row.step.title || row.step.label}`));
-  return card;
-}
-
-const readerTab = (view: 'flow' | 'decisions') => document.querySelector<HTMLElement>(`#reader-head .view-toggle [data-view="${view}"]`);
-
-// The reader's Decisions tab follows the shown session; called on every reader update, so it fetches only on a session change.
-let readerSession: string | null | undefined;
-export function followReaderSession(sessionId: string | null | undefined): void {
-  if (sessionId === readerSession) return;
-  readerSession = sessionId;
-  void window.pastel.flow.get({ kind: 'current' }).then((result) => {
-    if (readerSession === sessionId) showDecisionsTab(readerTab('decisions'), result);
-  }, () => {});
-}
-
-export function renderDecisions(container: HTMLElement, flow: FlowResult, options: FlowOptions): void {
-  const { onJump } = options;
-  container.classList.add('prose');
-  if (!flow || 'error' in flow || 'empty' in flow) return render(container, flow, options);
-  if (!hasDecisions(flow)) {
-    if (options.target.kind === 'current') showDecisionsTab(readerTab('decisions'), flow);
-    if (options.onNoDecisions) return options.onNoDecisions();
-    const flowTab = options.target.kind === 'current' ? readerTab('flow') : null;
-    if (flowTab) return flowTab.click(); // the reader's own toggle switches it to Flow
-    return render(container, flow, options);
-  }
-  const rows = decisionRows(flow);
-  const open = flow.steps.filter((s) => s.waitingOnYou).slice(-1).flatMap((s) => s.outcomes.filter((o) => o.label === 'decide'));
-  const filters = el('div', 'view-toggle decision-filter');
-  const list = el('div', 'decision-list');
-  let who: Who | 'all' = 'all';
-  const draw = () => {
-    const shown = rows.filter((row) => who === 'all' || row.who === who);
-    list.replaceChildren(...(shown.length ? shown.map((row) => decisionCard(row, onJump)) : [el('p', 'status empty', 'No decisions logged here.')]));
-  };
-  const FILTERS: [Who | 'all', string][] = [['all', 'All'], ['you', 'By you'], ['claude', 'By Claude']];
-  for (const [key, label] of FILTERS) {
-    const b = el('button', '', `${label} · ${rows.filter((r) => key === 'all' || r.who === key).length}`);
-    b.type = 'button';
-    b.setAttribute('aria-selected', String(key === who));
-    b.addEventListener('click', () => { who = key; filters.querySelectorAll('button').forEach((x) => x.setAttribute('aria-selected', String(x === b))); draw(); });
-    filters.append(b);
-  }
-  const stale = staleNote(flow, container, options);
-  const waiting = el('div', 'decision-waiting');
-  if (open.length) waiting.append(el('p', 'flow-waiting', 'waiting on you'), ...open.map(outcomeLine));
-  draw();
-  container.replaceChildren(stale, waiting, filters, list);
-}

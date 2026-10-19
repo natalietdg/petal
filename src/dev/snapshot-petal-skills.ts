@@ -100,7 +100,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   };
 
   try {
-    await js('PastelTerm.welcome?.close?.()');
+    await js('PastelTerm.getStarted.close()');
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, 1100, 900);
 

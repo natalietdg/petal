@@ -173,7 +173,7 @@ export async function conclusionCheck(kit: Kit, win: BrowserWindow, fixture: str
   let line: SessionLineFixture | null = null;
 
   try {
-    await js('PastelTerm.welcome.close()');
+    await js('PastelTerm.getStarted.close()');
     await js("PastelTerm.reader.setView('replies')");
     await sizeTo(1280);
     await setLook('newspaper');

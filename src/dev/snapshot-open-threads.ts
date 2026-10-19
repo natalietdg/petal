@@ -151,7 +151,7 @@ export async function openThreadsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     return p;
   };
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   await js("PastelTerm.reader.setView('replies')");
   const [startWidth, startHeight] = win.getContentSize();

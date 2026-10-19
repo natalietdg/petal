@@ -1,4 +1,4 @@
-/* Get started and the folder question: the welcome's frame (welcome.css), the reader's Steps rows (reader.css). */
+/* Get started and the folder question: the shared overlay frame (welcome.css), the reader's Steps rows (reader.css). */
 #get-started, #consent {
   position: absolute;
   inset: 0;
@@ -10,7 +10,7 @@
 }
 #get-started[hidden], #consent[hidden] { display: none; }
 
-/* UI-sized steps, in every reading look: the badges keep their em maths, the text stays the welcome's size. */
+/* UI-sized steps, in every reading look: the badges keep their em maths, the text stays the frame's size. */
 .gs-list { font-size: 15px; line-height: 1.45; font-family: var(--ui-font); }
 .gs-list.prose ol.steps { margin: 4px 0 0; }
 .gs-list .step-body > p { margin: 0 0 6px; }

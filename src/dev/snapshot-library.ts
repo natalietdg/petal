@@ -199,7 +199,7 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const select = (index: number) => js(`PastelTerm.library.select(${index})`);
   const az = LIBRARY_NOTES.map((n) => n.title).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-  await js('PastelTerm.welcome.close()');
+  await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
   const [startWidth, startHeight] = win.getContentSize();
   try {
