@@ -1,8 +1,4 @@
-// A task's test loop as two agents at once: the testing agent and the bug fix agent. Main owns both: it steps the bug
-// queue, routes every message by session id and resumes an agent with no claude. This window mirrors main's loops,
-// draws a lane per agent (its conversation, a message box, its live terminal on demand), pastes what main asks into
-// the agent terminals it holds, and reports which of them show a prompt. An agent waiting on a prompt reads Needs you
-// and badges the dock's Testing button.
+// A task's two Testing agents as lanes: mirrors main's loops, pastes what main asks into its agent terminals, reports prompts.
 import * as tabs from './tabs';
 import * as composer from './composer';
 import * as agentTerms from './agent-terms';
@@ -12,7 +8,7 @@ import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
 import { buildFixerBrief, buildLoopBrief, isActive, loopStatus, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { queueDone, type SentBug } from '../shared/bug-queue';
 import { laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
-import { agentOf, finishedRounds, noEvents, roundLabel, roundTokens } from '../shared/agent-loop';
+import { ROLES, agentOf, finishedRounds, isRunning, noEvents, roundLabel, roundTokens } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
@@ -50,12 +46,10 @@ export interface AgentContext {
   open: () => void; // shows Testing
 }
 
-const ROLES: AgentRole[] = ['tester', 'fixer'];
 const TICK_MS = 1500; // main's loops are read this often, Testing open or not
 const FIND_EVERY = 10; // with nothing at work, ask main for loops every 10th tick
 
 const keyOf = (root: string, taskId: string): string => `${root}:${taskId}`;
-const isRunning = (r: AgentLoop): boolean => r.kind === 'loop' && !r.stoppedAt;
 const atWork = (r: AgentLoop): boolean => isRunning(r) || [r.tester, r.fixer].some((a) => a && a.state !== 'ended' && a.state !== 'closed');
 const blank = <T>(make: () => T): Record<AgentRole, T> => ({ tester: make(), fixer: make() });
 

@@ -29,7 +29,7 @@ import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import { agentView, claimAgent, closeTaskAgents, findAgent, herEvent, listedLoops, loopView, openAgentTerminal, repliesOf, sendToAgent, startTestAgents, stopTaskLoop, watchRoot, windowReady, type Claim } from './test-agents';
-import { cleanSentBug, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
+import { cleanSentBug, isRunning, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
 import { addSent } from '../shared/bug-queue';
 import { buildSentFixerBrief, ITEMS_CAP, NAME_CAP } from '../shared/test-loop';
 import { scenariosApprovedText } from '../shared/suite-draft';
@@ -613,7 +613,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (!briefs.length || briefs.some((brief) => typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP)) return { note: 'A loop brief is empty or too long.' };
     const { root, task } = target;
     const prior = loopsOf(root)[task.id];
-    const running = prior?.kind === 'loop' && prior.stoppedAt === null ? prior : null;
+    const running = isRunning(prior) ? prior : null;
     const names = store.load(root).agentNames ?? {};
     if (!fixerBrief && !running?.fixerSessionId) return { note: 'Start the loop to start its testing agent.' };
     if (fixerBrief && running) return { note: `${agentName(names, 'fixer')} is already running for this task, maybe in another window.` };
@@ -635,9 +635,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     return { tester: view.tester, fixer: view.fixer };
   });
 
-  // Ask Claude to draw one up: the task's testing agent, on the testing-suite skill. The skill is checked first: Petal's
-  // unedited old copy is updated, a missing or edited one is replaced by its bundled instructions in the brief.
-  // The task's open testing agent gets the request instead of a new one; refused while it is still drawing up or testing.
+  // Ask Claude to draw one up: the task's testing agent (its open one if any) on the testing-suite skill, checked first.
   handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
@@ -692,7 +690,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const names = store.load(root).agentNames ?? {};
     const fixerName = agentName(names, 'fixer');
     const prior = loopsOf(root)[task.id];
-    const running = prior?.kind === 'loop' && prior.stoppedAt === null ? prior : null;
+    const running = isRunning(prior) ? prior : null;
     const now = Date.now();
     const agents = testAgentsOf(root);
     const fresh = (fixerSessionId: string): StoredLoop => loopForFixer(prior, agents, task.id, fixerSessionId, now);
@@ -751,8 +749,8 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const name = agentName(store.load(found.root).agentNames ?? {}, 'tester');
     const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(taskId), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
     if ('note' in sent) return sent;
-    const now = loopsOf(found.root)[taskId] ?? loop;
-    saveLoop(found.root, taskId, { ...now, approvedScenarios: [...(now.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
+    const latest = loopsOf(found.root)[taskId] ?? loop;
+    saveLoop(found.root, taskId, { ...latest, approvedScenarios: [...(latest.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
     return sent;
   });
 

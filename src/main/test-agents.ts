@@ -1,7 +1,7 @@
 // The Testing screen's agents, owned by main. An agent is found only by its session id: its terminal is whichever tab's
 // claude reports that session, in any window. Main steps every running loop's bug queue, routes each message to its
 // agent (pasted by the window holding its terminal), and resumes an agent with no claude by `claude --resume`, in an
-// agent terminal with no tab-bar entry. One open agent per role per task is enforced in claimAgent, and only there.
+// agent terminal with no tab-bar entry. New agents join only through claimAgent: one open agent per role per task.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,13 +22,13 @@ import { ReplyCollector } from './replies';
 import { keysFor } from './prompt-keys';
 import { loopsOf, rememberAgent, saveLoop, saveTestAgents, testAgentsOf, testingData } from './task-suites';
 import {
-  READY_SETTLE_MS, ROLES, agentBySession, agentState, claimRole, closeAgents, inFlightAgain, openAgent, resumeWhen, sessionOf, stepLoop, terminalOf, unsent, withEvent,
+  CLOSED_EVENT, READY_SETTLE_MS, ROLES, agentBySession, agentState, claimRole, closeAgents, inFlightAgain, isRunning, openAgent, resumeWhen, sessionOf, stepLoop, terminalOf, unsent, withEvent,
 } from '../shared/agent-loop';
 import { activeBugs, fixLines, type QueueMessage } from '../shared/bug-queue';
 import { isTerminal, latestLoop } from '../shared/loop-line';
 import { finishNotice, fixesLanded, fixNotice, type LoopNotice } from '../shared/loop-signals';
 import { agentName, agentTabTitle, type AgentNames, type AgentRole } from '../shared/agent-names';
-import { ASKING_NOTE } from '../shared/agent-chat';
+import { ASKING_NOTE, CLOSED_NOTE } from '../shared/agent-chat';
 import { forTask } from '../shared/task-suite';
 import { stopAll } from '../shared/test-loop';
 import type { AgentCloseResult, AgentPasteOutcome, AgentSendOutcome } from '../shared/ipc';
@@ -62,6 +62,7 @@ const hosts = new Map<string, Host>(); // sessionId -> the agent terminal main o
 const outbox = new Map<string, Outgoing[]>(); // sessionId -> messages waiting for its claude
 const readySince = new Map<string, number>(); // sessionId -> when a terminal first reported it
 const delivering = new Set<string>(); // sessionIds mid-paste
+const resuming = new Set<string>(); // sessionIds between the resume check and their terminal opening
 const resumeTries = new Map<string, number>();
 const eagerTried = new Set<string>(); // agents of running loops already resumed once at launch
 const notes = new Map<string, string>(); // sessionId -> why it can't be reached
@@ -72,7 +73,6 @@ let lastAsker: number | null = null; // the last window whose Testing asked for 
 let rootsScanned = false;
 
 const loopKey = (root: string, taskId: string): string => `${root}:${taskId}`;
-const isRunning = (loop: StoredLoop | undefined): loop is StoredLoop => loop?.kind === 'loop' && loop.stoppedAt === null;
 const namesOf = (root: string): AgentNames => store.load(root).agentNames ?? {};
 
 // ---- Terminals: found by the session their claude reports, never by a tab id.
@@ -170,7 +170,7 @@ export function listedLoops(known: readonly { root: string; taskId: string }[], 
 
 // ---- Sending to an agent: queued in main, pasted once its claude is ready, resumed first when none runs it.
 export async function sendToAgent(root: string, agent: TestAgent, text: string, event: string | null, preferred: number | null): Promise<{ outcome: AgentSendOutcome } | { note: string }> {
-  if (agent.closedAt !== null) return { note: 'That agent was closed. Start a new one.' };
+  if (agent.closedAt !== null) return { note: CLOSED_NOTE };
   const terminal = terminalFor(agent.sessionId);
   if (isAsking(terminal)) return { note: ASKING_NOTE };
   const problem = terminal || hosts.has(agent.sessionId) ? null : resumeProblem(agent);
@@ -185,7 +185,7 @@ export async function sendToAgent(root: string, agent: TestAgent, text: string, 
 
 // Open terminal: an ended agent resumes with no message. Back to lane: its tab here counts as an agent terminal again.
 export async function openAgentTerminal(root: string, agent: TestAgent, preferred: number): Promise<string | null> {
-  if (agent.closedAt !== null) return 'That agent was closed. Start a new one.';
+  if (agent.closedAt !== null) return CLOSED_NOTE;
   const terminal = terminalFor(agent.sessionId);
   if (!terminal) return resume(root, agent, preferred);
   if (terminal.contentsId === preferred) terminal.tab.agent = true;
@@ -236,18 +236,23 @@ export const herEvent = (name: string, text: string): string => `You → ${name}
 
 // ---- Resume: the same session id in its own folder. Never --fork-session, never into a session running elsewhere.
 async function resume(root: string, agent: TestAgent, preferred: number | null): Promise<string | null> {
-  if (hosts.has(agent.sessionId)) return null; // already starting
+  if (hosts.has(agent.sessionId) || resuming.has(agent.sessionId)) return null; // already starting
   const problem = resumeProblem(agent);
   if (problem) { notes.set(agent.sessionId, problem); return problem; }
   const contents = windowFor(preferred);
   if (!contents) return 'Open a Petal window first.';
-  resumeTries.set(agent.sessionId, (resumeTries.get(agent.sessionId) ?? 0) + 1);
-  notes.delete(agent.sessionId);
-  await reopenInFlight(root, agent);
-  if (isSnapshotRun()) testingFixture.resumes.push({ sessionId: agent.sessionId, command: buildResumeCommand(agent.cwd, agent.sessionId, (await claudeLaunch()).command) });
-  const command = isSnapshotRun() ? harnessLine(RESUME_STAND_IN) : buildResumeCommand(agent.cwd, agent.sessionId, (await claudeLaunch()).command);
-  openHost(contents, agent.sessionId, command);
-  return null;
+  resuming.add(agent.sessionId);
+  try {
+    resumeTries.set(agent.sessionId, (resumeTries.get(agent.sessionId) ?? 0) + 1);
+    notes.delete(agent.sessionId);
+    await reopenInFlight(root, agent);
+    const real = buildResumeCommand(agent.cwd, agent.sessionId, (await claudeLaunch()).command);
+    if (isSnapshotRun()) testingFixture.resumes.push({ sessionId: agent.sessionId, command: real });
+    openHost(contents, agent.sessionId, isSnapshotRun() ? harnessLine(RESUME_STAND_IN) : real);
+    return null;
+  } finally {
+    resuming.delete(agent.sessionId);
+  }
 }
 
 function resumeProblem(agent: TestAgent): string | null {
@@ -376,10 +381,11 @@ async function resumeAtLaunch(root: string, loop: StoredLoop): Promise<void> {
 // An agent terminal whose claude never came up, or has exited, is closed: it has no tab-bar entry to close it from.
 function checkHosts(): void {
   const now = Date.now();
-  for (const terminal of terminals()) {
+  const open = terminals();
+  for (const terminal of open) {
     if (terminal.sessionId && !readySince.has(terminal.sessionId)) readySince.set(terminal.sessionId, now);
   }
-  const following = new Set(terminals().flatMap((t) => (t.sessionId ? [t.sessionId] : [])));
+  const following = new Set(open.flatMap((t) => (t.sessionId ? [t.sessionId] : [])));
   for (const sessionId of readySince.keys()) if (!following.has(sessionId)) readySince.delete(sessionId);
   for (const [sessionId, host] of hosts) {
     const tab = deps?.sessions.get(`${host.contentsId}:${host.tabId}`);
@@ -443,17 +449,19 @@ export async function closeTaskAgents(root: string, taskId: string): Promise<{ c
   for (const agent of open) closed.push(await closeAgentSession(agent.sessionId));
   const done = closed.filter((c) => c.outcome !== 'running').map((c) => c.sessionId);
   for (const sessionId of done) forgetTerminal(sessionId);
-  saveTestAgents(root, closeAgents(testAgentsOf(root), done, Date.now()));
   const now = Date.now();
+  saveTestAgents(root, closeAgents(testAgentsOf(root), done, now));
   const after = loopsOf(root)[taskId];
   if (after) {
-    const events = ROLES.reduce((list, role) => (done.includes(sessionOf(after, role) ?? '') ? withEvent(list, role, 'Closed', now) : list), after.events);
+    const events = ROLES.reduce((list, role) => (done.includes(sessionOf(after, role) ?? '') ? withEvent(list, role, CLOSED_EVENT, now) : list), after.events);
     saveLoop(root, taskId, { ...after, stoppedAt: after.stoppedAt ?? now, events });
   }
   return { closed };
 }
 
 function forgetTerminal(sessionId: string): void {
+  const file = history.findRecord(sessionId)?.file;
+  if (file) tailCache.delete(file);
   outbox.delete(sessionId);
   notes.delete(sessionId);
   hosts.delete(sessionId);
@@ -463,7 +471,12 @@ function forgetTerminal(sessionId: string): void {
 // ---- Wiring: the timer, and the windows' answers.
 export function startTestAgents(given: AgentDeps): void {
   deps = given;
-  setInterval(() => void tick().catch((error: Error) => console.error('[petal] testing agents tick failed:', error)), TICK_MS);
+  let ticking = false; // a slow tick (a resume, a transcript read) never overlaps the next
+  setInterval(() => {
+    if (ticking) return;
+    ticking = true;
+    void tick().catch((error: Error) => console.error('[petal] testing agents tick failed:', error)).finally(() => { ticking = false; });
+  }, TICK_MS);
   on('testing:agent-pasted', (event, reply) => {
     const waiting = waitingPastes.get(reply?.requestId);
     const outcome = reply?.outcome;
@@ -471,6 +484,7 @@ export function startTestAgents(given: AgentDeps): void {
   });
   on('testing:agent-asking', (event, report) => {
     const tabIds = Array.isArray(report?.tabIds) ? report.tabIds.filter((id): id is string => typeof id === 'string') : [];
+    if (!askingTabs.has(event.sender.id)) event.sender.once('destroyed', () => askingTabs.delete(event.sender.id));
     askingTabs.set(event.sender.id, new Set(tabIds));
   });
 }

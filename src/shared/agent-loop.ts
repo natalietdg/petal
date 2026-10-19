@@ -15,6 +15,7 @@ const FAILURE_CHARS = 1500;
 export const noEvents = (): Record<AgentRole, LoopEvent[]> => ({ tester: [], fixer: [] });
 
 export const ROLES: readonly AgentRole[] = ['tester', 'fixer'];
+export const isRunning = <T extends Pick<StoredLoop, 'kind' | 'stoppedAt'>>(loop: T | null | undefined): loop is T & { kind: 'loop'; stoppedAt: null } => loop?.kind === 'loop' && loop.stoppedAt === null;
 export const READY_SETTLE_MS = 1500; // claude needs a moment after its session appears before it reads typed input
 
 export const agentOf = (loop: LoopView, role: AgentRole): AgentView | null => (role === 'tester' ? loop.tester : loop.fixer);
@@ -207,7 +208,7 @@ export function agentState(agent: Pick<TestAgent, 'closedAt'>, f: StateFacts): A
 export type ResumeWhen = 'never' | 'at-launch' | 'on-message';
 export function resumeWhen(agent: TestAgent, loop: StoredLoop | null | undefined): ResumeWhen {
   if (agent.closedAt !== null) return 'never';
-  const running = loop?.kind === 'loop' && loop.stoppedAt === null && sessionOf(loop, agent.role) === agent.sessionId;
+  const running = isRunning(loop) && sessionOf(loop, agent.role) === agent.sessionId;
   return running ? 'at-launch' : 'on-message';
 }
 

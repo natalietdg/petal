@@ -761,7 +761,7 @@ window.pastel.testing.onRunUpdate(({ run: updated }) => {
   data = { ...data, runs: [updated, ...others].sort((a, b) => b.startedAt - a.startedAt), running: updated.state === 'running' ? [...new Set([...data.running, updated.id])] : data.running.filter((id) => id !== updated.id) };
   if (!draft) drawAll();
 });
-// A Loop line or a busy flip in the loop's tab shows at once, not on the next poll.
+// A Loop line or a busy flip in the testing agent's terminal shows at once, not on the next poll.
 window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === agents.testerHost()) queueMicrotask(drawLoop); });
 byId('testing-button').addEventListener('click', toggle);
 // A run named in a conclusion's This session line: open Testing on it, when it is this project's.
