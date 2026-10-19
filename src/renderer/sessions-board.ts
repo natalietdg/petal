@@ -65,6 +65,8 @@ let shownKey = '';
 let following = false; // asking the sessions tick for digests
 const notes = new Map<string, string>(); // per session: why it couldn't open
 const confirms = new Map<string, string>(); // per session: "still running elsewhere, open here as well?"
+let closeAsking: string | null = null; // the card showing "Close this Claude?"
+const closingIds = new Set<string>();
 
 export const isOpen = (): boolean => overlays.isOpen('board');
 
@@ -179,6 +181,8 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
   const message = boardMessage.control(card);
   if (message) item.append(message);
+  item.append(closeControl(card));
+  if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId));
 
   const confirm = confirms.get(card.sessionId);
   if (confirm) {
@@ -219,6 +223,43 @@ async function choose(card: BoardCard, confirmFork: boolean): Promise<void> {
   else if ('confirm' in result) confirms.set(card.sessionId, result.confirm);
   else if ('note' in result) notes.set(card.sessionId, result.note);
   else return close();
+  render(true);
+}
+
+// Close sits under the card, a sibling of its button, and asks inline first, like the Sessions panel's.
+function closeControl(card: BoardCard): HTMLButtonElement {
+  const closing = closingIds.has(card.sessionId);
+  const button = el('button', 'session-link board-close', closing ? 'Closing…' : 'Close');
+  button.type = 'button';
+  button.disabled = closing;
+  button.setAttribute('aria-label', `Close ${card.name}`);
+  button.addEventListener('click', () => { closeAsking = card.sessionId; render(true); });
+  return button;
+}
+
+function closeConfirm(sessionId: string): HTMLParagraphElement {
+  const line = el('p', 'board-confirm board-close-confirm');
+  line.setAttribute('role', 'group');
+  const yes = el('button', 'session-link session-yes', 'Yes');
+  yes.type = 'button';
+  yes.addEventListener('click', () => void closeCard(sessionId));
+  const no = el('button', 'session-link session-no', 'No');
+  no.type = 'button';
+  no.addEventListener('click', () => { closeAsking = null; render(true); });
+  line.append(el('span', '', 'Close this Claude?'), yes, el('span', 'session-sep', '·'), no);
+  return line;
+}
+
+// The Sessions panel's own Close path; a refusal stays on the card as a note.
+async function closeCard(sessionId: string): Promise<void> {
+  closeAsking = null;
+  closingIds.add(sessionId);
+  notes.delete(sessionId);
+  render(true);
+  const note = await sessionsPanel.closeSession(sessionId);
+  if (note) notes.set(sessionId, note);
+  else await sessionsPanel.refresh(); // fresh rows drop the closed card
+  closingIds.delete(sessionId);
   render(true);
 }
 
@@ -357,7 +398,7 @@ function render(force = false): void {
   filterRow.hidden = !sessionsView;
   grid.hidden = !sessionsView;
   boardTasks.element().hidden = !sessionsView;
-  const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], stops, coord.current(), boardTasks.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  const key = JSON.stringify([filter, boardView, branchFilter, givingFor, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, coord.current(), boardTasks.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -433,6 +474,7 @@ new MutationObserver(() => {
   sessionsPanel.setBoardOpen(false);
   notes.clear();
   confirms.clear();
+  closeAsking = null;
   givingFor = null;
 })
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });

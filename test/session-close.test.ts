@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeSession } from '../src/main/session-close';
+import { closeNote } from '../src/shared/ipc';
 import { processCommand, type SessionFile } from '../src/main/claude-session';
 import { removeTempDirs, tempDir } from './helpers';
 
@@ -95,4 +96,11 @@ describe('closeSession', () => {
     expect(theirs.exitCode === null && theirs.signalCode === null).toBe(true);
     await expect(closeSession(ID, { live: () => [fileFor(theirs.pid)], terminate: () => { throw new Error('signalled'); } }, mine.pid)).rejects.toThrow(/not running/);
   });
+});
+
+// The note a Close leaves on its row or Board card, shared by the Sessions panel and the Board.
+describe('closeNote', () => {
+  it('says nothing once it closed', () => expect(closeNote({ closed: true })).toBeNull());
+  it('passes on main\'s note when it did not close', () => expect(closeNote({ closed: false, note: 'Still running' })).toBe('Still running'));
+  it('wraps a refusal from main', () => expect(closeNote({ error: 'That Claude session is not running.' })).toBe('Couldn’t close it: That Claude session is not running.'));
 });

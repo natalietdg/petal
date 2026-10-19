@@ -97,6 +97,7 @@
 .board-confirm,
 .board-note { margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
 .board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--reader-fg); }
+.board-close { align-self: flex-start; margin: 6px 0 0; }
 .board-empty { list-style: none; font-size: 14px; color: var(--muted); }
 .board-folder-off p { margin: 0 0 8px; }
 

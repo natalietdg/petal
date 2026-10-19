@@ -94,6 +94,10 @@ export const agentsBadgeText = (count: number): string => plural(count, 'agent')
 
 export type CloseResult = { closed: true } | { closed: false; note: string };
 
+// What a Close shows when it didn't close (main's refusal, or "Still running"); null once it closed.
+export const closeNote = (result: Guarded<CloseResult>): string | null =>
+  'error' in result ? `Couldn’t close it: ${result.error}` : result.closed ? null : result.note;
+
 export type SendResult = { note: string } | { ok: true; file: string };
 
 export type ResumeResult =
