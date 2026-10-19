@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { BrowserWindow, Notification, webContents, type WebContents } from 'electron';
+import { BrowserWindow, Notification, shell, webContents, type WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { allowedClaudeHome, claudeFolderAllowed, projectClaudeDir } from './claude-folder';
 import { isSnapshotRun, slashFixture, testingFixture } from './snapshot-mode';
@@ -43,7 +43,7 @@ import { pruneProject } from './testing-prune';
 import * as store from './testing-store';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { claudeLaunch } from './claude-launch';
-import { prepareLoop, readCriteria } from './criteria-store';
+import { criteriaFile, prepareLoop, readCriteria } from './criteria-store';
 import {
   normalizeCommand, runGoing, runStateOf, unconfirmed, addCounts, emptyCounts,
   type AddedBug, type Elsewhere, type LoopFacts, type SavedLoop, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
@@ -683,6 +683,17 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     } finally {
       drafting.delete(key);
     }
+  });
+
+  // Edit scenarios: only the task's own criteria file, made first if missing, in her default editor.
+  handle('testing:open-criteria', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    prepareLoop(target.root, target.task.id);
+    const file = criteriaFile(target.root, target.task.id);
+    if (isSnapshotRun()) { testingFixture.opened.push(file); return { ok: true as const }; }
+    const failure = await shell.openPath(file); // '' means it opened
+    return failure ? { note: `Couldn’t open the scenarios file: ${failure}` } : { ok: true as const };
   });
 
   // The renderer's timer: saves one loop when its owner asks, then lists the loops this window steps or shows. Roots come

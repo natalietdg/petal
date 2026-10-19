@@ -8,18 +8,18 @@ import * as composer from './composer';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
+import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, ITEMS_CAP, loopStatus, stopAll, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../shared/bug-queue';
-import { finishNotice, fixesLanded, fixNotice, laneWord, needsNotice, newlyWaiting, NEEDS_YOU, type LoopNotice } from '../shared/loop-signals';
+import { finishNotice, fixesLanded, fixNotice, laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
 import { agentOf, finishedRounds, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
-import { askAgainText, draftEnded, suiteProblemText } from '../shared/suite-draft';
+import { askAgainText, awaitingReview, draftEnded, scenariosApprovedText, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
 import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
-import type { Task } from '../shared/tasks';
+import type { Prd, Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
 
 export interface AgentLoop extends SavedLoop {
@@ -37,6 +37,8 @@ export interface AgentContext {
   picked: () => string | null;
   tabId: () => string | null; // the tab Testing was opened from
   task: () => Task | null;
+  prd: () => Prd | null; // the shown task's
+  scenarios: () => CriteriaItem[]; // the shown task's
   suite: () => TaskSuite | null;
   stack: () => StackItem[];
   names: () => AgentNames;
@@ -53,7 +55,7 @@ const STARTING_MS = 120_000; // a lane with no tab here reads as starting this l
 
 const keyOf = (root: string, taskId: string): string => `${root}:${taskId}`;
 const isRunning = (r: AgentLoop): boolean => r.kind === 'loop' && !r.stoppedAt;
-const toSaved = ({ kind, tester, fixer, startedAt, stoppedAt, queue, events }: AgentLoop): SavedLoop => ({ kind, tester, fixer, startedAt, stoppedAt, queue, events });
+const toSaved = ({ kind, tester, fixer, startedAt, stoppedAt, queue, events, approvedScenarios }: AgentLoop): SavedLoop => ({ kind, tester, fixer, startedAt, stoppedAt, queue, events, ...(approvedScenarios ? { approvedScenarios } : {}) });
 const fromSaved = (root: string, taskId: string, saved: SavedLoop): AgentLoop => ({
   ...saved, root, taskId, actions: { tester: [], fixer: [] }, tokens: { tester: null, fixer: null }, sending: false, stopping: false, inputs: null,
 });
@@ -100,12 +102,46 @@ export function createAgents(ctx: AgentContext) {
       tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
       busy: Boolean(screen?.busy), asking: Boolean(screen?.asking),
       worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
+      reviewing: awaiting().length > 0,
     });
     return { tabId: id, ended };
   }
 
-  // A follow-up to the drafting agent through the reply box's paste path; worked counts again from now.
-  async function pasteToDrafter(r: AgentLoop, text: string, event: string): Promise<boolean> {
+  // Scenarios first: the shown task's [todo] scenarios waiting on her, once its testing agent sits idle on them.
+  function awaiting(): CriteriaItem[] {
+    const r = record();
+    if (!r?.tester || r.stoppedAt || !tabOf(r.tester)) return [];
+    const screen = screenOf(r.tester);
+    return awaitingReview(ctx.scenarios(), { stopped: false, approved: r.approvedScenarios ?? [], busy: Boolean(screen?.busy), asking: Boolean(screen?.asking) });
+  }
+
+  // Looks right: the go-ahead goes into the testing agent's tab, and the names she approved are saved with its loop or draft.
+  async function approveScenarios(): Promise<void> {
+    const r = record();
+    const task = ctx.task();
+    const shown = awaiting();
+    if (!r || !task || !shown.length) return;
+    if (elsewhere.has(keyOf(r.root, r.taskId))) { notes.tester = 'This loop runs in another window. Approve the scenarios there.'; draw(); return; }
+    const before = r.approvedScenarios;
+    r.approvedScenarios = [...(before ?? []), ...shown.map((s) => s.name)].slice(-ITEMS_CAP);
+    const sent = await pasteToTester(r, scenariosApprovedText(task.id), `You → ${nameOf('tester')} · scenarios look right, write the tests`);
+    if (!sent) r.approvedScenarios = before;
+    notes.tester = sent ? `Sent. ${nameOf('tester')} is writing the tests.` : 'Couldn’t reach its tab. Try again.';
+    ctx.redraw();
+  }
+
+  // Edit scenarios: the task's criteria file in her editor; Petal reads it again on its next refresh.
+  async function editScenarios(): Promise<void> {
+    const from = ctx.tabId();
+    const task = ctx.task();
+    if (!from || !task) return;
+    const reply = await window.pastel.testing.openCriteria({ tabId: from, root: ctx.picked(), taskId: task.id });
+    notes.tester = isIpcError(reply) ? `Couldn’t open the file: ${reply.error}` : 'note' in reply ? reply.note : 'Opened in your editor. Save it, then come back here.';
+    draw();
+  }
+
+  // A follow-up to the testing agent through the reply box's paste path; a draft's worked counts again from now.
+  async function pasteToTester(r: AgentLoop, text: string, event: string): Promise<boolean> {
     const id = tabOf(r.tester);
     const tab = id ? tabs.get(id) : null;
     const sent = tab ? await composer.pasteToClaude(tab, text) : false;
@@ -121,7 +157,7 @@ export function createAgents(ctx: AgentContext) {
     const r = drafting();
     const task = ctx.task();
     if (!r || !task || !tabOf(r.tester)) return 'start';
-    return (await pasteToDrafter(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
+    return (await pasteToTester(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
   }
 
   // After each refresh: a suite file the drafting agent wrote but Petal couldn't use goes back to it once, with a fix request.
@@ -132,7 +168,7 @@ export function createAgents(ctx: AgentContext) {
     const k = `${keyOf(r.root, r.taskId)}:${problem}`;
     if (pastedProblems.has(k) || updateOf(r.tester)?.busy) return;
     pastedProblems.add(k);
-    if (!(await pasteToDrafter(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
+    if (!(await pasteToTester(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
     else ctx.redraw();
   }
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
@@ -318,13 +354,17 @@ export function createAgents(ctx: AgentContext) {
     }
   }
 
+  // The scenario names she approved for the shown task, carried from its last loop or draft into the next.
+  const approvedSoFar = (): string[] | undefined => record()?.approvedScenarios;
+
   function briefs(focus: string, rounds: number): { tester: string; fixer: string } | null {
     const task = ctx.task();
     const suite = ctx.suite();
     if (!task || !suite) return null;
     const names = { tester: nameOf('tester'), fixer: nameOf('fixer') };
+    const review = !approvedSoFar()?.length; // none approved yet: round 1 stops for her review
     return {
-      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names }),
+      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() }, review }),
       fixer: buildFixerBrief({ taskId: task.id, taskTitle: task.title, stages: suite.stages, names }),
     };
   }
@@ -348,6 +388,8 @@ export function createAgents(ctx: AgentContext) {
     const root = ctx.root();
     const b = briefs(focus, rounds);
     if (!from || !task || !root || !b || isActive(facts().status)) return;
+    const approved = approvedSoFar();
+    const carried = approved ? { approvedScenarios: approved } : {};
     const shown = shownLoop();
     const joining = shown && fixerLive(shown) && !shown.tester ? shown : null; // her bug fix agent already runs: only the testing agent starts
     const drafter = drafting();
@@ -359,7 +401,7 @@ export function createAgents(ctx: AgentContext) {
       const testerTab = tabOf(reply.tester);
       const tab = testerTab ? tabs.get(testerTab) : null;
       const sent = tab ? await composer.pasteToClaude(tab, composer.stripControls(b.tester).trim()) : false;
-      const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: reuse.events });
+      const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: reuse.events, ...carried });
       r.tokens = { tester: reuse.tokens.tester, fixer: NO_TOKENS };
       note(r, 'tester', sent ? `${nameOf('tester')} moves on to the test loop in its tab` : `Couldn’t paste the loop brief into ${nameOf('tester')}’s tab`);
       note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
@@ -377,7 +419,7 @@ export function createAgents(ctx: AgentContext) {
       return;
     }
     if (!reply.fixer) return;
-    const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
+    const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents(), ...carried });
     r.tokens = { tester: NO_TOKENS, fixer: NO_TOKENS };
     note(r, 'tester', `Started ${nameOf('tester')} in a new tab`);
     note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
@@ -510,6 +552,7 @@ export function createAgents(ctx: AgentContext) {
     return laneWord({
       role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: Boolean(r && Date.now() - r.startedAt < STARTING_MS),
       testerLine: progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : null, fixing: r?.queue.find((b) => b.state === 'fixing')?.name ?? null, draftEnded: r?.kind === 'draft' && Boolean(draft()?.ended),
+      scenariosReady: role === 'tester' && awaiting().length > 0,
     });
   }
 
@@ -545,6 +588,7 @@ export function createAgents(ctx: AgentContext) {
         role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
+        review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
       };
     });
     const loop = r?.kind === 'loop' ? r : null;
@@ -566,6 +610,8 @@ export function createAgents(ctx: AgentContext) {
       send: (role, text) => void send(role, text),
       askClose: (asking) => { closeAsking = asking; draw(); },
       close: () => void closeAgents(),
+      editScenarios: () => void editScenarios(),
+      approveScenarios: () => void approveScenarios(),
     }));
   }
 
@@ -581,10 +627,10 @@ export function createAgents(ctx: AgentContext) {
   // For the snapshot harness: what the shown task's lanes say, and forgetting this window's copies as a new window would.
   const state = () => {
     const r = record();
-    return { kind: r?.kind ?? null, draft: draft(), queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
+    return { kind: r?.kind ?? null, draft: draft(), awaiting: awaiting().map((s) => s.name), approved: r?.approvedScenarios ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, askAgain, checkDraft, state, forget: () => { loops.clear(); owned.clear(); elsewhere.clear(); } };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, awaiting, askAgain, checkDraft, state, forget: () => { loops.clear(); owned.clear(); elsewhere.clear(); } };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

@@ -106,4 +106,5 @@ export const testingFixture: {
   changed: string[] | null; // the project's recently changed files, instead of asking git
   agentIds: string[]; // session ids for the next agents Testing starts, so their fixture tabs match; taken in order
   notices: { title: string; body: string; tabId: string | null; focused: boolean }[]; // loop notifications, recorded instead of shown
-} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [] };
+  opened: string[]; // criteria files Edit scenarios would have opened in her editor
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [], opened: [] };

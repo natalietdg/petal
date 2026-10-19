@@ -255,6 +255,8 @@ export interface InvokeChannels {
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null; show?: boolean; reuseDraft?: boolean }]; result: Guarded<{ tester: AgentStart | null; fixer: AgentStart | null } | { note: string }> };
   // The testing agent alone, to draw up a task's suite; only its writes change the suite.
   'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null; updatedSkill: boolean } | { note: string }> };
+  // Edit scenarios: the task's own criteria file opened in her default editor; main works out the path from the task.
+  'testing:open-criteria': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
   // The loop timer: saves one task's loop (from its owner window only), then lists the running loops with an agent
   // session open in this window, plus the known ones this window shows, each marked with whether this window steps it.
   'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null; known?: { root: string; taskId: string }[] }]; result: Guarded<{ loops: LoopFacts[] }> };

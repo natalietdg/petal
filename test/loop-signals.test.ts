@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir } from './helpers';
-import { finishNotice, fixesLanded, fixNotice, hasAgentIn, laneWord, loopOwner, NEEDS_YOU, needsNotice, newlyWaiting, runningHere, takesSave, type LaneFacts, type OwnerFacts } from '../src/shared/loop-signals';
+import { finishNotice, fixesLanded, fixNotice, hasAgentIn, laneWord, loopOwner, NEEDS_YOU, SCENARIOS_READY, needsNotice, newlyWaiting, runningHere, takesSave, type LaneFacts, type OwnerFacts } from '../src/shared/loop-signals';
 import { cleanSentBug, noEvents } from '../src/shared/agent-loop';
 import { runGoing, type SavedLoop } from '../src/shared/testing';
 import { readLogTail, trimmedNote } from '../src/main/testing-runner';
@@ -70,6 +70,20 @@ describe('the loops a window steps, from saved loops and open sessions', () => {
 
 describe('what a lane says', () => {
   const base: LaneFacts = { role: 'fixer', kind: 'loop', started: true, stopped: false, tab: { busy: true, asking: false }, starting: false, testerLine: null, fixing: null };
+
+  it('reads Scenarios ready for an idle draft whose scenarios wait on her, below busy and Needs you', () => {
+    const draft: LaneFacts = { ...base, role: 'tester', kind: 'draft', tab: { busy: false, asking: false }, scenariosReady: true, draftEnded: false };
+    expect(laneWord(draft)).toBe(SCENARIOS_READY);
+    expect(laneWord({ ...draft, tab: { busy: true, asking: false } })).toBe('Drawing up the suite');
+    expect(laneWord({ ...draft, tab: { busy: false, asking: true } })).toBe(NEEDS_YOU);
+    expect(laneWord({ ...draft, scenariosReady: false, draftEnded: true })).toBe('Stopped without a suite');
+  });
+
+  it('reads Scenarios ready on a loop’s testing agent over its Loop line while they wait on her', () => {
+    const tester: LaneFacts = { ...base, role: 'tester', tab: { busy: false, asking: false }, testerLine: 'Writing scenarios · round 1/5', scenariosReady: true };
+    expect(laneWord(tester)).toBe(SCENARIOS_READY);
+    expect(laneWord({ ...tester, scenariosReady: false })).toBe('Writing scenarios · round 1/5');
+  });
 
   it('reads Needs you when a prompt is on the agent screen, over busy, fixing or a Loop line', () => {
     expect(laneWord({ ...base, tab: { busy: true, asking: true }, fixing: 'coupon below zero' })).toBe(NEEDS_YOU);

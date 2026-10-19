@@ -41,7 +41,10 @@ export interface LaneFacts {
   testerLine: string | null; // the testing agent's Loop line in words, "Fixing · round 2/5"
   fixing: string | null; // the bug the bug fix agent is on
   draftEnded?: boolean; // the drafting agent stopped with no suite
+  scenariosReady?: boolean; // the testing agent's [todo] scenarios wait on her review
 }
+
+export const SCENARIOS_READY = 'Scenarios ready';
 
 // A prompt on the agent's screen (a permission, a question) outranks busy or idle: it waits on her.
 export function laneWord(f: LaneFacts): string {
@@ -49,8 +52,8 @@ export function laneWord(f: LaneFacts): string {
   if (f.stopped) return 'Stopped';
   if (!f.tab) return f.starting ? 'Starting in its tab' : 'Its tab isn’t open here';
   if (f.tab.asking) return NEEDS_YOU;
-  if (f.kind === 'draft') return f.tab.busy ? 'Drawing up the suite' : f.draftEnded ? 'Stopped without a suite' : 'Idle';
-  if (f.role === 'tester') return f.testerLine ?? (f.tab.busy ? 'Working' : 'Idle');
+  if (f.kind === 'draft') return f.tab.busy ? 'Drawing up the suite' : f.scenariosReady ? SCENARIOS_READY : f.draftEnded ? 'Stopped without a suite' : 'Idle';
+  if (f.role === 'tester') return f.scenariosReady ? SCENARIOS_READY : f.testerLine ?? (f.tab.busy ? 'Working' : 'Idle');
   return f.fixing ? `Fixing ${f.fixing}` : f.tab.busy ? 'Working' : 'Idle, waiting for bugs';
 }
 

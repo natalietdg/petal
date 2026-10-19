@@ -11,7 +11,7 @@ import type { SavedLoop } from '../src/shared/testing';
 afterEach(removeTempDirs);
 
 const names = { tester: 'Quinn', fixer: 'Fixie' };
-const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, round: 1, regression: true, taskId: 't1' });
+const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, tests: [{ path: 'src/cart.test.ts', name: 'rounds' }], source: null, round: 1, regression: true, taskId: 't1' });
 const inputs = (over: Partial<LoopInputs> = {}): LoopInputs => ({ bugs: [], runs: [], testerRound: 1, fixerBusy: false, fixesDone: [], now: 1000, ...over });
 const loop = (over: Partial<SavedLoop> = {}): SavedLoop => ({
   kind: 'loop', tester: { tabId: 'tab-t', sessionId: 'sess-t' }, fixer: { tabId: 'tab-f', sessionId: 'sess-f' }, startedAt: 500, stoppedAt: null, queue: [], events: noEvents(), ...over,
@@ -95,6 +95,14 @@ describe('rehydrating', () => {
     expect(cleanSavedLoop({ ...good, tester: { tabId: null, sessionId: '' } })).toBeNull();
     expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [{ at: 'x' }] } })?.events).toMatchObject({ fixer: [] });
     expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [] } })?.events.tester).toHaveLength(100);
+  });
+
+  it('keeps the scenario names she approved, capped, and drops anything that isn’t a name', () => {
+    const draft: SavedLoop = { kind: 'draft', tester: { tabId: 'tab-1', sessionId: 'draft-t' }, fixer: null, startedAt: 5, stoppedAt: null, queue: [], events: noEvents() };
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: ['refund is capped', 7, '', 'x'.repeat(400)] })?.approvedScenarios).toEqual(['refund is capped', 'x'.repeat(300)]);
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: Array.from({ length: 250 }, (_, i) => `s${i}`) })?.approvedScenarios).toHaveLength(200);
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: 'yes' })).not.toHaveProperty('approvedScenarios');
+    expect(cleanSavedLoop(draft)).not.toHaveProperty('approvedScenarios');
   });
 });
 
