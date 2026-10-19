@@ -140,7 +140,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(fixerStart?.command.includes(`--session-id ${FIXER} --`) && testingFixture.loopStarts.length === startsBefore + 2, `only the bug fix agent starts in a new tab: ${JSON.stringify(testingFixture.loopStarts.slice(startsBefore + 1).map((l) => l.command.slice(-80)))}`);
     const brief = await waitFor(() => pasteWrites.slice(loopPastes).find((w) => w.tabId === drafterTab && w.data.includes('this task\'s testing agent. Run a test loop')) ?? null, 5000);
     const loop = store.load(repo).loops?.['t-draft'];
-    check(brief && loop?.kind === 'loop' && loop.tester?.sessionId === DRAFTER && loop.fixer?.sessionId === FIXER, `the loop brief goes to the drafting agent's tab, which is the loop's tester: ${JSON.stringify(loop && { kind: loop.kind, tester: loop.tester?.sessionId })}`);
+    check(brief && loop?.kind === 'loop' && loop.testerSessionId === DRAFTER && loop.fixerSessionId === FIXER, `the loop brief goes to the drafting agent's tab, which is the loop's tester: ${JSON.stringify(loop && { kind: loop.kind, tester: loop.testerSessionId })}`);
 
     // 6 The bug it recorded while drafting reaches the bug fix agent.
     const fixerTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(FIXER)}) ?? null`), 10000);
@@ -172,7 +172,8 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(fs.readFileSync(skillFile, 'utf8') === edited && !inlineNote.startsWith('Updated'), `her edited copy is untouched: ${inlineNote}`);
 
     // 9 Its tab closes with no suite: stopped, Ask again starts a fresh one, no Show its tab.
-    const editTab = store.load(repo).loops?.['t-edit']?.tester?.tabId ?? null;
+    const editSession = store.load(repo).loops?.['t-edit']?.testerSessionId ?? null;
+    const editTab = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(editSession)}) ?? null`) as string | null;
     await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
     if (editTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(editTab)})`);
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()");

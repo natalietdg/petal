@@ -3,10 +3,9 @@ import fs from 'node:fs';
 import * as store from './testing-store';
 import * as coord from './coord';
 import { loadTasks, updateTasks } from './tasks-store';
-import { suiteFile } from './task-suites';
+import { suiteFile, testingData } from './task-suites';
 import { prunePlan } from '../shared/testing-prune';
 import { removeTask } from '../shared/tasks';
-import { hasAgentIn } from '../shared/loop-signals';
 
 const PRUNE_EVERY_MS = 60 * 60 * 1000;
 const lastPruned = new Map<string, number>(); // root -> when it was last tidied
@@ -20,12 +19,13 @@ export function pruneProject(root: string, openSessions: ReadonlySet<string>, no
   lastPruned.set(root, now);
   const { tasks, problem } = loadTasks(root);
   if (problem) return;
-  const data = store.load(root);
+  const data = testingData(root);
+  const hasOpenAgent = (loop: { testerSessionId: string | null; fixerSessionId: string | null }) => [loop.testerSessionId, loop.fixerSessionId].some((id) => id !== null && openSessions.has(id));
   const plan = prunePlan({
     tasks, autoTasks: data.autoTasks ?? [], recordTasks: [...Object.keys(data.agents ?? {}), ...Object.keys(data.loops ?? {})],
     suiteTasks: new Set(tasks.map((t) => t.id).filter((id) => data.suites?.[id] || fs.existsSync(suiteFile(root, id)))),
     runTasks: new Set(data.runs.flatMap((r) => (r.taskId ? [r.taskId] : []))),
-    liveTasks: new Set(Object.entries(data.loops ?? {}).filter(([, loop]) => loop.stoppedAt === null && hasAgentIn(loop, openSessions)).map(([id]) => id)), openSessions, now,
+    liveTasks: new Set(Object.entries(data.loops ?? {}).filter(([, loop]) => loop.stoppedAt === null && hasOpenAgent(loop)).map(([id]) => id)), openSessions, now,
   });
   if (plan.tasks.length) {
     updateTasks(root, (current) => {
@@ -37,5 +37,5 @@ export function pruneProject(root: string, openSessions: ReadonlySet<string>, no
   const records = new Set(plan.records);
   const sameAuto = JSON.stringify(plan.autoTasks) === JSON.stringify(data.autoTasks ?? []);
   if (!records.size && sameAuto) return;
-  store.save({ ...data, agents: without(data.agents, records), loops: without(data.loops, records), autoTasks: plan.autoTasks });
+  store.save({ ...data, agents: without(data.agents, records), loops: without(data.loops, records), testAgents: data.testAgents?.filter((a) => !records.has(a.taskId)), autoTasks: plan.autoTasks });
 }

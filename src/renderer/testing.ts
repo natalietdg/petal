@@ -606,7 +606,7 @@ async function askForSuite(task: Task): Promise<void> {
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
   const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note
-    : reply.tabId ? `${updated}Started this task’s testing agent in a new tab. Its suite shows here when it writes one.` : 'Couldn’t open a new tab for the testing agent.';
+    : reply.reused ? `${updated}Sent the request to this task’s testing agent. Its suite shows here when it writes one.` : `${updated}Started this task’s testing agent. Its suite shows here when it writes one.`;
   drawNote();
   await refresh(); // its lane shows now
 }

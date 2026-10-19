@@ -2,7 +2,7 @@
 // ended with no suite, what Petal pastes back to it, and which one session may write the suite file.
 import { suitePath } from './task-suite';
 import { criteriaPath, scenarioSources, type CriteriaItem } from './test-loop';
-import type { AgentRecord, SavedLoop } from './testing';
+import type { AgentRecord, StoredLoop } from './testing';
 import type { Prd, Task } from './tasks';
 
 export const TESTING_SKILL = 'petal-testing-suite';
@@ -65,8 +65,8 @@ export const suiteProblemText = (taskId: string, problem: string): string =>
   `Petal couldn't use ${suitePath(taskId)}: ${problem} Fix the file so it has this shape: {"stages": [{"name": "Unit", "command": "npm test"}]}, then save it again.`;
 
 // The one session that may change the task's suite: the current loop's or draft's testing agent, else the newest one.
-export function suiteWriters(loop: SavedLoop | null | undefined, agents: readonly AgentRecord[]): string[] {
-  if (loop?.tester) return [loop.tester.sessionId];
+export function suiteWriters(loop: Pick<StoredLoop, 'testerSessionId'> | null | undefined, agents: readonly AgentRecord[]): string[] {
+  if (loop?.testerSessionId) return [loop.testerSessionId];
   const newest = agents.filter((a) => a.role === 'tester').at(-1);
   return newest ? [newest.sessionId] : [];
 }

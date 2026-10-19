@@ -328,8 +328,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(fixerBrief.includes('rejects an expired token') && fixerBrief.includes('src/auth.test.js') && fixerBrief.includes('`npm test`') && fixerBrief.includes('Fix the app code only. Never edit tests') && !/[\u2014\u2013]/.test(fixerBrief), `the bug fix agent starts on the failing test, app code only: ${JSON.stringify(fixerBrief.slice(0, 160))}`);
     check(testingFixture.loopStarts.length === startsBefore + 1 && !pasteWrites.slice(pastesBefore).some((w) => w.data.includes('rejects an expired token')), 'only the bug fix agent starts, and nothing is pasted into the session');
     const fixerLoop = await waitFor(() => { const l = store.load(project).loops?.[FIXTURE_TASK]; return l?.queue.length ? l : null; }, 4000);
-    check(fixerLoop && fixerLoop.tester === null && fixerLoop.fixer && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.tester, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
-    const fixerTab = fixerLoop?.fixer?.tabId ?? null;
+    check(fixerLoop && fixerLoop.testerSessionId === null && fixerLoop.fixerSessionId && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.testerSessionId, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
+    const fixerTab = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(fixerLoop?.fixerSessionId ?? null)}) ?? null`) as string | null;
     check(fixerTab && (await js('PastelTerm.tabs.active()?.id')) === fixerTab, `its tab is shown: ${fixerTab}`);
     const lanes = await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as string[][];
     check(lanes.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing auth > tokens')) && lanes.some(([role, status]) => role === 'tester' && status === 'Not started'), `its lane shows it fixing; the testing agent's is not started: ${JSON.stringify(lanes)}`);
@@ -441,11 +441,11 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       })()`), 8000);
       check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens( \([\d.]+k? of them cached reads\))?$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
-      check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
+      check(draft?.kind === 'draft' && draft.fixerSessionId === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
       await capture('testing-draft-lane');
 
       // Ask Claude shows her the agent's tab, and while it draws, a status replaces the button and main refuses a second.
-      const agentTab = draft?.tester?.tabId ?? null;
+      const agentTab = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(draft?.testerSessionId ?? null)}) ?? null`) as string | null;
       check(agentTab && (await js('PastelTerm.tabs.active()?.id')) === agentTab, `the drafting agent's tab is shown, not opened in the background: ${agentTab}`);
       const drawing = await settle((p) => p.drawing !== null);
       check(drawing && drawing.drawing === 'Testing agent is drawing up the suite' && !drawing.askSuite, `a status replaces Ask Claude while the agent draws: ${JSON.stringify({ drawing: drawing?.drawing, ask: drawing?.askSuite })}`);

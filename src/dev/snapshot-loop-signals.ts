@@ -9,20 +9,19 @@
 // 5. A stage log over 2 MB is read from its tail and says so.
 import fs from 'node:fs';
 import path from 'node:path';
-import { BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { CRITERIA_FIXTURE } from './snapshot-test-loop';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { snapshotLoops } from '../main/testing-ipc';
-import { rememberAgent, syncSuites } from '../main/task-suites';
+import { syncSuites } from '../main/task-suites';
 import { loadTasks } from '../main/tasks-store';
 import { LOG_TAIL_BYTES, trimmedNote } from '../main/testing-runner';
-import { noEvents } from '../shared/agent-loop';
 import * as store from '../main/testing-store';
 import * as configStore from '../main/config-store';
-import type { SavedLoop } from '../shared/testing';
+import type { StoredLoop } from '../shared/testing';
 
 const OTHER_TASK = 't-checkout';
 // A permission prompt on the agent's screen, as Claude Code draws it.
@@ -55,17 +54,15 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs = await js('PastelTerm.tabs.ids()') as string[];
   const fixtureTab = startTabs[0];
-  const savedLoop = (taskId = FIXTURE_TASK): SavedLoop | undefined => store.load(project).loops?.[taskId];
-  let other: BrowserWindow | null = null;
+  const savedLoop = (taskId = FIXTURE_TASK): StoredLoop | undefined => store.load(project).loops?.[taskId];
   try {
     resizeOffscreen(win, 1280, 900);
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(fixtureTab)})?.update?.state`)) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
 
     // 1. Start both agents, then forget what only this run of Petal knew: the tabs runs opened and the window's copy.
-    const started = await js(`window.pastel.testing.loopStart({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, testerBrief: 'Snapshot testing agent brief.', fixerBrief: 'Snapshot bug fix agent brief.' })`) as { tester?: { tabId: string | null }; fixer?: { tabId: string | null }; note?: string };
-    const fixerTab = started.fixer?.tabId ?? null;
-    check(fixerTab && started.tester?.tabId && testingFixture.loopStarts.length === 2, `both agents start in fixture tabs: ${JSON.stringify(started)}`);
-    check(snapshotLoops.owner(project, FIXTURE_TASK) === win.webContents.id, `the starting window owns the loop: ${snapshotLoops.owner(project, FIXTURE_TASK)}`);
+    const started = await js(`window.pastel.testing.loopStart({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, testerBrief: 'Snapshot testing agent brief.', fixerBrief: 'Snapshot bug fix agent brief.' })`) as { tester?: { hostTabId: string | null }; fixer?: { hostTabId: string | null }; note?: string };
+    const fixerTab = started.fixer?.hostTabId ?? null;
+    check(fixerTab && started.tester?.hostTabId && testingFixture.loopStarts.length === 2, `both agents start in fixture tabs: ${JSON.stringify(started)}`);
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(fixerTab)})?.update?.sessionId`)) === FIXER_SESSION || null, 10000), 'the bug fix agent tab follows its fixture session');
     snapshotLoops.forgetRunTabs();
     await js('PastelTerm.testing.forgetLoops()');
@@ -81,32 +78,12 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     const second = await js(`window.pastel.testing.loopStart({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, fixerBrief: 'Another bug fix agent.' })`) as { note?: string };
     check(/already running for this task/.test(second.note ?? '') && testingFixture.loopStarts.length === startsBefore, `a second bug fix agent is refused: ${JSON.stringify(second)}`);
     const sent = { name: 'cart badge shows a stale count', test: null, sent: { stage: 'Unit', failure: 'expected 2, got 3' } };
-    const added = await js(`window.pastel.testing.loopAddBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { queued?: boolean; added?: boolean };
-    check(added.queued && added.added && testingFixture.loopStarts.length === startsBefore, `a bug sent around the owner joins the saved queue, no new agent: ${JSON.stringify(added)}`);
+    const added = await js(`window.pastel.testing.sendBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { outcome?: string };
+    check(added.outcome === 'queued' && testingFixture.loopStarts.length === startsBefore, `a bug sent around the owner joins the saved queue, no new agent: ${JSON.stringify(added)}`);
     await wait(4000); // a few owner ticks and saves
     check(savedLoop()?.queue.some((b) => b.name === sent.name), `the owner's next saves keep it: ${JSON.stringify(savedLoop()?.queue.map((b) => [b.name, b.state]))}`);
-    const again = await js(`window.pastel.testing.loopAddBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { queued?: boolean; added?: boolean };
-    check(again.queued && again.added === false, `sent twice, it is added once: ${JSON.stringify(again)}`);
-
-    // Ownership moves back from a live window that holds none of the agent tabs.
-    other = new BrowserWindow({ show: false });
-    snapshotLoops.setOwner(project, FIXTURE_TASK, other.webContents.id);
-    check(await waitFor(() => snapshotLoops.owner(project, FIXTURE_TASK) === win.webContents.id || null, 8000), 'the window holding the agent tabs takes the loop back');
-
-    // A save from a live non-owner is refused while neither window holds the agents; once the owner is gone it is taken.
-    rememberAgent(project, OTHER_TASK, 'gone-tester', 'tester');
-    rememberAgent(project, OTHER_TASK, 'gone-fixer', 'fixer');
-    const idle: SavedLoop = { kind: 'loop', tester: { tabId: null, sessionId: 'gone-tester' }, fixer: { tabId: null, sessionId: 'gone-fixer' }, startedAt: 1000, stoppedAt: null, queue: [], events: noEvents() };
-    store.save({ ...store.load(project), loops: { ...(store.load(project).loops ?? {}), [OTHER_TASK]: idle } });
-    snapshotLoops.setOwner(project, OTHER_TASK, other.webContents.id);
-    const edited = { ...idle, events: { tester: [{ at: 2000, text: 'from a window that does not own it' }], fixer: [] } };
-    await js(`window.pastel.testing.loops({ save: { root: ${JSON.stringify(project)}, taskId: ${JSON.stringify(OTHER_TASK)}, loop: ${JSON.stringify(edited)} } })`);
-    check(savedLoop(OTHER_TASK)?.events.tester.length === 0, `a save from a window that doesn't own the loop is refused: ${JSON.stringify(savedLoop(OTHER_TASK)?.events.tester)}`);
-    other.destroy();
-    other = null;
-    await js(`window.pastel.testing.loops({ save: { root: ${JSON.stringify(project)}, taskId: ${JSON.stringify(OTHER_TASK)}, loop: ${JSON.stringify(edited)} } })`);
-    check(savedLoop(OTHER_TASK)?.events.tester.length === 1 && snapshotLoops.owner(project, OTHER_TASK) === win.webContents.id, 'once the owner window is gone the save is taken and ownership moves');
-    store.save({ ...store.load(project), loops: { ...(store.load(project).loops ?? {}), [OTHER_TASK]: { ...edited, stoppedAt: 3000 } } });
+    const again = await js(`window.pastel.testing.sendBug({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(FIXTURE_TASK)}, bug: ${JSON.stringify(sent)} })`) as { outcome?: string };
+    check(again.outcome === 'already', `sent twice, it is added once: ${JSON.stringify(again)}`);
 
     // 3. A permission prompt on the bug fix agent's screen: badge, notification, Needs you with Show its tab.
     const drawIn = (tabId: string | null, text: string) => js(`new Promise((done) => PastelTerm.tabs.get(${JSON.stringify(tabId)}).term.write(${JSON.stringify(text)}, done))`);
@@ -175,7 +152,6 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(testingFixture.notices.length === 1, `switched back on, it is recorded again: ${testingFixture.notices.length}`);
   } finally {
     configStore.save({ testing: { notify: true } });
-    other?.destroy();
     testingFixture.project = null;
     testingFixture.claudeDir = null;
     testingFixture.agentIds.length = 0;

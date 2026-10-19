@@ -13,9 +13,9 @@ import {
 } from '../shared/task-suite';
 import { loadManifest } from './test-lock';
 import type { Task } from '../shared/tasks';
-import type { AgentRecord, SavedLoop } from '../shared/testing';
+import type { AgentRecord, ProjectTesting, StoredLoop, TestAgent } from '../shared/testing';
 import type { AgentRole } from '../shared/agent-names';
-import { loopFromAgents } from '../shared/agent-loop';
+import { agentBySession, migrateTesting, sessionOf } from '../shared/agent-loop';
 import { suiteWriters } from '../shared/suite-draft';
 
 export const suiteFile = (root: string, taskId: string): string => path.join(root, ...suitePath(taskId).split('/'));
@@ -44,56 +44,70 @@ const lastWriter = (writes: readonly SuiteWrite[], taskId: string): string | nul
 
 const MAX_AGENTS = 20; // per task, newest kept
 
+// The project's testing store, with records from before main owned agents migrated once and saved.
+export function testingData(root: string): ProjectTesting {
+  const data = store.load(root);
+  const migrated = migrateTesting(data, Date.now());
+  if (!migrated) return data;
+  store.save(migrated);
+  return migrated;
+}
+
 const agentMap = (root: string): Record<string, AgentRecord[]> => store.load(root).agents ?? {};
 
-// The sessions Petal launched as this task's agents, oldest first.
+// The ledger: every session Petal launched as this task's agent, oldest first. Retired ones stay for the lock.
 export const agentsOf = (root: string, taskId: string): AgentRecord[] => agentMap(root)[taskId] ?? [];
+
+// The Testing screen's agents for the project, open and closed.
+export const testAgentsOf = (root: string): TestAgent[] => testingData(root).testAgents ?? [];
+
+export function saveTestAgents(root: string, agents: TestAgent[]): void {
+  store.save({ ...testingData(root), testAgents: agents });
+}
+
+// Every agent session of the project with its task and role: the ledger and the registry, each session once.
+export function allAgents(root: string): { sessionId: string; role: AgentRole; taskId: string }[] {
+  const data = testingData(root);
+  const ledger = Object.entries(data.agents ?? {}).flatMap(([taskId, list]) => list.map((a) => ({ sessionId: a.sessionId, role: a.role, taskId })));
+  const seen = new Set(ledger.map((a) => a.sessionId));
+  const registry = (data.testAgents ?? []).filter((a) => !seen.has(a.sessionId)).map(({ sessionId, role, taskId }) => ({ sessionId, role, taskId }));
+  return [...ledger, ...registry];
+}
 
 // The task and role of one of Petal's agent sessions; null for any other session.
 export function agentOf(root: string, sessionId: string | null | undefined): { taskId: string; role: AgentRole } | null {
   if (!sessionId) return null;
-  for (const [taskId, list] of Object.entries(agentMap(root))) {
-    const found = list.find((a) => a.sessionId === sessionId);
-    if (found) return { taskId, role: found.role };
-  }
-  return null;
+  const found = allAgents(root).find((a) => a.sessionId === sessionId);
+  return found ? { taskId: found.taskId, role: found.role } : null;
 }
 
 export const agentTaskOf = (root: string, sessionId: string | null | undefined): string | null => agentOf(root, sessionId)?.taskId ?? null;
 
-// Every agent session of the project with its task and role, for the lock manifest.
-export const allAgents = (root: string): { sessionId: string; role: AgentRole; taskId: string }[] =>
-  Object.entries(agentMap(root)).flatMap(([taskId, list]) => list.map((a) => ({ ...a, taskId })));
-
 export function rememberAgent(root: string, taskId: string, sessionId: string, role: AgentRole = 'tester'): void {
-  const data = store.load(root);
+  const data = testingData(root);
   const kept = [...agentsOf(root, taskId).filter((a) => a.sessionId !== sessionId), { sessionId, role }].slice(-MAX_AGENTS);
   store.save({ ...data, agents: { ...(data.agents ?? {}), [taskId]: kept } });
 }
 
-// Each task's loop or draft: the saved one, else one rebuilt from its agent records.
-export function loopsOf(root: string): Record<string, SavedLoop> {
-  const data = store.load(root);
-  const out: Record<string, SavedLoop> = {};
-  for (const taskId of new Set([...Object.keys(data.agents ?? {}), ...Object.keys(data.loops ?? {})])) {
-    const loop = loopFromAgents(data.loops?.[taskId], data.agents?.[taskId] ?? []);
-    if (loop) out[taskId] = loop;
-  }
-  return out;
-}
+// Each task's loop or draft.
+export const loopsOf = (root: string): Record<string, StoredLoop> => testingData(root).loops ?? {};
 
-// Saved only when its sessions are this task's agents in those roles; false otherwise.
-export function saveLoop(root: string, taskId: string, loop: SavedLoop): boolean {
-  const roleOf = (sessionId: string) => agentsOf(root, taskId).find((a) => a.sessionId === sessionId)?.role;
-  if ((loop.tester && roleOf(loop.tester.sessionId) !== 'tester') || (loop.fixer && roleOf(loop.fixer.sessionId) !== 'fixer')) return false;
-  const data = store.load(root);
+// Saved only when its sessions are this task's registered agents in those roles; false otherwise.
+export function saveLoop(root: string, taskId: string, loop: StoredLoop): boolean {
+  const data = testingData(root);
+  const fits = (role: AgentRole) => {
+    const sessionId = sessionOf(loop, role);
+    const agent = agentBySession(data.testAgents ?? [], sessionId);
+    return !sessionId || (agent?.taskId === taskId && agent.role === role);
+  };
+  if (!fits('tester') || !fits('fixer')) return false;
   store.save({ ...data, loops: { ...(data.loops ?? {}), [taskId]: loop } });
   return true;
 }
 
 // Takes the testing agents' changes to the tasks' files and returns each task's suite. Writes the store only when something changed.
 export function syncSuites(root: string, tasks: readonly Task[], writes: readonly SuiteWrite[] = []): SuiteViews {
-  const data = store.load(root);
+  const data = testingData(root);
   const records: Record<string, SuiteRecord> = { ...(data.suites ?? {}) };
   let changed = false;
   const views: SuiteViews = {};
@@ -102,8 +116,7 @@ export function syncSuites(root: string, tasks: readonly Task[], writes: readonl
     if (!isTaskId(task.id)) continue;
     const before = records[task.id] ?? null;
     const file = readSuiteFile(root, task.id);
-    const agents = data.agents?.[task.id] ?? [];
-    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), suiteWriters(loopFromAgents(data.loops?.[task.id], agents), agents));
+    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), suiteWriters(data.loops?.[task.id], data.agents?.[task.id] ?? []));
     if (after && JSON.stringify(after) !== JSON.stringify(before)) { records[task.id] = after; changed = true; }
     const outside = after?.outside ? { problem: outsideText(after.outside, locked), outside: after.outside } : {};
     if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem, ...outside, ...(file.at ? { at: file.at } : {}) };

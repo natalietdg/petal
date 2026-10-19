@@ -6,7 +6,7 @@ import { installPetalSkills, petalSkills, updatePetalSkill, type PetalSkillPaths
 import { parseCriteria, CRITERIA_SKELETON } from '../src/shared/test-loop';
 import { forTask } from '../src/shared/task-suite';
 import { noEvents } from '../src/shared/agent-loop';
-import type { SavedLoop } from '../src/shared/testing';
+import type { StoredLoop } from '../src/shared/testing';
 import { removeTempDirs, tempDir } from './helpers';
 
 const BUNDLED = fs.readFileSync(path.join(__dirname, '..', 'resources', 'skills', TESTING_SKILL, 'SKILL.md'), 'utf8');
@@ -93,8 +93,8 @@ describe('draft finished rule', () => {
 });
 
 describe('suite write rights', () => {
-  const loop = (kind: SavedLoop['kind'], tester: string | null): SavedLoop => ({
-    kind, tester: tester ? { tabId: 'tab', sessionId: tester } : null, fixer: kind === 'loop' ? { tabId: 'f', sessionId: 'fixer' } : null,
+  const loop = (kind: StoredLoop['kind'], tester: string | null): StoredLoop => ({
+    kind, testerSessionId: tester, fixerSessionId: kind === 'loop' ? 'fixer' : null,
     startedAt: 1, stoppedAt: null, queue: [], events: noEvents(),
   });
   const agents = [{ sessionId: 'old-tester', role: 'tester' as const }, { sessionId: 'drafter', role: 'tester' as const }, { sessionId: 'fixer', role: 'fixer' as const }];
