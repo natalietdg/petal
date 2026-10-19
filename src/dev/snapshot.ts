@@ -15,6 +15,7 @@ import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
 import { headlineLinksCheck } from './snapshot-headline-links';
+import { copyReplyCheck } from './snapshot-copy-reply';
 import { pastedCheck } from './snapshot-pasted';
 import { bubbleImagesCheck } from './snapshot-bubble-images';
 import { replyImagesCheck } from './snapshot-reply-images';
@@ -440,6 +441,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['divider', () => dividerCheck(kit, win)],
     ['tables', () => tablesCheck(kit, win)],
     ['headline links', () => headlineLinksCheck(kit, win)],
+    ['copy reply', () => copyReplyCheck(kit)], // clipboard stubbed in the page; replaces the reader's reply with its own sample
     ['pasted', () => pastedCheck(kit, win)],
     ['bubble images', () => bubbleImagesCheck(kit, win)],
     ['reply images', withStandInClaude('reply-images', () => replyImagesCheck(kit, win), kit.outDir)], // PNGs in a scratch HOME, or under the snapshot folder when HOME is hers

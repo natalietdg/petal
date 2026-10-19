@@ -5,6 +5,7 @@ import * as tabs from './tabs';
 import * as reply from './history-reply';
 import { el } from './dom';
 import { promptBubble } from './prompt-bubble';
+import { copyReplyBar } from './copy-reply-button';
 import * as slashMenu from './slash-menu';
 import { hooks, type Session } from './history-state';
 import { parsePermissionPrompt, parseQuestionPicker } from '../shared/prompt-answer';
@@ -27,7 +28,8 @@ export function turnCard(turn: Turn, youClass = '', cwd: string | null = null): 
   if (turn.reply) {
     const body = el('div', 'history-reply');
     // Keyed by its opening words, which a streaming reply never rewrites, so redraws keep what she opened.
-    body.append(markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}`, images: { cwd } }));
+    const prose = markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}`, images: { cwd } });
+    body.append(prose, copyReplyBar(turn.reply, () => [prose]));
     card.append(body);
   }
   return card;
