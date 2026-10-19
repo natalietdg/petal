@@ -11,6 +11,7 @@ const ALL_CATS: Readonly<Record<string, Pet>> = { ...CATS, ...Object.fromEntries
 const ALL_PROPS: Readonly<Record<string, Prop>> = { ...PROPS, ...Object.fromEntries(LOCAL_CATS.map(({ id, prop }) => [id, prop])) };
 for (const { css } of LOCAL_CATS) if (css) document.head.append(el('style', null, css));
 const isCatId = (id: string): boolean => Object.hasOwn(ALL_CATS, id);
+export const NO_PET = 'none'; // Pet › No pet: the corner stays empty
 
 // The eye sparkle (W) sits in the pupil at 2/3 size: 2px at 3px per pixel, so it stays crisp.
 const SPARKLE = 2 / 3;
@@ -75,12 +76,15 @@ const root = byId('cat');
 let current: Pet = CATS.mika;
 let busy = false;
 let scene = 'none';
+const petOff = (): boolean => root.dataset.cat === NO_PET;
 
 const updateTip = () => {
+  if (petOff()) return;
   query(root, '.cat-tip').textContent = `${current.name} · ${busy ? 'Claude is working' : 'Claude is resting'}`;
 };
 
 function render() {
+  if (petOff()) return; // her corner is empty: nothing drawn, so nothing animates
   const key = root.dataset.cat ?? '';
   const prop = isCatId(key) ? ALL_PROPS[key] : PROPS.mika;
   const layers = scenes.svg(scene);
@@ -99,27 +103,46 @@ function render() {
 // After Claude finishes she stays sitting up, eyes open, for a while before dozing off.
 const AWAKE_AFTER_WORK_MS = 5 * 60 * 1000;
 let dozeTimer: ReturnType<typeof setTimeout> | undefined;
+const dozeLater = (): void => {
+  clearTimeout(dozeTimer);
+  dozeTimer = setTimeout(() => root.classList.remove('awake'), AWAKE_AFTER_WORK_MS);
+};
 
 export function setBusy(next: boolean): void {
   const wasBusy = busy;
   busy = Boolean(next);
   root.classList.toggle('busy', busy);
+  if (petOff()) return; // no pet, no doze timer
   if (busy) {
     clearTimeout(dozeTimer);
     root.classList.add('awake');
   } else if (wasBusy) {
-    clearTimeout(dozeTimer);
-    dozeTimer = setTimeout(() => root.classList.remove('awake'), AWAKE_AFTER_WORK_MS);
+    dozeLater();
   }
   updateTip();
 }
 
-// Unknown ids (an old settings file, a retired or renamed cat) fall back to Mika.
+// Unknown ids (an old settings file, a retired or renamed cat) fall back to Mika. No pet empties the corner, scene included.
 export function setCat(id: string): void {
+  if (id === NO_PET) {
+    clearTimeout(dozeTimer);
+    root.dataset.cat = NO_PET;
+    root.hidden = true;
+    root.replaceChildren();
+    place();
+    return;
+  }
+  const wasOff = petOff();
   const key = isCatId(id) ? id : 'mika';
   current = ALL_CATS[key];
   root.dataset.cat = key;
+  root.hidden = false;
   render();
+  if (!wasOff) return;
+  // Back from No pet: awake a while, as when Petal opens.
+  root.classList.add('awake');
+  if (!busy) dozeLater();
+  place();
 }
 
 export function setScene(id: string): void {
@@ -167,6 +190,7 @@ function pinTo(slot: DOMRect, dock: number): void {
 }
 
 function place(): void {
+  if (petOff()) { area.classList.remove('cat-docked', 'cat-in-reply'); return; } // no pet: the header keeps no slot for her
   const dock = DOCK_PX[size];
   area.style.setProperty('--cat-dock-size', `${dock}px`); // her slot left of Colour key or in History's row, at least her height (cat.css)
   area.style.setProperty('--cat-dock-scale', String(dock / BOX_PX));
@@ -204,4 +228,4 @@ setCat('mika');
 setBusy(false);
 // Awake when Petal opens too, so the first thing she sees is the big eyes.
 root.classList.add('awake');
-dozeTimer = setTimeout(() => root.classList.remove('awake'), AWAKE_AFTER_WORK_MS);
+dozeLater();

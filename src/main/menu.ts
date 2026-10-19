@@ -8,9 +8,9 @@ import type { Choice, Themes } from '../shared/types';
 
 const themes: Themes = themesJson;
 
-// Art lives in renderer/cat-art.ts; ids here must match its CATS keys. Private local cats follow.
+// Art lives in renderer/cat-art.ts; ids here must match its CATS keys. 'none' hides the pet; private local cats follow.
 export const CAT_CHOICES: readonly Choice[] = [
-  ['mika', 'Mika'], ['miki', 'Miki'], ['kira', 'Kira'], ['hoshi', 'Hoshi'], ['corgi', 'Corgi'],
+  ['none', 'No pet'], ['mika', 'Mika'], ['miki', 'Miki'], ['kira', 'Kira'], ['hoshi', 'Hoshi'], ['corgi', 'Corgi'],
   ...LOCAL_CATS.map(({ id, pet }): Choice => [id, pet.name]),
 ];
 // Ids match SCENES in renderer/scenes.js; 'none' shows the cat alone.
