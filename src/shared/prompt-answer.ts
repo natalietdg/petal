@@ -23,6 +23,8 @@
 //   "────" rule / " Bash command" / details between "╌╌╌" rules / " Do you want to proceed?" /
 //   " ❯ 1. Yes" / "   2. Yes, allow reading from <dir> from this project" (wraps, indented) / "   3. No" /
 //   " Esc to cancel · Tab to amend". Digit k picks option k at once ("1" ran the command, "3" -> "Interrupted").
+// Seen live on 2.1.301, 2026-10-17: a bold "Tip: auto mode handles these prompts ..." row under the title, a 4th
+//   option ("Yes, and switch to auto mode · ..."), and on a short terminal the rule and title scroll off the top.
 // Claude Code's own menus, measured on 2.1.301 (haiku, real pty, 100x40), 2026-10-16. Esc closes each one.
 //   While one is open the session file says status "waiting", as for permission prompts.
 // /model: border row ("────", or "▔▔▔" when her usage notice sits on it) / " Select model" / two wrapped lines of
@@ -81,6 +83,8 @@ const OPTION = /^ ?(❯ | {2})(\d)\. (\S.*?)\s*$/;
 const CONTINUATION = /^ {6,}(\S.*?)\s*$/;
 const PERMISSION_FOOTER = /^ ?Esc to cancel\b/;
 const MAX_DETAIL_LINES = 6;
+const TIP = /^ ?Tip: /; // 2.1.301's auto-mode hint between the title and the details
+const CUT_TITLE = 'Permission'; // stands in for the title row when it has scrolled off
 
 // The permission prompt at the bottom of the visible screen, or null unless every part matches exactly.
 export function parsePermissionPrompt(lines: readonly string[]): PermissionPrompt | null {
@@ -115,11 +119,14 @@ export function parsePermissionPrompt(lines: readonly string[]): PermissionPromp
 
   let ruleAt = at - 1;
   while (ruleAt >= 0 && !RULE.test(lines[ruleAt] ?? '')) ruleAt -= 1;
-  if (ruleAt < 0) return null;
-  const request = lines.slice(ruleAt + 1, at).filter((line) => line.trim() && !DASHED_RULE.test(line)).map((line) => line.trim());
-  const [title, ...details] = request;
+  // No rule: only a prompt cut by the top of the screen (row 0 filled), its rule and title scrolled off (2.1.301).
+  const scrolledOff = ruleAt < 0;
+  if (scrolledOff && !lines[0]?.trim()) return null;
+  const request = lines.slice(ruleAt + 1, at).filter((line) => line.trim() && !DASHED_RULE.test(line));
+  const [title, ...details] = scrolledOff ? [CUT_TITLE, ...request] : request;
   if (!title) return null;
-  return { title, details: details.slice(0, MAX_DETAIL_LINES), question, options };
+  const shown = details.filter((line) => !TIP.test(line)).map((line) => line.trim());
+  return { title: title.trim(), details: shown.slice(0, MAX_DETAIL_LINES), question, options };
 }
 
 export interface PickerTab {

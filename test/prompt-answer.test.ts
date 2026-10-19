@@ -1,8 +1,8 @@
-// Screens captured from real Claude Code 2.1.291 and 2.1.293 (paths renamed): the permission and question-picker parsers.
+// Screens captured from real Claude Code 2.1.291, 2.1.293 and 2.1.301 (paths renamed): the permission and question-picker parsers.
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parsePermissionPrompt, parseQuestionPicker } from '../src/shared/prompt-answer';
+import { parsePermissionPrompt, parseQuestionPicker, screenIsAsking } from '../src/shared/prompt-answer';
 
 const screen = (name: string): string[] => fs.readFileSync(path.join(__dirname, 'fixtures', 'screens', `${name}.txt`), 'utf8').split('\n');
 
@@ -41,12 +41,79 @@ describe('parsePermissionPrompt', () => {
     expect(parsePermissionPrompt(lines.map((line) => line.replace('   3. No', ' ❯ 3. No')))).toBeNull();
     expect(parsePermissionPrompt(lines.map((line) => line.replace('   3. No', '   4. No')))).toBeNull();
     expect(parsePermissionPrompt(lines.map((line) => line.replace('Do you want to proceed?', 'Proceed now')))).toBeNull();
+    // No rule and a blank top row: not a prompt cut off by the screen's edge.
     expect(parsePermissionPrompt(lines.filter((line) => !/^─+$/.test(line.trim())))).toBeNull();
   });
 
   it('finds nothing on an empty or blank screen', () => {
     expect(parsePermissionPrompt([])).toBeNull();
     expect(parsePermissionPrompt(['', '   ', ''])).toBeNull();
+  });
+});
+
+describe('parsePermissionPrompt on live 2.1.301 screens', () => {
+  const YES_NO_AUTO = ['Yes', 'Yes, and switch to auto mode · auto mode handles these prompts for you', 'No'];
+
+  it('reads the rule-topped prompt: title, details without the Tip row, four options', () => {
+    const parsed = parsePermissionPrompt(screen('p301-permission-rule'));
+    expect(parsed).toMatchObject({ title: 'Bash command', details: ['Create a marker file', 'touch walk-permission.txt'], question: 'Do you want to proceed?' });
+    expect(parsed?.options.map((o) => o.number)).toEqual([1, 2, 3, 4]);
+    expect(parsed?.options[1]?.label).toMatch(/^Yes, and always allow access to \/private\/tmp\/.+walk-shop from this project$/);
+    expect([0, 2, 3].map((i) => parsed?.options[i]?.label)).toEqual(YES_NO_AUTO);
+  });
+
+  it('reads the prompt when the rule and title have scrolled off the top', () => {
+    const parsed = parsePermissionPrompt(screen('p301-permission-scrolled'));
+    expect(parsed).toMatchObject({ title: 'Permission', details: ['Create a marker file', 'touch walk-permission.txt'], question: 'Do you want to proceed?' });
+    expect(parsed?.options.map((o) => o.number)).toEqual([1, 2, 3, 4]);
+    expect(parsed?.options[1]?.label).toMatch(/^Yes, and always allow access to \/private\/tmp\/.+home-dev from this project$/);
+  });
+
+  it('reads a scrolled-off prompt with a blank row above the question', () => {
+    const parsed = parsePermissionPrompt(screen('p301-permission-scrolled-gap'));
+    expect(parsed?.details).toEqual(['Run the unit tests', 'npx vitest run', 'This command requires approval']);
+    expect(parsed?.options.map((o) => o.label)).toEqual(['Yes', 'Yes, and don’t ask again for: npx vitest *', ...YES_NO_AUTO.slice(1)]);
+  });
+
+  it('still refuses ambiguous options once the rule has scrolled off', () => {
+    const lines = screen('p301-permission-scrolled');
+    expect(parsePermissionPrompt(lines.map((line) => line.replace('❯', ' ')))).toBeNull();
+    expect(parsePermissionPrompt(lines.map((line) => line.replace('   4. No', ' ❯ 4. No')))).toBeNull();
+    expect(parsePermissionPrompt(lines.map((line) => line.replace('   4. No', '   5. No')))).toBeNull();
+    expect(parsePermissionPrompt(lines.map((line) => line.replace('   3. Yes', '   3 Yes')))).toBeNull();
+    expect(parsePermissionPrompt(['', ...lines])).toBeNull();
+    expect(parsePermissionPrompt([...lines, '% '])).toBeNull();
+  });
+
+  it.each(['p301-question-cut', 'q295-all-visible', 'builtin-model-team', 'builtin-model-api'])('finds no permission prompt on %s, but the screen is asking', (name) => {
+    expect(parsePermissionPrompt(screen(name))).toBeNull();
+    expect(screenIsAsking(screen(name))).toBe(true);
+  });
+
+  // An idle 2.1.301 screen: Claude's reply holds a numbered list and the question text, the input box sits below.
+  const IDLE_WITH_NUMBERS = [
+    ' Do you want to proceed?',
+    ' ❯ 1. Yes',
+    '   2. No',
+    '',
+    '⏺ Those are the two choices the prompt offered. Pick one of:',
+    '  1. Run the tests',
+    '  2. Skip them',
+    '',
+    '────────────────────────────────────────────────────────────────────────────────────────────────────',
+    '❯ ',
+    '────────────────────────────────────────────────────────────────────────────────────────────────────',
+    '  ? for shortcuts',
+  ];
+
+  it('finds nothing on an idle screen whose reply quotes numbered options', () => {
+    expect(parsePermissionPrompt(IDLE_WITH_NUMBERS)).toBeNull();
+    expect(parsePermissionPrompt(IDLE_WITH_NUMBERS.slice(0, 3))).toBeNull();
+    expect(screenIsAsking(IDLE_WITH_NUMBERS)).toBe(false);
+  });
+
+  it.each(['p301-permission-rule', 'p301-permission-scrolled', 'p301-permission-scrolled-gap', 'permission-bash', 'permission-read-wrapped', 'trust-folder'])('screenIsAsking says asking on %s', (name) => {
+    expect(screenIsAsking(screen(name))).toBe(true);
   });
 });
 
