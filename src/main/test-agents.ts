@@ -51,6 +51,7 @@ const EVENT_TEXT = 80;
 export interface AgentDeps {
   sessions: TabSessions;
   openTab: OpenTab;
+  agentOpening: (contentsId: number, tabId: string) => boolean; // opened, its shell not started yet
   notify: (notice: LoopNotice, contentsId: number | null) => void;
 }
 
@@ -389,7 +390,8 @@ function checkHosts(): void {
   for (const sessionId of readySince.keys()) if (!following.has(sessionId)) readySince.delete(sessionId);
   for (const [sessionId, host] of hosts) {
     const tab = deps?.sessions.get(`${host.contentsId}:${host.tabId}`);
-    if (!tab) { if (host.followed || now - host.openedAt > HOST_OPEN_MS) hosts.delete(sessionId); continue; }
+    const opening = deps?.agentOpening(host.contentsId, host.tabId) ?? false;
+    if (!tab) { if (!opening || now - host.openedAt > HOST_OPEN_MS) hosts.delete(sessionId); continue; } // closed, or never started
     if (tab.feed.session?.sessionId === sessionId) { host.followed = true; resumeTries.delete(sessionId); continue; }
     if (!host.followed && now - host.openedAt < STARTING_MS) continue;
     hosts.delete(sessionId);

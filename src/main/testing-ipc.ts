@@ -542,16 +542,16 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   return { started: id, typed };
 }
 
-export interface TestingDeps { sessions: TabSessions; openTab: OpenTab }
+export interface TestingDeps { sessions: TabSessions; openTab: OpenTab; agentOpening: (contentsId: number, tabId: string) => boolean }
 let deps: TestingDeps | null = null;
 
 const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): TabSession | undefined =>
   [...sessions.values()].find((s) => s.contentsId === contentsId && s.tabId === tabId);
 
-export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
-  deps = { sessions, openTab };
+export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingDeps): void {
+  deps = { sessions, openTab, agentOpening };
   startLockTimer(sessions);
-  startTestAgents({ sessions, openTab, notify: showNotice });
+  startTestAgents({ sessions, openTab, agentOpening, notify: showNotice });
   // The project and one of its tasks, for the calls that act on a task's suite.
   const taskTarget = async (contentsId: number, tabId: unknown, picked: unknown, taskId: unknown): Promise<{ root: string; task: Task; tasks: Task[] } | { note: string }> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };

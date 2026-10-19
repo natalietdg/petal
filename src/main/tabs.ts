@@ -56,6 +56,9 @@ export const openTab: OpenTab = (contents, { command, background = false, agent 
   return tabId;
 };
 
+// An agent terminal main opened whose shell hasn't started yet.
+export const agentOpening = (contentsId: number, tabId: TabId): boolean => pendingAgents.has(tabKey(contentsId, tabId));
+
 // A reload drops the renderer's terminals, so its agent terminals close too; their agents resume later by session id.
 const reloadWatched = new WeakSet<WebContents>();
 function closeAgentsOnReload(sender: WebContents): void {
