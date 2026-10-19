@@ -21,6 +21,7 @@ import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
+import { load as loadConfig } from './config-store';
 import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, settleOutsideChange, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
 import { setAgentTitle } from './agent-titles';
 import { draftWithSkill } from './testing-skill';
@@ -745,7 +746,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // A loop notification: only while no Petal window is focused. Snapshot runs record it, never show it.
   handle('testing:notify', (event, { title, body, tabId }) => {
-    if (typeof title !== 'string' || typeof body !== 'string' || !title.trim()) return { shown: false };
+    if (typeof title !== 'string' || typeof body !== 'string' || !title.trim() || !loadConfig().testing.notify) return { shown: false };
     const tab = typeof tabId === 'string' ? tabId : null;
     const focused = BrowserWindow.getFocusedWindow() !== null;
     if (isSnapshotRun()) { testingFixture.notices.push({ title, body, tabId: tab, focused }); return { shown: false }; }

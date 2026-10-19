@@ -20,6 +20,7 @@ import { rememberAgent } from '../main/task-suites';
 import { LOG_TAIL_BYTES, trimmedNote } from '../main/testing-runner';
 import { noEvents } from '../shared/agent-loop';
 import * as store from '../main/testing-store';
+import * as configStore from '../main/config-store';
 import type { SavedLoop } from '../shared/testing';
 
 const OTHER_TASK = 't-checkout';
@@ -157,7 +158,21 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     const trimmed = await waitFor(() => store.load(project).runs.find((r) => r.id === beside.started && r.state !== 'running') ?? null, 8000);
     const unit = trimmed?.stages[0];
     check(unit?.status === 'failed' && unit.output.startsWith(trimmedNote()) && unit.output.length < 6000, `a huge log is read from its last 2 MB: ${JSON.stringify(unit && { status: unit.status, head: unit.output.slice(0, 60), length: unit.output.length })}`);
+
+    // The Notifications switch in Customize › Sessions: on by default; off, testing:notify records nothing.
+    await js("PastelTerm.customize.open('sessions')");
+    const toggle = await waitFor(() => js("(() => { const b = document.querySelector('#customize-body .cz-testing-notify'); return b ? { checked: b.checked, label: b.closest('label')?.textContent ?? '' } : null; })()"), 5000) as { checked: boolean; label: string } | null;
+    check(toggle?.checked === true && toggle.label.includes('Notify me when a testing agent needs me, a fix lands or a loop finishes') && configStore.load().testing.notify, `the notifications switch shows, on by default: ${JSON.stringify(toggle)}`);
+    await js("document.querySelector('#customize-body .cz-testing-notify').click()");
+    const off = await waitFor(() => (configStore.load().testing.notify ? null : true), 4000);
+    testingFixture.notices.length = 0;
+    await js("window.pastel.testing.notify({ title: 'Test loop finished', body: '1 verified · 0 still open', tabId: null })");
+    check(off && testingFixture.notices.length === 0, `switched off, no notification is recorded: ${JSON.stringify(testingFixture.notices)}`);
+    configStore.save({ testing: { notify: true } });
+    await js("window.pastel.testing.notify({ title: 'Test loop finished', body: '1 verified · 0 still open', tabId: null })");
+    check(testingFixture.notices.length === 1, `switched back on, it is recorded again: ${testingFixture.notices.length}`);
   } finally {
+    configStore.save({ testing: { notify: true } });
     other?.destroy();
     testingFixture.project = null;
     testingFixture.claudeDir = null;
