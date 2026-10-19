@@ -134,7 +134,8 @@ function drawChange(): void {
   const id = taskId();
   if (!data?.project || !id || draft) { changeBox.hidden = true; return; }
   const own = data.suites[id];
-  const line = own ? suiteChangeLine(own.change, own.problem, () => void undoChange()) : null;
+  const outside = own?.outside ? { by: own.outside, locked: data.lock.enabled, use: () => void settleOutside(true), keepOld: () => void settleOutside(false) } : null;
+  const line = own ? suiteChangeLine(own.change, own.problem, () => void undoChange(), outside) : null;
   if (line) changeBox.append(line);
   const restored = data.lock.restored.filter((f) => f.taskId === id);
   changeBox.append(lockBar(data.lock, restored, agentName(data.agentNames, 'fixer'), { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }, false));
@@ -654,6 +655,8 @@ const resolveLock = (path: string, keep: boolean): Promise<boolean> =>
   suiteCall((request) => window.pastel.testing.resolveLock({ ...request, path, keep }), keep ? 'Kept your change. It is the locked copy now.' : 'Put the locked copy back.');
 
 const seedSuite = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.seedSuite(request), 'Suite started from the project’s commands. Each one still asks before its first run.');
+const settleOutside = (use: boolean): Promise<boolean> =>
+  suiteCall((request) => window.pastel.testing.settleOutside({ ...request, use }), use ? 'Using this file. Undo puts the old suite back.' : 'Kept the old suite.');
 const undoChange = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.undoSuite(request), 'Change undone.');
 
 async function load(): Promise<void> {

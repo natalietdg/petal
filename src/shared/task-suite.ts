@@ -63,24 +63,33 @@ export const sameSuite = (a: TaskSuite | null, b: TaskSuite | null): boolean => 
 export interface SuiteChange {
   at: number;
   previous: TaskSuite | null; // what Undo puts back
+  by?: 'you'; // she took a file changed outside the testing agent; else the agent changed it
 }
+
+// Who changed the file when it wasn't the testing agent: no session seen (her editor, say), or another Claude session.
+export type OutsideBy = 'nobody' | 'session';
 
 export interface SuiteRecord {
   text: string | null; // the file as last taken; null when there was none
   good: TaskSuite | null; // the suite in use
   change: SuiteChange | null;
   problem: string | null; // why the file as it is now was not taken
+  outside?: OutsideBy; // set with OUTSIDE_AGENT: she may still take the file
 }
 
 export interface SuiteFileNow { text: string | null; at: number }
 
 export const OUTSIDE_AGENT = 'Changed outside the testing agent, not applied.';
+export const OUTSIDE_CHANGE = 'Changed outside the testing agent.'; // her own edit with the lock off: hers to take or not
+
+// The line for a file changed outside the testing agent. With the lock off, a change no session made is hers to decide.
+export const outsideText = (by: OutsideBy, locked: boolean): string => (by === 'nobody' && !locked ? OUTSIDE_CHANGE : OUTSIDE_AGENT);
 
 // Only the task's testing agent changes its suite. Writer: the session whose log last wrote the file, if any; agents: the
 // session ids Petal launched as this task's testing agent. Anything else keeps the suite in use and says why; a rejected
 // file is checked again on every read, so the agent's log catching up still counts.
 export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow, writer: string | null, agents: readonly string[]): SuiteRecord | null {
-  if (record ? record.text === file.text : file.text === null) return record?.problem ? { ...record, problem: null } : record;
+  if (record ? record.text === file.text : file.text === null) return record?.problem ? { text: record.text, good: record.good, change: record.change, problem: null } : record;
   // First sight of a file nobody was seen writing, on a task with no testing agent: taken as it is. With an agent, its log may
   // not be read yet, so the file waits like any unattributed change and is taken with Undo once the log shows the write.
   if (!record && !writer && !agents.length && file.text !== null) {
@@ -88,7 +97,7 @@ export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow, wr
     return 'suite' in parsed ? { text: file.text, good: parsed.suite, change: null, problem: null } : { text: null, good: null, change: null, problem: `This suite’s file can’t be used: ${parsed.problem}.` };
   }
   const base: SuiteRecord = { text: record?.text ?? null, good: record?.good ?? null, change: record?.change ?? null, problem: null };
-  if (!writer || !agents.includes(writer)) return { ...base, problem: OUTSIDE_AGENT };
+  if (!writer || !agents.includes(writer)) return { ...base, problem: OUTSIDE_AGENT, outside: writer ? 'session' : 'nobody' };
   let next: TaskSuite | null = null;
   if (file.text !== null) {
     const parsed = parseSuiteText(file.text);
@@ -101,7 +110,20 @@ export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow, wr
 // After Petal writes the file itself (her edit, a seed, an Undo).
 export const writtenRecord = (suite: TaskSuite | null): SuiteRecord => ({ text: suite ? suiteText(suite) : null, good: suite, change: null, problem: null });
 
-export interface TaskSuiteView { suite: TaskSuite | null; change: SuiteChange | null; problem: string | null; at?: number } // at: the file's last change
+// Her "Use this file" on a change made outside the testing agent: taken as it is, with Undo. Short-circuits waiting
+// for an agent's log. A problem string when the file can't be used.
+export function useOutsideFile(record: SuiteRecord | null, file: SuiteFileNow, now: number): SuiteRecord | string {
+  let next: TaskSuite | null = null;
+  if (file.text !== null) {
+    const parsed = parseSuiteText(file.text);
+    if ('problem' in parsed) return `This file can’t be used: ${parsed.problem}.`;
+    next = parsed.suite;
+  }
+  const previous = record?.good ?? null;
+  return { text: file.text, good: next, change: sameSuite(previous, next) ? record?.change ?? null : { at: now, previous, by: 'you' }, problem: null };
+}
+
+export interface TaskSuiteView { suite: TaskSuite | null; change: SuiteChange | null; problem: string | null; outside?: OutsideBy; at?: number } // at: the file's last change
 export type SuiteViews = Record<string, TaskSuiteView>;
 
 // The suite to send for editing: every stage good, or nothing. No stages removes the suite.

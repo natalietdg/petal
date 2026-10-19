@@ -4,7 +4,7 @@ import { when } from './testing-view';
 import { groupsByActivity, taskActivity } from '../shared/task-activity';
 import { groupTasks } from '../shared/task-groups';
 import { parseTarget, targetValue, type OverviewRow, type PickAgent, type PickSession, type TestTarget } from '../shared/task-testing';
-import type { SuiteChange } from '../shared/task-suite';
+import type { OutsideBy, SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
 import type { LockView, TestingState } from '../shared/testing';
 import { restoredText, type RestoredFlag } from '../shared/test-lock';
@@ -129,26 +129,38 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
   return box;
 }
 
-// "Testing agent updated this suite · 3 min ago · Undo", or why the file's last change was not taken.
-export function suiteChangeLine(change: SuiteChange | null, problem: string | null, undo: () => void): HTMLElement | null {
+export interface OutsideChoice { by: OutsideBy; locked: boolean; use: () => void; keepOld: () => void }
+
+const linkButton = (cls: string, text: string, title: string, onClick: () => void): HTMLButtonElement => {
+  const button = el('button', `tst-link ${cls}`, text);
+  button.type = 'button';
+  button.title = title;
+  button.addEventListener('click', onClick);
+  return button;
+};
+
+// "Testing agent updated this suite · 3 min ago · Undo", or why the file's last change was not taken. A file changed
+// outside the testing agent offers her "Use this file"; with the lock off and no session seen, "Keep the old suite" too.
+export function suiteChangeLine(change: SuiteChange | null, problem: string | null, undo: () => void, outside: OutsideChoice | null = null): HTMLElement | null {
   if (!change && !problem) return null;
   const line = el('p', 'tst-suite-change');
   line.setAttribute('role', 'status');
   if (change) {
-    const undoButton = el('button', 'tst-link tst-undo-suite', 'Undo');
-    undoButton.type = 'button';
-    undoButton.title = change.previous ? 'Put back the stages from before this change' : 'Remove the suite again';
-    undoButton.addEventListener('click', undo);
-    line.append(el('span', null, `Testing agent updated this suite · ${when(change.at)} · `), undoButton);
+    const undoButton = linkButton('tst-undo-suite', 'Undo', change.previous ? 'Put back the stages from before this change' : 'Remove the suite again', undo);
+    line.append(el('span', null, `${change.by === 'you' ? 'You took this file' : 'Testing agent updated this suite'} · ${when(change.at)} · `), undoButton);
   }
   if (problem) line.append(el('span', 'tst-suite-problem', `${change ? ' ' : ''}${problem}`));
+  if (problem && outside) {
+    line.append(' ', linkButton('tst-use-file', 'Use this file', 'Take the file as it is now. Undo puts the old suite back.', outside.use));
+    if (outside.by === 'nobody' && !outside.locked) line.append(el('span', null, ' · '), linkButton('tst-keep-suite', 'Keep the old suite', 'Write the suite in use back over the file', outside.keepOld));
+  }
   return line;
 }
 
 export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => void; resolve?: ResolveUnconfirmed }
 
-// "Lock tests to the testing agent", a Keep or Restore question for each locked test changed outside Claude, and a
-// red line for each one another session changed and Petal put back.
+// "Lock tests to the testing agent", a Keep or Restore question for each locked test changed outside Claude, a red
+// line for each one another session changed and Petal put back, and each edit of the main session's the lock refused.
 export function lockBar(lock: LockView, restored: RestoredFlag[], fixerName: string, handlers: LockHandlers, busy: boolean): HTMLElement {
   const box = el('div', 'tst-lock');
   const label = el('label', 'tst-toggle tst-lock-toggle');
@@ -167,11 +179,15 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], fixerName: str
     box.append(list);
   }
   const done = restored.filter((f) => f.by !== 'unconfirmed');
-  if (done.length) {
+  if (done.length || lock.refusals.length) {
     const list = el('ul', 'tst-lock-flags');
-    for (const flag of done.slice(-5).reverse()) {
+    const lines = [
+      ...done.slice(-5).map((flag) => ({ at: flag.at, text: `${restoredText(flag, fixerName)} · ${flag.path} · ${when(flag.at)}` })),
+      ...lock.refusals.map((refusal) => ({ at: refusal.at, text: `${refusal.text} · ${when(refusal.at)}` })),
+    ].sort((a, b) => b.at - a.at);
+    for (const line of lines) {
       const item = el('li', 'tst-lock-flag');
-      item.append(el('span', null, `${restoredText(flag, fixerName)} · ${flag.path} · ${when(flag.at)}`));
+      item.append(el('span', null, line.text));
       list.append(item);
     }
     const dismiss = el('button', 'tst-link tst-lock-dismiss', 'Dismiss');

@@ -167,6 +167,7 @@ const api = {
     saveSuite: (request: InvokeArgs<'testing:save-suite'>[0]) => invoke('testing:save-suite', request),
     seedSuite: (request: InvokeArgs<'testing:seed-suite'>[0]) => invoke('testing:seed-suite', request),
     undoSuite: (request: InvokeArgs<'testing:undo-suite'>[0]) => invoke('testing:undo-suite', request),
+    settleOutside: (request: InvokeArgs<'testing:suite-outside'>[0]) => invoke('testing:suite-outside', request),
     setLock: (request: InvokeArgs<'testing:lock'>[0]) => invoke('testing:lock', request),
     dismissRestored: (request: InvokeArgs<'testing:lock-dismiss'>[0]) => invoke('testing:lock-dismiss', request),
     resolveLock: (request: InvokeArgs<'testing:lock-resolve'>[0]) => invoke('testing:lock-resolve', request),
