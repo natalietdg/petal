@@ -73,6 +73,7 @@ export function createAgents(ctx: AgentContext) {
   const notes: Partial<Record<AgentRole, string>> = {};
   let closeAsking = false;
   let closing = false;
+  const closedLoops = new Set<string>(); // root, task and start of a loop once Close agents finished; its tabs close a moment later
 
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
@@ -473,7 +474,7 @@ export function createAgents(ctx: AgentContext) {
   function closeModel(status: LoopStatus, lanes: readonly LaneModel[]): AgentsModel['close'] {
     const r = shownLoop();
     const agents = r ? [r.tester, r.fixer].filter((a): a is LoopAgent => a !== null) : [];
-    if (!r || !agents.some((a) => ownTab(a))) return null;
+    if (!r || closedLoops.has(`${keyOf(r.root, r.taskId)}:${r.startedAt}`) || !agents.some((a) => ownTab(a))) return null;
     const over = Boolean(r.stoppedAt) || status === 'done' || status === 'stopped';
     if (!over && lanes.some((l) => l.busy)) return null;
     return { count: agents.length, asking: closeAsking, closing };
@@ -499,6 +500,7 @@ export function createAgents(ctx: AgentContext) {
     for (const role of ROLES) if (agentOf(r, role)) note(r, role, 'Closed');
     persist(r);
     const stuck = reply.closed.find((c) => c.outcome === 'running');
+    if (!stuck) closedLoops.add(`${keyOf(r.root, r.taskId)}:${r.startedAt}`); // the button goes now, not on the next poll
     ctx.say(stuck ? `An agent is still running: ${stuck.note}. Its tab stays open.` : 'Closed the agents and their tabs.');
     ctx.redraw();
   }
