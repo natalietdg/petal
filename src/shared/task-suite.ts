@@ -81,7 +81,9 @@ export const OUTSIDE_AGENT = 'Changed outside the testing agent, not applied.';
 // file is checked again on every read, so the agent's log catching up still counts.
 export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow, writer: string | null, agents: readonly string[]): SuiteRecord | null {
   if (record ? record.text === file.text : file.text === null) return record?.problem ? { ...record, problem: null } : record;
-  if (!record && !writer && file.text !== null) { // first sight of a file nobody was seen writing: taken as it is
+  // First sight of a file nobody was seen writing, on a task with no testing agent: taken as it is. With an agent, its log may
+  // not be read yet, so the file waits like any unattributed change and is taken with Undo once the log shows the write.
+  if (!record && !writer && !agents.length && file.text !== null) {
     const parsed = parseSuiteText(file.text);
     return 'suite' in parsed ? { text: file.text, good: parsed.suite, change: null, problem: null } : { text: null, good: null, change: null, problem: `This suite’s file can’t be used: ${parsed.problem}.` };
   }

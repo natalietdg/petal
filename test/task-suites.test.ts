@@ -95,6 +95,13 @@ describe('taking a change to the file', () => {
     expect(takeSuiteFile(null, { text: suiteText(suite('Unit')), at: 5 }, null, [])).toEqual({ text: suiteText(suite('Unit')), good: suite('Unit'), change: null, problem: null });
     expect(takeSuiteFile(null, { text: null, at: 0 }, null, [])).toBeNull();
   });
+
+  it('a first file on a task with a testing agent waits for its log, then is taken with Undo', () => {
+    const file = { text: suiteText(suite('Docs')), at: 5 };
+    const waiting = takeSuiteFile(null, file, null, agents);
+    expect(waiting).toEqual({ text: null, good: null, change: null, problem: OUTSIDE_AGENT });
+    expect(takeSuiteFile(waiting, file, 'agent-1', agents)).toEqual({ text: file.text, good: suite('Docs'), change: { at: 5, previous: null }, problem: null });
+  });
 });
 
 describe('suites on disk', () => {
