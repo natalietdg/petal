@@ -166,7 +166,21 @@ export function popOut(id: TabId): void {
   activate(id);
 }
 
-// Called with every agent tab's id whenever one appears, goes, or pops out. Returns the unsubscribe.
+// Back from the tab bar to Testing's lane: off the strip, unshown until the lane mounts it. False when it is the only tab.
+export function popIn(id: TabId): boolean {
+  const tab = tabs.get(id);
+  const order = ids();
+  if (!tab || agents.has(id) || !order.includes(id) || order.length < 2) return false;
+  const neighbour = neighbourOf(order, id);
+  tab.element.remove();
+  agents.add(id);
+  tab.host.hidden = true;
+  agentTabsChanged();
+  if (id === activeId && neighbour) activate(neighbour);
+  return true;
+}
+
+// Called with every agent tab's id whenever one appears, goes, pops out or pops back in. Returns the unsubscribe.
 export function onAgentTabsChanged(callback: (ids: TabId[]) => void): () => void {
   agentListeners.add(callback);
   return () => { agentListeners.delete(callback); };

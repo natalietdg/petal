@@ -101,6 +101,17 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     check(mounted && await js("Boolean(document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-term .term-host'))"), `Terminal mounts its live terminal in the lane: ${JSON.stringify(mounted)}`);
     await capture('testing-journey-terminal');
 
+    // 1b Pop out puts its terminal in the tab bar; Back to lane returns it, off the tab bar, an agent terminal again in main.
+    await js("document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-popout')?.click()");
+    const popped = await waitLane('tester', (l) => l.terminal === 'tab-bar', 4000);
+    check(popped && (await stripCount()) === stripBefore + 1 && !agentTerminals().includes(firstHost ?? ''), `Pop out moves its terminal to the tab bar: ${JSON.stringify({ lane: popped?.terminal, strip: await stripCount() })}`);
+    await openOnTask();
+    await waitFor(() => safeJs<boolean>("Boolean(document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-popin')) || null"), 4000);
+    await js("document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-popin')?.click()");
+    const returned = await waitLane('tester', (l) => l.terminal === 'here' && l.mounted === firstHost, 4000);
+    const counted = await waitFor(() => (agentTerminals().includes(firstHost ?? '') ? true : null), 4000);
+    check(returned && counted && (await stripCount()) === stripBefore && await js("Boolean(document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-term .term-host'))"), `Back to lane returns it to the lane, off the tab bar: ${JSON.stringify({ lane: returned?.terminal, mounted: returned?.mounted, strip: await stripCount(), agent: counted })}`);
+
     // 2 Its terminal closes: the agent reads ended, the lane keeps its conversation, and the box stays on.
     await js(`PastelTerm.tabs.requestClose(${JSON.stringify(firstHost)})`);
     const ended = await waitLane('tester', (l) => l.state === 'ended' && !agentTerminals().includes(firstHost ?? ''));

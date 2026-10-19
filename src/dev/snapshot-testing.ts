@@ -68,7 +68,7 @@ export function hostOf(contentsId: number, root: string, sessionId: string | nul
   return agent ? agentView(root, agent, contentsId).hostTabId : null;
 }
 
-// Every agent terminal Testing opened, in any window (popped-out ones included).
+// Every agent terminal Testing opened, in any window; a popped-out one counts as a tab until it is back in its lane.
 export const agentTerminals = (): string[] => [...sessions.values()].filter((s) => s.agent).map((s) => s.tabId);
 
 // Closes every tab-bar tab not in startTabs and every agent terminal; true once only startTabs remain.

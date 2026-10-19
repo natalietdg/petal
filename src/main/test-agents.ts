@@ -183,10 +183,13 @@ export async function sendToAgent(root: string, agent: TestAgent, text: string, 
   return { outcome: (await pump(agent.sessionId)) ? 'sent' : 'queued' };
 }
 
-// Open terminal: an ended agent resumes with no message.
+// Open terminal: an ended agent resumes with no message. Back to lane: its tab here counts as an agent terminal again.
 export async function openAgentTerminal(root: string, agent: TestAgent, preferred: number): Promise<string | null> {
   if (agent.closedAt !== null) return 'That agent was closed. Start a new one.';
-  return terminalFor(agent.sessionId) ? null : resume(root, agent, preferred);
+  const terminal = terminalFor(agent.sessionId);
+  if (!terminal) return resume(root, agent, preferred);
+  if (terminal.contentsId === preferred) terminal.tab.agent = true;
+  return null;
 }
 
 function enqueue(message: Outgoing, sessionId: string): void {

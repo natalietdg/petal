@@ -478,6 +478,22 @@ export function createAgents(ctx: AgentContext) {
     ctx.redraw();
   }
 
+  // Back to lane: the popped-out terminal leaves the tab bar and shows in its lane; main counts it as an agent terminal again.
+  function popIn(role: AgentRole): void {
+    const r = record();
+    const agent = r ? agentOf(r, role) : null;
+    if (!r || !agent?.hostTabId) return;
+    if (!agentTerms.popIn(agent.hostTabId)) {
+      notes[role] = `${nameOf(role)}’s terminal is your only tab, so it stays in the tab bar.`;
+      draw();
+      return;
+    }
+    delete notes[role];
+    termWanted.add(agent.sessionId);
+    void window.pastel.testing.agentOpen({ root: r.root, sessionId: agent.sessionId });
+    draw();
+  }
+
   function showTab(role: AgentRole): void {
     const r = record();
     const id = r ? agentOf(r, role)?.hostTabId : null;
@@ -555,6 +571,7 @@ export function createAgents(ctx: AgentContext) {
       toggleTerminal,
       showTerminal,
       popOut,
+      popIn,
       showTab,
       toggleLog: (role) => { if (!logOpen.delete(role)) logOpen.add(role); draw(); },
       showOlder: (role) => { logShown[role] = (logShown[role] ?? 20) + 20; draw(); },

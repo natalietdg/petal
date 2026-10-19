@@ -63,6 +63,7 @@ export interface AgentsHandlers {
   toggleTerminal: (role: AgentRole) => void; // show or hide its terminal in the lane, resumed first if none runs it
   showTerminal: (role: AgentRole) => void;
   popOut: (role: AgentRole) => void; // its terminal to the tab bar
+  popIn: (role: AgentRole) => void; // its popped-out terminal back to the lane
   showTab: (role: AgentRole) => void; // its popped-out tab
   toggleLog: (role: AgentRole) => void;
   showOlder: (role: AgentRole) => void;
@@ -206,7 +207,7 @@ function scenarioReview(lane: LaneModel, scenarios: CriteriaItem[], on: AgentsHa
   return box;
 }
 
-// Terminal shows or hides its live terminal in the lane; Pop out moves it to the tab bar; a popped-out one is shown there.
+// Terminal shows or hides its live terminal in the lane; Pop out moves it to the tab bar; Back to lane returns it.
 function terminalButtons(lane: LaneModel, on: AgentsHandlers): HTMLElement[] {
   const link = (cls: string, text: string, onClick: () => void): HTMLButtonElement => {
     const b = el('button', `tst-link ${cls}`, text);
@@ -214,7 +215,7 @@ function terminalButtons(lane: LaneModel, on: AgentsHandlers): HTMLElement[] {
     b.addEventListener('click', onClick);
     return b;
   };
-  if (lane.terminal === 'tab-bar') return [link('tst-agent-tab', 'Show its tab', () => on.showTab(lane.role))];
+  if (lane.terminal === 'tab-bar') return [link('tst-agent-tab', 'Show its tab', () => on.showTab(lane.role)), link('tst-agent-popin', 'Back to lane', () => on.popIn(lane.role))];
   if (lane.terminal !== 'here' && lane.terminal !== 'resume') return [];
   const toggle = link('tst-agent-terminal', lane.termOpen ? 'Hide terminal' : 'Terminal', () => on.toggleTerminal(lane.role));
   toggle.setAttribute('aria-pressed', String(lane.termOpen));

@@ -733,7 +733,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     return sendToAgent(found.root, found.agent, text.trim(), words, event.sender.id);
   });
 
-  // Open terminal: an ended agent resumes into this window with no message.
+  // Open terminal: an ended agent resumes into this window with no message. Also Back to lane for a popped-out one.
   handle('testing:agent-open', async (event, { root: asked, sessionId }) => {
     const found = agentAt(asked, sessionId);
     if ('note' in found) return found;
