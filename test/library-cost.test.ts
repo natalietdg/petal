@@ -7,6 +7,7 @@ import {
   CHARS_PER_TOKEN, CLAUDE_CODE_OVERHEAD_TOKENS, OUTPUT_TOKENS_PER_CALL, estimateCalls, estimateText, lastRunText, perSessionRange,
   roundTokens, sumUsage, tokensOf, totalTokens, usageOfEntry, usageOfReply, usedText,
 } from '../src/shared/library-cost';
+import { addCostText } from '../src/shared/library';
 
 const NOW = Date.UTC(2026, 9, 18, 12);
 const USAGE = { input_tokens: 10, output_tokens: 200, cache_creation_input_tokens: 3000, cache_read_input_tokens: 40_000 };
@@ -45,6 +46,27 @@ describe('the usage summer', () => {
     expect(roundTokens(987)).toBe('990');
     expect(roundTokens(12_345)).toBe('12,000');
     expect(roundTokens(1_250_000)).toBe('1,300,000');
+  });
+});
+
+describe('the token line under Add to Library', () => {
+  const run = { at: '2026-10-18T00:00:00Z', kind: 'add' as const, sessions: 1, usage: { input: 12, output: 310, cacheWrite: 2400, cacheRead: 9800 } };
+  const estimate = { read: 14_321, write: 1800, calls: 3 };
+  const nothing = { read: 0, write: 0, calls: 0 };
+
+  it('shows the estimate while there is something new, even after a run', () => {
+    expect(addCostText(estimate, null)).toBe('About 14,000 tokens to read, 1,800 to write.');
+    expect(addCostText(estimate, run)).toBe('About 14,000 tokens to read, 1,800 to write.');
+  });
+
+  it('shows the last add, worded like the Library, once nothing is new or before a count', () => {
+    expect(addCostText(nothing, run)).toBe('Last build: Add to Library, 1 session, used about 13,000 tokens.');
+    expect(addCostText(null, run)).toBe('Last build: Add to Library, 1 session, used about 13,000 tokens.');
+  });
+
+  it('says nothing is new with no run, and stays empty before any count', () => {
+    expect(addCostText(nothing, null)).toBe('Nothing new to read.');
+    expect(addCostText(null, null)).toBe('');
   });
 });
 

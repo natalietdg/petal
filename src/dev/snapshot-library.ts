@@ -11,8 +11,11 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { folderFixture, libraryFixture } from '../main/snapshot-mode';
 import { serializeNote } from '../main/library-store';
 import { READING_CHOICES } from '../main/menu';
+import { estimateText, type TokenEstimate } from '../shared/library-cost';
 
 const MIN_RATIO = 4.5;
+// What the Add to Library stub reports, in the CLI's usage names: 12,522 tokens, shown as about 13,000.
+const ADD_USAGE = { input_tokens: 12, output_tokens: 310, cache_creation_input_tokens: 2400, cache_read_input_tokens: 9800 };
 const WIDTHS = [800, 990, 1280, 1600];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -81,7 +84,7 @@ const COLOUR_PROBE = `(() => {
   };
 })()`;
 
-// Text contrast for the session header's button and its status line, outside the Library.
+// Text contrast for the session header's button, its status line and its token line, outside the Library.
 const HEADER_PROBE = `(() => {
   const rgb = (s) => (s.match(/[\\d.]+/g) ?? []).map(Number);
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
@@ -89,9 +92,13 @@ const HEADER_PROBE = `(() => {
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const b = document.getElementById('library-add-session');
   const s = document.getElementById('library-add-status');
+  const c = document.getElementById('library-add-cost');
   const r = b.getBoundingClientRect();
+  const muted = (() => { const m = document.createElement('span'); m.style.color = 'var(--muted)'; c.parentElement.append(m); const v = getComputedStyle(m).color; m.remove(); return v; })();
   return {
     ...PastelTerm.libraryAdd.state(),
+    costRatio: c.hidden ? null : ratio(c),
+    costMuted: !c.hidden && getComputedStyle(c).color === muted,
     visible: r.width > 0 && r.height > 0,
     nextTo: (() => { const n = document.getElementById('notes-toggle').getBoundingClientRect(); return Math.abs((n.top + n.bottom) / 2 - (r.top + r.bottom) / 2) < 3; })(),
     ratios: [b, ...(s.hidden ? [] : [...s.querySelectorAll('span, button')])].map(ratio),
@@ -334,26 +341,38 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const prompts: string[] = [];
     libraryFixture.extract = async (prompt) => {
       prompts.push(prompt);
-      return JSON.stringify({ result: JSON.stringify({ topics: [{ topic: 'Invoice numbering', category: 'billing', facts: ['Invoice numbers are sequential per account and never reused.'], evidence: 'fixture session' }] }) });
+      return JSON.stringify({ result: JSON.stringify({ topics: [{ topic: 'Invoice numbering', category: 'billing', facts: ['Invoice numbers are sequential per account and never reused.'], evidence: 'fixture session' }] }), usage: ADD_USAGE });
     };
     check(await js("!document.querySelector('#library .lib-past')?.textContent.includes('this session')"), 'the Library no longer has Add from this session');
     await js('PastelTerm.library.close()');
-    type Header = { hidden: boolean; disabled: boolean; title: string; status: string; visible: boolean; nextTo: boolean; ratios: number[] };
+    type Header = { hidden: boolean; disabled: boolean; title: string; status: string; cost: string; costRatio: number | null; costMuted: boolean; visible: boolean; nextTo: boolean; ratios: number[] };
     const header = (): Promise<Header> => js(HEADER_PROBE);
     const live = await js('Boolean(PastelTerm.tabs.active()?.update?.sessionId)');
     if (live) {
       const before = await header();
       check(before.visible && !before.disabled && before.nextTo && before.title === 'Save this session’s domain knowledge to your Library', `Add to Library shows beside Notes with its tooltip: ${JSON.stringify(before)}`);
       check(before.ratios.every((r) => r >= MIN_RATIO), `the header button is readable: ${JSON.stringify(before.ratios)}`);
+      // The token estimate sits under the button as muted text, no hover needed, in the Read past sessions wording.
+      const counted = await js('window.pastel.library.addEstimate(PastelTerm.tabs.active().id)') as TokenEstimate | { skipped: string };
+      const wantCost = 'calls' in counted && counted.calls ? estimateText(counted) : 'Nothing new to read.';
+      const shownCost = await waitFor(async () => { const h = await header(); return h.cost ? h : null; }, 5000);
+      check(shownCost?.cost === wantCost && /^(About [\d,]+ tokens to read, [\d,]+ to write\.|Nothing new to read\.)$/.test(shownCost.cost),
+        `the estimate shows inline under the button: ${JSON.stringify(shownCost?.cost)} (want ${JSON.stringify(wantCost)})`);
+      check(shownCost && shownCost.costRatio !== null && shownCost.costRatio >= MIN_RATIO && shownCost.costMuted, `the estimate line is muted and readable: ${JSON.stringify(shownCost && { ratio: shownCost.costRatio, muted: shownCost.costMuted })}`);
+      check(prompts.length === 0, 'showing the estimate sent nothing to Claude');
       await capture('library-header-button');
       await click('#library-add-session');
       const added = await waitFor(async () => { const h = await header(); return /Added 1 note/.test(h.status) ? h : null; }, 5000);
       check(added && prompts.length === 1 && /Open Library/.test(added.status), `Add to Library merges a stubbed answer: ${JSON.stringify(added?.status)}`);
+      check(added && added.cost === '', `the token line steps aside while the status shows: ${JSON.stringify(added?.cost)}`);
       check(added && added.ratios.every((r) => r >= MIN_RATIO), `the status line is readable: ${JSON.stringify(added?.ratios)}`);
       check(fs.readFileSync(path.join(dir, 'invoice-numbering.md'), 'utf8').includes('category: Billing'), 'its category reuses the starter spelling (Billing)');
       await capture('library-header-status');
       const faded = await waitFor(async () => { const h = await header(); return h.status === '' ? h : null; }, 9000);
       check(faded, 'the status fades after a few seconds');
+      const usedLine = await waitFor(async () => { const h = await header(); return /^Last build/.test(h.cost) ? h : null; }, 5000);
+      check(usedLine?.cost === 'Last build: Add to Library, 1 session, used about 13,000 tokens.', `after the run the line shows the tokens it used, worded like the Library: ${JSON.stringify(usedLine?.cost ?? (await header()).cost)}`);
+      await capture('library-header-used');
       resizeOffscreen(win, 800, 900);
       await wait(400);
       await click('#library-add-session');
@@ -543,8 +562,9 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await waitFor(async () => (await js("document.querySelector('#library .lib-past').disabled")) || null, 3000);
     const off = await settle((p) => Boolean(p.allow));
     check(off && /isn’t reading your Claude folder/.test(off.note as string) && await js("document.querySelector('#library .lib-past').disabled"), 'consent off: Allow line, Read past sessions disabled');
-    const headerOff = await js("PastelTerm.libraryAdd.state()") as { disabled: boolean; title: string };
+    const headerOff = await js("PastelTerm.libraryAdd.state()") as { disabled: boolean; title: string; cost: string };
     check(headerOff.disabled && /Allow reading your Claude folder/.test(headerOff.title), `consent off: Add to Library is off and says why: ${JSON.stringify(headerOff)}`);
+    check(headerOff.cost === '', `consent off: no token line under the off button: ${JSON.stringify(headerOff.cost)}`);
     fs.renameSync(dir, `${dir}-aside`);
     await js('PastelTerm.library.load()');
     const emptyOff = await settle((p) => Boolean(p.empty));
