@@ -424,7 +424,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       // Ask Claude: the testing agent drawing up the suite gets a lane (chat, action log, tokens) before any suite exists.
       const startsBefore = testingFixture.loopStarts.length;
       await click('#testing .tst-ask-suite');
-      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
+      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
+      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `.petal/suites/<task id>.json`') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
       const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
         const box = document.querySelector('#testing .tst-agentsbox');
         const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];

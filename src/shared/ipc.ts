@@ -247,10 +247,10 @@ export interface InvokeChannels {
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, SavedLoop>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
-  // One brief starts that agent alone; show opens the bug fix agent's tab in front.
-  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null; show?: boolean }]; result: Guarded<{ tester: AgentStart | null; fixer: AgentStart | null } | { note: string }> };
+  // One brief starts that agent alone; show opens the bug fix agent's tab in front; reuseDraft makes the drafting agent the tester.
+  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null; show?: boolean; reuseDraft?: boolean }]; result: Guarded<{ tester: AgentStart | null; fixer: AgentStart | null } | { note: string }> };
   // The testing agent alone, to draw up a task's suite; only its writes change the suite.
-  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null } | { note: string }> };
+  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null; updatedSkill: boolean } | { note: string }> };
   // The loop timer: saves one task's loop, then lists the running loops with an agent tab in this window.
   'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null }]; result: Guarded<{ loops: LoopFacts[] }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
