@@ -1,4 +1,4 @@
-/* The Board's Tasks section and Activity tab, task and clash lines on cards, and the reader's clash notice.
+/* The Board's Activity tab, task and clash lines on cards, and the reader's clash notice.
    Colours come from the theme's label pairs (ink on pill), which check-contrast.mjs holds at 4.5:1. */
 
 /* Sessions / Activity switch and the branch filter, in the board's head. */
@@ -29,44 +29,9 @@
 .board-branch[hidden],
 .board-filters[hidden],
 .board-grid[hidden],
-.board-tasks[hidden],
 .board-activity[hidden] { display: none; }
 
-/* Tasks: above the cards, one row per task. */
-.board-tasks { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 14px; }
-.tasks-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 8px; }
-.tasks-title { margin: 0; font: 600 15px var(--ui-font); }
-.tasks-project { min-width: 0; overflow: hidden; font-size: 12px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.tasks-empty { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-.task-list { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; padding: 0; list-style: none; }
-.task-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 8px; border-radius: 10px; }
-.task-row:hover { background: var(--code-bg); }
-.task-row[draggable="true"] { cursor: grab; }
-.task-main { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
-.task-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.task-title { min-width: 0; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.task-row.done .task-title { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--rule); }
-.task-notes,
-.task-owner { min-width: 0; overflow: hidden; font-size: 12px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.task-actions { display: flex; flex: none; gap: 2px; }
-.task-action {
-  min-width: 28px;
-  padding: 2px 7px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: none;
-  color: var(--muted);
-  font: 600 12px var(--ui-font);
-  cursor: pointer;
-}
-.task-action:hover:not(:disabled) { border-color: var(--rule); color: var(--reader-fg); }
-.task-action:disabled { opacity: 0.4; cursor: default; }
-.task-action:focus-visible,
-.board-give-task:focus-visible,
-.activity-item:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
-
-/* Status pills: Open stays plain; Given, Working, Blocked and Done take the theme's label pairs. */
-.task-status,
+/* A card's task pill: Given, Working, Blocked and Done take the theme's label pairs. */
 .board-task .board-label {
   flex: none;
   padding: 0 7px;
@@ -75,57 +40,12 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.task-status.open { box-shadow: inset 0 0 0 1px var(--rule); color: var(--muted); }
-.task-status.claimed, .board-task.claimed .board-label { background: var(--why-pill); color: var(--why-ink); }
-.task-status.working, .board-task.working .board-label { background: var(--next-pill); color: var(--next-ink); }
-.task-status.blocked, .board-task.blocked .board-label { background: var(--decide-pill); color: var(--decide-ink); }
-.task-status.done, .board-task.done .board-label { background: var(--done-pill); color: var(--done-ink); }
+.board-task.claimed .board-label { background: var(--why-pill); color: var(--why-ink); }
+.board-task.working .board-label { background: var(--next-pill); color: var(--next-ink); }
+.board-task.blocked .board-label { background: var(--decide-pill); color: var(--decide-ink); }
+.board-task.done .board-label { background: var(--done-pill); color: var(--done-ink); }
 
-.task-add,
-.task-edit { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.task-edit { flex: 1; }
-.task-input {
-  flex: 2 1 200px;
-  min-width: 0;
-  padding: 5px 9px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--reader-bg);
-  color: var(--reader-fg);
-  font: 14px var(--ui-font);
-}
-.task-input.task-notes-input { flex: 3 1 220px; }
-.task-input::placeholder { color: var(--muted); opacity: 1; }
-.task-input:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 0; }
-.task-add + .prd-add { margin-top: 6px; }
-.task-confirm { margin: 8px 0 0; }
-
-/* PRDs: each groups its tasks; subtasks sit indented under their task. */
-.prd-group { margin: 0 0 10px; }
-.prd-group + .prd-group { padding-top: 8px; border-top: 1px solid var(--rule); }
-.prd-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px; }
-.prd-badge { flex: none; padding: 0 7px; border-radius: 999px; background: var(--why-pill); color: var(--why-ink); font: 600 11px/1.6 var(--ui-font); letter-spacing: 0.04em; }
-.prd-title { min-width: 0; overflow: hidden; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.prd-count,
-.prd-ungrouped { flex: none; margin: 0; font: 600 12px var(--ui-font); color: var(--muted); }
-.prd-ungrouped { padding: 4px 8px; }
-.task-row.is-subtask { margin-left: 22px; padding-left: 10px; border-left: 2px solid var(--rule); border-radius: 0 10px 10px 0; }
-.task-row.is-subtask .task-title { font-weight: 500; }
-.task-prd {
-  max-width: 140px;
-  padding: 2px 6px;
-  border: 1px solid var(--rule);
-  border-radius: 7px;
-  background: var(--reader-bg);
-  color: var(--reader-fg);
-  font: 12px var(--ui-font);
-}
-.task-prd:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
-.task-split-input { flex: 1 1 100%; resize: vertical; }
-.tasks-note,
-.tasks-problem { margin: 8px 0 0; }
-
-/* On a card: its task, and a clash chip; Give task sits under the card. */
+/* On a card: its task, and a clash chip. */
 .board-task { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 13px; }
 .board-clash {
   align-self: flex-start;
@@ -139,27 +59,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.board-card.drop-target { outline: 2px dashed var(--next-ink); outline-offset: 2px; }
-.board-give { display: flex; flex-direction: column; gap: 4px; margin: 6px 4px 0; font-size: 13px; }
-.board-give-toggle { align-self: flex-start; }
-.board-give-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 4px; border: 1px solid var(--rule); border-radius: 10px; list-style: none; }
-.board-give-task {
-  width: 100%;
-  overflow: hidden;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--reader-fg);
-  font: 13px var(--ui-font);
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.board-give-task:hover { background: var(--code-bg); }
-.board-give-owner { color: var(--muted); }
-
 /* Activity: filters, then one row per event, newest first. */
 .activity-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
 .activity-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
@@ -180,6 +79,7 @@
   cursor: pointer;
 }
 .activity-item:hover { background: var(--code-bg); }
+.activity-item:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
 .activity-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; color: var(--muted); }
 .activity-badge { flex: none; padding: 0 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule); font: 600 11px/1.6 var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
 .activity-badge.clash { background: var(--watch-pill); box-shadow: none; color: var(--watch-ink); }
