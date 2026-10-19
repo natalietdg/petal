@@ -230,6 +230,22 @@ export async function captureBaseline(kit: Kit, win: BrowserWindow): Promise<Ste
   return { check };
 }
 
+// A step that opens History, the Board, the "/" or "@" menus or Customize: its Claude folder is an empty stand-in under
+// the snapshot folder, so under her real HOME (the official gate) nothing lists or reads her ~/.claude.
+export function withStandInClaude(name: string, step: () => Promise<unknown>, outDir: string): () => Promise<void> {
+  return async () => {
+    const standIn = path.join(outDir, `stand-in-claude-${name}`);
+    fs.mkdirSync(standIn, { recursive: true });
+    const saved = fixtures.folderFixture.home;
+    fixtures.folderFixture.home = standIn;
+    try {
+      await step();
+    } finally {
+      fixtures.folderFixture.home = saved;
+    }
+  };
+}
+
 // A step whose job is to write a store (Library notes, test runs, their Activity events) declares it here; each goes back as it was after.
 export function keepingStores(names: readonly StoreName[], step: () => Promise<unknown>, outDir: string): () => Promise<void> {
   return async () => {

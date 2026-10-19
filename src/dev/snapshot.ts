@@ -77,7 +77,7 @@ import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode
 import { onAnyDisplay } from '../main/snapshot-window';
 import { harnessLine } from '../main/snapshot-shell';
 import { shellGuardCheck } from './snapshot-shell-guard';
-import { captureBaseline, keepingStores, type StepIsolation } from './snapshot-baseline';
+import { captureBaseline, keepingStores, withStandInClaude, type StepIsolation } from './snapshot-baseline';
 import type { ReaderFeed } from '../main/reader-feed';
 import type { ActiveSession, OpenTab, TabSessions } from '../main/tab-session';
 import type { Theme, Themes } from '../shared/types';
@@ -440,7 +440,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['headline links', () => headlineLinksCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['bubble images', () => bubbleImagesCheck(kit, win)],
-    ['reply images', () => replyImagesCheck(kit, win)], // PNGs into the scratch HOME only; refuses her real one
+    ['reply images', withStandInClaude('reply-images', () => replyImagesCheck(kit, win), kit.outDir)], // PNGs in a scratch HOME, or under the snapshot folder when HOME is hers
     ['formatting guide', () => formattingGuideCheck(kit, win)], // shapes, then colour labels with their own sample reply
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
@@ -460,9 +460,9 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['conclusion', keepingStores(['library', 'cost', 'testing', 'activity'], () => conclusionCheck(kit, win, fakeTranscript() ?? '', feed), kit.outDir)], // appends conclude turns; after the steps that measure the reader
     ['minimise', () => minimiseCheck(kit, win, tabs)], // headers and terminal folded and restored; leaves both shown
     ['window fit', () => windowFitCheck(kit, win)], // appends wide replies to the fixture
-    ['text size', () => textSizeCheck(kit, win, { activeSession: tabs.activeSession })], // appends a reply; puts both sizes and the window back
-    ['stop', () => stopButtonCheck(kit, { win, feed, activeSession: tabs.activeSession })], // fixture busy/idle; Escs recorded in main, never typed
-    ['mentions', keepingStores(['activity'], () => mentionsCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions, fixtureFile: fakeTranscript() ?? '' }), kit.outDir)], // fixture tabs, pastes recorded never typed; closes its tabs
+    ['text size', withStandInClaude('text-size', () => textSizeCheck(kit, win, { activeSession: tabs.activeSession }), kit.outDir)], // appends a reply; puts both sizes and the window back
+    ['stop', withStandInClaude('stop', () => stopButtonCheck(kit, { win, feed, activeSession: tabs.activeSession }), kit.outDir)], // fixture busy/idle; Escs recorded in main, never typed
+    ['mentions', keepingStores(['activity'], withStandInClaude('mentions', () => mentionsCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions, fixtureFile: fakeTranscript() ?? '' }), kit.outDir), kit.outDir)], // fixture tabs, pastes recorded never typed; closes its tabs
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
