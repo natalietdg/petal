@@ -527,7 +527,7 @@ function drawLoop(): void {
   loopPanel.element.hidden = !folderAllowed || !data?.project || !suite();
   agents.draw();
   if (loopPanel.element.hidden) { stopLoopTick(); return; }
-  const { record, progress, status } = agents.facts();
+  const { record, progress, status, stopping } = agents.facts();
   const { distill, distillKey } = loopDistillation();
   const stages = suite()?.stages ?? [];
   const names = data?.agentNames ?? {};
@@ -538,7 +538,7 @@ function drawLoop(): void {
     status, progress, criteria: taskCriteria(), why,
     canStart: Boolean(stages.length) && !isActive(status) && draft === null,
     stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
-    stopping: record?.stopping ?? false,
+    stopping,
     note: loopNote,
     distillation: distill,
     distillKey,

@@ -5,7 +5,7 @@ import * as agentTerms from './agent-terms';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { buildFixerBrief, buildLoopBrief, isActive, loopStatus, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
+import { IDLE_GIVE_UP_MS, buildFixerBrief, buildLoopBrief, isActive, loopStatus, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { queueDone, type SentBug } from '../shared/bug-queue';
 import { laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
 import { ROLES, agentOf, finishedRounds, isRunning, noEvents, roundLabel, roundTokens } from '../shared/agent-loop';
@@ -159,15 +159,19 @@ export function createAgents(ctx: AgentContext) {
   }
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
-  function facts(): { record: AgentLoop | null; progress: LoopProgress | null; status: LoopStatus } {
+  function facts(): { record: AgentLoop | null; progress: LoopProgress | null; status: LoopStatus; stopping: boolean } {
     const r = shownLoop();
     const progress = latestLoop(repliesOf(r, 'tester'), r?.startedAt ?? 0);
     const startedAt = r?.tester ? r.startedAt : null; // a bug fix agent alone hasn't started the test loop
     const live = r?.tester?.state === 'working' || r?.tester?.state === 'idle' || r?.tester?.state === 'asking';
     let status = loopStatus({ progress, live, startedAt, stoppedAt: r?.stoppedAt ?? null, now: Date.now() });
     if (r && !r.stoppedAt && status === 'done' && !queueDone(r.queue, progress?.phase ?? null)) status = 'running'; // fixes still in flight
-    return { record: r, progress, status };
+    return { record: r, progress, status, stopping: Boolean(r && isStopping(r)) };
   }
+
+  // Stopping: asked here, or main stopped the loop and an agent is still finishing its turn before its stop message.
+  const isStopping = (r: AgentLoop): boolean => r.stopping
+    || (r.stoppedAt !== null && Date.now() - r.stoppedAt < IDLE_GIVE_UP_MS && [r.tester, r.fixer].some((a) => a?.state === 'working'));
 
   // Main's view of a loop becomes this window's copy, keeping what only this window reads (logs, tokens); true when it changed.
   function adopt(root: string, taskId: string, next: LoopView): boolean {
