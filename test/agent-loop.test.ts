@@ -103,17 +103,17 @@ describe('the last round’s tokens', () => {
     const tester = [action(600, 1, 1000), action(700, 1, 500), action(1000, 2, 2000), action(1400, 3, 300)];
     const fixer = [action(1100, null, 400), action(1450, null, 50)];
     const r = roundTokens(tester, fixer, 500);
-    expect(r).toEqual({ round: 2, done: true, tokens: 2400 }); // round 2: from its first tester step to round 3's
+    expect(r).toEqual({ round: 2, done: true, tokens: 2400, cached: 0 }); // round 2: from its first tester step to round 3's
     expect(roundLabel(r)).toBe('Round 2');
   });
 
   it('round one counts from the start, and before any Loop line it is everything so far', () => {
-    expect(roundTokens([action(600, 1, 1000)], [action(550, null, 200)], 500)).toEqual({ round: 1, done: false, tokens: 1200 });
-    expect(roundTokens([action(600, 1, 1000), action(900, 2, 10)], [action(550, null, 200)], 500)).toEqual({ round: 1, done: true, tokens: 1200 });
+    expect(roundTokens([action(600, 1, 1000)], [action(550, null, 200)], 500)).toEqual({ round: 1, done: false, tokens: 1200, cached: 0 });
+    expect(roundTokens([action(600, 1, 1000), action(900, 2, 10)], [action(550, null, 200)], 500)).toEqual({ round: 1, done: true, tokens: 1200, cached: 0 });
     const none = roundTokens([action(600, null, 70)], [action(400, null, 900)], 500);
-    expect(none).toEqual({ round: null, done: false, tokens: 70 }); // the fixer's step before the start is left out
+    expect(none).toEqual({ round: null, done: false, tokens: 70, cached: 0 }); // the fixer's step before the start is left out
     expect(roundLabel(none)).toBe('So far');
-    expect(roundLabel({ round: 1, done: false, tokens: 0 })).toBe('Round 1 so far');
+    expect(roundLabel({ round: 1, done: false, tokens: 0, cached: 0 })).toBe('Round 1 so far');
   });
 });
 

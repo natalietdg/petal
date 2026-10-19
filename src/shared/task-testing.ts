@@ -109,3 +109,7 @@ export function ownedTask(tasks: readonly Task[], sessionId: string): Task | nul
   const owned = tasks.filter((t) => t.owner?.sessionId === sessionId).sort((a, b) => (b.claimedAt ?? 0) - (a.claimedAt ?? 0));
   return owned.find((t) => t.status !== 'done') ?? owned[0] ?? null;
 }
+
+// A Claude session in a repo gets its own task there when it owns none; Petal's agent sessions never do.
+export const needsOwnTask = ({ tasks, sessionId, isAgent }: { tasks: readonly Task[]; sessionId: string | null | undefined; isAgent: boolean }): boolean =>
+  Boolean(sessionId) && !isAgent && ownedTask(tasks, sessionId as string) === null;

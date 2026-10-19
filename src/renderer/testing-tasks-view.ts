@@ -100,7 +100,7 @@ export function noTasks(): HTMLElement {
   return box;
 }
 
-export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null }
+export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null; askEstimate?: string | null }
 
 export function noSuite(actions: NoSuiteActions, seedProblem: string | null, busy: boolean): HTMLElement {
   const box = el('div', 'tst-no-suite');
@@ -125,6 +125,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
   if (actions.fromRuns) row.append(button('tst-make-pipeline', 'Start from Claude’s checks', actions.fromRuns));
   row.append(button('tst-edit-suite', 'Add stages yourself', actions.edit));
   box.append(el('p', 'tst-empty tst-no-suite-title', 'No suite for this task yet'), row);
+  if (!actions.showDraft && actions.askEstimate) box.append(el('p', 'tst-estimate tst-ask-estimate', actions.askEstimate)); // under Ask Claude to draw one up
   if (seedProblem) box.append(el('p', 'tst-muted', `The project’s .petal/pipeline.json can’t be used: ${seedProblem}.`));
   return box;
 }

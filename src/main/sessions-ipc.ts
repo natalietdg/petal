@@ -7,10 +7,11 @@ import { sessionTitleFor } from './session-title';
 import { closeSession } from './session-close';
 import { handle } from './ipc';
 import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
-import { concludeCloses, isSnapshotRun } from './snapshot-mode';
+import { agentCloses, concludeCloses, isSnapshotRun } from './snapshot-mode';
 import { boardDetails } from './sessions-board';
 import type { ActiveSession } from './tab-session';
 import type { ConcludedSession } from './reader-feed';
+import type { AgentCloseResult } from '../shared/ipc';
 
 // Every row, open or recently closed, is named by the shared rule at list time, so a later title shows at once.
 const nameOf = (s: { sessionId: string; cwd: string }): string => sessionTitleFor(s.sessionId, { cwd: s.cwd });
@@ -69,4 +70,18 @@ export async function closeConcluded({ sessionId, pid }: ConcludedSession): Prom
     console.error('[petal] closing the concluded session failed:', (error as Error).message);
     return false;
   }
+}
+
+// Testing's Close agents: the same Close for one of Petal's agent sessions, answered per agent instead of thrown.
+export async function closeAgentSession(sessionId: string): Promise<AgentCloseResult> {
+  let result: AgentCloseResult;
+  try {
+    const outcome = await closeAndRemember(sessionId);
+    result = outcome.closed ? { sessionId, outcome: 'closed', note: '' } : { sessionId, outcome: 'running', note: outcome.note };
+  } catch (error) {
+    const note = (error as Error).message;
+    result = { sessionId, outcome: /not running/.test(note) ? 'gone' : 'refused', note };
+  }
+  if (isSnapshotRun()) agentCloses.push(result);
+  return result;
 }

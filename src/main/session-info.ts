@@ -8,7 +8,10 @@ import * as history from './history';
 import * as librarySessions from './library-sessions';
 import * as testingStore from './testing-store';
 import { isReadingSession, onSessionChange } from './library-extract';
-import { mergeLogRuns, readCriteria } from './testing-ipc';
+import { mergeLogRuns } from './testing-ipc';
+import { readCriteria } from './criteria-store';
+import { taskIdAt } from './testing-tasks';
+import { forTask } from '../shared/task-suite';
 import { projectRootOf } from './testing-project';
 import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
@@ -105,7 +108,9 @@ export async function sessionInfo(sessionId: string, sessions: TabSessions, now 
     tests = testsLine(runsInSpan(testingStore.load(root).runs, span, sessionId));
     if (log.loop) {
       const criteria = readCriteria(root);
-      loop = { progress: log.loop, fixed: criteria ? criteria.bugs.filter((b) => b.status === 'fixed').length : null };
+      const taskId = taskIdAt(root, sessionId, span.end);
+      const bugs = criteria ? (taskId ? forTask(criteria.bugs, taskId) : criteria.bugs) : null; // the session's task's file, else every file
+      loop = { progress: log.loop, fixed: bugs ? bugs.filter((b) => b.status === 'fixed').length : null };
     }
   } else if (log.loop) {
     loop = { progress: log.loop, fixed: null };

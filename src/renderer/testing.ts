@@ -10,7 +10,8 @@ import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhe
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
-import { isActive, type Criteria } from '../shared/test-loop';
+import { buildSentFixerBrief, isActive, type Criteria } from '../shared/test-loop';
+import { DRAFT_TURNS, FIX_TURNS, SUITE_SKILL_CHARS, agentEstimateText, agentTokens } from '../shared/token-usage';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
 import { distillSection } from './testing-distill-view';
@@ -25,6 +26,7 @@ import { keepTarget, prdOverview as overviewRows, type TestTarget } from '../sha
 import type { Prd, Task } from '../shared/tasks';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
+const ASK_PROMPT_CHARS = 250; // the draft request's own words around the task's title and notes
 const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh faster
 
 const view = byId('testing');
@@ -263,6 +265,7 @@ function drawStrip(): void {
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
+      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + ASK_PROMPT_CHARS + task.title.length + task.notes.length, DRAFT_TURNS)),
     }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(data.running)));
     return;
   }
@@ -355,6 +358,12 @@ function fix(stage: StageResult, test: TestCase | null, where: FixWhere): void {
 const fixHandlers = {
   fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => fix(stage, test, where),
   fixStage: (stage: StageResult, where: FixWhere) => fix(stage, null, where),
+  fixEstimate: (stage: StageResult): string | null => {
+    const task = shownTask();
+    if (!task) return null;
+    const prompt = buildFixPrompt({ stage: stage.name, command: stage.command, tests: stage.tests, output: stage.output });
+    return agentEstimateText(agentTokens(buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: stage.name, prompt }).length, FIX_TURNS));
+  },
 };
 
 function drawResults(): void {

@@ -30,16 +30,16 @@ import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRol
 import { cleanSavedLoop, noEvents, withEvent } from '../shared/agent-loop';
 import type { LockManifest } from '../shared/test-lock';
 import { checkSuite, emptySuite, forTask, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
-import { foldAgents, listedSession, listedSessions, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
+import { foldAgents, listedSession, listedSessions, needsOwnTask, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
 import { lastRunAt, latest } from '../shared/task-activity';
 import { panelSessions } from './agents-ipc';
 import { giveSessionTask } from './tasks-ipc';
+import { closeAgentSession } from './sessions-ipc';
+import { pruneProject } from './testing-prune';
 import * as store from './testing-store';
-import { ensureSelfIgnore } from './factory-store';
-import { writeFileDurable } from './atomic-file';
 import { buildStartCommand, shellQuote } from './resume-command';
 import { claudeLaunch } from './claude-launch';
-import { CRITERIA_CAP, CRITERIA_PATH, CRITERIA_SKELETON, parseCriteria, type Criteria } from '../shared/test-loop';
+import { prepareLoop, readCriteria } from './criteria-store';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
   type Elsewhere, type LoopFacts, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
@@ -214,7 +214,7 @@ async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<Pro
   const { found, writes, touches } = await logCalls(logs);
   const closed = await closedAgentFinds(root, logs);
   const allTouches = [...touches, ...closed.touches];
-  const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
+  const manifest = refreshLock(root, { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root, tasks), agents: allAgents(root), touches: allTouches }, store.load(root).agentNames ?? {});
   const suites = syncSuites(root, tasks, [...writes, ...closed.writes]);
   const names = store.load(root).agentNames;
   for (const agent of allAgents(root)) {
@@ -319,7 +319,15 @@ async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere 
 function pickedSession(sessionId: unknown): { root: string; taskId: string } {
   const picked = listedSession(sessionPicks(), sessionId);
   if (!picked) throw new Error('That session isn’t one of your Claude sessions in a repo.');
-  return { root: picked.root, taskId: picked.taskId ?? giveSessionTask(picked.root, { sessionId: picked.sessionId, cwd: picked.cwd }) };
+  return { root: picked.root, taskId: picked.taskId ?? giveAutoTask(picked.root, { sessionId: picked.sessionId, cwd: picked.cwd }) };
+}
+
+// A task Testing made for a session, remembered as made here so an abandoned one can be pruned later.
+function giveAutoTask(root: string, session: { sessionId: string; cwd: string | null }): string {
+  const id = giveSessionTask(root, session);
+  const data = store.load(root);
+  store.save({ ...data, autoTasks: [...new Set([...(data.autoTasks ?? []), id])] });
+  return id;
 }
 
 // This window's tab with a Claude session on the project: the asking tab first, else any other.
@@ -362,14 +370,27 @@ export function captureFinishedReply(reply: Reply, sessionId: string, cwd: strin
   captureReplies(projectRootOf(isSnapshotRun() && testingFixture.project ? testingFixture.project : cwd), [reply], sessionId);
 }
 
-// A repo with no tasks yet: the tab's own Claude session gets one, so Testing opens on its suite, not a dead end.
+const giving = new Map<string, Promise<void>>(); // `${root}\0${sessionId}` -> its task being made; a quick refresh waits on it
+
+// Every Claude session in the repo owning no task there gets its own, so Testing opens on its suite and its runs file
+// under it; never a shell tab without Claude or one of Petal's agent sessions.
 async function giveTabTask(root: string, asking: TabSession | undefined): Promise<void> {
   const session = asking?.feed.session;
   if (!session?.sessionId) return;
-  const { tasks, problem } = loadTasks(root);
-  if (tasks.length || problem || (await projectOf(asking)) !== root) return;
-  giveSessionTask(root, { sessionId: session.sessionId, cwd: session.cwd ?? null });
+  const key = `${root}\0${session.sessionId}`;
+  const pending = giving.get(key) ?? (async () => {
+    if ((await projectOf(asking)) !== root) return;
+    const { tasks, problem } = loadTasks(root);
+    if (problem || !needsOwnTask({ tasks, sessionId: session.sessionId, isAgent: agentOf(root, session.sessionId) !== null })) return;
+    giveAutoTask(root, { sessionId: session.sessionId, cwd: session.cwd ?? null });
+  })().finally(() => giving.delete(key));
+  giving.set(key, pending);
+  await pending;
 }
+
+// The Claude sessions open now: the Sessions panel's live ones and every tab's.
+const openSessionIds = (sessions: TabSessions): Set<string> =>
+  new Set([...panelSessions().map((s) => s.sessionId), ...[...sessions.values()].flatMap((s) => (s.feed.session ? [s.feed.session.sessionId] : []))]);
 
 async function stateFor(root: string, sessions: TabSessions, onProject: TabSession | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
@@ -467,30 +488,6 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   return { started: id, typed };
 }
 
-// ---- Test loop: Petal makes .petal/ (kept out of git) and reads the criteria file; Claude runs the loop itself.
-const criteriaFile = (root: string): string => path.join(root, ...CRITERIA_PATH.split('/'));
-
-export function prepareLoop(root: string): void {
-  const file = criteriaFile(root);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  ensureSelfIgnore(path.dirname(file), root);
-  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON, undefined, { within: root });
-}
-
-// Read only, the first CRITERIA_CAP bytes; null when there is no file yet.
-export function readCriteria(root: string): Criteria | null {
-  let fd: number;
-  try { fd = fs.openSync(criteriaFile(root), 'r'); } catch { return null; }
-  try {
-    const size = fs.fstatSync(fd).size;
-    const buffer = Buffer.alloc(Math.min(size, CRITERIA_CAP));
-    const read = fs.readSync(fd, buffer, 0, buffer.length, 0);
-    return parseCriteria(buffer.toString('utf8', 0, read), size > CRITERIA_CAP);
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
 export interface TestingDeps { sessions: TabSessions; openTab: OpenTab }
 let deps: TestingDeps | null = null;
 
@@ -520,6 +517,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     }
     const root = await rootFor(asking, picked);
     if (!root) return blank(true, await elsewhereFor(asking));
+    pruneProject(root, openSessionIds(sessions));
     await giveTabTask(root, asking);
     return stateFor(root, sessions, await sessionOnProject(root, sessions, asking));
   });
@@ -564,7 +562,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const prior = loopsOf(target.root)[target.task.id];
     const running = prior?.kind === 'loop' && prior.stoppedAt === null && briefs.length === 1 ? prior : null;
     if (!fixerBrief && !running?.fixer) return { note: 'Start the loop to start its testing agent.' };
-    prepareLoop(target.root);
+    prepareLoop(target.root, target.task.id);
     const tester = testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null;
     const fixer = fixerBrief ? await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, show !== true) : null;
     saveLoop(target.root, target.task.id, running
@@ -629,6 +627,21 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const open = [...sessions.values()].find((s) => s.feed.session?.sessionId === sessionId)?.feed.session?.transcript;
     const file = open ?? history.findRecord(sessionId)?.file;
     return file ? readAgentLog(file, root) : { actions: [], tokens: NO_TOKENS };
+  });
+
+  // Close agents: each loop agent's claude through the Sessions panel's Close, then the loop is stopped. Refused while one works.
+  handle('testing:close-agents', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    const loop = loopsOf(target.root)[target.task.id];
+    const agents = [loop?.tester, loop?.fixer].filter((a): a is NonNullable<typeof a> => Boolean(a));
+    if (!loop || !agents.length) return { note: 'This task has no agents to close.' };
+    const busy = (sessionId: string) => [...sessions.values()].some((s) => s.feed.session?.sessionId === sessionId && s.feed.session.status === 'busy');
+    if (loop.stoppedAt === null && agents.some((a) => busy(a.sessionId))) return { note: 'An agent is still working. Stop the loop first.' };
+    const closed = [];
+    for (const agent of agents) closed.push(await closeAgentSession(agent.sessionId));
+    if (loop.stoppedAt === null) saveLoop(target.root, target.task.id, { ...loop, stoppedAt: Date.now() });
+    return { closed };
   });
 
   // The task's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.

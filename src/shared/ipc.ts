@@ -36,6 +36,9 @@ import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
 
+// One agent's Close: closed, already not running, refused (not its claude), or still running after the wait.
+export interface AgentCloseResult { sessionId: string; outcome: 'closed' | 'gone' | 'refused' | 'running'; note: string }
+
 export interface AgentStart { tabId: string | null; sessionId: string }
 export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage }
 import type { SuiteViews, TaskSuite } from './task-suite';
@@ -254,6 +257,8 @@ export interface InvokeChannels {
   // The loop timer: saves one task's loop, then lists the running loops with an agent tab in this window.
   'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null }]; result: Guarded<{ loops: LoopFacts[] }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
+  // Close agents: each of a task's loop agents closed through the Sessions panel's Close, and the loop marked stopped.
+  'testing:close-agents': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ closed: AgentCloseResult[] } | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
   'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };

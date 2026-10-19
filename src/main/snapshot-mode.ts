@@ -88,6 +88,9 @@ export const handoffWrites: { tabId: string; data: string }[] = [];
 // Every close a "conclude" set off, with how it ended; snapshot runs stop before the signal.
 export const concludeCloses: { sessionId: string; outcome: string }[] = [];
 
+// Every agent Testing's Close agents tried to close, with how it ended; snapshot runs stop before the signal.
+export const agentCloses: { sessionId: string; outcome: string; note: string }[] = [];
+
 // A stand-in ~/.claude for the reply box's "/" menu (read only); null reads the real one.
 export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
 

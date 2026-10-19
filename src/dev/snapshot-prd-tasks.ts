@@ -313,7 +313,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(refusalLine === 'Refused: Fixie tried to edit src/cart.test.ts', `the lock's refusal shows in Fixie's lane: ${refusalLine}`);
     const tokens: string[] = await js("[...document.querySelectorAll('#testing .tst-agent-tokens')].map((n) => n.textContent)");
     const total: string = await js("document.querySelector('#testing .tst-agent-total')?.textContent ?? ''");
-    check(tokens.length === 2 && tokens.every((t) => /^[\d.]+k tokens$/.test(t)) && /tokens so far for both agents/.test(total), `tokens per lane from each session's usage, and a total: ${JSON.stringify(tokens)} ${total}`);
+    check(tokens.length === 2 && tokens.every((t) => /^[\d.]+k tokens \([\d.]+k of them cached reads\)$/.test(t)) && /so far for both agents$/.test(total), `tokens per lane from each session's usage, cache reads named apart, and a total: ${JSON.stringify(tokens)} ${total}`);
     await js(`document.querySelector('${lane('fixer')} .tst-agent-view[data-view="actions"]').click()`);
     const fixerLogLines = await waitFor<string[] | null>(async () => { const l: string[] = await js(`[...document.querySelectorAll('${lane('fixer')} .tst-agent-step-text')].map((n) => n.textContent)`); return l.some((x) => x.startsWith('Edited src/cart.ts')) ? l : null; }, 6000);
     const roundLine: string = await js(`document.querySelector('${lane('fixer')} .tst-agent-rounds li')?.textContent ?? ''`);
@@ -328,6 +328,24 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
 
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
+
+    // 11 A second Claude session in this repo, which already has tasks, gets its own task named for it, once, however
+    // fast Testing refreshes; the testing agent's session gets none.
+    const SECOND = '7a5c0000-0000-4000-8000-0000000000d2';
+    const secondLog = path.join(dir, 'tabs', `${SECOND}.jsonl`);
+    writeTranscript(secondLog, repo, SECOND);
+    extraTabFixtures.push({ sessionId: SECOND, transcript: secondLog, status: 'idle', cwd: repo });
+    openTab(win.webContents);
+    const secondTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(SECOND)}) ?? null`), 15000);
+    type Detected = { sessionTaskId: string | null; tasks: { id: string; title: string; owner: { sessionId: string } | null }[] };
+    const detect = (tabId: string | null): Promise<Detected> => js(`window.pastel.testing.detect(${JSON.stringify(tabId)})`);
+    const [one, two] = await Promise.all([detect(secondTab), detect(secondTab)]);
+    const ownedBySecond = (await detect(secondTab)).tasks.filter((t) => t.owner?.sessionId === SECOND);
+    check(secondTab && ownedBySecond.length === 1 && one.sessionTaskId === ownedBySecond[0]?.id && two.sessionTaskId === ownedBySecond[0]?.id, `the second session gets exactly one task of its own: ${JSON.stringify({ owned: ownedBySecond, one: one.sessionTaskId, two: two.sessionTaskId })}`);
+    check(ownedBySecond[0]?.title && ownedBySecond[0].title !== 'Fix the cart total' && one.tasks.find((t) => t.id === 't-cart')?.owner?.sessionId === SESSION, `named for its session, and the first session keeps its task: ${JSON.stringify(ownedBySecond[0]?.title)}`);
+    check(JSON.stringify(store.load(repo).autoTasks ?? []).includes(ownedBySecond[0]?.id ?? 'none'), 'the task is remembered as made by Testing, the only kind it may prune');
+    const asAgent = await detect(testerTab);
+    check(!asAgent.tasks.some((t) => t.owner?.sessionId === TESTER), `the testing agent's session gets no task: ${JSON.stringify(asAgent.tasks.map((t) => t.owner?.sessionId))}`);
   } finally {
     await js('PastelTerm.testing.close()');
     await js('PastelTerm.sessionsBoard.close()');

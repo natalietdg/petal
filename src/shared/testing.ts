@@ -72,6 +72,7 @@ export interface ProjectTesting {
   agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
   agentNames?: AgentNames; // her names for the two agents, for every task in the project
   loops?: Record<string, SavedLoop>; // per task: its agents' lanes and bug queue, so they outlive a reload
+  autoTasks?: string[]; // tasks Testing made for a session itself, the only ones it may prune
 }
 
 export interface AgentRecord { sessionId: string; role: AgentRole }

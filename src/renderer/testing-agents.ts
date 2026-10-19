@@ -4,13 +4,13 @@
 import * as tabs from './tabs';
 import * as composer from './composer';
 import { isIpcError } from './dom';
-import { agentsPanel, type LaneModel } from './testing-agents-view';
+import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
 import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
 import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../shared/bug-queue';
-import { agentOf, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
+import { agentOf, finishedRounds, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
-import { estimateRoundTokens, totalTokens } from '../shared/token-usage';
+import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
 import type { TaskSuite } from '../shared/task-suite';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
@@ -22,7 +22,7 @@ export interface AgentLoop extends SavedLoop {
   root: string;
   taskId: string;
   actions: Record<AgentRole, AgentAction[]>;
-  tokens: Record<AgentRole, number | null>;
+  tokens: Record<AgentRole, TokenUsage | null>;
   sending: boolean;
   stopping: boolean;
   inputs: Pick<LoopFacts, 'bugs' | 'runs' | 'names'> | null; // from main's last tick; null until then
@@ -64,6 +64,8 @@ export function createAgents(ctx: AgentContext) {
   const view: Partial<Record<AgentRole, 'chat' | 'actions'>> = {};
   const drafts: Partial<Record<AgentRole, string>> = {};
   const notes: Partial<Record<AgentRole, string>> = {};
+  let closeAsking = false;
+  let closing = false;
 
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
@@ -179,7 +181,7 @@ export function createAgents(ctx: AgentContext) {
       const reply = await window.pastel.testing.agentLog({ tabId: from, root: ctx.picked(), sessionId: agent.sessionId });
       if (isIpcError(reply) || 'note' in reply) continue;
       r.actions[role] = reply.actions;
-      r.tokens[role] = totalTokens(reply.tokens);
+      r.tokens[role] = reply.tokens;
     }
   }
 
@@ -194,13 +196,17 @@ export function createAgents(ctx: AgentContext) {
     };
   }
 
-  // Tokens per round, from the two briefs and the size of the task's last run output.
-  function estimate(): number | null {
+  // Tokens per round: this task's finished rounds averaged once it has some, else a rough figure from the two briefs
+  // and the size of the task's last run output.
+  function estimate(status: LoopStatus): RoundEstimate | null {
     const b = briefs('', 5);
     if (!b) return null;
     const last = ctx.taskRuns()[0];
     const output = last ? last.stages.reduce((n, s) => n + s.output.length + s.tests.reduce((m, t) => m + t.name.length + (t.failure?.length ?? 0), 0), 0) : 0;
-    return estimateRoundTokens({ briefChars: [b.tester.length, b.fixer.length], suiteOutputChars: output });
+    const rough = estimateRoundTokens({ briefChars: [b.tester.length, b.fixer.length], suiteOutputChars: output });
+    const r = shownLoop();
+    const over = Boolean(r?.stoppedAt) || status === 'done' || status === 'stopped';
+    return roundEstimate(r ? finishedRounds(r.actions.tester, r.actions.fixer, r.startedAt, over) : [], rough);
   }
 
   async function start(focus: string, rounds: number): Promise<void> {
@@ -216,7 +222,7 @@ export function createAgents(ctx: AgentContext) {
     if (!reply.tester || !(reply.fixer ?? joining?.fixer)) { ctx.say('Couldn’t start the loop. Try again.'); return; }
     if (joining) {
       joining.tester = reply.tester;
-      joining.tokens.tester = 0;
+      joining.tokens.tester = NO_TOKENS;
       note(joining, 'tester', `Started ${nameOf('tester')} in a new tab`);
       persist(joining);
       ctx.say(reply.tester.tabId ? `${nameOf('tester')} is starting in a new tab. ${nameOf('fixer')} keeps fixing.` : 'Couldn’t open a tab for the testing agent. Try again.');
@@ -224,7 +230,7 @@ export function createAgents(ctx: AgentContext) {
     }
     if (!reply.fixer) return;
     const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
-    r.tokens = { tester: 0, fixer: 0 };
+    r.tokens = { tester: NO_TOKENS, fixer: NO_TOKENS };
     note(r, 'tester', `Started ${nameOf('tester')} in a new tab`);
     note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
     loops.set(keyOf(root, task.id), r);
@@ -261,7 +267,7 @@ export function createAgents(ctx: AgentContext) {
       ? { ...toSaved(keep), fixer: reply.fixer, queue: keep.queue.map((b) => (b.state === 'fixing' ? { ...b, state: 'open' as const, asked: false } : b)) }
       : { kind: 'loop', tester: null, fixer: reply.fixer, startedAt: now, stoppedAt: null, queue: [], events: noEvents() });
     r.queue = addSent(r.queue, bug, now, 'fixing').queue;
-    r.tokens = { tester: keep ? keep.tokens.tester : null, fixer: 0 };
+    r.tokens = { tester: keep ? keep.tokens.tester : null, fixer: NO_TOKENS };
     note(r, 'fixer', `Started ${fixer} in a new tab on ${bug.name}`);
     loops.set(keyOf(root, task.id), r);
     persist(r);
@@ -287,6 +293,44 @@ export function createAgents(ctx: AgentContext) {
     for (const role of ROLES) note(r, role, 'Stopped');
     persist(r);
     ctx.say('Asked both agents to stop. Their summaries show in their tabs.');
+    ctx.redraw();
+  }
+
+  // The tab Petal opened for an agent, while it still follows that agent's session; never another tab on the same session.
+  const ownTab = (agent: LoopAgent | null | undefined): string | null =>
+    (agent?.tabId && tabs.get(agent.tabId)?.update?.sessionId === agent.sessionId ? agent.tabId : null);
+
+  // Close agents shows once the loop is over or both agents are idle, while one of their tabs is still open here.
+  function closeModel(status: LoopStatus, lanes: readonly LaneModel[]): AgentsModel['close'] {
+    const r = shownLoop();
+    const agents = r ? [r.tester, r.fixer].filter((a): a is LoopAgent => a !== null) : [];
+    if (!r || !agents.some((a) => ownTab(a))) return null;
+    const over = Boolean(r.stoppedAt) || status === 'done' || status === 'stopped';
+    if (!over && lanes.some((l) => l.busy)) return null;
+    return { count: agents.length, asking: closeAsking, closing };
+  }
+
+  // Each agent's claude goes through the Sessions panel's Close in main, then its tab closes; the loop is marked stopped.
+  async function closeAgents(): Promise<void> {
+    const r = shownLoop();
+    const from = ctx.tabId();
+    if (!r || !from || closing) return;
+    closeAsking = false;
+    closing = true;
+    draw();
+    const reply = await window.pastel.testing.closeAgents({ tabId: from, root: ctx.picked(), taskId: r.taskId });
+    closing = false;
+    if (isIpcError(reply) || 'note' in reply) { ctx.say(isIpcError(reply) ? `Couldn’t close the agents: ${reply.error}` : reply.note); draw(); return; }
+    for (const result of reply.closed) {
+      if (result.outcome === 'running') continue; // its claude didn't exit; the tab stays so nothing is cut off
+      const id = ownTab([r.tester, r.fixer].find((a) => a?.sessionId === result.sessionId));
+      if (id) tabs.requestClose(id);
+    }
+    r.stoppedAt = r.stoppedAt ?? Date.now();
+    for (const role of ROLES) if (agentOf(r, role)) note(r, role, 'Closed');
+    persist(r);
+    const stuck = reply.closed.find((c) => c.outcome === 'running');
+    ctx.say(stuck ? `An agent is still running: ${stuck.note}. Its tab stays open.` : 'Closed the agents and their tabs.');
     ctx.redraw();
   }
 
@@ -325,22 +369,24 @@ export function createAgents(ctx: AgentContext) {
     const r = record();
     element.hidden = !task || (!ctx.suite() && !r); // a draft's lane shows before the suite exists
     if (element.hidden) return;
-    const { progress } = facts();
+    const { progress, status } = facts();
     const roles = ctx.suite() || r?.kind === 'loop' ? ROLES : ROLES.filter((role) => r && agentOf(r, role));
     const lanes: LaneModel[] = roles.map((role) => {
       const agent = r ? agentOf(r, role) : null;
       return {
         role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status: laneStatus(role, r, progress), busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy),
-        tokens: agent ? r?.tokens[role] ?? null : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
+        tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
       };
     });
     const loop = r?.kind === 'loop' ? r : null;
     const round = loop ? roundTokens(loop.actions.tester, loop.actions.fixer, loop.startedAt) : null;
     const started = lanes.filter((l) => l.started);
+    const sum = (pick: (t: { total: number; cached: number }) => number) => started.reduce((n, l) => n + (l.tokens ? pick(l.tokens) : 0), 0);
     element.replaceChildren(agentsPanel({
-      lanes, queue: loop?.queue ?? null, estimate: estimate(), round: round ? { label: roundLabel(round), tokens: round.tokens } : null,
-      total: started.length ? started.reduce((n, l) => n + (l.tokens ?? 0), 0) : null, renaming, logOpen, logShown, view, drafts,
+      lanes, queue: loop?.queue ?? null, estimate: estimate(status), round: round ? { label: roundLabel(round), tokens: round.tokens, cached: round.cached } : null,
+      total: started.length ? { total: sum((t) => t.total), cached: sum((t) => t.cached) } : null, renaming, logOpen, logShown, view, drafts,
+      close: closeModel(status, lanes),
     }, {
       rename: (role) => { renaming = role; draw(); },
       saveName: (role, name) => void saveName(role, name),
@@ -350,6 +396,8 @@ export function createAgents(ctx: AgentContext) {
       setView: (role, next) => { view[role] = next; if (next === 'actions') logOpen.add(role); draw(); },
       draft: (role, text) => { drafts[role] = text; },
       send: (role, text) => void send(role, text),
+      askClose: (asking) => { closeAsking = asking; draw(); },
+      close: () => void closeAgents(),
     }));
   }
 

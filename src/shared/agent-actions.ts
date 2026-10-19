@@ -1,7 +1,7 @@
 // An agent's action log, read from its Claude Code transcript: every tool call in order with its time, what it changed,
 // a command's exit and output tail, refusals, and the tokens each step used. Pure: entries in, actions out.
 import { parseLoop } from './loop-line';
-import { usageOf, totalTokens } from './token-usage';
+import { cachedTokens, usageOf, totalTokens } from './token-usage';
 
 export type ActionKind = 'edit' | 'write' | 'bash' | 'read' | 'refused' | 'other';
 
@@ -13,6 +13,7 @@ export interface AgentAction {
   path: string | null;
   detail: string; // a diff, a command's output tail, the files read, or the refusal's reason
   tokens: number; // the message's tokens, on its first action only
+  cached?: number; // of those, the cache reads
   round: number | null; // the Loop round it happened in
 }
 
@@ -21,7 +22,7 @@ const COMMAND_CHARS = 80;
 const TEST_PATH = /(^|\/)(tests?|__tests__|e2e|spec|\.maestro)\/|\.(test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]+\.py$/;
 const REFUSED = /Tests belong to|only changes tests|hook.*(denied|blocked)|PreToolUse.*(deny|denied)/i;
 
-interface ToolUse { id: string; name: string; input: Record<string, unknown>; at: number; tokens: number; round: number | null }
+interface ToolUse { id: string; name: string; input: Record<string, unknown>; at: number; tokens: number; cached: number; round: number | null }
 type Item = { type?: string; id?: string; name?: string; input?: unknown; tool_use_id?: string; content?: unknown; is_error?: boolean; text?: string };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -42,7 +43,7 @@ function diff(oldText: unknown, newText: unknown): { added: number; removed: num
 }
 
 function finish(use: ToolUse, result: Item, root: string | null): AgentAction {
-  const base = { id: use.id, at: use.at, tokens: use.tokens, round: use.round };
+  const base = { id: use.id, at: use.at, tokens: use.tokens, cached: use.cached, round: use.round };
   const output = textOf(result.content);
   const file = relTo(use.input.file_path ?? use.input.notebook_path, root);
   if (result.is_error && REFUSED.test(output)) {
@@ -83,7 +84,7 @@ function foldReads(actions: AgentAction[]): AgentAction[] {
     const last = out[out.length - 1];
     if (action.kind === 'read' && last?.kind === 'read' && last.round === action.round) {
       const files = [...last.detail.split('\n'), action.path ?? ''].filter(Boolean);
-      out[out.length - 1] = { ...last, text: `Read ${files.length} files`, detail: files.join('\n'), tokens: last.tokens + action.tokens };
+      out[out.length - 1] = { ...last, text: `Read ${files.length} files`, detail: files.join('\n'), tokens: last.tokens + action.tokens, cached: (last.cached ?? 0) + (action.cached ?? 0) };
     } else out.push(action);
   }
   return out;
@@ -102,13 +103,16 @@ export function actionsFrom(entries: readonly unknown[], root: string | null = n
     const items: Item[] = Array.isArray(entry.message?.content) ? entry.message.content as Item[] : [];
     if (entry.type === 'assistant') {
       const usage = usageOf(entry);
-      let tokens = usage && (!usage.id || !seenMessages.has(usage.id)) ? totalTokens(usage.usage) : 0;
+      const fresh = usage && (!usage.id || !seenMessages.has(usage.id));
+      let tokens = fresh ? totalTokens(usage.usage) : 0;
+      let cached = fresh ? cachedTokens(usage.usage) : 0;
       if (usage?.id) seenMessages.add(usage.id);
       for (const item of items) {
         if (item.type === 'text' && item.text) round = parseLoop(item.text)?.round ?? round;
         if (item.type === 'tool_use' && item.id && item.name) {
-          pending.set(item.id, { id: item.id, name: item.name, input: isRecord(item.input) ? item.input : {}, at, tokens, round });
+          pending.set(item.id, { id: item.id, name: item.name, input: isRecord(item.input) ? item.input : {}, at, tokens, cached, round });
           tokens = 0;
+          cached = 0;
         }
       }
     }

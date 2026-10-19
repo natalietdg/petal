@@ -66,10 +66,10 @@ export function pipelineStrip(pipeline: { stages: StageConfig[] }, resultOf: (st
 // ---- One stage's results: a summary bar, then groups by file with failures first and open.
 // fixer: this task's bug fix agent; session: pasted into this tab's Claude, as before.
 export type FixWhere = 'fixer' | 'session';
-export interface ResultHandlers { fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => void; fixStage: (stage: StageResult, where: FixWhere) => void }
+export interface ResultHandlers { fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => void; fixStage: (stage: StageResult, where: FixWhere) => void; fixEstimate?: (stage: StageResult) => string | null }
 
 // The send to the bug fix agent, with the paste into this session as a small link beside it.
-function fixActions(label: string, title: string, fix: (where: FixWhere) => void, stage: boolean): HTMLElement {
+function fixActions(label: string, title: string, fix: (where: FixWhere) => void, stage: boolean, estimate: string | null = null): HTMLElement {
   const box = el('div', `tst-fix-actions${stage ? ' is-stage' : ''}`);
   const send = el('button', `tst-fix${stage ? ' tst-fix-stage' : ''}`, label);
   send.type = 'button';
@@ -80,6 +80,7 @@ function fixActions(label: string, title: string, fix: (where: FixWhere) => void
   here.title = 'Paste the failure into the Claude in this tab';
   here.addEventListener('click', () => fix('session'));
   box.append(send, here);
+  if (estimate) box.append(el('p', 'tst-estimate tst-fix-estimate', estimate));
   return box;
 }
 
@@ -92,7 +93,7 @@ function summaryBar(stage: StageResult, run: PipelineRun, handlers: ResultHandle
   facts.append(el('span', 'tst-status-word', STATUS_WORD[stage.status]), ...[duration(stage.durationMs), when(run.startedAt), byLabel(run)].filter(Boolean).map((t) => el('span', null, t)));
   const command = el('code', 'tst-command', stage.command);
   bar.append(counts, facts, command);
-  if (stage.status === 'failed') bar.append(fixActions('Send to bug fix agent', 'Send the failing tests and their output to this task’s bug fix agent', (where) => handlers.fixStage(stage, where), true));
+  if (stage.status === 'failed') bar.append(fixActions('Send to bug fix agent', 'Send the failing tests and their output to this task’s bug fix agent', (where) => handlers.fixStage(stage, where), true, handlers.fixEstimate?.(stage) ?? null));
   return bar;
 }
 
