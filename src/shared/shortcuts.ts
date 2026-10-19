@@ -76,7 +76,7 @@ export const GUIDE: readonly GuideGroup[] = [
       menuRow('Settings (Customize)', ACCEL.settings),
       menuRow('Open a repo', ACCEL.openRepo),
       keyRow('Fold History’s list (History open)', 'CmdOrCtrl+\\'),
-      keyRow('Close the open view, colour key or Focus', 'Escape'),
+      keyRow('Close the open view or Focus', 'Escape'),
     ],
   },
   {

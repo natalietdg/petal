@@ -38,7 +38,7 @@
 .cz-chip .cat-portrait svg { width: 100%; height: 100%; image-rendering: pixelated; }
 .cz-chip[aria-checked="true"] { background: var(--next-pill); border-color: var(--next-ink); color: var(--next-ink); }
 
-/* Shape guide: one row per shape, the raw markdown beside the reader's rendering of it. */
+/* Formatting guide, shapes first: one row per shape, the raw markdown beside the reader's rendering of it. */
 .sg-list { display: flex; flex-direction: column; margin-top: 4px; }
 .sg-row { padding: 12px 0; border-top: 1px solid var(--rule); }
 .sg-row:first-child { border-top: 0; }
@@ -79,6 +79,55 @@
 .sg-preview .prose > :last-child, .sg-preview .section-body > :last-child { margin-bottom: 0; }
 @media (max-width: 760px) {
   .sg-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Colour labels: the guide's second half, a live sample beside each colour's meaning.
+   Samples keep every colour from the reader's CSS; the :root #colour-labels rules only shrink size and spacing. */
+.ck-part { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--rule); scroll-margin-top: 12px; }
+.ck-title { margin: 0; font: 700 12px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; }
+.ck-sub { margin: 2px 0 10px; font-size: 13px; color: var(--muted); }
+.ck-list { margin: 0; padding: 0; list-style: none; }
+.ck-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 14px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ck-meaning { margin: 0; color: var(--muted); }
+.ck-meaning strong { color: var(--reader-fg); font-weight: 600; }
+:root #colour-labels .ck-sample.reader-column {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: var(--reader-fg); /* re-resolved here so Print's sample ink matches the reply's */
+  font-size: 13.5px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+}
+:root #colour-labels .prose :is(p, section, .section-body > *) { margin: 0; }
+:root #colour-labels .prose .story-section { display: block; }
+:root #colour-labels .prose :is(.section-body, .rail) { display: contents; }
+:root #colour-labels .prose .callout-decide { padding: 0.35em 0.6em; }
+:root #colour-labels .prose .story-section { padding: 0.35em 0.5em; border-radius: 10px; }
+/* Lifestyle's extra colour: listed only in that look. */
+.ck-look { display: none; }
+[data-reading="lifestyle"] .ck-look { display: block; }
+.ck-look-head { margin: 10px 0 4px; font: 700 11px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+:root #colour-labels .ck-sample .status { margin: 0; font-size: 11px; }
+:root #colour-labels .prose .story-head { margin: 0; padding: 0.4em 0.6em; border-radius: 12px; }
+:root #colour-labels .prose .headline { font-size: 1.25em; line-height: 1.15; margin: 0; }
+:root #colour-labels .prose .headline + p { font-size: 1em; line-height: 1.35; }
+:root #colour-labels .prose :is(.status-block, blockquote.sidebar) { margin: 0; padding: 0.4em 0.6em; font-size: 0.9em; }
+:root #colour-labels .prose blockquote.pull-quote { margin: 0; font-size: 1.1em; line-height: 1.2; }
+:root #colour-labels .prose h2 { margin: 0; font-size: 1.1em; }
+:root #colour-labels .prose table { margin: 0; font-size: 0.85em; }
+@media (max-width: 760px) {
+  .ck-entry { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
 
 /* Live preview: a small reader column in the current reading style. */

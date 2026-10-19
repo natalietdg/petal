@@ -36,7 +36,6 @@ import { latencyCheck } from './snapshot-latency';
 import { replyLatencyCheck } from './snapshot-reply-latency';
 import { pasteCheck } from './snapshot-paste';
 import { tarotCheck } from './snapshot-tarot';
-import { colourKeyCheck } from './snapshot-colour-key';
 import { shortcutsCheck } from './snapshot-shortcuts';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
@@ -57,7 +56,7 @@ import { historyLayoutCheck } from './snapshot-history-layout';
 import { petSizeCheck } from './snapshot-pet-size';
 import { customizeStylesCheck } from './snapshot-customize-styles';
 import { factoryCheck } from './snapshot-factory';
-import { shapeGuideCheck } from './snapshot-shape-guide';
+import { formattingGuideCheck } from './snapshot-formatting-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
@@ -425,7 +424,6 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['factory', () => factoryCheck(kit, win)],
-    ['shape guide', () => shapeGuideCheck(kit, win)],
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
@@ -442,7 +440,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['headline links', () => headlineLinksCheck(kit, win)],
     ['pasted', () => pastedCheck(kit, win)],
     ['bubble images', () => bubbleImagesCheck(kit, win)],
-    ['colour key', () => colourKeyCheck(kit, win)],
+    ['formatting guide', () => formattingGuideCheck(kit, win)], // shapes, then colour labels with their own sample reply
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
@@ -610,12 +608,6 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'column-axis') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await columnAxisCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
-    return finish();
-  }
-
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'colour-key') {
-    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-    await colourKeyCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
@@ -808,10 +800,10 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     return finish();
   }
 
-  if (process.env.PASTEL_SNAPSHOT_MODE === 'shape-guide' && fakeTranscript()) {
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'formatting-guide' && fakeTranscript()) {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
-    await shapeGuideCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    await formattingGuideCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
