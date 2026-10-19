@@ -1,6 +1,6 @@
 // Each task's suite file, <repo>/.petal/suites/<taskId>.json: read with a size cap and no symlinks, written atomically
 // inside the repo. A change by the task's testing agent is taken on the next read, with Undo; any other change is not.
-// The agents' session ids and what Petal took are kept in the testing store, outside the repo.
+// The agents' session ids, their saved loops and what Petal took are kept in the testing store, outside the repo.
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
@@ -12,8 +12,9 @@ import {
   type SuiteFileNow, type SuiteRecord, type SuiteViews, type TaskSuite,
 } from '../shared/task-suite';
 import type { Task } from '../shared/tasks';
-import type { AgentRecord } from '../shared/testing';
+import type { AgentRecord, SavedLoop } from '../shared/testing';
 import type { AgentRole } from '../shared/agent-names';
+import { loopFromAgents } from '../shared/agent-loop';
 
 export const suiteFile = (root: string, taskId: string): string => path.join(root, ...suitePath(taskId).split('/'));
 
@@ -67,6 +68,26 @@ export function rememberAgent(root: string, taskId: string, sessionId: string, r
   const data = store.load(root);
   const kept = [...agentsOf(root, taskId).filter((a) => a.sessionId !== sessionId), { sessionId, role }].slice(-MAX_AGENTS);
   store.save({ ...data, agents: { ...(data.agents ?? {}), [taskId]: kept } });
+}
+
+// Each task's loop or draft: the saved one, else one rebuilt from its agent records.
+export function loopsOf(root: string): Record<string, SavedLoop> {
+  const data = store.load(root);
+  const out: Record<string, SavedLoop> = {};
+  for (const taskId of new Set([...Object.keys(data.agents ?? {}), ...Object.keys(data.loops ?? {})])) {
+    const loop = loopFromAgents(data.loops?.[taskId], data.agents?.[taskId] ?? []);
+    if (loop) out[taskId] = loop;
+  }
+  return out;
+}
+
+// Saved only when its sessions are this task's agents in those roles; false otherwise.
+export function saveLoop(root: string, taskId: string, loop: SavedLoop): boolean {
+  const roleOf = (sessionId: string) => agentsOf(root, taskId).find((a) => a.sessionId === sessionId)?.role;
+  if (roleOf(loop.tester.sessionId) !== 'tester' || (loop.fixer && roleOf(loop.fixer.sessionId) !== 'fixer')) return false;
+  const data = store.load(root);
+  store.save({ ...data, loops: { ...(data.loops ?? {}), [taskId]: loop } });
+  return true;
 }
 
 // Takes the testing agents' changes to the tasks' files and returns each task's suite. Writes the store only when something changed.

@@ -4,7 +4,7 @@
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
 // records the paste; Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
 // how long it took; a tab in ~ picks a Claude session instead; a task with no suite starts one from Claude's checks;
-// editing saves; every theme, style and width fits.
+// a repo with no tasks gives the tab's session one, and its drafting agent a lane; editing saves; every theme, style and width fits.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
+import * as store from '../main/testing-store';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
 
@@ -370,6 +371,48 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       put(tasksJson(project), before.acme);
       put(tasksJson(bare), before.notes);
       fs.rmSync(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), { force: true });
+      testingFixture.project = project;
+    }
+
+    // A repo with no tasks: the tab's Claude session gets one silently, and Testing lands on its no-suite screen.
+    const emptyRepo = path.join(outDir, 'testing-fixture', 'empty-app');
+    const noClaudeRepo = path.join(outDir, 'testing-fixture', 'empty-shell');
+    for (const repo of [emptyRepo, noClaudeRepo]) fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+    const plainTab = ((await js('PastelTerm.tabs.ids()')) as string[]).find((t) => !startTabs.includes(t)) ?? null; // Run suite's tab: a shell, no Claude
+    testingFixture.project = emptyRepo;
+    try {
+      await js('PastelTerm.overlays.hideCurrent()');
+      await click('#testing-button');
+      const given = await settle((p) => p.state.project === 'empty-app' && Boolean(p.noSuite));
+      const made = fs.existsSync(tasksJson(emptyRepo)) ? (JSON.parse(fs.readFileSync(tasksJson(emptyRepo), 'utf8')) as { tasks: { id: string; owner: { sessionId: string } | null }[] }).tasks : [];
+      check(given && made.length === 1 && made[0]?.owner?.sessionId === 'snapshot-fixture' && JSON.stringify(given.state.target) === JSON.stringify({ kind: 'task', id: made[0]?.id }), `the tab's session gets one task and its no-suite screen: ${JSON.stringify({ target: given?.state.target, made })}`);
+      check(!(await js("document.querySelector('#testing .tst-no-tasks')")), 'no "add a task on the Board" dead end');
+
+      // Ask Claude: the testing agent drawing up the suite gets a lane (chat, action log, tokens) before any suite exists.
+      const startsBefore = testingFixture.loopStarts.length;
+      await click('#testing .tst-ask-suite');
+      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.command.includes('/petal-testing-suite')) ?? null, 4000);
+      const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
+        const box = document.querySelector('#testing .tst-agentsbox');
+        const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];
+        const tokens = box?.querySelector('.tst-agent-tokens')?.textContent ?? null;
+        return lanes.length && tokens ? { roles: lanes.map((l) => l.dataset.role), chat: !!box.querySelector('.tst-agent-chat'), views: box.querySelectorAll('.tst-agent-view').length, tokens, queue: !!box.querySelector('.tst-queue'), events: PastelTerm.testing.state().agents.events.tester.map((e) => e.text) } : null;
+      })()`), 8000);
+      check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
+      const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
+      check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
+      await capture('testing-draft-lane');
+
+      // A tab with no Claude in a repo with no tasks: one line, and no task is made.
+      testingFixture.project = noClaudeRepo;
+      await js('PastelTerm.overlays.hideCurrent()');
+      if (plainTab) await js(`PastelTerm.tabs.activate(${JSON.stringify(plainTab)})`);
+      await click('#testing-button');
+      const line = await waitFor<string | null>(() => js("document.querySelector('#testing .tst-no-tasks')?.textContent ?? null"), 6000);
+      check(plainTab && line === 'Start Claude in this tab to give it a test suite.' && !fs.existsSync(tasksJson(noClaudeRepo)), `a tab without Claude gets one line and no task: ${JSON.stringify(line)}`);
+    } finally {
+      await js('PastelTerm.overlays.hideCurrent()');
+      await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
       testingFixture.project = project;
     }
 

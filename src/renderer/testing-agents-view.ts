@@ -1,5 +1,6 @@
 // The two agents of a task's test loop, side by side: a live lane each (her name for it, its tab, what it is doing,
-// tokens so far, an action log), then the bug queue between them. testing.ts owns the state and the handoffs.
+// tokens so far, an action log), the last round's tokens next to the estimate, then the bug queue between them.
+// testing-agents.ts owns the state and the handoffs.
 import { el } from './dom';
 import { when } from './testing-view';
 import { BUG_STATES, BUG_STATE_WORDS, queueCounts, type QueuedBug } from '../shared/bug-queue';
@@ -8,14 +9,16 @@ import { AGENT_NAME_MAX, type AgentRole } from '../shared/agent-names';
 import { tokenText } from '../shared/token-usage';
 import { render } from './markdown';
 import type { ChatTurn } from '../shared/agent-chat';
+import type { LoopEvent } from '../shared/testing';
 
 const LOG_PAGE = 20;
 
-export interface PetalEvent { at: number; text: string }
+export type PetalEvent = LoopEvent;
 
 export interface LaneModel {
   role: AgentRole;
   name: string;
+  started: boolean; // Petal started this agent for the task
   tabId: string | null; // its tab, when open here
   status: string; // what it is doing now
   busy: boolean;
@@ -29,9 +32,10 @@ export interface LaneModel {
 
 export interface AgentsModel {
   lanes: LaneModel[];
-  queue: QueuedBug[];
-  estimate: number | null; // before Start: tokens per round for both agents
-  started: boolean;
+  queue: QueuedBug[] | null; // null until the loop starts
+  estimate: number | null; // tokens per round for both agents
+  round: { label: string; tokens: number } | null; // the last round's actual tokens, once the loop started
+  total: number | null; // tokens so far, once an agent started
   renaming: AgentRole | null;
   logOpen: ReadonlySet<AgentRole>;
   logShown: Partial<Record<AgentRole, number>>; // entries shown, grows with Show older
@@ -88,7 +92,7 @@ function chat(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElem
     if (turn.markdown) { const reply = render(turn.markdown); reply.classList.add('tst-agent-reply'); item.append(reply); }
     turns.append(item);
   }
-  if (!lane.turns.length) turns.append(el('li', 'tst-muted', lane.tabId ? 'No replies yet.' : 'Start the loop to chat with this agent.'));
+  if (!lane.turns.length) turns.append(el('li', 'tst-muted', lane.tabId ? 'No replies yet.' : lane.started ? 'Its tab isn’t open in this window.' : 'Start the loop to chat with this agent.'));
   const refusal = lane.actions.filter((a) => a.kind === 'refused' && a.at >= lane.startedAt).at(-1); // the newest since the loop started
   const form = el('form', 'tst-agent-send');
   const input = el('textarea', 'tst-input tst-agent-input');
@@ -178,7 +182,7 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
   facts.append(dot, el('span', null, lane.status));
   if (lane.tokens !== null) facts.append(el('span', 'tst-agent-tokens', `${tokenText(lane.tokens)} tokens`));
   box.append(head, facts);
-  if (!model.started) return box;
+  if (!lane.started) return box;
   const view = model.view[lane.role] ?? 'chat';
   const switcher = el('div', 'tst-agent-views');
   switcher.setAttribute('role', 'group');
@@ -219,8 +223,9 @@ export function agentsPanel(model: AgentsModel, on: AgentsHandlers): HTMLElement
   const lanes = el('div', 'tst-agent-lanes');
   for (const lane of model.lanes) lanes.append(laneEl(lane, model, on));
   box.append(lanes);
-  const total = model.lanes.reduce((n, l) => n + (l.tokens ?? 0), 0);
-  if (!model.started && model.estimate !== null) box.append(el('p', 'tst-muted tst-agent-estimate', `About ${tokenText(model.estimate)} tokens per round for both agents. An estimate from the briefs and the last run’s output.`));
-  if (model.started) box.append(el('p', 'tst-muted tst-agent-total', `${tokenText(total)} tokens so far for both agents`), queueEl(model.queue));
+  if (!model.queue && model.estimate !== null) box.append(el('p', 'tst-muted tst-agent-estimate', `About ${tokenText(model.estimate)} tokens per round for both agents. An estimate from the briefs and the last run’s output.`));
+  if (model.round) box.append(el('p', 'tst-muted tst-agent-round', `${model.round.label}: ${tokenText(model.round.tokens)} tokens for both agents${model.estimate !== null ? ` · about ${tokenText(model.estimate)} estimated per round` : ''}`));
+  if (model.total !== null) box.append(el('p', 'tst-muted tst-agent-total', `${tokenText(model.total)} tokens so far${model.queue ? ' for both agents' : ''}`));
+  if (model.queue) box.append(queueEl(model.queue));
   return box;
 }

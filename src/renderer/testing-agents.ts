@@ -1,33 +1,31 @@
 // A task's test loop as two agents at once: the testing agent and the bug fix agent, each in its own tab Petal started.
-// On every refresh Petal steps the bug queue between them and sends each handoff through the reply box's paste path.
+// A timer steps every running loop's bug queue whether Testing is open or not, and sends each handoff through the reply
+// box's paste path. The queue and Petal's events are saved next to the agent records, so lanes come back after a reload.
 import * as tabs from './tabs';
 import * as composer from './composer';
 import { isIpcError } from './dom';
-import { agentsPanel, type LaneModel, type PetalEvent } from './testing-agents-view';
-import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { buildFixerBrief, buildLoopBrief, isActive, loopStatus, stopAll, type Criteria, type LoopStatus } from '../shared/test-loop';
-import { BUG_STATE_WORDS, fixLines, queueDone, stepQueue, type QueuedBug, type QueueMessage } from '../shared/bug-queue';
+import { agentsPanel, type LaneModel } from './testing-agents-view';
+import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
+import { buildFixerBrief, buildLoopBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
+import { activeBugs, fixLines, queueDone } from '../shared/bug-queue';
+import { agentOf, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { estimateRoundTokens, totalTokens } from '../shared/token-usage';
-import { forTask, type TaskSuite } from '../shared/task-suite';
+import type { TaskSuite } from '../shared/task-suite';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
-import type { AgentStart } from '../shared/ipc';
-import type { PipelineRun, StackItem } from '../shared/testing';
+import type { LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
 import type { Task } from '../shared/tasks';
+import type { QueueMessage } from '../shared/bug-queue';
 
-export interface AgentLoop {
+export interface AgentLoop extends SavedLoop {
+  root: string;
   taskId: string;
-  tester: AgentStart;
-  fixer: AgentStart;
-  startedAt: number;
-  stoppedAt: number | null;
-  stopping: boolean;
-  queue: QueuedBug[];
-  events: Record<AgentRole, PetalEvent[]>;
   actions: Record<AgentRole, AgentAction[]>;
   tokens: Record<AgentRole, number | null>;
   sending: boolean;
+  stopping: boolean;
+  inputs: Pick<LoopFacts, 'bugs' | 'runs' | 'names'> | null; // from main's last tick; null until then
 }
 
 export interface AgentContext {
@@ -38,19 +36,26 @@ export interface AgentContext {
   suite: () => TaskSuite | null;
   stack: () => StackItem[];
   names: () => AgentNames;
-  criteria: () => Criteria | null;
   taskRuns: () => PipelineRun[];
-  redraw: () => void;
+  redraw: () => void; // draws only while Testing is open
   renamed: () => Promise<void>; // reload after a name changed
   say: (text: string) => void; // the loop panel's note
 }
 
 const ROLES: AgentRole[] = ['tester', 'fixer'];
-const FAILURE_CHARS = 1500;
-const EVENTS_KEPT = 100;
+const TICK_MS = 1500; // a running loop's queue steps this often, Testing open or not
+const FIND_EVERY = 10; // with nothing running, ask main for loops every 10th tick (after a reload)
+const STARTING_MS = 120_000; // a lane with no tab here reads as starting this long
+
+const keyOf = (root: string, taskId: string): string => `${root}:${taskId}`;
+const isRunning = (r: AgentLoop): boolean => r.kind === 'loop' && !r.stoppedAt;
+const toSaved = ({ kind, tester, fixer, startedAt, stoppedAt, queue, events }: AgentLoop): SavedLoop => ({ kind, tester, fixer, startedAt, stoppedAt, queue, events });
+const fromSaved = (root: string, taskId: string, saved: SavedLoop): AgentLoop => ({
+  ...saved, root, taskId, actions: { tester: [], fixer: [] }, tokens: { tester: null, fixer: null }, sending: false, stopping: false, inputs: null,
+});
 
 export function createAgents(ctx: AgentContext) {
-  const loops = new Map<string, AgentLoop>(); // `${root}:${taskId}` -> its loop, this window only
+  const loops = new Map<string, AgentLoop>(); // `${root}:${taskId}` -> its loop or draft, this window's copy
   const element = document.createElement('div');
   element.className = 'tst-agentsbox';
   let renaming: AgentRole | null = null;
@@ -60,20 +65,21 @@ export function createAgents(ctx: AgentContext) {
   const drafts: Partial<Record<AgentRole, string>> = {};
   const notes: Partial<Record<AgentRole, string>> = {};
 
-  const key = (): string | null => (ctx.root() && ctx.task() ? `${ctx.root()}:${ctx.task()?.id}` : null);
-  const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null;
-  const tabOf = (agent: AgentStart | undefined): string | null => {
+  const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
+  const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
+  const shownLoop = (): AgentLoop | null => { const r = record(); return r?.kind === 'loop' ? r : null; };
+  const tabOf = (agent: LoopAgent | null | undefined): string | null => {
     if (!agent) return null;
     const matches = tabs.ids().filter((id) => tabs.get(id)?.update?.sessionId === agent.sessionId);
     const bySession = matches.find((id) => tabs.get(id)?.update?.state === 'live') ?? matches[0]; // a live one first
     return bySession ?? (agent.tabId && tabs.get(agent.tabId) ? agent.tabId : null);
   };
-  const updateOf = (agent: AgentStart | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
-  const nameOf = (role: AgentRole): string => agentName(ctx.names(), role);
+  const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
+  const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
   function facts(): { record: AgentLoop | null; testerTab: string | null; progress: LoopProgress | null; status: LoopStatus } {
-    const r = record();
+    const r = shownLoop();
     const testerTab = tabOf(r?.tester);
     const progress = latestLoop(updateOf(r?.tester)?.replies ?? [], r?.startedAt ?? 0);
     let status = loopStatus({ progress, live: testerTab ? tabs.get(testerTab)?.update?.state === 'live' : false, startedAt: r?.startedAt ?? null, stoppedAt: r?.stoppedAt ?? null, now: Date.now() });
@@ -81,18 +87,22 @@ export function createAgents(ctx: AgentContext) {
     return { record: r, testerTab, progress, status };
   }
 
-  const note = (r: AgentLoop, role: AgentRole, text: string) => { r.events[role] = [...r.events[role], { at: Date.now(), text }].slice(-EVENTS_KEPT); };
+  const note = (r: AgentLoop, role: AgentRole, text: string) => { r.events = withEvent(r.events, role, text, Date.now()); };
+  const persist = (r: AgentLoop): void => { void window.pastel.testing.loops({ save: { root: r.root, taskId: r.taskId, loop: toSaved(r) } }); };
 
-  // The failure to hand the fixer: the test's output from the task's newest run that has it.
-  function failureOf(bug: QueuedBug): string {
-    const [file, name] = (bug.test ?? '').split('::');
-    for (const run of ctx.taskRuns()) {
-      for (const stage of run.stages) {
-        const test = stage.tests.find((t) => t.status === 'failed' && (!file || t.file.endsWith(file) || file.endsWith(t.file)) && (!name || t.name.includes(name)));
-        if (test?.failure) return `Failure output:\n${test.failure.slice(0, FAILURE_CHARS)}`;
-      }
-    }
-    return 'Run the test to see the failure.';
+  // A saved loop this window lacks, or one from a newer start, becomes this window's copy; true when it did.
+  function adopt(root: string, taskId: string, saved: SavedLoop): boolean {
+    const k = keyOf(root, taskId);
+    if (!takesSaved(loops.get(k) ?? null, saved)) return false;
+    loops.set(k, fromSaved(root, taskId, saved));
+    return true;
+  }
+
+  // Testing's refresh hands over the project's saved loops, so lanes rebuild on open.
+  function adoptAll(root: string, saved: Record<string, SavedLoop>): void {
+    let changed = false;
+    for (const [taskId, loop] of Object.entries(saved)) changed = adopt(root, taskId, loop) || changed;
+    if (changed) ctx.redraw();
   }
 
   async function deliver(r: AgentLoop, message: QueueMessage): Promise<boolean> {
@@ -102,43 +112,65 @@ export function createAgents(ctx: AgentContext) {
   }
 
   // One queue step: new bugs join, fixes move to verify, and each handoff is sent once. A send that fails is tried again.
-  async function step(): Promise<void> {
-    const r = record();
-    const task = ctx.task();
-    if (!r || !task || r.stoppedAt || r.sending) return;
-    const { progress } = facts();
+  // A loop whose testing agent ended it, with no bug in flight, stops stepping.
+  async function step(r: AgentLoop): Promise<void> {
+    if (!r.inputs || !isRunning(r) || r.sending || !r.fixer) return;
+    const progress = latestLoop(updateOf(r.tester)?.replies ?? [], r.startedAt);
+    if (progress && isTerminal(progress.phase) && !activeBugs(r.queue).length) { r.stoppedAt = Date.now(); persist(r); ctx.redraw(); return; }
+    const names = { tester: nameOf('tester', r.inputs.names), fixer: nameOf('fixer', r.inputs.names) };
     const fixer = updateOf(r.fixer);
-    const before = r.queue;
-    const result = stepQueue(r.queue, {
-      bugs: forTask(ctx.criteria()?.bugs ?? [], task.id), testerRound: progress?.round ?? 0, fixerBusy: Boolean(fixer?.busy),
-      fixesDone: fixLines(fixer?.replies ?? [], r.startedAt), now: Date.now(),
-    }, { tester: nameOf('tester'), fixer: nameOf('fixer'), failure: failureOf });
+    const before = JSON.stringify([r.queue, r.events]);
+    const result = stepLoop(r, {
+      bugs: r.inputs.bugs, runs: r.inputs.runs, testerRound: progress?.round ?? 0,
+      fixerBusy: Boolean(fixer?.busy), fixesDone: fixLines(fixer?.replies ?? [], r.startedAt), now: Date.now(),
+    }, names);
     r.queue = result.queue;
-    for (const move of result.moves) {
-      const to = BUG_STATE_WORDS[move.to].toLowerCase();
-      if (move.to === 'fixing') note(r, 'fixer', `${nameOf('tester')} → ${nameOf('fixer')} · ${move.name}`);
-      else if (move.to === 'verify') note(r, 'tester', `${nameOf('fixer')} → ${nameOf('tester')} · verify ${move.name}`);
-      else note(r, move.to === 'verified' ? 'fixer' : 'tester', `Bug ${move.from ? `${BUG_STATE_WORDS[move.from].toLowerCase()} → ` : 'filed · '}${to} · ${move.name}`);
-    }
-    if (!result.send.length) { if (before !== r.queue) ctx.redraw(); return; }
+    r.events = result.events;
     r.sending = true;
     try {
-      for (const message of result.send) {
-        if (await deliver(r, message)) continue;
-        r.queue = r.queue.map((b) => (b.key !== message.key ? b : message.to === 'fixer' ? { ...b, state: 'open', asked: false } : { ...b, asked: false }));
-      }
+      for (const message of result.send) if (!(await deliver(r, message))) r.queue = unsent(r.queue, message);
     } finally {
       r.sending = false;
     }
+    if (JSON.stringify([r.queue, r.events]) === before) return;
+    persist(r);
     ctx.redraw();
   }
 
+  // Every tick while a loop runs: main lists this window's running loops with their bugs, then each one steps.
+  let ticks = 0;
+  let ticking = false;
+  async function tick(): Promise<void> {
+    ticks += 1;
+    if (ticking || (![...loops.values()].some(isRunning) && ticks % FIND_EVERY)) return;
+    ticking = true;
+    try {
+      const reply = await window.pastel.testing.loops({});
+      if (isIpcError(reply)) return;
+      let adopted = false;
+      for (const f of reply.loops) adopted = adopt(f.root, f.taskId, f.loop) || adopted;
+      if (adopted) ctx.redraw();
+      for (const f of reply.loops) {
+        const r = loops.get(keyOf(f.root, f.taskId));
+        if (!r) continue;
+        r.inputs = { bugs: f.bugs, runs: f.runs, names: f.names };
+        await step(r);
+      }
+    } finally {
+      ticking = false;
+    }
+  }
+  setInterval(() => void tick(), TICK_MS);
+
+  // The shown task's agents: their action logs and tokens, from each session's transcript.
   async function refreshLogs(): Promise<void> {
     const r = record();
     const from = ctx.tabId();
     if (!r || !from) return;
     for (const role of ROLES) {
-      const reply = await window.pastel.testing.agentLog({ tabId: from, root: ctx.picked(), sessionId: r[role].sessionId });
+      const agent = agentOf(r, role);
+      if (!agent) continue;
+      const reply = await window.pastel.testing.agentLog({ tabId: from, root: ctx.picked(), sessionId: agent.sessionId });
       if (isIpcError(reply) || 'note' in reply) continue;
       r.actions[role] = reply.actions;
       r.tokens[role] = totalTokens(reply.tokens);
@@ -156,7 +188,7 @@ export function createAgents(ctx: AgentContext) {
     };
   }
 
-  // Before Start: tokens per round, from the two briefs and the size of the task's last run output.
+  // Tokens per round, from the two briefs and the size of the task's last run output.
   function estimate(): number | null {
     const b = briefs('', 5);
     if (!b) return null;
@@ -168,24 +200,23 @@ export function createAgents(ctx: AgentContext) {
   async function start(focus: string, rounds: number): Promise<void> {
     const from = ctx.tabId();
     const task = ctx.task();
-    const k = key();
+    const root = ctx.root();
     const b = briefs(focus, rounds);
-    if (!from || !task || !k || !b || isActive(facts().status)) return;
+    if (!from || !task || !root || !b || isActive(facts().status)) return;
     const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, testerBrief: b.tester, fixerBrief: b.fixer });
     if (isIpcError(reply) || 'note' in reply) { ctx.say(isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note); return; }
-    const r: AgentLoop = {
-      taskId: task.id, tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, stopping: false, queue: [],
-      events: { tester: [], fixer: [] }, actions: { tester: [], fixer: [] }, tokens: { tester: 0, fixer: 0 }, sending: false,
-    };
+    const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
+    r.tokens = { tester: 0, fixer: 0 };
     note(r, 'tester', `Started ${nameOf('tester')} in a new tab`);
     note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
-    loops.set(k, r);
+    loops.set(keyOf(root, task.id), r);
+    persist(r);
     ctx.say(reply.tester.tabId && reply.fixer.tabId ? `${nameOf('tester')} and ${nameOf('fixer')} are starting in two new tabs.` : 'Couldn’t open both tabs. Close the loop and try again.');
   }
 
   // Stop halts both: Esc to each, then the stop message once each is idle.
   async function stop(): Promise<void> {
-    const r = record();
+    const r = shownLoop();
     if (!r || r.stopping) return;
     r.stopping = true;
     ctx.say('Interrupting both agents, then asking them to stop and summarise.');
@@ -200,15 +231,18 @@ export function createAgents(ctx: AgentContext) {
     r.stopping = false;
     r.stoppedAt = Date.now();
     for (const role of ROLES) note(r, role, 'Stopped');
+    persist(r);
     ctx.say('Asked both agents to stop. Their summaries show in their tabs.');
     ctx.redraw();
   }
 
   function laneStatus(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): string {
-    if (!r) return 'Not started';
+    const agent = r ? agentOf(r, role) : null;
+    if (!r || !agent) return 'Not started';
     if (r.stoppedAt) return 'Stopped';
-    const update = updateOf(r[role]);
-    if (!update) return 'Starting in its tab';
+    const update = updateOf(agent);
+    if (!update) return Date.now() - r.startedAt < STARTING_MS ? 'Starting in its tab' : 'Its tab isn’t open here';
+    if (r.kind === 'draft') return update.busy ? 'Drawing up the suite' : 'Idle';
     if (role === 'tester') return progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : update.busy ? 'Working' : 'Idle';
     const fixing = r.queue.find((b) => b.state === 'fixing');
     return fixing ? `Fixing ${fixing.name}` : update.busy ? 'Working' : 'Idle, waiting for bugs';
@@ -217,12 +251,14 @@ export function createAgents(ctx: AgentContext) {
   // Her message to one agent, through the reply box's paste path; refused while that agent is asking something.
   async function send(role: AgentRole, text: string): Promise<void> {
     const r = record();
-    const route = routeMessage(role, r, (sessionId) => { const id = tabOf({ sessionId, tabId: null }); const tab = id ? tabs.get(id) : null; return tab ? composer.claudeIsAsking(tab) : false; }, text);
+    const agent = r ? agentOf(r, role) : null;
+    const asking = (sessionId: string) => { const id = tabOf({ sessionId, tabId: null }); const tab = id ? tabs.get(id) : null; return tab ? composer.claudeIsAsking(tab) : false; };
+    const route = routeMessage(role, agent ? { tester: agent, fixer: agent } : null, asking, text); // only the role's own entry is read
     if ('note' in route) { notes[role] = route.note; draw(); return; }
-    const id = tabOf(r?.[role]);
+    const id = tabOf(agent);
     const tab = id ? tabs.get(id) : null;
     const sent = tab ? await composer.pasteToClaude(tab, composer.stripControls(text).trim()) : false;
-    if (sent && r) { drafts[role] = ''; note(r, role, `You → ${nameOf(role)}: ${text.trim().slice(0, 80)}`); }
+    if (sent && r) { drafts[role] = ''; note(r, role, `You → ${nameOf(role)}: ${text.trim().slice(0, 80)}`); persist(r); }
     notes[role] = sent ? `Sent to ${nameOf(role)}.` : 'Couldn’t reach that tab. Try again.';
     (document.activeElement as HTMLElement | null)?.blur();
     draw();
@@ -232,16 +268,26 @@ export function createAgents(ctx: AgentContext) {
     const typing = element.contains(document.activeElement) && (renaming !== null || document.activeElement instanceof HTMLTextAreaElement);
     if (typing) return; // her typing survives the refresh
     const task = ctx.task();
-    element.hidden = !task || !ctx.suite();
-    if (element.hidden) return;
     const r = record();
+    element.hidden = !task || (!ctx.suite() && !r); // a draft's lane shows before the suite exists
+    if (element.hidden) return;
     const { progress } = facts();
-    const lanes: LaneModel[] = ROLES.map((role) => ({
-      role, name: nameOf(role), tabId: r ? tabOf(r[role]) : null, status: laneStatus(role, r, progress), busy: Boolean(r && !r.stoppedAt && updateOf(r[role])?.busy),
-      tokens: r ? r.tokens[role] : null, actions: r?.actions[role] ?? [], events: r?.events[role] ?? [],
-      turns: r ? chatTurns(updateOf(r[role])?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
-    }));
-    element.replaceChildren(agentsPanel({ lanes, queue: r?.queue ?? [], estimate: r ? null : estimate(), started: Boolean(r), renaming, logOpen, logShown, view, drafts }, {
+    const roles = ctx.suite() || r?.kind === 'loop' ? ROLES : ROLES.filter((role) => r && agentOf(r, role));
+    const lanes: LaneModel[] = roles.map((role) => {
+      const agent = r ? agentOf(r, role) : null;
+      return {
+        role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status: laneStatus(role, r, progress), busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy),
+        tokens: agent ? r?.tokens[role] ?? null : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
+        turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
+      };
+    });
+    const loop = r?.kind === 'loop' ? r : null;
+    const round = loop ? roundTokens(loop.actions.tester, loop.actions.fixer, loop.startedAt) : null;
+    const started = lanes.filter((l) => l.started);
+    element.replaceChildren(agentsPanel({
+      lanes, queue: loop?.queue ?? null, estimate: estimate(), round: round ? { label: roundLabel(round), tokens: round.tokens } : null,
+      total: started.length ? started.reduce((n, l) => n + (l.tokens ?? 0), 0) : null, renaming, logOpen, logShown, view, drafts,
+    }, {
       rename: (role) => { renaming = role; draw(); },
       saveName: (role, name) => void saveName(role, name),
       openTab: (id) => tabs.activate(id),
@@ -262,7 +308,13 @@ export function createAgents(ctx: AgentContext) {
     await ctx.renamed();
   }
 
-  return { element, record, facts, step, refreshLogs, start, stop, draw, testerTab: () => facts().testerTab, state: () => ({ queue: record()?.queue ?? [], renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, record(), facts().progress) })) }) };
+  // For the snapshot harness: what the shown task's lanes say, and forgetting this window's copies as a new window would.
+  const state = () => {
+    const r = record();
+    return { kind: r?.kind ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
+  };
+
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, draw, testerTab: () => facts().testerTab, state, forget: () => loops.clear() };
 }
 
 export type Agents = ReturnType<typeof createAgents>;
