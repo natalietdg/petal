@@ -8,7 +8,7 @@ import { sessionNameEl } from './session-name';
 import { sessionLabelText } from '../shared/session-label';
 import type { SessionRow, SubagentRow } from '../main/sessions-monitor';
 import type { ClosedSession } from '../main/closed-store';
-import { agentsBadgeText, sessionsPillText, type SessionsView } from '../shared/ipc';
+import { agentsBadgeText, closeNote, sessionsPillText, type SessionsView } from '../shared/ipc';
 import { limitReached, limitText, overLimit } from '../shared/session-limit';
 
 const OPEN_REFRESH_MS = 2000;
@@ -61,15 +61,17 @@ function textButton(label: string, className: string, onClick: () => unknown): H
   return b;
 }
 
+// The one Close path, shared with the Board: main's sessions:close, answered as a note or null once closed.
+export const closeSession = async (sessionId: string): Promise<string | null> => closeNote(await window.pastel.closeSession(sessionId));
+
 async function closeNow(sessionId: string): Promise<void> {
   confirming = null;
   closingId = sessionId;
   notes.delete(sessionId);
   refresh();
-  const result = await window.pastel.closeSession(sessionId);
+  const note = await closeSession(sessionId);
   closingId = null;
-  if (isIpcError(result)) notes.set(sessionId, `Couldn’t close it: ${result.error}`);
-  else if (!result.closed) notes.set(sessionId, result.note);
+  if (note) notes.set(sessionId, note);
   refresh();
 }
 

@@ -327,6 +327,32 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     await js(`[...document.querySelectorAll('#board .board-confirm .session-link')].find((b) => b.textContent === 'Cancel').click()`);
     check(await waitFor(async () => (await js("document.querySelector('#board .board-confirm')")) === null || null, 3000), 'Cancel takes the question away');
 
+    // 8b Close on every card: a sibling of the card button, asks inline, No keeps it. Yes goes through sessions:close,
+    // which looks in the stand-in claude-home, finds no live process for a fixture id, and refuses before any signal.
+    const closes = await js(`[...document.querySelectorAll('#board .board-item')].filter((i) => i.querySelector(':scope > .board-card')).map((i) => {
+      const own = i.querySelectorAll(':scope > .board-close');
+      return { id: i.querySelector(':scope > .board-card').dataset.sessionId, count: own.length, label: own[0]?.getAttribute('aria-label') ?? null, want: 'Close ' + i.querySelector('.board-name').title, text: own[0]?.textContent ?? null };
+    })`);
+    const nested: number = await js("document.querySelectorAll('#board .board-card .board-close, #board button button').length");
+    check(closes.length && closes.every((c: { count: number; label: string | null; want: string; text: string | null }) => c.count === 1 && c.label === c.want && c.text === 'Close') && nested === 0,
+      `every card has one Close beside its button, named for the session: ${JSON.stringify({ nested, closes })}`);
+    const closeItem = `document.querySelector('#board .board-card[data-session-id="${ELSEWHERE_IDLE.id}"]').closest('.board-item')`;
+    const closeState = () => js(`(() => { const i = ${closeItem}; return { overlay: PastelTerm.overlays.current(), confirm: i.querySelector('.board-close-confirm')?.innerText.replace(/\\s+/g, ' ').trim() ?? null, close: i.querySelector('.board-close')?.textContent ?? null, note: i.querySelector('.board-note')?.textContent ?? null }; })()`);
+    await js(`${closeItem}.querySelector('.board-close').click()`);
+    const closeAsked = await waitFor(async () => { const s = await closeState(); return s.confirm ? s : null; }, 3000);
+    check(closeAsked?.confirm === 'Close this Claude? Yes · No' && closeAsked.overlay === 'board', `Close asks inline and leaves the board open, the card not opened: ${JSON.stringify(closeAsked)}`);
+    await js(`${closeItem}.querySelector('.board-close-confirm .session-no').click()`);
+    const closeKept = await waitFor(async () => { const s = await closeState(); return s.confirm === null ? s : null; }, 3000);
+    check(closeKept && (await cardOf(ELSEWHERE_IDLE)), `No dismisses the confirm and closes nothing: ${JSON.stringify(closeKept)}`);
+    await js(`${closeItem}.querySelector('.board-close').click()`);
+    await waitFor(async () => (await closeState()).confirm || null, 3000);
+    // Same tick as the click: the card shows Closing… disabled while main answers.
+    const closingNow = await js(`(() => { ${closeItem}.querySelector('.board-close-confirm .session-yes').click(); const b = ${closeItem}.querySelector('.board-close'); return { text: b.textContent, disabled: b.disabled }; })()`);
+    check(closingNow.text === 'Closing…' && closingNow.disabled, `Yes shows Closing… disabled: ${JSON.stringify(closingNow)}`);
+    const closeRefused = await waitFor(async () => { const s = await closeState(); return s.note ? s : null; }, 6000);
+    check(closeRefused?.note === 'Couldn’t close it: That Claude session is not running.' && closeRefused.close === 'Close' && closeRefused.confirm === null,
+      `Yes goes through the Sessions panel's close path; main refuses a fixture with the panel's own words: ${JSON.stringify(closeRefused)}`);
+
     // 9 Every theme and look, 1600 and 800: nothing sideways. PNGs of the board light and dark at both widths.
     for (const width of [1600, 800]) {
       check(await sizeTo(width), `${width}px window sized`);
