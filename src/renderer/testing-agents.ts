@@ -1,9 +1,11 @@
 // A task's test loop as two agents at once: the testing agent and the bug fix agent. Main owns both: it steps the bug
 // queue, routes every message by session id and resumes an agent with no claude. This window mirrors main's loops,
-// pastes what main asks into the agent terminals it holds, and reports which of them show a prompt. An agent waiting on
-// a prompt reads Needs you and badges the dock's Testing button.
+// draws a lane per agent (its conversation, a message box, its live terminal on demand), pastes what main asks into
+// the agent terminals it holds, and reports which of them show a prompt. An agent waiting on a prompt reads Needs you
+// and badges the dock's Testing button.
 import * as tabs from './tabs';
 import * as composer from './composer';
+import * as agentTerms from './agent-terms';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
@@ -16,17 +18,19 @@ import { cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type Rou
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
 import { askAgainText, awaitingReview, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
-import { agentTab, chatTurns, laneReach, reopenStalledNote, routeMessage, type LaneReach } from '../shared/agent-chat';
+import { canMessage, chatPlaceholder, chatTurns, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, type LaneTerminal } from '../shared/agent-chat';
 import type { AgentView, LoopFacts, LoopView, PipelineRun, StackItem } from '../shared/testing';
 import type { Prd, Task } from '../shared/tasks';
+import type { Reply } from '../shared/types';
 
 export interface AgentLoop extends LoopView {
   root: string;
   taskId: string;
   actions: Record<AgentRole, AgentAction[]>;
   tokens: Record<AgentRole, TokenUsage | null>;
+  replies: Record<AgentRole, Reply[]>; // newest first, from its transcript or live terminal (agent-log)
   stopping: boolean;
-  inputs: Pick<LoopFacts, 'names'> | null; // from main's last tick; null until then
+  inputs: Pick<LoopFacts, 'names'> | null; // from main's last read; null until then
 }
 
 export interface AgentContext {
@@ -43,6 +47,7 @@ export interface AgentContext {
   redraw: () => void; // draws only while Testing is open
   renamed: () => Promise<void>; // reload after a name changed
   say: (text: string) => void; // the loop panel's note
+  open: () => void; // shows Testing
 }
 
 const ROLES: AgentRole[] = ['tester', 'fixer'];
@@ -52,6 +57,7 @@ const FIND_EVERY = 10; // with nothing at work, ask main for loops every 10th ti
 const keyOf = (root: string, taskId: string): string => `${root}:${taskId}`;
 const isRunning = (r: AgentLoop): boolean => r.kind === 'loop' && !r.stoppedAt;
 const atWork = (r: AgentLoop): boolean => isRunning(r) || [r.tester, r.fixer].some((a) => a && a.state !== 'ended' && a.state !== 'closed');
+const blank = <T>(make: () => T): Record<AgentRole, T> => ({ tester: make(), fixer: make() });
 
 export function createAgents(ctx: AgentContext) {
   const loops = new Map<string, AgentLoop>(); // `${root}:${taskId}` -> its loop or draft, this window's copy
@@ -66,51 +72,53 @@ export function createAgents(ctx: AgentContext) {
   const view: Partial<Record<AgentRole, 'chat' | 'actions'>> = {};
   const drafts: Partial<Record<AgentRole, string>> = {};
   const notes: Partial<Record<AgentRole, string>> = {};
-  const reopened = new Map<string, number>(); // agent sessionId -> when she asked to reopen it here
+  const askedAt = new Map<string, number>(); // `${root}:${taskId}` -> when Petal last sent a follow-up to its drafting agent
+  const pastedProblems = new Set<string>(); // `${key}:${problem}` sent back once each
   let closeAsking = false;
   let closing = false;
+  // The lanes' terminals, by agent session: the ones she asked to see, the box each mounts in, and what is in it.
+  const termWanted = new Set<string>();
+  const termBoxes = new Map<string, HTMLDivElement>();
+  const mounted = new Map<string, string>(); // sessionId -> the agent terminal's tab id in its box
+  const resumeAsked = new Set<string>(); // sessions Open terminal already asked main to resume
 
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
   const shownLoop = (): AgentLoop | null => { const r = record(); return r?.kind === 'loop' ? r : null; };
-  const tabOf = (agent: AgentView | null | undefined): string | null =>
-    agentTab(agent, tabs.ids().map((id) => { const update = tabs.get(id)?.update; return { id, sessionId: update?.sessionId ?? null, live: update?.state === 'live' }; }));
-  const opening = (agent: AgentView | null): boolean => agent?.state === 'starting';
-  const busyOf = (agent: AgentView | null): boolean => agent?.state === 'working';
-  const askingOf = (agent: AgentView | null): boolean => agent?.state === 'asking';
-  const askedAt = new Map<string, number>(); // `${root}:${taskId}` -> when Petal last pasted a follow-up to its drafting agent
-  const pastedProblems = new Set<string>(); // `${key}:${problem}` pasted back once each
+  const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
   const drafting = (): AgentLoop | null => { const r = record(); return r?.kind === 'draft' && !r.stoppedAt && r.tester ? r : null; };
-  // The shown task's draft: its testing agent's tab, and whether it ended with no suite.
-  function draft(): { tabId: string | null; ended: boolean } | null {
+  const poppedOut = (agent: AgentView | null): boolean => Boolean(agent?.hostTabId && !agentTerms.isAgent(agent.hostTabId));
+  const terminalOf = (agent: AgentView | null): LaneTerminal => laneTerminal(agent, poppedOut(agent));
+
+  // An agent's replies, newest first: its terminal's live feed when it runs here, else what its log said.
+  function repliesOf(r: AgentLoop | null, role: AgentRole): readonly Reply[] {
+    const agent = r ? agentOf(r, role) : null;
+    const live = agent?.hostTabId ? tabs.get(agent.hostTabId)?.update : null;
+    if (live && live.sessionId === agent?.sessionId) return live.replies;
+    return r?.replies[role] ?? [];
+  }
+
+  // The shown task's draft, and whether it ended with no suite.
+  function draft(): { ended: boolean } | null {
     const r = drafting();
     if (!r?.tester) return null;
-    const id = tabOf(r.tester);
     const since = Math.max(r.startedAt, askedAt.get(keyOf(r.root, r.taskId)) ?? 0);
-    const replies = updateOf(r.tester)?.replies ?? [];
-    const ended = draftEnded({
-      suite: Boolean(ctx.suite()),
-      tab: id ? 'open' : opening(r.tester) ? 'starting' : 'gone',
-      busy: busyOf(r.tester), asking: askingOf(r.tester),
-      worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
-      reviewing: awaiting().length > 0,
-    });
-    return { tabId: id, ended };
+    const worked = repliesOf(r, 'tester').some((reply) => Date.parse(reply.timestamp ?? '') >= since);
+    return { ended: draftEnded({ suite: Boolean(ctx.suite()), state: r.tester.state, worked, reviewing: awaiting().length > 0 }) };
   }
 
   // Scenarios first: the shown task's [todo] scenarios waiting on her, once its testing agent sits idle on them.
   function awaiting(): CriteriaItem[] {
     const r = record();
     if (!r?.tester || r.stoppedAt || (r.tester.state !== 'idle' && r.tester.state !== 'ended')) return [];
-    return awaitingReview(ctx.scenarios(), { stopped: false, approved: r.approvedScenarios ?? [], busy: busyOf(r.tester), asking: askingOf(r.tester) });
+    return awaitingReview(ctx.scenarios(), { stopped: false, approved: r.approvedScenarios ?? [], busy: false, asking: false });
   }
 
-  // Looks right: the go-ahead goes into the testing agent's tab, and the names she approved are saved with its loop or draft.
+  // Looks right: main sends the go-ahead to the testing agent (resumed if needed) and saves the names she approved.
   async function approveScenarios(): Promise<void> {
     const r = record();
-    const task = ctx.task();
     const shown = awaiting();
-    if (!r || !task || !shown.length) return;
+    if (!r || !shown.length) return;
     const reply = await window.pastel.testing.approveScenarios({ root: r.root, taskId: r.taskId, names: shown.map((s) => s.name) });
     notes.tester = isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note : `Sent. ${nameOf('tester')} is writing the tests.`;
     await tick();
@@ -128,7 +136,7 @@ export function createAgents(ctx: AgentContext) {
   }
 
   // A follow-up to the testing agent, through main (which resumes it if needed); a draft's worked counts again from now.
-  async function pasteToTester(r: AgentLoop, text: string, event: string): Promise<boolean> {
+  async function sendToTester(r: AgentLoop, text: string, event: string): Promise<boolean> {
     if (!r.tester) return false;
     const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: r.tester.sessionId, text, event });
     if (isIpcError(reply) || 'note' in reply) return false;
@@ -136,71 +144,75 @@ export function createAgents(ctx: AgentContext) {
     return true;
   }
 
-  // Ask again: the drafting agent gets a follow-up, resumed if it ended; 'start' when there is none.
+  // Ask again: the drafting agent gets a follow-up, resumed if it ended; 'start' when there is none to ask.
   async function askAgain(): Promise<'pasted' | 'start' | 'failed'> {
     const r = drafting();
     const task = ctx.task();
     if (!r || !task || !r.tester || r.tester.state === 'closed') return 'start';
-    return (await pasteToTester(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
+    return (await sendToTester(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
   }
 
   // After each refresh: a suite file the drafting agent wrote but Petal couldn't use goes back to it once, with a fix request.
   async function checkDraft(problem: string | null): Promise<void> {
     const r = drafting();
     const task = ctx.task();
-    if (!r || !task || !problem || problem === OUTSIDE_AGENT || !tabOf(r.tester)) return;
+    if (!r?.tester || !task || !problem || problem === OUTSIDE_AGENT || r.tester.state === 'closed' || r.tester.state === 'working') return;
     const k = `${keyOf(r.root, r.taskId)}:${problem}`;
-    if (pastedProblems.has(k) || updateOf(r.tester)?.busy) return;
+    if (pastedProblems.has(k)) return;
     pastedProblems.add(k);
-    if (!(await pasteToTester(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
+    if (!(await sendToTester(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
     else ctx.redraw();
   }
-  const updateOf = (agent: AgentView | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
-  const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
-  function facts(): { record: AgentLoop | null; testerTab: string | null; progress: LoopProgress | null; status: LoopStatus } {
+  function facts(): { record: AgentLoop | null; progress: LoopProgress | null; status: LoopStatus } {
     const r = shownLoop();
-    const testerTab = tabOf(r?.tester);
-    const progress = latestLoop(updateOf(r?.tester)?.replies ?? [], r?.startedAt ?? 0);
+    const progress = latestLoop(repliesOf(r, 'tester'), r?.startedAt ?? 0);
     const startedAt = r?.tester ? r.startedAt : null; // a bug fix agent alone hasn't started the test loop
     const live = r?.tester?.state === 'working' || r?.tester?.state === 'idle' || r?.tester?.state === 'asking';
     let status = loopStatus({ progress, live, startedAt, stoppedAt: r?.stoppedAt ?? null, now: Date.now() });
     if (r && !r.stoppedAt && status === 'done' && !queueDone(r.queue, progress?.phase ?? null)) status = 'running'; // fixes still in flight
-    return { record: r, testerTab, progress, status };
+    return { record: r, progress, status };
   }
 
   // Main's view of a loop becomes this window's copy, keeping what only this window reads (logs, tokens); true when it changed.
-  function adopt(root: string, taskId: string, view: LoopView): boolean {
+  function adopt(root: string, taskId: string, next: LoopView): boolean {
     const k = keyOf(root, taskId);
-    const text = JSON.stringify(view);
+    const text = JSON.stringify(next);
     if (shownViews.get(k) === text) return false;
     shownViews.set(k, text);
     const local = loops.get(k);
-    loops.set(k, { ...view, root, taskId, actions: local?.actions ?? { tester: [], fixer: [] }, tokens: local?.tokens ?? { tester: null, fixer: null }, stopping: local?.stopping ?? false, inputs: local?.inputs ?? null });
+    loops.set(k, { ...next, root, taskId, actions: local?.actions ?? blank(() => []), tokens: local?.tokens ?? blank(() => null), replies: local?.replies ?? blank(() => []), stopping: local?.stopping ?? false, inputs: local?.inputs ?? null });
     return true;
   }
 
-  // Testing's refresh hands over the project's loops, so lanes rebuild on open.
+  // A loop main no longer has (its store was replaced or pruned) leaves this window's copy too.
+  function drop(k: string): boolean {
+    shownViews.delete(k);
+    return loops.delete(k);
+  }
+
+  // Testing's refresh hands over all of the project's loops, so lanes rebuild on open.
   function adoptAll(root: string, views: Record<string, LoopView>): void {
     let changed = false;
-    for (const [taskId, view] of Object.entries(views)) changed = adopt(root, taskId, view) || changed;
+    for (const [taskId, next] of Object.entries(views)) changed = adopt(root, taskId, next) || changed;
+    for (const r of [...loops.values()]) if (r.root === root && !(r.taskId in views)) changed = drop(keyOf(r.root, r.taskId)) || changed;
     if (changed) ctx.redraw();
   }
 
   const notify = (notice: LoopNotice): void => { void window.pastel.testing.notify(notice); };
 
-  // Agents with a prompt on screen in this window, across every loop and live draft: the lane word, the dock badge,
-  // and one notification per new prompt.
+  // Agents with a prompt on screen in this window, across every loop and draft: main's asking state, the dock badge,
+  // and one notification per new prompt. Main says which terminal runs each agent here; nothing else is trusted.
   function scanWaiting(): void {
     const now = new Map<string, { name: string; tabId: string }>();
     const askingHere = new Set<string>();
     for (const r of loops.values()) {
       for (const role of ROLES) {
         const agent = agentOf(r, role);
-        const id = tabOf(agent);
+        const id = agent?.hostTabId ?? null;
         const tab = id ? tabs.get(id) : null;
-        if (!agent || !id || !tab || !composer.claudeIsAsking(tab)) continue;
+        if (!agent || !id || !tab || tab.update?.sessionId !== agent.sessionId || !composer.claudeIsAsking(tab)) continue;
         askingHere.add(id);
         if (!r.stoppedAt) now.set(agent.sessionId, { name: nameOf(role, r.inputs?.names), tabId: id });
       }
@@ -230,7 +242,7 @@ export function createAgents(ctx: AgentContext) {
     dot.hidden = count === 0;
     button.dataset.needsYou = String(count);
     button.dataset.title ??= button.title; // its own tooltip, put back once nobody waits
-    button.title = count ? `${count === 1 ? 'An agent needs' : `${count} agents need`} you in its tab` : button.dataset.title;
+    button.title = count ? `${count === 1 ? 'An agent needs' : `${count} agents need`} you in its terminal` : button.dataset.title;
   }
 
   // Every tick: Needs you is read from this window's screens, then main's loops are read while one is at work.
@@ -246,27 +258,39 @@ export function createAgents(ctx: AgentContext) {
       const reply = await window.pastel.testing.loops({ known });
       if (isIpcError(reply)) return;
       let changed = false;
+      const listed = new Set<string>();
       for (const f of reply.loops) {
+        listed.add(keyOf(f.root, f.taskId));
         changed = adopt(f.root, f.taskId, f.loop) || changed;
         const r = loops.get(keyOf(f.root, f.taskId));
         if (r) r.inputs = { names: f.names };
       }
+      for (const k of known.map((x) => keyOf(x.root, x.taskId))) if (!listed.has(k)) changed = drop(k) || changed;
       if (changed) ctx.redraw();
     } finally {
       ticking = false;
     }
   }
   setInterval(() => void tick(), TICK_MS);
-  // A clicked loop notification shows that agent's tab.
-  window.pastel.testing.onShowTab(({ tabId }) => { if (tabs.get(tabId)) tabs.activate(tabId); });
+
+  // A clicked loop notification: a tab-bar tab is shown; an agent terminal opens in its lane.
+  window.pastel.testing.onShowTab(({ tabId }) => {
+    if (!tabs.get(tabId)) return;
+    if (!agentTerms.isAgent(tabId)) { agentTerms.showTab(tabId); return; }
+    const agent = [...loops.values()].flatMap((r) => [r.tester, r.fixer]).find((a) => a?.hostTabId === tabId);
+    if (agent) termWanted.add(agent.sessionId);
+    ctx.open();
+  });
   // Main's handoffs and her lane messages: pasted through the reply box's path, which refuses while a prompt is on screen.
   window.pastel.testing.onAgentPaste(({ requestId, tabId, text }) => void (async () => {
     const tab = tabs.get(tabId);
     const outcome = !tab ? 'gone' : composer.claudeIsAsking(tab) ? 'asking' : (await composer.pasteToClaude(tab, composer.stripControls(text).trim())) ? 'sent' : 'gone';
     window.pastel.testing.agentPasted({ requestId, outcome });
   })());
+  // An agent terminal came or went (resumed, closed, popped out): the lanes follow at once.
+  agentTerms.onAgentTabsChanged(() => ctx.redraw());
 
-  // The shown task's agents: their action logs and tokens, from each session's transcript.
+  // The shown task's agents: their action logs, tokens and replies, from each session's transcript or live terminal.
   async function refreshLogs(): Promise<void> {
     const r = record();
     const from = ctx.tabId();
@@ -278,6 +302,7 @@ export function createAgents(ctx: AgentContext) {
       if (isIpcError(reply) || 'note' in reply) continue;
       r.actions[role] = reply.actions;
       r.tokens[role] = reply.tokens;
+      r.replies[role] = reply.replies;
     }
   }
 
@@ -309,6 +334,7 @@ export function createAgents(ctx: AgentContext) {
     return roundEstimate(r ? finishedRounds(r.actions.tester, r.actions.fixer, r.startedAt, over) : [], rough);
   }
 
+  // Start: each role's open agent gets its brief as a message (the drafting agent is reused), else main starts one.
   async function start(focus: string, rounds: number): Promise<void> {
     const from = ctx.tabId();
     const task = ctx.task();
@@ -338,7 +364,7 @@ export function createAgents(ctx: AgentContext) {
     return `Sent "${bug.name}" to ${fixer}'s queue. Run the suite again once it says done, to verify.`;
   }
 
-  // Stop halts both: main stops the queue, then sends Esc to each and the stop message once each is idle.
+  // Stop halts both, from any window: main stops the queue, then sends Esc to each and the stop message once each is idle.
   async function stop(): Promise<void> {
     const r = shownLoop();
     if (!r || r.stopping) return;
@@ -347,24 +373,24 @@ export function createAgents(ctx: AgentContext) {
     ctx.redraw();
     const reply = await window.pastel.testing.loopStop({ root: r.root, taskId: r.taskId });
     r.stopping = false;
-    ctx.say(isIpcError(reply) ? `Couldn’t stop the loop: ${reply.error}` : 'note' in reply ? reply.note : 'Asked both agents to stop. Their summaries show in their terminals.');
+    ctx.say(isIpcError(reply) ? `Couldn’t stop the loop: ${reply.error}` : 'note' in reply ? reply.note : 'Asked both agents to stop. Their summaries show in their lanes.');
     await tick();
     ctx.redraw();
   }
 
   // Close agents shows once the loop is over or both agents are idle, while one of them is still open.
   function closeModel(status: LoopStatus, lanes: readonly LaneModel[]): AgentsModel['close'] {
-    const r = shownLoop();
+    const r = record();
     const agents = r ? [r.tester, r.fixer].filter((a): a is AgentView => a !== null && a.state !== 'closed') : [];
     if (!r || !agents.length) return null;
-    const over = Boolean(r.stoppedAt) || status === 'done' || status === 'stopped';
+    const over = Boolean(r.stoppedAt) || r.kind === 'draft' || status === 'done' || status === 'stopped';
     if (!over && lanes.some((l) => l.busy)) return null;
     return { count: agents.length, asking: closeAsking, closing };
   }
 
-  // Main closes each agent's claude and its terminal, and marks the loop stopped.
+  // Main closes each agent's claude, its terminal and its record, and marks the loop stopped.
   async function closeAgents(): Promise<void> {
-    const r = shownLoop();
+    const r = record();
     const from = ctx.tabId();
     if (!r || !from || closing) return;
     closeAsking = false;
@@ -392,42 +418,117 @@ export function createAgents(ctx: AgentContext) {
   async function send(role: AgentRole, text: string): Promise<void> {
     const r = record();
     const agent = r ? agentOf(r, role) : null;
-    const route = routeMessage(role, agent ? { tester: agent, fixer: agent } : null, () => askingOf(agent), text); // only the role's own entry is read
-    if ('note' in route || !r || !agent) { notes[role] = 'note' in route ? route.note : ''; draw(); return; }
-    const name = nameOf(role);
-    const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: agent.sessionId, text });
+    const route = routeMessage(agent, text);
+    if ('note' in route || !r) { notes[role] = 'note' in route ? route.note : ''; draw(); return; }
+    const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: route.sessionId, text });
     const sent = !isIpcError(reply) && !('note' in reply);
     if (sent) drafts[role] = '';
-    if (sent && reply.outcome === 'resuming') reopened.set(agent.sessionId, Date.now());
-    notes[role] = isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note
-      : reply.outcome === 'sent' ? `Sent to ${name}.` : reply.outcome === 'resuming' ? `Resuming ${name}’s session. Your message goes once it’s ready.` : `${name} gets it once it’s ready.`;
+    notes[role] = isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note : sentNote(nameOf(role), reply.outcome);
     (document.activeElement as HTMLElement | null)?.blur();
     await tick();
     draw();
   }
 
-  // Open terminal: main resumes its session with no message.
-  async function reopen(role: AgentRole, agent: AgentView): Promise<void> {
+  // An open thread's card from the loop panel: a question to the testing agent, through main like her lane messages.
+  async function askTester(prompt: string): Promise<string> {
+    const r = shownLoop();
+    const route = routeMessage(r?.tester ?? null, prompt);
+    if ('note' in route || !r) return 'note' in route ? route.note : '';
+    const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: route.sessionId, text: prompt });
+    return isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note : sentNote(nameOf('tester'), reply.outcome);
+  }
+
+  // ---- The lane's terminal: mounted in the lane on Terminal, resumed first when no claude runs it.
+  const boxOf = (sessionId: string): HTMLDivElement => {
+    let box = termBoxes.get(sessionId);
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'tst-agent-term';
+      termBoxes.set(sessionId, box);
+    }
+    return box;
+  };
+
+  function toggleTerminal(role: AgentRole): void {
     const r = record();
-    if (!r) return;
-    reopened.set(agent.sessionId, Date.now());
+    const agent = r ? agentOf(r, role) : null;
+    if (!agent) return;
+    if (!termWanted.delete(agent.sessionId)) termWanted.add(agent.sessionId);
+    draw();
+  }
+
+  function showTerminal(role: AgentRole): void {
+    const r = record();
+    const agent = r ? agentOf(r, role) : null;
+    if (!agent) return;
+    termWanted.add(agent.sessionId);
+    draw();
+    element.querySelector(`.tst-agent-lane.is-${role}`)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Pop out: the terminal joins the tab bar as a normal tab and is shown there.
+  function popOut(role: AgentRole): void {
+    const r = record();
+    const agent = r ? agentOf(r, role) : null;
+    if (!agent?.hostTabId) return;
+    termWanted.delete(agent.sessionId);
+    mounted.delete(agent.sessionId);
+    agentTerms.popOut(agent.hostTabId);
+    notes[role] = `${nameOf(role)}’s terminal is in the tab bar now.`;
+    ctx.redraw();
+  }
+
+  function showTab(role: AgentRole): void {
+    const r = record();
+    const id = r ? agentOf(r, role)?.hostTabId : null;
+    if (id) agentTerms.showTab(id);
+  }
+
+  // Open terminal on an agent no claude runs: main resumes its session here with no message.
+  async function resumeForTerminal(role: AgentRole, r: AgentLoop, agent: AgentView): Promise<void> {
+    resumeAsked.add(agent.sessionId);
     const reply = await window.pastel.testing.agentOpen({ root: r.root, sessionId: agent.sessionId });
     const problem = isIpcError(reply) ? reply.error : 'note' in reply ? reply.note : null;
-    if (problem) reopened.delete(agent.sessionId);
-    notes[role] = problem ? `Couldn’t reopen ${nameOf(role)}’s session. ${problem}` : `Resuming ${nameOf(role)}’s session.`;
+    notes[role] = problem ? `Couldn’t resume ${nameOf(role)}’s session. ${problem}` : `Resuming ${nameOf(role)}’s session. Its terminal shows here once it’s up.`;
+    if (problem) termWanted.delete(agent.sessionId);
     await tick();
     draw();
   }
 
-  // Reopening ends when a tab picks the session up, or reads as failed once REOPEN_MS passes without one.
-  function reachOf(role: AgentRole, agent: AgentView | null, tabId: string | null): LaneReach {
-    const at = agent ? reopened.get(agent.sessionId) ?? null : null;
-    const reach = laneReach(agent, tabId, at, Date.now(), opening(agent));
-    if (agent && at !== null && reach !== 'reopening') {
-      reopened.delete(agent.sessionId);
-      if (reach !== 'tab') notes[role] = reopenStalledNote(nameOf(role));
+  // After each draw: every lane's box holds the terminal she asked for, and nothing else.
+  function syncTerminals(r: AgentLoop | null): void {
+    const shown = new Map<string, { role: AgentRole; agent: AgentView }>();
+    for (const role of ROLES) { const agent = r ? agentOf(r, role) : null; if (agent) shown.set(agent.sessionId, { role, agent }); }
+    for (const [sessionId, tabId] of [...mounted]) {
+      if (shown.has(sessionId)) continue;
+      agentTerms.unmountAgent(tabId); // another task's lane, now hidden
+      mounted.delete(sessionId);
     }
-    return reach;
+    for (const [sessionId, { role, agent }] of shown) {
+      const terminal = terminalOf(agent);
+      const was = mounted.get(sessionId);
+      if (was && !tabs.get(was)) termWanted.delete(sessionId); // its terminal closed: Terminal resumes it on her next click
+      if (terminal !== 'resume') resumeAsked.delete(sessionId);
+      const step = mountStep(termWanted.has(sessionId), terminal, agent.hostTabId, mounted.get(sessionId) ?? null);
+      if (step.unmount) { agentTerms.unmountAgent(step.unmount); mounted.delete(sessionId); }
+      if (step.mount && agentTerms.mountAgent(step.mount, boxOf(sessionId))) mounted.set(sessionId, step.mount);
+      if (step.resume && r && !resumeAsked.has(sessionId)) void resumeForTerminal(role, r, agent);
+    }
+  }
+
+  function laneModel(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): LaneModel {
+    const agent = r ? agentOf(r, role) : null;
+    const status = laneStatus(role, r, progress);
+    const terminal = terminalOf(agent);
+    const termOpen = Boolean(agent && termWanted.has(agent.sessionId) && terminal !== 'none' && terminal !== 'tab-bar');
+    return {
+      role, name: nameOf(role), started: Boolean(agent), state: agent?.state ?? null, status, busy: Boolean(r && !r.stoppedAt && agent?.state === 'working'), needsYou: status === NEEDS_YOU,
+      canSend: canMessage(agent), placeholder: chatPlaceholder(nameOf(role), agent?.state ?? null),
+      terminal, termOpen, termBox: agent && termOpen ? boxOf(agent.sessionId) : null, terminalNote: terminalNote(terminal), agentNote: agent?.note ?? null,
+      tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
+      turns: r && agent ? chatTurns(repliesOf(r, role), r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
+      review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
+    };
   }
 
   function draw(): void {
@@ -436,20 +537,10 @@ export function createAgents(ctx: AgentContext) {
     const task = ctx.task();
     const r = record();
     element.hidden = !task || (!ctx.suite() && !r); // a draft's lane shows before the suite exists
-    if (element.hidden) return;
+    if (element.hidden) { syncTerminals(null); return; }
     const { progress, status } = facts();
     const roles = ctx.suite() || r?.kind === 'loop' ? ROLES : ROLES.filter((role) => r && agentOf(r, role));
-    const lanes: LaneModel[] = roles.map((role) => {
-      const agent = r ? agentOf(r, role) : null;
-      const status = laneStatus(role, r, progress);
-      const tabId = tabOf(agent);
-      return {
-        role, name: nameOf(role), started: Boolean(agent), tabId, reach: reachOf(role, agent, tabId), status, busy: Boolean(r && !r.stoppedAt && busyOf(agent)), needsYou: status === NEEDS_YOU,
-        tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
-        turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
-        review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
-      };
-    });
+    const lanes = roles.map((role) => laneModel(role, r, progress));
     const loop = r?.kind === 'loop' ? r : null;
     const round = loop ? roundTokens(loop.actions.tester, loop.actions.fixer, loop.startedAt) : null;
     const started = lanes.filter((l) => l.started);
@@ -461,8 +552,10 @@ export function createAgents(ctx: AgentContext) {
     }, {
       rename: (role) => { renaming = role; draw(); },
       saveName: (role, name) => void saveName(role, name),
-      openTab: (id) => tabs.activate(id),
-      reopen: (role) => { const r = record(); const agent = r ? agentOf(r, role) : null; if (agent) void reopen(role, agent); },
+      toggleTerminal,
+      showTerminal,
+      popOut,
+      showTab,
       toggleLog: (role) => { if (!logOpen.delete(role)) logOpen.add(role); draw(); },
       showOlder: (role) => { logShown[role] = (logShown[role] ?? 20) + 20; draw(); },
       setView: (role, next) => { view[role] = next; if (next === 'actions') logOpen.add(role); draw(); },
@@ -473,6 +566,7 @@ export function createAgents(ctx: AgentContext) {
       editScenarios: () => void editScenarios(),
       approveScenarios: () => void approveScenarios(),
     }));
+    syncTerminals(r);
   }
 
   async function saveName(role: AgentRole, name: string): Promise<void> {
@@ -484,13 +578,23 @@ export function createAgents(ctx: AgentContext) {
     await ctx.renamed();
   }
 
-  // For the snapshot harness: what the shown task's lanes say, and forgetting this window's copies as a new window would.
+  // For the snapshot harness: what the shown task's lanes say and hold.
   const state = () => {
     const r = record();
-    return { kind: r?.kind ?? null, draft: draft(), awaiting: awaiting().map((s) => s.name), approved: r?.approvedScenarios ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
+    const progress = facts().progress;
+    return {
+      kind: r?.kind ?? null, draft: draft(), awaiting: awaiting().map((s) => s.name), approved: r?.approvedScenarios ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes },
+      lanes: ROLES.map((role) => {
+        const lane = laneModel(role, r, progress);
+        const agent = r ? agentOf(r, role) : null;
+        return { role, name: lane.name, status: lane.status, state: lane.state, sessionId: agent?.sessionId ?? null, hostTabId: agent?.hostTabId ?? null, terminal: lane.terminal, mounted: agent ? mounted.get(agent.sessionId) ?? null : null, canSend: lane.canSend, placeholder: lane.placeholder, turns: lane.turns.length };
+      }),
+    };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, awaiting, askAgain, checkDraft, state, forget: () => { loops.clear(); shownViews.clear(); } };
+  const testerHost = (): string | null => facts().record?.tester?.hostTabId ?? null;
+
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerHost, testerReplies: () => repliesOf(shownLoop(), 'tester'), draft, awaiting, askAgain, askTester, checkDraft, showTerminal, state };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

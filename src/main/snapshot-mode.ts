@@ -107,4 +107,5 @@ export const testingFixture: {
   agentIds: string[]; // session ids for the next agents Testing starts, so their fixture tabs match; taken in order
   notices: { title: string; body: string; tabId: string | null; focused: boolean }[]; // loop notifications, recorded instead of shown
   opened: string[]; // criteria files Edit scenarios would have opened in her editor
-} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [], opened: [] };
+  resumes: { sessionId: string; command: string }[]; // an agent resumed in an agent terminal: the line it would have typed
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [], opened: [], resumes: [] };

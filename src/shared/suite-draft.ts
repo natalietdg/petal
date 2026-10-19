@@ -2,7 +2,7 @@
 // ended with no suite, what Petal pastes back to it, and which one session may write the suite file.
 import { suitePath } from './task-suite';
 import { criteriaPath, scenarioSources, type CriteriaItem } from './test-loop';
-import type { AgentRecord, StoredLoop } from './testing';
+import type { AgentRecord, AgentState, StoredLoop } from './testing';
 import type { Prd, Task } from './tasks';
 
 export const TESTING_SKILL = 'petal-testing-suite';
@@ -32,12 +32,13 @@ export function draftRequest(task: Pick<Task, 'id' | 'title' | 'notes'>, prd: Pi
   ].join('\n');
 }
 
-export type DraftTab = 'open' | 'starting' | 'gone';
-// reviewing: idle because its scenarios wait on her review, as the skill says
-export interface DraftFacts { suite: boolean; tab: DraftTab; busy: boolean; asking: boolean; worked: boolean; reviewing?: boolean }
+// state: its agent's, as main reports it. reviewing: idle because its scenarios wait on her review, as the skill says.
+export interface DraftFacts { suite: boolean; state: AgentState; worked: boolean; reviewing?: boolean }
 
-// Ended with no suite: its tab is gone, or it worked since the last ask and now sits idle (not asking her something).
-export const draftEnded = (f: DraftFacts): boolean => !f.suite && (f.tab === 'gone' || (f.tab === 'open' && !f.busy && !f.asking && f.worked && !f.reviewing));
+// Ended with no suite: closed, or no claude runs it any more, or it worked since the last ask and now sits idle (not
+// asking her something). Scenarios waiting on her review keep it going: Looks right resumes it.
+export const draftEnded = (f: DraftFacts): boolean =>
+  !f.suite && (f.state === 'closed' || (!f.reviewing && (f.state === 'ended' || (f.state === 'idle' && f.worked))));
 
 // ---- Scenarios first: the testing agent writes scenarios as [todo] and stops; she reviews them in Petal before any
 // of their tests are written. Applies to a draft and to a loop's rounds alike.

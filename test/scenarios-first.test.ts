@@ -135,11 +135,12 @@ describe('her review', () => {
     expect(names(awaitingReview([...scenarios, { status: 'todo', name: 'a second refund waits' }], approved))).toEqual(['a second refund waits']);
   });
 
-  it('a draft waiting on her review has not ended without a suite; a closed tab still has', () => {
-    const idle = { suite: false, tab: 'open' as const, busy: false, asking: false, worked: true };
+  it('a draft waiting on her review has not ended without a suite, even with no claude running it; a closed one has', () => {
+    const idle = { suite: false, state: 'idle' as const, worked: true };
     expect(draftEnded({ ...idle, reviewing: true })).toBe(false);
     expect(draftEnded(idle)).toBe(true);
-    expect(draftEnded({ ...idle, tab: 'gone', reviewing: true })).toBe(true);
+    expect(draftEnded({ ...idle, state: 'ended', reviewing: true })).toBe(false);
+    expect(draftEnded({ ...idle, state: 'closed', reviewing: true })).toBe(true);
   });
 
   it('the go-ahead names the file, says she may have edited it, and asks for linked tests', () => {
