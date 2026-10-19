@@ -6,8 +6,8 @@ import * as composer from './composer';
 import { isIpcError } from './dom';
 import { agentsPanel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { buildFixerBrief, buildLoopBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
-import { activeBugs, fixLines, queueDone } from '../shared/bug-queue';
+import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
+import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../shared/bug-queue';
 import { agentOf, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { estimateRoundTokens, totalTokens } from '../shared/token-usage';
@@ -78,13 +78,16 @@ export function createAgents(ctx: AgentContext) {
   const draftTab = (): string | null => { const r = record(); return r?.kind === 'draft' && !r.stoppedAt ? tabOf(r.tester) : null; };
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
   const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
+  // Its bug fix agent can take bugs: running, and its tab is open here or still starting.
+  const fixerLive = (r: AgentLoop): boolean => isRunning(r) && r.fixer !== null && (tabOf(r.fixer) !== null || Date.now() - r.startedAt < STARTING_MS);
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
   function facts(): { record: AgentLoop | null; testerTab: string | null; progress: LoopProgress | null; status: LoopStatus } {
     const r = shownLoop();
     const testerTab = tabOf(r?.tester);
     const progress = latestLoop(updateOf(r?.tester)?.replies ?? [], r?.startedAt ?? 0);
-    let status = loopStatus({ progress, live: testerTab ? tabs.get(testerTab)?.update?.state === 'live' : false, startedAt: r?.startedAt ?? null, stoppedAt: r?.stoppedAt ?? null, now: Date.now() });
+    const startedAt = r?.tester ? r.startedAt : null; // a bug fix agent alone hasn't started the test loop
+    let status = loopStatus({ progress, live: testerTab ? tabs.get(testerTab)?.update?.state === 'live' : false, startedAt, stoppedAt: r?.stoppedAt ?? null, now: Date.now() });
     if (r && !r.stoppedAt && status === 'done' && !queueDone(r.queue, progress?.phase ?? null)) status = 'running'; // fixes still in flight
     return { record: r, testerTab, progress, status };
   }
@@ -122,8 +125,9 @@ export function createAgents(ctx: AgentContext) {
     const names = { tester: nameOf('tester', r.inputs.names), fixer: nameOf('fixer', r.inputs.names) };
     const fixer = updateOf(r.fixer);
     const before = JSON.stringify([r.queue, r.events]);
+    // With no testing agent yet, criteria lines wait for it; only the bugs she sent move.
     const result = stepLoop(r, {
-      bugs: r.inputs.bugs, runs: r.inputs.runs, testerRound: progress?.round ?? 0,
+      bugs: r.tester ? r.inputs.bugs : [], runs: r.inputs.runs, testerRound: progress?.round ?? 0,
       fixerBusy: Boolean(fixer?.busy), fixesDone: fixLines(fixer?.replies ?? [], r.startedAt), now: Date.now(),
     }, names);
     r.queue = result.queue;
@@ -205,8 +209,20 @@ export function createAgents(ctx: AgentContext) {
     const root = ctx.root();
     const b = briefs(focus, rounds);
     if (!from || !task || !root || !b || isActive(facts().status)) return;
-    const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, testerBrief: b.tester, fixerBrief: b.fixer });
+    const shown = shownLoop();
+    const joining = shown && fixerLive(shown) && !shown.tester ? shown : null; // her bug fix agent already runs: only the testing agent starts
+    const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, testerBrief: b.tester, fixerBrief: joining ? null : b.fixer });
     if (isIpcError(reply) || 'note' in reply) { ctx.say(isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note); return; }
+    if (!reply.tester || !(reply.fixer ?? joining?.fixer)) { ctx.say('Couldn’t start the loop. Try again.'); return; }
+    if (joining) {
+      joining.tester = reply.tester;
+      joining.tokens.tester = 0;
+      note(joining, 'tester', `Started ${nameOf('tester')} in a new tab`);
+      persist(joining);
+      ctx.say(reply.tester.tabId ? `${nameOf('tester')} is starting in a new tab. ${nameOf('fixer')} keeps fixing.` : 'Couldn’t open a tab for the testing agent. Try again.');
+      return;
+    }
+    if (!reply.fixer) return;
     const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
     r.tokens = { tester: 0, fixer: 0 };
     note(r, 'tester', `Started ${nameOf('tester')} in a new tab`);
@@ -214,6 +230,42 @@ export function createAgents(ctx: AgentContext) {
     loops.set(keyOf(root, task.id), r);
     persist(r);
     ctx.say(reply.tester.tabId && reply.fixer.tabId ? `${nameOf('tester')} and ${nameOf('fixer')} are starting in two new tabs.` : 'Couldn’t open both tabs. Close the loop and try again.');
+  }
+
+  // Her "Send to bug fix agent": the failure joins the task's bug queue, else the bug fix agent starts on it in a tab she
+  // is shown. Its fix waits in "Awaiting verify" until a newer run of that test or stage passes. Returns the note to show.
+  async function sendToFixer(bug: SentBug): Promise<string> {
+    const from = ctx.tabId();
+    const task = ctx.task();
+    const root = ctx.root();
+    if (!from || !task || !root) return 'Pick a task first.';
+    const fixer = nameOf('fixer');
+    const shown = shownLoop();
+    if (shown && fixerLive(shown)) {
+      const { queue, added } = addSent(shown.queue, bug, Date.now());
+      if (!added) return `${fixer} already has "${bug.name}" in its queue.`;
+      shown.queue = queue;
+      note(shown, 'fixer', `You → ${fixer} · ${bug.name}`);
+      persist(shown);
+      ctx.redraw();
+      return `Sent "${bug.name}" to ${fixer}'s queue. Run the suite again once it says done, to verify.`;
+    }
+    const brief = buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: bug.name, prompt: bug.sent.failure, names: { tester: nameOf('tester'), fixer } });
+    const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, fixerBrief: brief, show: true });
+    if (isIpcError(reply)) return `Couldn’t start ${fixer}: ${reply.error}`;
+    if ('note' in reply) return reply.note;
+    if (!reply.fixer?.tabId) return `Couldn’t open a tab for ${fixer}. Try again.`;
+    const now = Date.now();
+    const keep = shown && isRunning(shown) ? shown : null; // a running loop whose bug fix agent's tab is gone keeps its testing agent
+    const r = fromSaved(root, task.id, keep
+      ? { ...toSaved(keep), fixer: reply.fixer, queue: keep.queue.map((b) => (b.state === 'fixing' ? { ...b, state: 'open' as const, asked: false } : b)) }
+      : { kind: 'loop', tester: null, fixer: reply.fixer, startedAt: now, stoppedAt: null, queue: [], events: noEvents() });
+    r.queue = addSent(r.queue, bug, now, 'fixing').queue;
+    r.tokens = { tester: keep ? keep.tokens.tester : null, fixer: 0 };
+    note(r, 'fixer', `Started ${fixer} in a new tab on ${bug.name}`);
+    loops.set(keyOf(root, task.id), r);
+    persist(r);
+    return `Started ${fixer} on "${bug.name}". Run the suite again once it says done, to verify.`;
   }
 
   // Stop halts both: Esc to each, then the stop message once each is idle.
@@ -316,7 +368,7 @@ export function createAgents(ctx: AgentContext) {
     return { kind: r?.kind ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => loops.clear() };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => loops.clear() };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

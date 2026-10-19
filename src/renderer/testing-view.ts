@@ -64,7 +64,24 @@ export function pipelineStrip(pipeline: { stages: StageConfig[] }, resultOf: (st
 }
 
 // ---- One stage's results: a summary bar, then groups by file with failures first and open.
-export interface ResultHandlers { fixTest: (stage: StageResult, test: TestCase) => void; fixStage: (stage: StageResult) => void }
+// fixer: this task's bug fix agent; session: pasted into this tab's Claude, as before.
+export type FixWhere = 'fixer' | 'session';
+export interface ResultHandlers { fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => void; fixStage: (stage: StageResult, where: FixWhere) => void }
+
+// The send to the bug fix agent, with the paste into this session as a small link beside it.
+function fixActions(label: string, title: string, fix: (where: FixWhere) => void, stage: boolean): HTMLElement {
+  const box = el('div', `tst-fix-actions${stage ? ' is-stage' : ''}`);
+  const send = el('button', `tst-fix${stage ? ' tst-fix-stage' : ''}`, label);
+  send.type = 'button';
+  send.title = title;
+  send.addEventListener('click', () => fix('fixer'));
+  const here = el('button', 'tst-link tst-ask-here', 'Ask in this session instead');
+  here.type = 'button';
+  here.title = 'Paste the failure into the Claude in this tab';
+  here.addEventListener('click', () => fix('session'));
+  box.append(send, here);
+  return box;
+}
 
 function summaryBar(stage: StageResult, run: PipelineRun, handlers: ResultHandlers): HTMLElement {
   const bar = el('div', `tst-sumbar is-${stage.status}`);
@@ -75,13 +92,7 @@ function summaryBar(stage: StageResult, run: PipelineRun, handlers: ResultHandle
   facts.append(el('span', 'tst-status-word', STATUS_WORD[stage.status]), ...[duration(stage.durationMs), when(run.startedAt), byLabel(run)].filter(Boolean).map((t) => el('span', null, t)));
   const command = el('code', 'tst-command', stage.command);
   bar.append(counts, facts, command);
-  if (stage.status === 'failed') {
-    const fix = el('button', 'tst-fix tst-fix-stage', 'Ask Claude to fix');
-    fix.type = 'button';
-    fix.title = 'Send the failing tests and their output to Claude in this tab';
-    fix.addEventListener('click', () => handlers.fixStage(stage));
-    bar.append(fix);
-  }
+  if (stage.status === 'failed') bar.append(fixActions('Send to bug fix agent', 'Send the failing tests and their output to this task’s bug fix agent', (where) => handlers.fixStage(stage, where), true));
   return bar;
 }
 
@@ -101,10 +112,7 @@ function testRow(stage: StageResult, test: TestCase, handlers: ResultHandlers): 
       pre.setAttribute('aria-label', `Failure output for ${test.name}`);
       row.append(pre);
     }
-    const fix = el('button', 'tst-fix', 'Ask Claude to fix');
-    fix.type = 'button';
-    fix.addEventListener('click', () => handlers.fixTest(stage, test));
-    row.append(fix);
+    row.append(fixActions('Send this test to bug fix agent', 'Send this test and its failure to this task’s bug fix agent', (where) => handlers.fixTest(stage, test, where), false));
   }
   return row;
 }

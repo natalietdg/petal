@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 // Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and its one task's suite;
 // Run suite confirms the exact commands, then records the line a new tab would run (never executed);
-// fixture exit codes and a real vitest JSON report finish it; results group with failures first; Ask Claude to fix
-// records the paste; Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
+// fixture exit codes and a real vitest JSON report finish it; results group with failures first; Send to bug fix agent
+// starts the task's bug fix agent on the failure (Ask in this session instead records the paste); Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
 // how long it took; a tab in ~ picks a Claude session instead; a task with no suite starts one from Claude's checks;
 // a repo with no tasks gives the tab's session one, and its drafting agent a lane; editing saves; every theme, style and width fits.
 import fs from 'node:fs';
@@ -312,13 +312,39 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(inserted && await js("document.getElementById('testing').hidden"), 'Use in reply puts /prove-it in the reply box and shows it');
     await js("(() => { const i = document.getElementById('composer-input'); i.value = ''; i.dispatchEvent(new Event('input')); })()");
 
-    // Ask Claude to fix: back to the session tab, pasted through the reply box's send path.
+    // Send this test to bug fix agent: with no loop running, the task's bug fix agent starts alone on it, in a tab she is
+    // shown, the failure as its brief and the bug already fixing in its queue. Nothing is pasted into the session.
     await click('#testing-button');
     await settle((p) => (p.failRows as string[]).length > 0);
     const pastesBefore = pasteWrites.length;
+    const startsBefore = testingFixture.loopStarts.length;
     await click('#testing .tst-row.is-failed .tst-fix');
+    const fixerStart = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.startsWith('You are Bug fix agent, the bug fix agent')) ?? null, 4000);
+    const fixerBrief = fixerStart?.brief ?? '';
+    check(fixerBrief.includes('rejects an expired token') && fixerBrief.includes('src/auth.test.js') && fixerBrief.includes('`npm test`') && fixerBrief.includes('Fix the app code only. Never edit tests') && !/[\u2014\u2013]/.test(fixerBrief), `the bug fix agent starts on the failing test, app code only: ${JSON.stringify(fixerBrief.slice(0, 160))}`);
+    check(testingFixture.loopStarts.length === startsBefore + 1 && !pasteWrites.slice(pastesBefore).some((w) => w.data.includes('rejects an expired token')), 'only the bug fix agent starts, and nothing is pasted into the session');
+    const fixerLoop = await waitFor(() => { const l = store.load(project).loops?.[FIXTURE_TASK]; return l?.queue.length ? l : null; }, 4000);
+    check(fixerLoop && fixerLoop.tester === null && fixerLoop.fixer && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.tester, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
+    const fixerTab = fixerLoop?.fixer?.tabId ?? null;
+    check(fixerTab && (await js('PastelTerm.tabs.active()?.id')) === fixerTab, `its tab is shown: ${fixerTab}`);
+    const lanes = await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as string[][];
+    check(lanes.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing auth > tokens')) && lanes.some(([role, status]) => role === 'tester' && status === 'Not started'), `its lane shows it fixing; the testing agent's is not started: ${JSON.stringify(lanes)}`);
+
+    // A second send of the same test while it is being fixed adds nothing.
+    await js('PastelTerm.overlays.hideCurrent()');
+    await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
+    await click('#testing-button');
+    await settle((p) => (p.failRows as string[]).length > 0);
+    await click('#testing .tst-row.is-failed .tst-fix');
+    const deduped = await settle((p) => /already has/.test(String(p.note)), 4000);
+    check(deduped && testingFixture.loopStarts.length === startsBefore + 1 && store.load(project).loops?.[FIXTURE_TASK]?.queue.length === 1, `a second send is deduped: ${JSON.stringify(deduped?.note)}`);
+
+    // Ask in this session instead: the old way, back to the session tab, pasted through the reply box's send path.
+    await click('#testing .tst-row.is-failed .tst-ask-here');
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
+    if (fixerTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(fixerTab)})`);
+    check(await waitFor(async () => (fixerTab && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab)) || null, 8000), 'the bug fix agent tab closes again');
 
     // A tab in the home folder is not a project: pick one of her Claude sessions instead, newest activity first, its repo and status as the small line.
     // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (1 min ago).
@@ -406,7 +432,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       await capture('testing-draft-lane');
 
       // Ask Claude shows her the agent's tab, and while it draws, a status replaces the button and main refuses a second.
-      const agentTab = draft?.tester.tabId ?? null;
+      const agentTab = draft?.tester?.tabId ?? null;
       check(agentTab && (await js('PastelTerm.tabs.active()?.id')) === agentTab, `the drafting agent's tab is shown, not opened in the background: ${agentTab}`);
       const drawing = await settle((p) => p.drawing !== null);
       check(drawing && drawing.drawing === 'Testing agent is drawing up the suite' && !drawing.askSuite, `a status replaces Ask Claude while the agent draws: ${JSON.stringify({ drawing: drawing?.drawing, ask: drawing?.askSuite })}`);

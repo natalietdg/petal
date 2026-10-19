@@ -2,7 +2,7 @@
 // lanes rebuilt from agent records, the save check, saving next to the agent records, and the last round's tokens.
 import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
-import { cleanSavedLoop, loopFromAgents, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, type LoopInputs } from '../src/shared/agent-loop';
+import { cleanSavedLoop, loopFromAgents, noEvents, rerunOf, roundLabel, roundTokens, stepLoop, takesSaved, unsent, type LoopInputs } from '../src/shared/agent-loop';
 import { loopsOf, rememberAgent, saveLoop } from '../src/main/task-suites';
 import type { AgentAction } from '../src/shared/agent-actions';
 import type { CriteriaItem } from '../src/shared/test-loop';
@@ -114,5 +114,40 @@ describe('the last round’s tokens', () => {
     expect(none).toEqual({ round: null, done: false, tokens: 70 }); // the fixer's step before the start is left out
     expect(roundLabel(none)).toBe('So far');
     expect(roundLabel({ round: 1, done: false, tokens: 0 })).toBe('Round 1 so far');
+  });
+});
+
+describe('a bug she sent from a failed run', () => {
+  const sent = { key: 'auth rejects an expired token', name: 'auth rejects an expired token', test: 'src/auth.test.js::auth rejects an expired token', state: 'verify' as const, since: 1000, asked: false, testerRound: 0, rechecked: false, sent: { stage: 'Unit', failure: 'The test "auth rejects an expired token" fails.' } };
+  const run = (startedAt: number, status: 'passed' | 'failed') => ({ startedAt, stages: [{ name: 'Unit', status, tests: [{ file: 'src/auth.test.js', name: 'auth rejects an expired token', status }] }] }) as unknown as LoopInputs['runs'][number];
+
+  it('is verified by a newer run that passes its test, reopened by one that fails it, and waits without one', () => {
+    expect(rerunOf([run(500, 'passed')], sent)).toBeNull(); // older than the fix
+    expect(stepLoop(loop({ queue: [sent] }), inputs({ runs: [run(2000, 'passed')], fixerBusy: true, now: 3000 }), names).queue[0]?.state).toBe('verified');
+    expect(stepLoop(loop({ queue: [sent] }), inputs({ runs: [run(2000, 'failed')], fixerBusy: true, now: 3000 }), names).queue[0]?.state).toBe('open');
+    const waiting = stepLoop(loop({ queue: [sent] }), inputs({ fixerBusy: true }), names);
+    expect(waiting.queue[0]?.state).toBe('verify');
+    expect(waiting.send).toEqual([]); // no criteria line for the testing agent to verify
+  });
+
+  it('a whole-stage bug is verified by the stage; it survives a step with no criteria line', () => {
+    const stage = { ...sent, key: 'unit stage fails', name: 'Unit stage fails', test: null };
+    expect(rerunOf([run(2000, 'passed')], stage)).toBe('passed');
+    expect(stepLoop(loop({ queue: [{ ...stage, state: 'open' }] }), inputs({ fixerBusy: true }), names).queue).toHaveLength(1);
+  });
+
+  it('the fixer gets what she sent as the failure, and its Fix line moves it to verify', () => {
+    const step = stepLoop(loop({ queue: [{ ...sent, state: 'open' }] }), inputs(), names);
+    expect(step.send[0]?.text).toContain('The test "auth rejects an expired token" fails.');
+    expect(step.queue[0]?.state).toBe('fixing');
+    const fixed = stepLoop(step, inputs({ fixesDone: [{ name: 'auth rejects an expired token', at: 1500 }], fixerBusy: true, now: 2000 }), names);
+    expect(fixed.queue[0]?.state).toBe('verify');
+  });
+
+  it('a loop whose bug fix agent started alone saves without a testing agent, and keeps what she sent', () => {
+    const alone = loop({ tester: null, queue: [sent] });
+    expect(cleanSavedLoop(JSON.parse(JSON.stringify(alone)))).toEqual(alone);
+    expect(cleanSavedLoop({ ...alone, kind: 'draft', fixer: null })).toBeNull(); // a draft has its testing agent
+    expect(cleanSavedLoop({ ...alone, queue: [{ ...sent, sent: { stage: 'Unit', failure: 'x'.repeat(5000) } }] })?.queue[0]?.sent).toBeUndefined();
   });
 });
