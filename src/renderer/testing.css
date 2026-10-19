@@ -258,6 +258,7 @@
 .tst-pick:hover { background: var(--code-bg); }
 .tst-pick-name { font-weight: 600; }
 .tst-pick-path { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.tst-pick-agents { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .tst-pick-suite { padding: 0 7px; border-radius: 999px; background: var(--next-pill); color: var(--next-ink); font-weight: 700; }
 
 /* ---- What it tests with. */

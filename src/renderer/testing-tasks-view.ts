@@ -3,7 +3,7 @@ import { el } from './dom';
 import { when } from './testing-view';
 import { groupsByActivity, taskActivity } from '../shared/task-activity';
 import { groupTasks } from '../shared/task-groups';
-import { parseTarget, targetValue, type OverviewRow, type PickSession, type TestTarget } from '../shared/task-testing';
+import { parseTarget, targetValue, type OverviewRow, type PickAgent, type PickSession, type TestTarget } from '../shared/task-testing';
 import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
 import type { LockView, TestingState } from '../shared/testing';
@@ -63,6 +63,9 @@ export function prdOverview(rows: OverviewRow[], open: (taskId: string) => void)
   return box;
 }
 
+// "Testing agent · busy", or "Testing agent ×3 · idle" for several alike.
+const agentLine = (agent: PickAgent): string => `${agent.name}${agent.count > 1 ? ` ×${agent.count}` : ''} · ${agent.status}`;
+
 // The tab is in ~ or outside a repo: her Claude sessions in a repo, newest activity first; a row opens that session's suite.
 export function sessionPicker(sessions: readonly PickSession[], choose: (sessionId: string) => void): HTMLElement {
   const box = el('div', 'tst-picker');
@@ -81,6 +84,7 @@ export function sessionPicker(sessions: readonly PickSession[], choose: (session
     const meta = el('span', 'tst-pick-path', `${session.project} · ${session.status}`);
     if (session.suite) meta.append(' ', el('span', 'tst-pick-suite', 'has a suite'));
     button.append(el('span', 'tst-pick-name', session.name), meta);
+    if (session.agents.length) button.append(el('span', 'tst-pick-agents', session.agents.map(agentLine).join(', ')));
     button.addEventListener('click', () => choose(session.sessionId));
     item.append(button);
     list.append(item);

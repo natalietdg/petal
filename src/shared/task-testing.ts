@@ -67,7 +67,9 @@ export function prdOverview(data: TaskData, prdId: string, suites: SuiteViews, r
 // ---- The session picker for a tab outside any project: her Claude sessions in a repo, each opening its task's suite.
 export type PickStatus = 'busy' | 'idle' | 'closed';
 export interface SessionCandidate { sessionId: string; root: string | null; status: PickStatus; at?: number | null } // at: its latest activity
-export interface PickSession { sessionId: string; name: string; root: string; project: string; status: PickStatus; suite: boolean }
+export interface PickAgent { name: string; status: PickStatus; count: number } // agents of one name and status, folded
+export interface PickSession { sessionId: string; name: string; root: string; project: string; status: PickStatus; suite: boolean; agents: PickAgent[] }
+export interface AgentSession { root: string; sessionId: string; taskId: string; name: string } // one of a task's agent sessions
 
 // Newest activity first, live and recent mixed; one outside a repo is left out, one listed twice keeps its first entry and newest time.
 export function listedSessions<T extends SessionCandidate>(live: readonly T[], recent: readonly T[], max: number): (T & { root: string })[] {
@@ -78,6 +80,24 @@ export function listedSessions<T extends SessionCandidate>(live: readonly T[], r
     seen.set(s.sessionId, first ? { ...first, at: latest(first.at, s.at) } : { ...s, root: s.root });
   }
   return byRecent([...seen.values()], (s) => latest(s.at)).slice(0, max);
+}
+
+// Agent sessions leave the list; each shows on the row of the session owning its task, with its status, and moves that row up to its newest activity.
+export function foldAgents<T extends SessionCandidate & { root: string; taskId: string | null }>(rows: readonly T[], agents: readonly AgentSession[], max: number): (T & { agents: PickAgent[] })[] {
+  const isAgent = new Set(agents.map((a) => `${a.root}\0${a.sessionId}`));
+  const rowOf = new Map(rows.map((r) => [`${r.root}\0${r.sessionId}`, r]));
+  const owners = rows.filter((r) => !isAgent.has(`${r.root}\0${r.sessionId}`)).map((r) => {
+    const mine = agents.filter((a) => r.taskId !== null && a.root === r.root && a.taskId === r.taskId).map((a) => ({ agent: a, row: rowOf.get(`${a.root}\0${a.sessionId}`) }));
+    const folded: PickAgent[] = [];
+    for (const { agent, row } of mine) {
+      const status = row?.status ?? 'closed';
+      const same = folded.find((f) => f.name === agent.name && f.status === status);
+      if (same) same.count += 1;
+      else folded.push({ name: agent.name, status, count: 1 });
+    }
+    return { ...r, at: latest(r.at, ...mine.map((m) => m.row?.at)), agents: folded };
+  });
+  return byRecent(owners, (s) => latest(s.at)).slice(0, max);
 }
 
 // The picked session, only when the picker listed it; the renderer never names a folder.
