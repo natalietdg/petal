@@ -72,11 +72,13 @@ export const GUIDE: readonly GuideGroup[] = [
       menuRow('This guide', ACCEL.shortcuts),
       menuRow('History', ACCEL.history),
       menuRow('Sessions board', ACCEL.board),
-      menuRow('Focus: only the reply', ACCEL.focus),
+      menuRow('Focus, level 1: headers minimised', ACCEL.minimiseHeaders),
+      menuRow('Focus, level 2: only the reply', ACCEL.focus),
+      { gesture: 'Click the Focus control at the dock’s end', does: 'Headers minimised, then only the reply, then the full layout' },
       menuRow('Settings (Customize)', ACCEL.settings),
       menuRow('Open a repo', ACCEL.openRepo),
       keyRow('Fold History’s list (History open)', 'CmdOrCtrl+\\'),
-      keyRow('Close the open view, colour key or Focus', 'Escape'),
+      keyRow('Close the open view or colour key, or leave Focus level 2', 'Escape'),
     ],
   },
   {
@@ -112,7 +114,6 @@ export const GUIDE: readonly GuideGroup[] = [
     title: 'Layout',
     rows: [
       menuRow('Minimise the terminal', ACCEL.minimiseTerminal),
-      menuRow('Minimise the headers', ACCEL.minimiseHeaders),
       { gesture: 'Drag the divider', does: 'Resizes; to the bottom minimises the terminal' },
       { gesture: 'Double-click the divider', does: 'Resets the split' },
       keyRow('Move the focused divider', 'Up', 'Down', 'PageUp', 'PageDown', 'Home', 'End'),

@@ -123,10 +123,11 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
       label: 'View',
       submenu: [
         { label: 'Minimise Terminal', accelerator: ACCEL.minimiseTerminal, click: onToggleReader },
-        { label: 'Minimise Headers', accelerator: ACCEL.minimiseHeaders, click: onToggleHeaders },
+        // The Focus control's two levels (renderer/focus-mode.ts); each key toggles its own level.
+        { label: 'Focus: Minimise Headers', accelerator: ACCEL.minimiseHeaders, click: onToggleHeaders },
+        { label: 'Focus: Only the Reply', accelerator: ACCEL.focus, click: onToggleFocus },
         { label: 'History', accelerator: ACCEL.history, click: onToggleHistory },
         { label: 'Sessions Board', accelerator: ACCEL.board, click: onToggleBoard },
-        { label: 'Focus on Reply', accelerator: ACCEL.focus, click: onToggleFocus },
         { type: 'separator' },
         // Acts on the terminal when it has focus, otherwise the reader (renderer/text-size.ts).
         { label: 'Bigger Text', accelerator: ACCEL.biggerText, click: () => onTextSize(1) },

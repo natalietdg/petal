@@ -246,29 +246,29 @@
 #sessions-dock.fit-snug { gap: 6px; padding: 14px 12px 0; }
 :where(.fit-snug) :is(.dock-button, .sessions-pill, .update-pill) { padding: 7px 12px; font-size: 13px; }
 :where(.fit-snug) .dock-button.dock-mini { padding: 4px 9px; font-size: 12px; }
-#sessions-dock.fit-snug .headers-min-button { padding: 3px; font-size: 13px; }
+#sessions-dock.fit-snug .focus-toggle { padding: 3px; font-size: 13px; }
 #sessions-dock.fit-tight { gap: 3px; padding: 12px 6px 0; }
 :where(.fit-tight) :is(.dock-button, .sessions-pill, .update-pill) { padding: 5px 7px; font-size: 12px; }
 :where(.fit-tight) .dock-button { gap: 3px; padding-inline: 5px; }
 :where(.fit-tight) .sessions-pill { gap: 3px; }
-#sessions-dock.fit-tight .headers-min-button { padding: 2px; font-size: 12px; }
+#sessions-dock.fit-tight .focus-toggle { padding: 2px; font-size: 12px; }
 :where(.fit-tight) .sessions-pill .pill-limit { padding: 1px 6px; font-size: 11px; }
 :where(.fit-tight) .dock-button.dock-mini { padding: 3px 6px; font-size: 11px; }
 :where(.fit-icons) :is(.dock-button, .dock-button.dock-mini) { position: relative; gap: 0; padding: 5px; font-size: 13px; }
 /* The label stays the accessible name; the tooltip shows it. */
 :where(.fit-icons) .dock-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* Minimise headers (headers-min.ts): a small arrow at the dock's end. */
-.headers-min-button { display: inline-flex; align-items: center; padding: 5px 6px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
-.headers-min-button:hover { color: var(--reader-fg); background: var(--code-bg); }
-.headers-min-button:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+/* Focus (focus-mode.ts): one small control at the dock's end, stepping through its levels. */
+.focus-toggle { display: inline-flex; align-items: center; padding: 5px 6px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
+.focus-toggle:hover { color: var(--reader-fg); background: var(--code-bg); }
+.focus-toggle:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
 
 /* Minimised: the dock is a thin strip of sessions count, update dot and restore; the reader header goes. */
 #app.headers-min #sessions-dock { padding-block: 4px; gap: 6px; }
 #app.headers-min #sessions-dock > .dock-button:not([aria-pressed="true"]) { display: none; } /* an open overlay keeps its way back */
 #app.headers-min #reader-head { display: none; }
 #app.headers-min .sessions-pill { padding: 2px 10px; font-size: 12px; box-shadow: none; }
-#app.headers-min .headers-min-button { padding: 2px 4px; font-size: 13px; }
+#app.headers-min .focus-toggle { padding: 2px 4px; font-size: 13px; }
 #app.headers-min .sessions-pill .pill-limit { padding: 0 6px; font-size: 11px; }
 /* The update pill as a dot (minimised headers, or a dock too narrow for even "Restart"); its label and title keep the words. */
 #app.headers-min .update-pill:not([hidden], .noting),

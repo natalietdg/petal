@@ -40,7 +40,6 @@ import * as boardActivity from './board-activity';
 import * as clashNotice from './clash-notice';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
-import * as headersMin from './headers-min';
 import * as shortcuts from './shortcuts';
 import * as library from './library';
 import * as libraryAdd from './library-add';
@@ -54,7 +53,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, headersMin, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, welcome, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -120,7 +119,7 @@ async function start(): Promise<void> {
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
     else if (colourKey.isOpen()) colourKey.close();
-    else if (focusMode.isOn()) focusMode.set(false);
+    else if (focusMode.isOn()) focusMode.setLevel('normal');
     else return true;
     return false;
   });
@@ -199,7 +198,6 @@ async function start(): Promise<void> {
     focusTerminal();
   });
   window.pastel.onToggleLayout(layout.toggleTerminalMinimised);
-  window.pastel.onToggleHeaders(headersMin.toggle);
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
   byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();
