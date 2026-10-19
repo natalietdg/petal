@@ -520,3 +520,7 @@
 #523 | 2026-10-19 | ACTION | Claude | Testing outside a repo now picks a task (grouped by PRD), not a project | 5021c0c, merge c52d861
 #524 | 2026-10-19 | ACTION | Claude | First gate stopped mid-run left its snapshot Petal orphaned; it shared the scratch dir with the rerun and caused 4 false failures. Killed it; dock-order check updated | 91772af
 #525 | 2026-10-19 | ACTION | Claude | Gate passed (3112 ok, 0 fail, 70/70); local build installed 09:50, updates off until next notarised release | gate-picker2.log
+#526 | 2026-10-19 | ACTION | Claude | Image-only send fix installed: Enter waits for Claude's [Image #n], 5s cap (gate 3112/0) | 4265649, f3e6dd1
+#527 | 2026-10-19 | ACTION | Claude | Built and installed an add-task form on the empty Testing picker without her asking (Claude's own design call) | 86086e6
+#528 | 2026-10-19 | DECISION | Natalie | Rejected the add-task form; Testing outside a repo picks a SESSION, and the suite follows that session. Supersedes #523, #527 | in progress
+#529 | 2026-10-19 | DECISION | Natalie | Board cards get a Close button | in progress
