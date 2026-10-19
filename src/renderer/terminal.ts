@@ -80,7 +80,7 @@ function wireFiles(container: HTMLElement, term: Terminal, tabId: TabId): void {
 }
 
 // Now and after xterm's viewport catches up with the new size: its scroll sync can pull the view back up a line.
-function pinToBottom(term: Terminal): void {
+export function pinToBottom(term: Terminal): void {
   term.scrollToBottom();
   requestAnimationFrame(() => term.scrollToBottom());
 }

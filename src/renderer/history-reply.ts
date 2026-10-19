@@ -5,10 +5,8 @@ import { pasteToClaude, stripControls } from './composer';
 import { limitNote } from './sessions-panel';
 import { isIpcError } from './dom';
 import { parseQuestionPicker } from '../shared/prompt-answer';
+import { READY_SETTLE_MS } from '../shared/agent-loop';
 import type { Tab } from './tabs';
-
-// Claude needs a moment after its session appears before it reads typed input.
-const READY_SETTLE_MS = 1500;
 
 const following = new Map<string, string>(); // sessionId -> the tab this box opened for it
 const queued = new Map<string, string[]>(); // sessionId -> messages waiting for Claude in its tab
@@ -83,8 +81,7 @@ export function tabClosed(tabId: string): void {
   hooks.redraw(null); // unsent messages stay queued for the next reply
 }
 
-// limitAction: what the session-limit note says closing one would let her do.
-export function sendReply(sessionId: string, raw: string, confirmFork = false, limitAction = 'reply from here'): Promise<ReplyOutcome> {
+export function sendReply(sessionId: string, raw: string, confirmFork = false): Promise<ReplyOutcome> {
   const text = stripControls(raw).trim();
   if (!text) return Promise.resolve({ note: '' });
   const tab = tabFor(sessionId);
@@ -93,15 +90,12 @@ export function sendReply(sessionId: string, raw: string, confirmFork = false, l
     tabUpdated(tab.id);
     return Promise.resolve({ sent: true });
   }
-  return openAndSend(sessionId, text, confirmFork, limitAction);
+  return openAndSend(sessionId, text, confirmFork);
 }
 
-// Opens a background tab on the session with nothing to send; it is tabFor(sessionId) once main's tab arrives.
-export const openSession = (sessionId: string, limitAction: string): Promise<ReplyOutcome> => openAndSend(sessionId, null, false, limitAction);
-
 // No tab follows this session yet: the same checks as Open and Add Session, then a background tab.
-async function openAndSend(sessionId: string, text: string | null, confirmFork: boolean, limitAction: string): Promise<ReplyOutcome> {
-  const limited = await limitNote(limitAction);
+async function openAndSend(sessionId: string, text: string, confirmFork: boolean): Promise<ReplyOutcome> {
+  const limited = await limitNote('reply from here');
   if (limited) return { note: limited };
   opening = sessionId;
   const result = await window.pastel.history.resume(sessionId, confirmFork, true);
@@ -112,7 +106,7 @@ async function openAndSend(sessionId: string, text: string | null, confirmFork: 
     opening = null;
     return refused;
   }
-  if (text) queued.set(sessionId, [...queuedFor(sessionId), text]);
+  queued.set(sessionId, [...queuedFor(sessionId), text]);
   if ('tabId' in result) {
     opening = null;
     following.set(sessionId, result.tabId);

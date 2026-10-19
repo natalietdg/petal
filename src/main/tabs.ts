@@ -158,7 +158,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     feed.stop();
     sessions.delete(tabKey(contentsId, tabId));
     if (!sender.isDestroyed()) send(sender, 'tab:closed', { tabId });
-    if (!agent && !stripTabsOf(contentsId).length && win && !win.isDestroyed()) win.close();
+    if (!session.agent && !stripTabsOf(contentsId).length && win && !win.isDestroyed()) win.close();
   });
 }
 
@@ -244,7 +244,12 @@ export function registerTabIpc(): void {
     if (session) closeSession(session);
   });
 
-  on('tab:activate', (event, { tabId }) => activeTabs.set(event.sender.id, tabId));
+  // The renderer never activates an agent terminal unless it popped out to the tab bar: from then on it is an ordinary tab.
+  on('tab:activate', (event, { tabId }) => {
+    activeTabs.set(event.sender.id, tabId);
+    const session = tabFor(event, tabId);
+    if (session) session.agent = false;
+  });
 
   on('reader:pick-session', (event, { tabId, sessionId }) => {
     if (typeof sessionId === 'string') tabFor(event, tabId)?.feed.pick(sessionId);
