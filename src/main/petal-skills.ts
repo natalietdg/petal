@@ -55,20 +55,37 @@ export function petalSkills(paths: PetalSkillPaths): PetalSkills {
   return { skills, installable: skills.some((s) => s.state === 'missing' || s.state === 'outdated') };
 }
 
+// One skill: added when missing (if asked), updated when it is Petal's own unedited copy, else left. Returns its state before.
+function installOne(paths: PetalSkillPaths, record: Record<string, string>, dir: string, text: string, add: boolean): PetalStyleState {
+  const target = targetOf(paths.claudeDir, dir);
+  const key = recordKey(dir);
+  const state = stateOf(readOrNull(target), text, record[key]);
+  if (state === 'missing' && !add) return state;
+  if (state === 'missing') {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    createNew(target, text);
+  } else if (state === 'outdated') writeFileDurable(target, text, fs.statSync(target).mode & 0o7777);
+  if (state === 'missing' || state === 'outdated' || (state === 'current' && record[key] === undefined)) record[key] = hash(text);
+  return state;
+}
+
 // Adds missing skills and updates Petal's own unedited copies; everything else is left as it is.
 export function installPetalSkills(paths: PetalSkillPaths): PetalSkills {
   const record = readRecord(paths.recordFile);
-  for (const { dir, text } of bundled(paths)) {
-    const target = targetOf(paths.claudeDir, dir);
-    const key = recordKey(dir);
-    const onDisk = readOrNull(target);
-    const state = stateOf(onDisk, text, record[key]);
-    if (state === 'missing') {
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      createNew(target, text);
-    } else if (state === 'outdated') writeFileDurable(target, text, fs.statSync(target).mode & 0o7777);
-    if (state === 'missing' || state === 'outdated' || (state === 'current' && record[key] === undefined)) record[key] = hash(text);
-  }
+  for (const { dir, text } of bundled(paths)) installOne(paths, record, dir, text, true);
   writeJsonAtomic(paths.recordFile, record, 2);
   return petalSkills(paths);
+}
+
+// One bundled skill's text as it lands on disk; null when the app doesn't carry it.
+export const bundledSkill = (paths: PetalSkillPaths, dir: string): string | null => bundled(paths).find((s) => s.dir === dir)?.text ?? null;
+
+// Updates one skill only when it is Petal's own unedited old copy; never adds it or touches another. Returns its state before.
+export function updatePetalSkill(paths: PetalSkillPaths, dir: string): PetalStyleState | null {
+  const text = bundledSkill(paths, dir);
+  if (text === null) return null;
+  const record = readRecord(paths.recordFile);
+  const state = installOne(paths, record, dir, text, false);
+  if (state === 'outdated') writeJsonAtomic(paths.recordFile, record, 2);
+  return state;
 }

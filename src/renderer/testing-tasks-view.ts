@@ -100,7 +100,8 @@ export function noTasks(): HTMLElement {
   return box;
 }
 
-export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null }
+// draftEnded: the testing agent stopped with no suite; askAgain then stands where Ask Claude was.
+export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; draftEnded: boolean; askAgain: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null }
 
 export function noSuite(actions: NoSuiteActions, seedProblem: string | null, busy: boolean): HTMLElement {
   const box = el('div', 'tst-no-suite');
@@ -112,7 +113,17 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     return b;
   };
   const row = el('div', 'tst-actions');
-  if (actions.showDraft) {
+  let ended: HTMLElement | null = null;
+  if (actions.draftEnded) {
+    ended = el('p', 'tst-muted tst-draft-ended', 'The testing agent stopped without a suite.');
+    ended.setAttribute('role', 'status');
+    row.append(button('tst-ask-again', 'Ask again', actions.askAgain, true));
+    if (actions.showDraft) {
+      const show = button('tst-show-draft', 'Show its tab', actions.showDraft);
+      show.disabled = false;
+      row.append(show);
+    }
+  } else if (actions.showDraft) {
     // While its testing agent draws, a status stands where Ask Claude was, so a second agent can't be started.
     const status = el('span', 'tst-button tst-drawing', 'Testing agent is drawing up the suite');
     status.setAttribute('role', 'status');
@@ -124,7 +135,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
   if (actions.seed) row.append(button('tst-seed-suite', 'Start from the project’s commands', actions.seed));
   if (actions.fromRuns) row.append(button('tst-make-pipeline', 'Start from Claude’s checks', actions.fromRuns));
   row.append(button('tst-edit-suite', 'Add stages yourself', actions.edit));
-  box.append(el('p', 'tst-empty tst-no-suite-title', 'No suite for this task yet'), row);
+  box.append(el('p', 'tst-empty tst-no-suite-title', 'No suite for this task yet'), ...(ended ? [ended] : []), row);
   if (seedProblem) box.append(el('p', 'tst-muted', `The project’s .petal/pipeline.json can’t be used: ${seedProblem}.`));
   return box;
 }

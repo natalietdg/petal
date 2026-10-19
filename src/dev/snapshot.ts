@@ -48,6 +48,7 @@ import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
 import { distillationCheck } from './snapshot-distillation';
 import { petalSkillsCheck } from './snapshot-petal-skills';
+import { suiteDraftCheck } from './snapshot-suite-draft';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -453,6 +454,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['distillation', keepingStores(['testing', 'activity'], () => distillationCheck(kit, win), kit.outDir)], // appends two loop rounds; records the thread, answer and brief pastes, never a real claude
     ['prd tasks', keepingStores(['testing', 'activity'], () => prdTasksCheck(kit, { win, openTab: tabs.openTab }), kit.outDir)], // seeds runs for a fixture repo's tasks; never runs a command
+    ['suite draft', keepingStores(['testing', 'activity'], () => suiteDraftCheck(kit, win), kit.outDir)], // stand-in ~/.claude, userData record and fixture sessions only; never a real claude
     ['latency', () => latencyCheck(kit, { feed, file: fakeTranscript() ?? '' })], // appends turns to the fixture
     ['reply latency', () => replyLatencyCheck(kit, { win, feed, file: fakeTranscript() ?? '', ...tabs })], // appends long turns and a 60MB second session
     ['status strip', () => statusStripCheck(kit, win, fakeTranscript() ?? '')], // appends its own replies too
@@ -652,6 +654,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'testing') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testingCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'suite-draft') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await keepingStores(['testing', 'activity'], () => suiteDraftCheck(kit, win), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

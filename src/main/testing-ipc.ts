@@ -23,6 +23,7 @@ import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, settleOutsideChange, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
 import { setAgentTitle } from './agent-titles';
+import { draftWithSkill } from './testing-skill';
 import { readAgentLog } from './agent-log';
 import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
@@ -600,7 +601,8 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
 
   // The loop for a task: its testing agent and its bug fix agent, each in its own new tab, working at once.
   // One brief starts that agent alone: the bug fix agent for a failed run, or the testing agent joining a running one.
-  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief, show }) => {
+  // reuseDraft: the drafting agent's open tab becomes the loop's testing agent; the renderer pastes its brief there.
+  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief, show, reuseDraft }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     const briefs = [testerBrief, fixerBrief].filter((brief) => brief !== null && brief !== undefined);
@@ -608,8 +610,10 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const prior = loopsOf(target.root)[target.task.id];
     const running = prior?.kind === 'loop' && prior.stoppedAt === null && briefs.length === 1 ? prior : null;
     if (!fixerBrief && !running?.fixer) return { note: 'Start the loop to start its testing agent.' };
+    const drafter = reuseDraft === true && !testerBrief && prior?.kind === 'draft' && draftLive(target.root, target.task.id) ? prior.tester : null;
+    if (reuseDraft === true && !drafter) return { note: 'The drafting agent’s tab is gone. Start the loop again.' };
     prepareLoop(target.root);
-    const tester = testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null;
+    const tester = drafter ?? (testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null);
     const fixer = fixerBrief ? await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, show !== true) : null;
     saveLoop(target.root, target.task.id, running
       ? { ...running, tester: tester ?? running.tester, fixer: fixer ?? running.fixer }
@@ -626,7 +630,8 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   const drafting = new Set<string>(); // `${root}:${taskId}` while its draft agent is being started
 
   // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task, in a tab she is shown.
-  // One per task: a second ask while the first is still drawing gets a note.
+  // The skill is checked first: Petal's unedited old copy is updated, a missing or edited one is replaced by its bundled
+  // instructions in the brief. One per task: a second ask while the first is still drawing gets a note.
   handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
@@ -635,11 +640,13 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     if (drafting.has(key) || draftLive(target.root, target.task.id)) return { note: 'This task’s testing agent is already drawing up its suite.' };
     drafting.add(key);
     try {
-      const tester = await startAgent(event.sender, target.root, target.task, 'tester', prompt, false);
+      const skill = draftWithSkill(isSnapshotRun() ? testingFixture.claudeDir : allowedClaudeHome(), prompt.trim());
+      prepareLoop(target.root); // bugs it finds go in the criteria file as [fail] lines
+      const tester = await startAgent(event.sender, target.root, target.task, 'tester', skill.brief, false);
       const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
       const now = Date.now();
       saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
-      return { tabId: tester.tabId };
+      return { tabId: tester.tabId, updatedSkill: skill.updated };
     } finally {
       drafting.delete(key);
     }

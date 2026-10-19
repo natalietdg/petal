@@ -39,7 +39,15 @@ Say in a few lines what the suite will be: runners, the stages, which paths get 
 
 ## 3. Run it
 
-Run every stage. Make it green by fixing setup and test mistakes. When a test fails because the code is wrong, keep the test and report it as a bug with the file and line. Never weaken, skip or delete a test to get green.
+Run every stage. Make it green by fixing setup and test mistakes. When a test fails because the code is wrong, keep the test and record the bug; don't fix app code. Never weaken, skip or delete a test to get green.
+
+Record each bug as one line under `## Bugs` in `.petal/test-criteria.md` (create the file with a `## Scenarios` and a `## Bugs` heading if it is missing), so Petal hands it to the task's bug fix agent:
+
+```
+- [fail] coupon can take the total below zero · test: src/checkout/coupon.test.ts::caps at the total · task: t-1a2b
+```
+
+Use your task id after `task:`, the failing test after `test:` (path, `::`, test name), and keep the ` · ` separators exactly.
 
 ## 4. Hand Petal the suite
 
@@ -64,4 +72,4 @@ Never commit. Leave every change for the user to review.
 
 ## 5. Report
 
-A short summary: what was added, the stage commands, pass and fail counts, and any real bugs found. End with one line: open Petal's Testing tab on this task to run the suite.
+A short summary: what was added, the stage commands, pass and fail counts, and the bugs you recorded. End with one line: open Petal's Testing tab on this task to run the suite.

@@ -16,6 +16,7 @@ import type { Task } from '../shared/tasks';
 import type { AgentRecord, SavedLoop } from '../shared/testing';
 import type { AgentRole } from '../shared/agent-names';
 import { loopFromAgents } from '../shared/agent-loop';
+import { suiteWriters } from '../shared/suite-draft';
 
 export const suiteFile = (root: string, taskId: string): string => path.join(root, ...suitePath(taskId).split('/'));
 
@@ -47,7 +48,6 @@ const agentMap = (root: string): Record<string, AgentRecord[]> => store.load(roo
 
 // The sessions Petal launched as this task's agents, oldest first.
 export const agentsOf = (root: string, taskId: string): AgentRecord[] => agentMap(root)[taskId] ?? [];
-export const testersOf = (agents: readonly AgentRecord[]): string[] => agents.filter((a) => a.role === 'tester').map((a) => a.sessionId);
 
 // The task and role of one of Petal's agent sessions; null for any other session.
 export function agentOf(root: string, sessionId: string | null | undefined): { taskId: string; role: AgentRole } | null {
@@ -102,7 +102,8 @@ export function syncSuites(root: string, tasks: readonly Task[], writes: readonl
     if (!isTaskId(task.id)) continue;
     const before = records[task.id] ?? null;
     const file = readSuiteFile(root, task.id);
-    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), testersOf(data.agents?.[task.id] ?? []));
+    const agents = data.agents?.[task.id] ?? [];
+    const after = takeSuiteFile(before, file, lastWriter(writes, task.id), suiteWriters(loopFromAgents(data.loops?.[task.id], agents), agents));
     if (after && JSON.stringify(after) !== JSON.stringify(before)) { records[task.id] = after; changed = true; }
     const outside = after?.outside ? { problem: outsideText(after.outside, locked), outside: after.outside } : {};
     if (after) views[task.id] = { suite: after.good, change: after.change, problem: after.problem, ...outside, ...(file.at ? { at: file.at } : {}) };

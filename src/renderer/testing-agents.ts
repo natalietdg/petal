@@ -11,7 +11,8 @@ import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../share
 import { agentOf, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { estimateRoundTokens, totalTokens } from '../shared/token-usage';
-import type { TaskSuite } from '../shared/task-suite';
+import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
+import { askAgainText, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
 import type { LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
@@ -74,8 +75,57 @@ export function createAgents(ctx: AgentContext) {
     const bySession = matches.find((id) => tabs.get(id)?.update?.state === 'live') ?? matches[0]; // a live one first
     return bySession ?? (agent.tabId && tabs.get(agent.tabId) ? agent.tabId : null);
   };
-  // The shown task's testing agent tab while it draws up the suite, else null.
-  const draftTab = (): string | null => { const r = record(); return r?.kind === 'draft' && !r.stoppedAt ? tabOf(r.tester) : null; };
+  const askedAt = new Map<string, number>(); // `${root}:${taskId}` -> when Petal last pasted a follow-up to its drafting agent
+  const pastedProblems = new Set<string>(); // `${key}:${problem}` pasted back once each
+  const drafting = (): AgentLoop | null => { const r = record(); return r?.kind === 'draft' && !r.stoppedAt && r.tester ? r : null; };
+  // The shown task's draft: its testing agent's tab, and whether it ended with no suite.
+  function draft(): { tabId: string | null; ended: boolean } | null {
+    const r = drafting();
+    if (!r?.tester) return null;
+    const id = tabOf(r.tester);
+    const tab = id ? tabs.get(id) ?? null : null;
+    const since = Math.max(r.startedAt, askedAt.get(keyOf(r.root, r.taskId)) ?? 0);
+    const replies = tab?.update?.replies ?? [];
+    const ended = draftEnded({
+      suite: Boolean(ctx.suite()),
+      tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
+      busy: Boolean(tab?.update?.busy), asking: tab ? composer.claudeIsAsking(tab) : false,
+      worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
+    });
+    return { tabId: id, ended };
+  }
+
+  // A follow-up to the drafting agent through the reply box's paste path; worked counts again from now.
+  async function pasteToDrafter(r: AgentLoop, text: string, event: string): Promise<boolean> {
+    const id = tabOf(r.tester);
+    const tab = id ? tabs.get(id) : null;
+    const sent = tab ? await composer.pasteToClaude(tab, text) : false;
+    if (!sent) return false;
+    askedAt.set(keyOf(r.root, r.taskId), Date.now());
+    note(r, 'tester', event);
+    persist(r);
+    return true;
+  }
+
+  // Ask again: the drafting agent's open tab gets a follow-up; 'start' when there is none to reuse.
+  async function askAgain(): Promise<'pasted' | 'start' | 'failed'> {
+    const r = drafting();
+    const task = ctx.task();
+    if (!r || !task || !tabOf(r.tester)) return 'start';
+    return (await pasteToDrafter(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
+  }
+
+  // After each refresh: a suite file the drafting agent wrote but Petal couldn't use goes back to it once, with a fix request.
+  async function checkDraft(problem: string | null): Promise<void> {
+    const r = drafting();
+    const task = ctx.task();
+    if (!r || !task || !problem || problem === OUTSIDE_AGENT || !tabOf(r.tester)) return;
+    const k = `${keyOf(r.root, r.taskId)}:${problem}`;
+    if (pastedProblems.has(k) || updateOf(r.tester)?.busy) return;
+    pastedProblems.add(k);
+    if (!(await pasteToDrafter(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
+    else ctx.redraw();
+  }
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
   const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
   // Its bug fix agent can take bugs: running, and its tab is open here or still starting.
@@ -211,9 +261,24 @@ export function createAgents(ctx: AgentContext) {
     if (!from || !task || !root || !b || isActive(facts().status)) return;
     const shown = shownLoop();
     const joining = shown && fixerLive(shown) && !shown.tester ? shown : null; // her bug fix agent already runs: only the testing agent starts
-    const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, testerBrief: b.tester, fixerBrief: joining ? null : b.fixer });
+    const drafter = drafting();
+    const reuse = !joining && drafter && tabOf(drafter.tester) ? drafter : null; // the drafting agent's open tab becomes the loop's testing agent
+    const reply = await window.pastel.testing.loopStart({ tabId: from, root: ctx.picked(), taskId: task.id, testerBrief: reuse ? null : b.tester, fixerBrief: joining ? null : b.fixer, ...(reuse ? { reuseDraft: true } : {}) });
     if (isIpcError(reply) || 'note' in reply) { ctx.say(isIpcError(reply) ? `Couldn’t start the loop: ${reply.error}` : reply.note); return; }
     if (!reply.tester || !(reply.fixer ?? joining?.fixer)) { ctx.say('Couldn’t start the loop. Try again.'); return; }
+    if (reuse && reply.fixer) {
+      const testerTab = tabOf(reply.tester);
+      const tab = testerTab ? tabs.get(testerTab) : null;
+      const sent = tab ? await composer.pasteToClaude(tab, composer.stripControls(b.tester).trim()) : false;
+      const r = fromSaved(root, task.id, { kind: 'loop', tester: reply.tester, fixer: reply.fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: reuse.events });
+      r.tokens = { tester: reuse.tokens.tester, fixer: 0 };
+      note(r, 'tester', sent ? `${nameOf('tester')} moves on to the test loop in its tab` : `Couldn’t paste the loop brief into ${nameOf('tester')}’s tab`);
+      note(r, 'fixer', `Started ${nameOf('fixer')} in a new tab`);
+      loops.set(keyOf(root, task.id), r);
+      persist(r);
+      ctx.say(sent ? `${nameOf('tester')} moves on to the test loop in its tab. ${nameOf('fixer')} is starting in a new tab.` : `Couldn’t reach ${nameOf('tester')}’s tab. Stop the loop and try again.`);
+      return;
+    }
     if (joining) {
       joining.tester = reply.tester;
       joining.tokens.tester = 0;
@@ -296,7 +361,7 @@ export function createAgents(ctx: AgentContext) {
     if (r.stoppedAt) return 'Stopped';
     const update = updateOf(agent);
     if (!update) return Date.now() - r.startedAt < STARTING_MS ? 'Starting in its tab' : 'Its tab isn’t open here';
-    if (r.kind === 'draft') return update.busy ? 'Drawing up the suite' : 'Idle';
+    if (r.kind === 'draft') return update.busy ? 'Drawing up the suite' : draft()?.ended ? 'Stopped without a suite' : 'Idle';
     if (role === 'tester') return progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : update.busy ? 'Working' : 'Idle';
     const fixing = r.queue.find((b) => b.state === 'fixing');
     return fixing ? `Fixing ${fixing.name}` : update.busy ? 'Working' : 'Idle, waiting for bugs';
@@ -365,10 +430,10 @@ export function createAgents(ctx: AgentContext) {
   // For the snapshot harness: what the shown task's lanes say, and forgetting this window's copies as a new window would.
   const state = () => {
     const r = record();
-    return { kind: r?.kind ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
+    return { kind: r?.kind ?? null, draft: draft(), queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draftTab, state, forget: () => loops.clear() };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, askAgain, checkDraft, state, forget: () => loops.clear() };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

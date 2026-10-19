@@ -257,10 +257,13 @@ function drawStrip(): void {
   if (!p) {
     if (draft) return;
     const fromClaude = stagesFromRuns(taskRuns());
-    const drawingTab = agents.draftTab();
+    const drawn = agents.draft();
+    const draftTab = drawn?.tabId ?? null;
     strip.append(noSuite({
       askClaude: () => void askForSuite(task),
-      showDraft: drawingTab ? () => tabs.activate(drawingTab) : null,
+      showDraft: draftTab ? () => tabs.activate(draftTab) : null,
+      draftEnded: drawn?.ended ?? false,
+      askAgain: () => void askAgain(task),
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
@@ -580,19 +583,29 @@ function insertSkill(item: StackItem): void {
 }
 
 // Ask Claude to draw one up: starts this task's testing agent in a new tab, shown, on the testing-suite skill. Only it may write the suite.
+// Main puts the skill's slash command in front, or its bundled instructions after, depending on the installed copy.
 async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
   if (!id) return;
   const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task));
   const prompt = [
-    `/petal-testing-suite for task ${task.id}: "${task.title}".`, task.notes ? `Notes: ${task.notes}` : '', prd ? `PRD: ${prd.title}${prd.notes ? `. ${prd.notes}` : ''}.` : '',
+    `for task ${task.id}: "${task.title}".`, task.notes ? `Notes: ${task.notes}` : '', prd ? `PRD: ${prd.title}${prd.notes ? `. ${prd.notes}` : ''}.` : '',
     `You are this task's testing agent, so you may write ${suitePath(task.id)}.`,
   ].filter(Boolean).join(' ');
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
+  const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note
-    : reply.tabId ? 'Started this task’s testing agent in a new tab. Its suite shows here when it writes one.' : 'Couldn’t open a new tab for the testing agent.';
+    : reply.tabId ? `${updated}Started this task’s testing agent in a new tab. Its suite shows here when it writes one.` : 'Couldn’t open a new tab for the testing agent.';
   drawNote();
   await refresh(); // its lane shows now
+}
+
+// The testing agent stopped without a suite: its open tab gets a follow-up, else a fresh one starts.
+async function askAgain(task: Task): Promise<void> {
+  const asked = await agents.askAgain();
+  if (asked === 'start') return askForSuite(task);
+  message = asked === 'pasted' ? 'Asked the testing agent again in its tab.' : 'Couldn’t reach the testing agent’s tab. Answer anything it is asking there first.';
+  drawAll();
 }
 
 async function run(stageId: string | null, confirmed: boolean): Promise<void> {
@@ -681,6 +694,8 @@ async function refresh(): Promise<void> {
   criteria = result.criteria;
   distillation = result.distillation;
   if (data.project) agents.adoptAll(data.project.root, result.loops); // lanes rebuild from the saved loops
+  const shownId = taskId();
+  void agents.checkDraft(shownId ? result.suites[shownId]?.problem ?? null : null);
   void agents.refreshLogs().then(() => { if (isOpen()) agents.draw(); }); // logs and tokens follow; the view doesn't wait
   if (draft) { drawHead(); drawPicker(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
