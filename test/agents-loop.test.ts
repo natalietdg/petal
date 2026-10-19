@@ -6,7 +6,7 @@ import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, parseCriteria, st
 import { estimateRoundTokens, sumUsage, tokenText, totalTokens, CHARS_PER_TOKEN, TURNS_PER_ROUND, BASE_CONTEXT_TOKENS } from '../src/shared/token-usage';
 import { actionsFrom, roundSummaries } from '../src/shared/agent-actions';
 import { agentTabTitle } from '../src/shared/agent-names';
-import { ASKING_NOTE, chatTurns, routeMessage } from '../src/shared/agent-chat';
+import { agentTab, ASKING_NOTE, chatPlaceholder, chatTurns, laneReach, reopenNote, REOPEN_MS, routeMessage } from '../src/shared/agent-chat';
 
 const words = { tester: 'Quinn', fixer: 'Fixie', failure: () => 'Failure output:\nexpected 10 to be 9' };
 const bugs = (text: string) => parseCriteria(`## Bugs\n${text}`).bugs;
@@ -226,6 +226,40 @@ describe('chatting with an agent', () => {
     expect(routeMessage('tester', agents, (id) => id === 'fixer-1', 'hi')).toEqual({ sessionId: 'tester-1' });
     expect(routeMessage('tester', null, () => false, 'hi')).toEqual({ note: 'Start the loop first. Each agent gets its own tab.' });
     expect(routeMessage('tester', agents, () => false, '  ')).toEqual({ note: 'Type a message first.' });
+  });
+  it('an agent whose tab is gone stays reachable through its saved session', () => {
+    const agent = { sessionId: 'tester-1' };
+    expect(laneReach(agent, 'm3', null, 0)).toBe('tab');
+    expect(laneReach(agent, null, null, 0)).toBe('reopen'); // after a restart, or its tab was closed
+    expect(laneReach(null, null, null, 0)).toBe('none'); // never started: the box stays off
+    expect(chatPlaceholder('Quinn', 'reopen')).toBe('Message Quinn. Reopens its session');
+    expect(chatPlaceholder('Quinn', 'tab')).toBe('Message Quinn');
+  });
+  it('finds an agent only by its session: a saved tab id that now names an unrelated tab is not adopted', () => {
+    const agent = { sessionId: 'tester-1', tabId: 'm3' }; // saved before a restart
+    expect(agentTab(agent, [{ id: 'm3', sessionId: 'her-own', live: true }])).toBeNull();
+    expect(agentTab(agent, [{ id: 'm3', sessionId: null, live: false }])).toBeNull(); // a plain shell that reused the id
+    expect(agentTab(agent, [{ id: 'm3', sessionId: 'her-own', live: true }, { id: 'm7', sessionId: 'tester-1', live: true }])).toBe('m7');
+    expect(agentTab(agent, [{ id: 'm5', sessionId: 'tester-1', live: false }, { id: 'm6', sessionId: 'tester-1', live: true }])).toBe('m6'); // a live one first
+    expect(agentTab(null, [{ id: 'm3', sessionId: null, live: false }])).toBeNull();
+  });
+  it('just started with no session reported yet reads as starting, not reopened', () => {
+    const agent = { sessionId: 'tester-1' };
+    expect(laneReach(agent, null, null, 0, true)).toBe('starting');
+    expect(chatPlaceholder('Quinn', 'starting')).toBe('Quinn is starting…');
+    expect(laneReach(agent, 'm2', null, 0, true)).toBe('tab');
+  });
+  it('reopening holds the box until a tab picks the session up, then reads as failed', () => {
+    const agent = { sessionId: 'tester-1' };
+    expect(laneReach(agent, null, 1000, 1000 + REOPEN_MS - 1)).toBe('reopening');
+    expect(laneReach(agent, 'm9', 1000, 1001)).toBe('tab');
+    expect(laneReach(agent, null, 1000, 1000 + REOPEN_MS)).toBe('reopen');
+  });
+  it('says plainly when the session couldn’t be reopened', () => {
+    expect(reopenNote('Quinn', 'That session is no longer on disk.', true)).toBe('Couldn’t reopen Quinn’s session. That session is no longer on disk.');
+    expect(reopenNote('Quinn', null, true)).toBe('Reopening Quinn’s session in a new tab. Your message goes once it’s ready.');
+    expect(reopenNote('Quinn', null, false)).toBe('Reopening Quinn’s session in a new tab.');
+    for (const text of [chatPlaceholder('Quinn', 'reopen'), chatPlaceholder('Quinn', 'reopening'), reopenNote('Quinn', null, true)]) expect(text).not.toMatch(/—/);
   });
   it('shows the last few turns, oldest first, since the loop started', () => {
     const reply = (id: string, s: number) => ({ id, timestamp: new Date(s * 1000).toISOString(), markdown: `reply ${id}`, prompt: `ask ${id}` });

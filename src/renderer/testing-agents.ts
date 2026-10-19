@@ -5,6 +5,7 @@
 // waiting on a prompt reads Needs you and badges the dock's Testing button; that, a fix landing and a loop ending notify.
 import * as tabs from './tabs';
 import * as composer from './composer';
+import * as historyReply from './history-reply';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
@@ -17,7 +18,7 @@ import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalToken
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
 import { askAgainText, awaitingReview, draftEnded, scenariosApprovedText, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
-import { chatTurns, routeMessage } from '../shared/agent-chat';
+import { agentTab, chatTurns, laneReach, reopenNote, reopenStalledNote, routeMessage, type LaneReach } from '../shared/agent-chat';
 import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
 import type { Prd, Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
@@ -73,6 +74,7 @@ export function createAgents(ctx: AgentContext) {
   const view: Partial<Record<AgentRole, 'chat' | 'actions'>> = {};
   const drafts: Partial<Record<AgentRole, string>> = {};
   const notes: Partial<Record<AgentRole, string>> = {};
+  const reopened = new Map<string, number>(); // agent sessionId -> when she asked to reopen it here
   let closeAsking = false;
   let closing = false;
   const closedLoops = new Set<string>(); // root, task and start of a loop once Close agents finished; its tabs close a moment later
@@ -80,11 +82,15 @@ export function createAgents(ctx: AgentContext) {
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
   const shownLoop = (): AgentLoop | null => { const r = record(); return r?.kind === 'loop' ? r : null; };
-  const tabOf = (agent: LoopAgent | null | undefined): string | null => {
-    if (!agent) return null;
-    const matches = tabs.ids().filter((id) => tabs.get(id)?.update?.sessionId === agent.sessionId);
-    const bySession = matches.find((id) => tabs.get(id)?.update?.state === 'live') ?? matches[0]; // a live one first
-    return bySession ?? (agent.tabId && tabs.get(agent.tabId) ? agent.tabId : null);
+  const tabOf = (agent: LoopAgent | null | undefined): string | null =>
+    agentTab(agent, tabs.ids().map((id) => { const update = tabs.get(id)?.update; return { id, sessionId: update?.sessionId ?? null, live: update?.state === 'live' }; }));
+  const isStarting = (r: AgentLoop | null): boolean => Boolean(r && !r.stoppedAt && Date.now() - r.startedAt < STARTING_MS); // its Claude may not have reported its session yet
+  // Starting, and its tab is still opening: not opened yet, or open with no session reported. A closed one reads as gone.
+  // The saved id only rules a tab out here; it never makes one the agent's.
+  const opening = (r: AgentLoop | null, agent: LoopAgent | null): boolean => {
+    if (!isStarting(r) || !agent) return false;
+    const tab = agent.tabId ? tabs.get(agent.tabId) : null;
+    return agent.tabId === null || Boolean(tab && !tab.update?.sessionId);
   };
   const askedAt = new Map<string, number>(); // `${root}:${taskId}` -> when Petal last pasted a follow-up to its drafting agent
   const pastedProblems = new Set<string>(); // `${key}:${problem}` pasted back once each
@@ -99,7 +105,7 @@ export function createAgents(ctx: AgentContext) {
     const replies = updateOf(r.tester)?.replies ?? [];
     const ended = draftEnded({
       suite: Boolean(ctx.suite()),
-      tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
+      tab: id ? 'open' : opening(r, r.tester) ? 'starting' : 'gone',
       busy: Boolean(screen?.busy), asking: Boolean(screen?.asking),
       worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
       reviewing: awaiting().length > 0,
@@ -174,7 +180,7 @@ export function createAgents(ctx: AgentContext) {
   const updateOf = (agent: LoopAgent | null | undefined) => { const id = tabOf(agent); return id ? tabs.get(id)?.update ?? null : null; };
   const nameOf = (role: AgentRole, names: AgentNames = ctx.names()): string => agentName(names, role);
   // Its bug fix agent can take bugs: running, and its tab is open here or still starting.
-  const fixerLive = (r: AgentLoop): boolean => isRunning(r) && r.fixer !== null && (tabOf(r.fixer) !== null || Date.now() - r.startedAt < STARTING_MS);
+  const fixerLive = (r: AgentLoop): boolean => isRunning(r) && r.fixer !== null && (tabOf(r.fixer) !== null || isStarting(r));
 
   // The testing agent's Loop line drives the status; the loop is done only once the queue is empty too.
   function facts(): { record: AgentLoop | null; testerTab: string | null; progress: LoopProgress | null; status: LoopStatus } {
@@ -550,7 +556,7 @@ export function createAgents(ctx: AgentContext) {
   function laneStatus(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): string {
     const agent = r ? agentOf(r, role) : null;
     return laneWord({
-      role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: Boolean(r && Date.now() - r.startedAt < STARTING_MS),
+      role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: isStarting(r),
       testerLine: progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : null, fixing: r?.queue.find((b) => b.state === 'fixing')?.name ?? null, draftEnded: r?.kind === 'draft' && Boolean(draft()?.ended),
       scenariosReady: role === 'tester' && awaiting().length > 0,
     });
@@ -564,12 +570,47 @@ export function createAgents(ctx: AgentContext) {
     const route = routeMessage(role, agent ? { tester: agent, fixer: agent } : null, asking, text); // only the role's own entry is read
     if ('note' in route) { notes[role] = route.note; draw(); return; }
     const id = tabOf(agent);
+    if (!id && r && agent) { await reopen(r, role, agent, text); return; }
     const tab = id ? tabs.get(id) : null;
     const sent = tab ? await composer.pasteToClaude(tab, composer.stripControls(text).trim()) : false;
     if (sent && r) { drafts[role] = ''; note(r, role, `You → ${nameOf(role)}: ${text.trim().slice(0, 80)}`); persist(r); }
     notes[role] = sent ? `Sent to ${nameOf(role)}.` : 'Couldn’t reach that tab. Try again.';
     (document.activeElement as HTMLElement | null)?.blur();
     draw();
+  }
+
+  // Its tab is gone (closed, or Petal restarted): History's reply path resumes its session in a new tab and sends her
+  // message once Claude is ready there. With no message, Open tab: the new tab is shown.
+  async function reopen(r: AgentLoop, role: AgentRole, agent: LoopAgent, text: string | null): Promise<void> {
+    const name = nameOf(role);
+    reopened.set(agent.sessionId, Date.now());
+    notes[role] = reopenNote(name, null, Boolean(text));
+    draw();
+    const limitAction = `reopen ${name}`;
+    const outcome = text ? await historyReply.sendReply(agent.sessionId, text, false, limitAction) : await historyReply.openSession(agent.sessionId, limitAction);
+    const problem = 'note' in outcome ? outcome.note || 'Try again.' : 'confirm' in outcome ? outcome.confirm : null;
+    if (problem) reopened.delete(agent.sessionId);
+    notes[role] = reopenNote(name, problem, Boolean(text));
+    if (!problem) {
+      note(r, role, text ? `You → ${name}: ${text.trim().slice(0, 80)} · reopened its session` : `Reopened ${name}’s session in a new tab`);
+      if (text) drafts[role] = '';
+      persist(r);
+      const tab = text ? null : historyReply.tabFor(agent.sessionId);
+      if (tab) tabs.activate(tab.id);
+    }
+    (document.activeElement as HTMLElement | null)?.blur();
+    draw();
+  }
+
+  // Reopening ends when a tab picks the session up, or reads as failed once REOPEN_MS passes without one.
+  function reachOf(role: AgentRole, r: AgentLoop | null, agent: LoopAgent | null, tabId: string | null): LaneReach {
+    const at = agent ? reopened.get(agent.sessionId) ?? null : null;
+    const reach = laneReach(agent, tabId, at, Date.now(), opening(r, agent));
+    if (agent && at !== null && reach !== 'reopening') {
+      reopened.delete(agent.sessionId);
+      if (reach !== 'tab') notes[role] = reopenStalledNote(nameOf(role));
+    }
+    return reach;
   }
 
   function draw(): void {
@@ -584,8 +625,9 @@ export function createAgents(ctx: AgentContext) {
     const lanes: LaneModel[] = roles.map((role) => {
       const agent = r ? agentOf(r, role) : null;
       const status = laneStatus(role, r, progress);
+      const tabId = tabOf(agent);
       return {
-        role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
+        role, name: nameOf(role), started: Boolean(agent), tabId, reach: reachOf(role, r, agent, tabId), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
         review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
@@ -603,6 +645,7 @@ export function createAgents(ctx: AgentContext) {
       rename: (role) => { renaming = role; draw(); },
       saveName: (role, name) => void saveName(role, name),
       openTab: (id) => tabs.activate(id),
+      reopen: (role) => { const r = record(); const agent = r ? agentOf(r, role) : null; if (r && agent) void reopen(r, role, agent, null); },
       toggleLog: (role) => { if (!logOpen.delete(role)) logOpen.add(role); draw(); },
       showOlder: (role) => { logShown[role] = (logShown[role] ?? 20) + 20; draw(); },
       setView: (role, next) => { view[role] = next; if (next === 'actions') logOpen.add(role); draw(); },

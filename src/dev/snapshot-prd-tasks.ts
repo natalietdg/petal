@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
-import { extraTabFixtures, folderFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
+import { extraTabFixtures, folderFixture, historyFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import * as store from '../main/testing-store';
 import { lockedCopiesDir } from '../main/test-lock';
@@ -65,7 +65,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
   const repo = path.join(dir, 'repos', 'shop');
   const tasksJson = path.join(repo, '.petal', 'tasks.json');
   const transcript = path.join(dir, 'tabs', `${SESSION}.jsonl`);
-  const saved = { panel: panelFixture.sessions, home: folderFixture.home, project: testingFixture.project, claudeDir: testingFixture.claudeDir };
+  const saved = { panel: panelFixture.sessions, home: folderFixture.home, project: testingFixture.project, claudeDir: testingFixture.claudeDir, historyRecords: [...historyFixture.records] };
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   type View = { tasks: { id: string; title: string; prdId: string | null; parentId: string | null }[]; prds: { id: string; title: string }[] };
@@ -375,6 +375,17 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await js("document.querySelector('#testing .tst-stop').click()");
     check(await waitFor(async () => ((await js('PastelTerm.testing.state().loop')) === 'stopped' ? true : null), 15000), 'Stop halts both agents');
 
+    // Quinn's tab gone (closed, or after a restart): the lane still takes a message and reopens its saved session for it.
+    historyFixture.records.push({ sessionId: TESTER, file: testerLog, cwd: repo, title: 'Quinn', firstPrompt: 'You are Quinn.', lastAt: Date.now(), messages: 1, messagesExact: true });
+    await js(`PastelTerm.tabs.requestClose(${JSON.stringify(testerTab)})`);
+    const reopenBox = await waitFor<{ placeholder: string; open: boolean } | null>(() => js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); return i && !i.disabled && !PastelTerm.tabs.get(${JSON.stringify(testerTab)}) ? { placeholder: i.placeholder, open: Boolean(document.querySelector('${lane('tester')} .tst-agent-tab')) } : null; })()`), 10000);
+    check(reopenBox?.placeholder === 'Message Quinn. Reopens its session' && reopenBox.open, `with its tab closed Quinn's box stays on and Open tab stays: ${JSON.stringify(reopenBox)}`);
+    const resumesBefore = historyFixture.resumes.length;
+    await js(`(() => { const i = document.querySelector('${lane('tester')} .tst-agent-input'); i.value = 'Still there?'; i.dispatchEvent(new Event('input')); document.querySelector('${lane('tester')} .tst-agent-send').requestSubmit(); })()`);
+    const reopened = await waitFor(() => (historyFixture.resumes.slice(resumesBefore).includes(TESTER) ? true : null), 6000);
+    const reopenLine: string = await js(`document.querySelector('${lane('tester')} .tst-agent-note')?.textContent ?? ''`);
+    check(reopened && reopenLine === 'Reopening Quinn’s session in a new tab. Your message goes once it’s ready.', `Send resumed Quinn's own session in a background tab: ${JSON.stringify({ resumes: historyFixture.resumes.slice(resumesBefore), reopenLine })}`);
+
     const overflow: number = await js("Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, document.getElementById('testing').scrollWidth - document.getElementById('testing').clientWidth)");
     check(overflow <= 1, `nothing sideways at 1280px: ${overflow}`);
 
@@ -408,6 +419,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     testingFixture.project = saved.project;
     testingFixture.claudeDir = saved.claudeDir;
     testingFixture.agentIds.length = 0;
+    historyFixture.records.splice(0, Infinity, ...saved.historyRecords);
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }
