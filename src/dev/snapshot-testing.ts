@@ -146,10 +146,6 @@ const PROBE = `(() => {
     picker: [...view.querySelectorAll('.tst-pick')].map((b) => [b.querySelector('.tst-pick-name')?.textContent, b.querySelector('.tst-pick-path')?.textContent]),
     pickerGroups: [...view.querySelectorAll('.tst-pick-group')].map((n) => n.textContent),
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
-    addLine: view.querySelector('.tst-add-first .tst-muted')?.textContent ?? null,
-    addProjects: [...view.querySelectorAll('.tst-add-project option')].map((o) => o.textContent),
-    addProject: view.querySelector('.tst-add-project')?.selectedOptions[0]?.textContent ?? null,
-    noSuite: Boolean(view.querySelector('.tst-no-suite')),
     makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
     head: view.querySelector('.tst-summary')?.textContent ?? '',
     bars: view.querySelectorAll('.tst-bar').length,
@@ -339,34 +335,6 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
     await click('#testing .tst-change-task');
     check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change task goes back to the picker');
-
-    // No recent project has tasks: add the first one right there, in the project she picks, and land on its no-suite screen.
-    const taskFiles = [project, bare].map((repo) => path.join(repo, '.petal', 'tasks.json'));
-    const savedTasks = taskFiles.map((file) => fs.readFileSync(file, 'utf8'));
-    try {
-      for (const file of taskFiles) fs.rmSync(file);
-      await js('PastelTerm.overlays.hideCurrent()');
-      await click('#testing-button');
-      const empty = await settle((p) => p.state.elsewhere?.reason === 'home' && (p.addProjects as string[]).length > 0);
-      const projects = (empty?.addProjects as string[] | undefined) ?? [];
-      check(empty && empty.addLine === 'No tasks yet. Add one to start its test suite:' && JSON.stringify([...projects].sort()) === JSON.stringify(['acme', 'notes-app']) && empty.addProject === projects[0] && !(empty.picker as unknown[]).length, `no tasks anywhere shows the add form with the recent projects: ${empty?.addLine} ${JSON.stringify(projects)} ${empty?.addProject}`);
-      await capture('testing-add-first');
-      await js("document.querySelector('#testing .tst-add-first').requestSubmit()");
-      await wait(300);
-      check(taskFiles.every((file) => !fs.existsSync(file)), 'an empty title adds nothing');
-      const title = 'Export notes as PDF';
-      await js(`(() => { const f = document.querySelector('#testing .tst-add-first'); f.querySelector('.tst-add-project').value = ${JSON.stringify(bare)}; f.querySelector('.tst-add-title').value = ${JSON.stringify(title)}; f.requestSubmit(); })()`);
-      const added = await settle((p) => p.state.project === 'notes-app' && p.state.task === title && Boolean(p.noSuite));
-      const saved = fs.existsSync(taskFiles[1] as string) ? JSON.parse(fs.readFileSync(taskFiles[1] as string, 'utf8')) as { tasks: { id: string; title: string; owner: unknown }[] } : { tasks: [] };
-      const made = saved.tasks.find((t) => t.title === title);
-      check(added && made && saved.tasks.length === 1 && made.owner === null && !fs.existsSync(taskFiles[0] as string), `the task lands in notes-app's .petal/tasks.json with no owner: ${JSON.stringify(saved.tasks)}`);
-      check(added && made && JSON.stringify(added.state.target) === JSON.stringify({ kind: 'task', id: made.id }), `Add task opens that task on its no-suite screen: ${JSON.stringify(added?.state.target)}`);
-      await capture('testing-added-first');
-      await click('#testing .tst-change-task');
-      await settle((p) => p.state.elsewhere?.reason === 'home');
-    } finally {
-      taskFiles.forEach((file, i) => fs.writeFileSync(file, savedTasks[i] as string));
-    }
     testingFixture.project = project;
 
     // Esc closes it.

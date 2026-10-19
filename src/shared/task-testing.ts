@@ -2,7 +2,7 @@
 import { groupTasks } from './task-groups';
 import { forTask, suiteFor, type SuiteViews } from './task-suite';
 import { openBugs, type Criteria } from './test-loop';
-import type { PipelineRun, ProjectRef } from './testing';
+import type { PipelineRun } from './testing';
 import type { Task, TaskData } from './tasks';
 
 export type TestTarget = { kind: 'task'; id: string } | { kind: 'prd'; id: string };
@@ -74,9 +74,4 @@ export function pickGroups(projects: readonly ProjectTasks[]): PickGroup[] {
     root: p.root, project: p.name, prd: g.prd?.title ?? null,
     tasks: g.tasks.flatMap((tree) => [tree.task, ...tree.subtasks]).map((t) => ({ id: t.id, title: t.title, subtask: t.parentId !== null, suite: p.suited.includes(t.id) })),
   })));
-}
-
-// A root the renderer names, kept only when it is exactly one of the recent projects main listed.
-export function listedRoot(root: unknown, projects: readonly ProjectRef[]): string | null {
-  return typeof root === 'string' && projects.some((p) => p.root === root) ? root : null;
 }

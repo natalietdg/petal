@@ -180,7 +180,7 @@ const api = {
   },
   tasks: {
     get: (tabId: TabId) => invoke('tasks:get', { tabId }),
-    change: (tabId: TabId, op: InvokeArgs<'tasks:change'>[0]['op'], root: string | null = null) => invoke('tasks:change', { tabId, op, root }),
+    change: (tabId: TabId, op: InvokeArgs<'tasks:change'>[0]['op']) => invoke('tasks:change', { tabId, op }),
   },
   coord: {
     get: () => invoke('coord:get'),

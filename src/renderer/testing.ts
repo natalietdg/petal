@@ -349,16 +349,11 @@ const fixHandlers = {
   fixStage: (stage: StageResult) => void askFix(buildFixPrompt({ stage: stage.name, command: stage.command, tests: stage.tests, output: stage.output })),
 };
 
-let shownElsewhere = '';
-
 function drawResults(): void {
-  const elsewhereKey = data && !data.project ? JSON.stringify(data.elsewhere) : '';
-  if (folderAllowed && elsewhereKey === shownElsewhere && results.querySelector('.tst-add-first')) return; // the poll leaves her typing alone
-  shownElsewhere = elsewhereKey;
   results.replaceChildren();
   if (!folderAllowed || !data) return;
   if (!data.project) {
-    results.append(data.elsewhere ? elsewherePicker(data.elsewhere, chooseTask, addFirstTask) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
+    results.append(data.elsewhere ? elsewherePicker(data.elsewhere.groups, chooseTask) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
   if (!data.tasks.length) { results.append(noTasks(openBoard)); return; }
@@ -388,20 +383,6 @@ function chooseTask(root: string, id: string): void {
   selectedRun = null;
   selectedStage = null;
   void load().then(refresh);
-}
-
-// The first task for a tab in ~: added to that recent project (main checks it is one), then opened like a picker row.
-async function addFirstTask(root: string, title: string): Promise<void> {
-  const id = tabId();
-  if (!id) return;
-  const reply = await window.pastel.tasks.change(id, { kind: 'add', title, notes: '' }, root);
-  if (isIpcError(reply) || !reply.added) {
-    message = `Couldn’t add the task: ${isIpcError(reply) ? reply.error : 'it didn’t save.'}`;
-    drawNote();
-    return;
-  }
-  message = '';
-  chooseTask(root, reply.added);
 }
 
 // Each Claude session's distillation goes under that session's newest row in History, once.
