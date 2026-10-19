@@ -95,8 +95,11 @@ export function sendReply(sessionId: string, raw: string, confirmFork = false): 
   return openAndSend(sessionId, text, confirmFork);
 }
 
+// Opens a background tab on the session with nothing to send; it is tabFor(sessionId) once main's tab arrives.
+export const openSession = (sessionId: string): Promise<ReplyOutcome> => openAndSend(sessionId, null, false);
+
 // No tab follows this session yet: the same checks as Open and Add Session, then a background tab.
-async function openAndSend(sessionId: string, text: string, confirmFork: boolean): Promise<ReplyOutcome> {
+async function openAndSend(sessionId: string, text: string | null, confirmFork: boolean): Promise<ReplyOutcome> {
   const limited = await limitNote('reply from here');
   if (limited) return { note: limited };
   opening = sessionId;
@@ -108,7 +111,7 @@ async function openAndSend(sessionId: string, text: string, confirmFork: boolean
     opening = null;
     return refused;
   }
-  queued.set(sessionId, [...queuedFor(sessionId), text]);
+  if (text) queued.set(sessionId, [...queuedFor(sessionId), text]);
   if ('tabId' in result) {
     opening = null;
     following.set(sessionId, result.tabId);

@@ -1,4 +1,5 @@
-// Chatting with a task's agents from the Testing view: which session a message goes to, and the turns a lane shows. Pure.
+// Chatting with a task's agents from the Testing view: which session a message goes to, how it gets there, and the turns
+// a lane shows. Pure.
 import type { AgentRole } from './agent-names';
 import type { Reply } from './types';
 
@@ -15,6 +16,26 @@ export function routeMessage(role: AgentRole, agents: Record<AgentRole, { sessio
   if (isAsking(agent.sessionId)) return { note: ASKING_NOTE };
   return { sessionId: agent.sessionId };
 }
+
+export const REOPEN_MS = 60_000; // a reopened session with no tab by then didn't come back
+
+// How her message reaches an agent: its open tab; else its saved session, reopened in a new tab; nothing before it started.
+export type LaneReach = 'tab' | 'reopen' | 'reopening' | 'none';
+export function laneReach(agent: { sessionId: string } | null, tabId: string | null, reopenedAt: number | null, now: number): LaneReach {
+  if (tabId) return 'tab';
+  if (!agent?.sessionId) return 'none';
+  return reopenedAt !== null && now - reopenedAt < REOPEN_MS ? 'reopening' : 'reopen';
+}
+
+export const chatPlaceholder = (name: string, reach: LaneReach): string =>
+  reach === 'reopen' ? `Message ${name}. Reopens its session` : reach === 'reopening' ? `Reopening ${name}’s session…` : `Message ${name}`;
+
+// The lane's note after asking to reopen: on its way, or why not in plain words.
+export function reopenNote(name: string, problem: string | null, withMessage: boolean): string {
+  if (problem) return `Couldn’t reopen ${name}’s session. ${problem}`;
+  return withMessage ? `Reopening ${name}’s session in a new tab. Your message goes once it’s ready.` : `Reopening ${name}’s session in a new tab.`;
+}
+export const reopenStalledNote = (name: string): string => `Couldn’t reopen ${name}’s session. Its tab never picked it up. Try Open tab again.`;
 
 export interface ChatTurn { id: string; prompt: string; markdown: string; at: number }
 

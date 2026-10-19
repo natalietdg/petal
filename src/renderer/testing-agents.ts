@@ -5,6 +5,7 @@
 // waiting on a prompt reads Needs you and badges the dock's Testing button; that, a fix landing and a loop ending notify.
 import * as tabs from './tabs';
 import * as composer from './composer';
+import * as historyReply from './history-reply';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
@@ -17,7 +18,7 @@ import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalToken
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
 import { askAgainText, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
-import { chatTurns, routeMessage } from '../shared/agent-chat';
+import { chatTurns, laneReach, reopenNote, reopenStalledNote, routeMessage, type LaneReach } from '../shared/agent-chat';
 import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
 import type { Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
@@ -71,6 +72,7 @@ export function createAgents(ctx: AgentContext) {
   const view: Partial<Record<AgentRole, 'chat' | 'actions'>> = {};
   const drafts: Partial<Record<AgentRole, string>> = {};
   const notes: Partial<Record<AgentRole, string>> = {};
+  const reopened = new Map<string, number>(); // agent sessionId -> when she asked to reopen it here
   let closeAsking = false;
   let closing = false;
   const closedLoops = new Set<string>(); // root, task and start of a loop once Close agents finished; its tabs close a moment later
@@ -521,12 +523,46 @@ export function createAgents(ctx: AgentContext) {
     const route = routeMessage(role, agent ? { tester: agent, fixer: agent } : null, asking, text); // only the role's own entry is read
     if ('note' in route) { notes[role] = route.note; draw(); return; }
     const id = tabOf(agent);
+    if (!id && r && agent) { await reopen(r, role, agent, text); return; }
     const tab = id ? tabs.get(id) : null;
     const sent = tab ? await composer.pasteToClaude(tab, composer.stripControls(text).trim()) : false;
     if (sent && r) { drafts[role] = ''; note(r, role, `You → ${nameOf(role)}: ${text.trim().slice(0, 80)}`); persist(r); }
     notes[role] = sent ? `Sent to ${nameOf(role)}.` : 'Couldn’t reach that tab. Try again.';
     (document.activeElement as HTMLElement | null)?.blur();
     draw();
+  }
+
+  // Its tab is gone (closed, or Petal restarted): History's reply path resumes its session in a new tab and sends her
+  // message once Claude is ready there. With no message, Open tab: the new tab is shown.
+  async function reopen(r: AgentLoop, role: AgentRole, agent: LoopAgent, text: string | null): Promise<void> {
+    const name = nameOf(role);
+    reopened.set(agent.sessionId, Date.now());
+    notes[role] = reopenNote(name, null, Boolean(text));
+    draw();
+    const outcome = text ? await historyReply.sendReply(agent.sessionId, text) : await historyReply.openSession(agent.sessionId);
+    const problem = 'note' in outcome ? outcome.note || 'Try again.' : 'confirm' in outcome ? outcome.confirm : null;
+    if (problem) reopened.delete(agent.sessionId);
+    notes[role] = reopenNote(name, problem, Boolean(text));
+    if (!problem) {
+      note(r, role, text ? `You → ${name}: ${text.trim().slice(0, 80)} · reopened its session` : `Reopened ${name}’s session in a new tab`);
+      if (text) drafts[role] = '';
+      persist(r);
+      const tab = text ? null : historyReply.tabFor(agent.sessionId);
+      if (tab) tabs.activate(tab.id);
+    }
+    (document.activeElement as HTMLElement | null)?.blur();
+    draw();
+  }
+
+  // Reopening ends when a tab picks the session up, or reads as failed once REOPEN_MS passes without one.
+  function reachOf(role: AgentRole, agent: LoopAgent | null, tabId: string | null): LaneReach {
+    const at = agent ? reopened.get(agent.sessionId) ?? null : null;
+    const reach = laneReach(agent, tabId, at, Date.now());
+    if (agent && at !== null && reach !== 'reopening') {
+      reopened.delete(agent.sessionId);
+      if (reach === 'reopen') notes[role] = reopenStalledNote(nameOf(role));
+    }
+    return reach;
   }
 
   function draw(): void {
@@ -541,8 +577,9 @@ export function createAgents(ctx: AgentContext) {
     const lanes: LaneModel[] = roles.map((role) => {
       const agent = r ? agentOf(r, role) : null;
       const status = laneStatus(role, r, progress);
+      const tabId = tabOf(agent);
       return {
-        role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
+        role, name: nameOf(role), started: Boolean(agent), tabId, reach: reachOf(role, agent, tabId), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
       };
@@ -559,6 +596,7 @@ export function createAgents(ctx: AgentContext) {
       rename: (role) => { renaming = role; draw(); },
       saveName: (role, name) => void saveName(role, name),
       openTab: (id) => tabs.activate(id),
+      reopen: (role) => { const r = record(); const agent = r ? agentOf(r, role) : null; if (r && agent) void reopen(r, role, agent, null); },
       toggleLog: (role) => { if (!logOpen.delete(role)) logOpen.add(role); draw(); },
       showOlder: (role) => { logShown[role] = (logShown[role] ?? 20) + 20; draw(); },
       setView: (role, next) => { view[role] = next; if (next === 'actions') logOpen.add(role); draw(); },
