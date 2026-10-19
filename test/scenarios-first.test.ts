@@ -3,8 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildLoopBrief, CRITERIA_SKELETON, parseCriteria, scenarioSources, SOURCE_CAP } from '../src/shared/test-loop';
-import { draftBrief, draftEnded, draftRequest, scenarioReview, scenariosApprovedText, TESTING_SKILL, type ReviewFacts } from '../src/shared/suite-draft';
+import { buildLoopBrief, CRITERIA_SKELETON, parseCriteria, reviewBrief, scenarioSources, SOURCE_CAP } from '../src/shared/test-loop';
+import { awaitingReview, draftBrief, draftEnded, draftRequest, scenariosApprovedText, TESTING_SKILL, type ReviewFacts } from '../src/shared/suite-draft';
 
 const BUNDLED = fs.readFileSync(path.join(__dirname, '..', 'resources', 'skills', TESTING_SKILL, 'SKILL.md'), 'utf8');
 
@@ -90,11 +90,26 @@ describe('where scenarios come from', () => {
     expect(draftBrief(false, request, BUNDLED).startsWith('/petal-testing-suite for task t-1: "Refunds".')).toBe(true);
   });
 
+  it('a loop with nothing approved stops in round 1 for her review; an approved one only for new scenarios', () => {
+    const base = { focus: '', rounds: 3, stages: [{ id: 's', name: 'Unit', command: 'npm test' }], stack: [], taskId: 't-6b86cb76', agent: true };
+    const first = buildLoopBrief({ ...base, review: true });
+    expect(first).toContain('Scenarios first: before any test in round 1, write this task\'s scenarios under Scenarios in the criteria file as [todo] lines');
+    expect(first).toContain('end your reply with the Loop line in the phase scenarios and wait');
+    expect(first).toContain('A scenario you add in a later round goes in as [todo] too');
+    expect(first).toContain('1. Scenarios: give every approved [todo] scenario its tests');
+    const later = buildLoopBrief({ ...base, review: false });
+    expect(later).not.toContain('before any test in round 1');
+    expect(later).toContain('The scenarios already in the criteria file are the ones I approved.');
+    expect(later).toContain('A scenario you add in a later round goes in as [todo] too');
+    expect(reviewBrief(true).join('\n')).not.toMatch(/[—–]/);
+    expect(buildLoopBrief({ ...base, agent: false })).not.toContain('Scenarios first'); // the old single-agent loop is unchanged
+  });
+
   it('the loop brief carries them after the focus, with the todo status explained', () => {
     const brief = buildLoopBrief({ focus: 'refunds', rounds: 3, stages: [{ id: 's', name: 'Unit', command: 'npm test' }], stack: [], taskId: 't-1', agent: true, sources: { notes: 'Refunds cap at the amount paid.', prd: { title: 'Payments', notes: 'Partial refunds allowed.' } } });
     expect(brief).toContain('Focus: refunds.\nSource of scenarios:');
     expect(brief).toContain('Task notes:\nRefunds cap at the amount paid.\nPRD "Payments":\nPartial refunds allowed.');
-    expect(brief).toContain('give any still [todo] its tests first');
+    expect(brief).toContain('give every approved [todo] scenario its tests');
     expect(brief).toContain('or todo for a scenario with no test yet');
     expect(brief).not.toMatch(/[—–]/);
     expect(buildLoopBrief({ focus: '', rounds: 3, stages: [], stack: [], taskId: 't-1', agent: true })).not.toContain('Source of scenarios');
@@ -102,20 +117,22 @@ describe('where scenarios come from', () => {
 });
 
 describe('her review', () => {
-  const ready: ReviewFacts = { kind: 'draft', stopped: false, approvedAt: null, scenarios: [{ status: 'todo' }, { status: 'pass' }], busy: false, asking: false };
+  const idle: ReviewFacts = { stopped: false, approved: [], busy: false, asking: false };
+  const scenarios = [{ status: 'todo' as const, name: 'refund is capped' }, { status: 'pass' as const, name: 'refund emails the payer' }, { status: 'todo' as const, name: 'cancelled order is refused' }];
+  const names = (list: { name: string }[]) => list.map((s) => s.name);
 
-  it('is ready once an idle, live draft has scenarios with no test yet', () => {
-    expect(scenarioReview(ready)).toBe('ready');
-    expect(scenarioReview({ ...ready, busy: true })).toBe('none'); // still writing them
-    expect(scenarioReview({ ...ready, asking: true })).toBe('none'); // a prompt waits on her first
-    expect(scenarioReview({ ...ready, scenarios: [{ status: 'pass' }] })).toBe('none');
-    expect(scenarioReview({ ...ready, scenarios: [] })).toBe('none');
+  it('shows the [todo] scenarios once the testing agent sits idle on them', () => {
+    expect(names(awaitingReview(scenarios, idle))).toEqual(['refund is capped', 'cancelled order is refused']);
+    expect(awaitingReview(scenarios, { ...idle, busy: true })).toEqual([]); // still writing them
+    expect(awaitingReview(scenarios, { ...idle, asking: true })).toEqual([]); // a prompt waits on her first
+    expect(awaitingReview(scenarios, { ...idle, stopped: true })).toEqual([]);
+    expect(awaitingReview([], idle)).toEqual([]);
   });
 
-  it('is over once she approved, and never shows for a loop or a stopped draft', () => {
-    expect(scenarioReview({ ...ready, approvedAt: 5 })).toBe('approved');
-    expect(scenarioReview({ ...ready, kind: 'loop' })).toBe('none');
-    expect(scenarioReview({ ...ready, stopped: true })).toBe('none');
+  it('once approved they don’t show again; only scenarios added later do', () => {
+    const approved = { ...idle, approved: ['refund is capped', 'cancelled order is refused'] };
+    expect(awaitingReview(scenarios, approved)).toEqual([]); // an approved one still [todo] (untestable) never re-asks
+    expect(names(awaitingReview([...scenarios, { status: 'todo', name: 'a second refund waits' }], approved))).toEqual(['a second refund waits']);
   });
 
   it('a draft waiting on her review has not ended without a suite; a closed tab still has', () => {

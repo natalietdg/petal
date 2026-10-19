@@ -26,7 +26,7 @@ const STATUS_WORD: Record<LoopStatus, string> = { idle: 'Not started', starting:
 const STEPS: LoopPhase[] = ['scenarios', 'testing', 'fixing', 'verifying'];
 const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed', todo: 'no test yet' };
 const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed', todo: 'waiting' };
-const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const;
+export const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const; // a scenario's from: part as its tag reads
 
 export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement; update: (model: LoopModel) => void; focusInput: HTMLInputElement } {
   const panel = el('section', 'tst-loop');

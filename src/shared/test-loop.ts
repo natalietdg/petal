@@ -9,6 +9,7 @@ export const LEGACY_CRITERIA_PATH = '.petal/test-criteria.md'; // the one shared
 export const CRITERIA_DIR = '.petal/criteria';
 export const CRITERIA_CAP = 64 * 1024; // bytes read; a bigger file shows its first part
 export const ITEMS_CAP = 200; // per section
+export const NAME_CAP = 300; // characters of an item's name
 export const DEFAULT_ROUNDS = 5;
 export const MAX_ROUNDS = 10;
 export const FOCUS_CAP = 200;
@@ -20,16 +21,15 @@ export const STOP_MESSAGE = 'Stop the test loop now. Leave the code as it is and
 // "· from: prd" or "· from: notes", and may name several tests, one "test:" each.
 export const CRITERIA_STATUSES = ['pass', 'fail', 'flaky', 'fixed', 'todo'] as const;
 export type CriteriaStatus = typeof CRITERIA_STATUSES[number];
-export const SCENARIO_SOURCES = ['prd', 'notes'] as const;
-export type ScenarioSource = typeof SCENARIO_SOURCES[number];
+export type ScenarioSource = 'prd' | 'notes';
 
-export interface TestRef { path: string; name: string | null }
+interface CriteriaTest { path: string; name: string | null }
 
 export interface CriteriaItem {
   status: CriteriaStatus;
   name: string;
-  test: TestRef | null; // the first of tests
-  tests: TestRef[];
+  test: CriteriaTest | null; // the first of tests
+  tests: CriteriaTest[];
   source: ScenarioSource | null; // where a scenario's rule came from; null for one the agent added
   round: number | null;
   regression: boolean; // a bug with a test that reproduces it
@@ -50,7 +50,7 @@ function parseItem(line: string, section: 'scenarios' | 'bugs'): CriteriaItem | 
   if (!CRITERIA_STATUSES.includes(status)) return null;
   const [name = '', ...parts] = (match[2] ?? '').split(SEP).map((p) => p.trim());
   if (!name || /^([·•]|test:)/i.test(name)) return null; // a name is required
-  const tests: TestRef[] = [];
+  const tests: CriteriaTest[] = [];
   let source: ScenarioSource | null = null;
   let round: number | null = null;
   let taskId: string | null = null;
@@ -73,7 +73,7 @@ function parseItem(line: string, section: 'scenarios' | 'bugs'): CriteriaItem | 
     }
   }
   const test = tests[0] ?? null;
-  return { status, name: name.slice(0, 300), test, tests, source, round, regression: section === 'bugs' && test !== null, taskId };
+  return { status, name: name.slice(0, NAME_CAP), test, tests, source, round, regression: section === 'bugs' && test !== null, taskId };
 }
 
 // Lines outside the two sections are ignored; a list line inside one that doesn't fit the format counts as malformed.
@@ -151,7 +151,7 @@ export const CRITERIA_SKELETON = '# Test criteria\n\nKept by Claude during Petal
 
 // ---- The brief Petal sends once; Claude runs the loop.
 // agent: the task's testing agent, which owns the tests and suite and works beside the bug fix agent.
-export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput }
+export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput; review?: boolean }
 
 export const clampRounds = (n: unknown): number => {
   const value = Math.round(Number(n));
@@ -182,6 +182,16 @@ export function scenarioSources({ notes, prd }: SourceInput): string[] {
   ];
 }
 
+// Scenarios first, for the testing agent: [todo] scenarios wait on her review in Petal before their tests are written.
+// review: none approved yet, so round 1 writes them and stops; otherwise only scenarios added later stop it.
+export function reviewBrief(review: boolean): string[] {
+  const wait = 'end your reply with the Loop line in the phase scenarios and wait. I review them in Petal, and may edit the file, then send a message saying they look right. Read the file again then, and only then write their tests.';
+  return [
+    ...(review ? [`Scenarios first: before any test in round 1, write this task's scenarios under Scenarios in the criteria file as [todo] lines, one plain-language rule each, observable behaviour, with edge cases and failure paths. Keep the ones already there. Then ${wait}`] : ['The scenarios already in the criteria file are the ones I approved.']),
+    `A scenario you add in a later round goes in as [todo] too: once you have added them, ${wait}`,
+  ];
+}
+
 // Each round's self-review; Petal reads the section and the Course line (shared/distillation.ts).
 export const DISTILL_BRIEF = [
   '6. Distillation: before you end the round, review it yourself. From round 2 on, start by revisiting every open thread from your previous round: settle it with evidence, carry it forward (and list it again under Open threads), or drop it with a reason, as a Q/A whose answer starts with settled, carried or dropped. Then ask yourself 3 to 6 pointed questions, such as: what changed this round, what is still untested for the focus, why did a test fail, is that failure flaky or real, does the fix cover the cause or only the symptom, what would a user hit next. Answer each one yourself from evidence (test output, the code, the criteria file), never from memory.',
@@ -197,7 +207,7 @@ export const DISTILL_BRIEF = [
   '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
 ];
 
-export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources }: BriefInput): string {
+export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources, review = false }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
   const tools = stack.filter((s) => !s.insert && s.kind !== 'ci');
@@ -215,9 +225,12 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, ag
     ...stages.map((s, i) => `${i + 1}. ${s.name}: \`${s.command}\``),
     ...(tester && taskId ? [`The suite lives in ${suitePath(taskId)}. You own it and the tests: you may change it during the loop (add, fix or remove stages), keeping its shape: {"stages": [{"name": "Unit", "command": "npm test"}]}. Petal takes the change and shows it with an Undo.`] : []),
     `Criteria file: ${criteriaPath(taskId)}`,
+    ...(tester ? ['', ...reviewBrief(review)] : []),
     '',
     'Each round:',
-    `1. Scenarios: ${taskId ? 'keep the scenarios already under Scenarios in the criteria file, which I may have reviewed or edited, and give any still [todo] its tests first. Then ' : ''}write new scenarios for the focus as real tests in the project's existing test folders, using its own frameworks${maestro ? ', plus Maestro flows next to the existing ones' : ''}. Add each under Scenarios in the criteria file, with every test that covers it.`,
+    tester
+      ? `1. Scenarios: give every approved [todo] scenario its tests, as real tests in the project's existing test folders, using its own frameworks${maestro ? ', plus Maestro flows next to the existing ones' : ''}, and name each test on its scenario's line. New scenarios for the focus go in as [todo] and wait for my review, as above.`
+      : `1. Scenarios: ${taskId ? 'keep the scenarios already under Scenarios in the criteria file and give any still [todo] its tests first. Then ' : ''}write new scenarios for the focus as real tests in the project's existing test folders, using its own frameworks${maestro ? ', plus Maestro flows next to the existing ones' : ''}. Add each under Scenarios in the criteria file, with every test that covers it.`,
     `2. Testing: run the ${taskId ? 'suite' : 'pipeline'} commands above, in order.`,
     '3. Before calling a failure a bug, run that test once more. If it passes, record it as flaky, not a bug.',
     tester

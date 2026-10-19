@@ -3,7 +3,7 @@
 import { BUG_STATES, BUG_STATE_WORDS, SENT_FAILURE_CAP, stepQueue, type QueuedBug, type QueueMessage, type RunResult, type SentBug, type SentFrom } from './bug-queue';
 import type { AgentAction } from './agent-actions';
 import type { AgentRole } from './agent-names';
-import type { CriteriaItem } from './test-loop';
+import { ITEMS_CAP, NAME_CAP, type CriteriaItem } from './test-loop';
 import type { AgentRecord, LoopAgent, LoopEvent, PipelineRun, SavedLoop } from './testing';
 
 export const EVENTS_KEPT = 100; // per agent
@@ -119,6 +119,9 @@ function cleanBug(v: unknown): QueuedBug | null {
 const cleanEvents = (v: unknown): LoopEvent[] => (Array.isArray(v) ? v : [])
   .flatMap((e) => (isObject(e) && isTime(e.at) && isText(e.text) ? [{ at: e.at, text: e.text }] : [])).slice(-EVENTS_KEPT);
 
+// Approved scenario names, as the criteria file caps them.
+const cleanNames = (v: unknown[]): string[] => v.filter((n): n is string => typeof n === 'string' && n.length > 0).map((n) => n.slice(0, NAME_CAP)).slice(0, ITEMS_CAP);
+
 export function cleanSavedLoop(v: unknown): SavedLoop | null {
   if (!isObject(v) || (v.kind !== 'loop' && v.kind !== 'draft') || !isTime(v.startedAt) || !(v.stoppedAt === null || isTime(v.stoppedAt))) return null;
   const tester = v.tester === null ? null : cleanAgent(v.tester);
@@ -129,7 +132,7 @@ export function cleanSavedLoop(v: unknown): SavedLoop | null {
   return {
     kind: v.kind, tester, fixer, startedAt: v.startedAt, stoppedAt: v.stoppedAt,
     queue: (queue as QueuedBug[]).slice(-QUEUE_KEPT), events: { tester: cleanEvents(v.events.tester), fixer: cleanEvents(v.events.fixer) },
-    ...(isTime(v.scenariosApprovedAt) ? { scenariosApprovedAt: v.scenariosApprovedAt } : {}),
+    ...(Array.isArray(v.approvedScenarios) ? { approvedScenarios: cleanNames(v.approvedScenarios) } : {}),
   };
 }
 

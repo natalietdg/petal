@@ -272,7 +272,7 @@ function drawStrip(): void {
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
       askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd()).length, DRAFT_TURNS)),
-      scenariosReady: agents.review() === 'ready',
+      scenariosReady: agents.awaiting().length > 0,
     }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(taskRunning())));
     return;
   }

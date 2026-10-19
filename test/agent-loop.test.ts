@@ -97,11 +97,12 @@ describe('rehydrating', () => {
     expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [] } })?.events.tester).toHaveLength(100);
   });
 
-  it('keeps when she approved a draft’s scenarios, and drops a value that isn’t a time', () => {
+  it('keeps the scenario names she approved, capped, and drops anything that isn’t a name', () => {
     const draft: SavedLoop = { kind: 'draft', tester: { tabId: 'tab-1', sessionId: 'draft-t' }, fixer: null, startedAt: 5, stoppedAt: null, queue: [], events: noEvents() };
-    expect(cleanSavedLoop({ ...draft, scenariosApprovedAt: 9 })?.scenariosApprovedAt).toBe(9);
-    expect(cleanSavedLoop({ ...draft, scenariosApprovedAt: 'yes' })).not.toHaveProperty('scenariosApprovedAt');
-    expect(cleanSavedLoop(draft)).not.toHaveProperty('scenariosApprovedAt');
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: ['refund is capped', 7, '', 'x'.repeat(400)] })?.approvedScenarios).toEqual(['refund is capped', 'x'.repeat(300)]);
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: Array.from({ length: 250 }, (_, i) => `s${i}`) })?.approvedScenarios).toHaveLength(200);
+    expect(cleanSavedLoop({ ...draft, approvedScenarios: 'yes' })).not.toHaveProperty('approvedScenarios');
+    expect(cleanSavedLoop(draft)).not.toHaveProperty('approvedScenarios');
   });
 });
 

@@ -39,26 +39,24 @@ export interface DraftFacts { suite: boolean; tab: DraftTab; busy: boolean; aski
 // Ended with no suite: its tab is gone, or it worked since the last ask and now sits idle (not asking her something).
 export const draftEnded = (f: DraftFacts): boolean => !f.suite && (f.tab === 'gone' || (f.tab === 'open' && !f.busy && !f.asking && f.worked && !f.reviewing));
 
-// ---- Scenarios first: the drafting agent writes them and stops; she reviews them in Petal before any test is written.
-export type ScenarioReview = 'none' | 'ready' | 'approved';
+// ---- Scenarios first: the testing agent writes scenarios as [todo] and stops; she reviews them in Petal before any
+// of their tests are written. Applies to a draft and to a loop's rounds alike.
 export interface ReviewFacts {
-  kind: SavedLoop['kind'];
   stopped: boolean;
-  approvedAt: number | null;
-  scenarios: readonly Pick<CriteriaItem, 'status'>[]; // this task's
+  approved: readonly string[]; // scenario names she already said look right
   busy: boolean;
   asking: boolean;
 }
 
-// Ready once a live draft sits idle with scenarios still [todo] and she hasn't said they look right.
-export function scenarioReview(f: ReviewFacts): ScenarioReview {
-  if (f.kind !== 'draft' || f.stopped) return 'none';
-  if (f.approvedAt !== null) return 'approved';
-  return !f.busy && !f.asking && f.scenarios.some((s) => s.status === 'todo') ? 'ready' : 'none';
+// The [todo] scenarios she hasn't approved, once its agent sits idle on them; empty while nothing waits on her.
+export function awaitingReview<T extends Pick<CriteriaItem, 'status' | 'name'>>(scenarios: readonly T[], f: ReviewFacts): T[] {
+  if (f.stopped || f.busy || f.asking) return [];
+  const approved = new Set(f.approved);
+  return scenarios.filter((s) => s.status === 'todo' && !approved.has(s.name));
 }
 
 export const scenariosApprovedText = (taskId: string): string =>
-  `I reviewed the scenarios in ${criteriaPath(taskId)} and they look right. Read the file again first, since I may have edited it. Then write the tests: one or more per scenario, each named on its scenario line with "test: path::test name", and carry on with the suite as your instructions say.`;
+  `I reviewed the scenarios in ${criteriaPath(taskId)} and they look right. Read the file again first, since I may have edited it. Then write their tests: one or more per scenario, each named on its scenario line with "test: path::test name", and carry on as your instructions say.`;
 
 export const askAgainText = (taskId: string): string =>
   `You stopped without writing ${suitePath(taskId)}. Finish drawing up this task's suite and write that file, as your instructions say.`;

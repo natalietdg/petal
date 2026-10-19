@@ -11,6 +11,7 @@ import { render } from './markdown';
 import type { ChatTurn } from '../shared/agent-chat';
 import type { LoopEvent } from '../shared/testing';
 import type { CriteriaItem } from '../shared/test-loop';
+import { SOURCE_WORD } from './testing-loop-view';
 
 const LOG_PAGE = 20;
 
@@ -30,7 +31,7 @@ export interface LaneModel {
   turns: ChatTurn[]; // the last few turns of its session, oldest first
   startedAt: number; // when the loop started; 0 before
   note: string; // why her last message didn't go, or that it did
-  review: { scenarios: CriteriaItem[] } | null; // the testing agent's scenarios, while they wait on her
+  review: { scenarios: CriteriaItem[] } | null; // the testing agent's [todo] scenarios she hasn't approved yet
 }
 
 export interface Spent { total: number; cached: number } // cached: the cache reads among them
@@ -165,14 +166,13 @@ function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTM
   return box;
 }
 
-const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const;
-
-// Scenarios first: the rules the tests will be written from, for her to read, edit or accept before any test exists.
+// Scenarios first: the rules tests will be written from, for her to read, edit or accept before their tests exist.
 function scenarioReview(lane: LaneModel, scenarios: CriteriaItem[], on: AgentsHandlers): HTMLElement {
   const box = el('div', 'tst-scenario-review');
   box.setAttribute('role', 'group');
   box.setAttribute('aria-label', 'Scenarios to review');
-  box.append(el('p', 'tst-scenario-intro', `${lane.name} wrote ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'}. No tests yet: they get written from these once you say so.`));
+  const many = scenarios.length !== 1;
+  box.append(el('p', 'tst-scenario-intro', `${scenarios.length} scenario${many ? 's' : ''} from ${lane.name} wait${many ? '' : 's'} for your review. ${many ? 'Their' : 'Its'} tests get written once you say so.`));
   const list = el('ul', 'tst-scenario-list');
   for (const item of scenarios) {
     const row = el('li', 'tst-scenario');

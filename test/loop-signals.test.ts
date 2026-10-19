@@ -79,6 +79,12 @@ describe('what a lane says', () => {
     expect(laneWord({ ...draft, scenariosReady: false, draftEnded: true })).toBe('Stopped without a suite');
   });
 
+  it('reads Scenarios ready on a loop’s testing agent over its Loop line while they wait on her', () => {
+    const tester: LaneFacts = { ...base, role: 'tester', tab: { busy: false, asking: false }, testerLine: 'Writing scenarios · round 1/5', scenariosReady: true };
+    expect(laneWord(tester)).toBe(SCENARIOS_READY);
+    expect(laneWord({ ...tester, scenariosReady: false })).toBe('Writing scenarios · round 1/5');
+  });
+
   it('reads Needs you when a prompt is on the agent screen, over busy, fixing or a Loop line', () => {
     expect(laneWord({ ...base, tab: { busy: true, asking: true }, fixing: 'coupon below zero' })).toBe(NEEDS_YOU);
     expect(laneWord({ ...base, role: 'tester', tab: { busy: false, asking: true }, testerLine: 'Fixing · round 2/5' })).toBe(NEEDS_YOU);
