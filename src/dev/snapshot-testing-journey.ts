@@ -150,6 +150,9 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     const fixerStart = testingFixture.loopStarts.find((l) => l.command.includes(`--session-id ${FIXER} --`));
     const fixerHost = await waitFor(() => hostOf(win.webContents.id, project, FIXER), 10000);
     check(first.outcome === 'started' && fixerStart?.brief?.includes(BUG) && fixerHost && agentTerminals().includes(fixerHost), `the bug fix agent starts on the failure in its own terminal: ${JSON.stringify({ first, host: fixerHost })}`);
+    const kept = store.load(project).loops?.[TASK];
+    const testerLane = await waitLane('tester', (l) => l.sessionId === TESTER && l.turns > 0);
+    check(kept?.kind === 'loop' && kept.testerSessionId === TESTER && testerLane, `the drafting agent stays on as the loop's testing agent, its lane intact: ${JSON.stringify({ tester: kept?.testerSessionId, lane: testerLane?.sessionId })}`);
     const next = await send(BUG_TWO);
     fs.appendFileSync(logOf(FIXER), say(FIXER, 'f1', `Bug: ${BUG}.`, `Kept the plus sign.\n\n**Fix:** ${BUG} · done`));
     const handed = await waitFor(() => pasteWrites.slice(fixPastes).find((w) => w.data.includes(`Bug: ${BUG_TWO}.`)) ?? null, 15000);

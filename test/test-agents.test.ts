@@ -4,7 +4,7 @@ import { BrowserWindow } from 'electron';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 import {
-  CLOSED_EVENT, agentBySession, agentState, claimRole, closeAgents, inFlightAgain, migrateTesting, noEvents, openAgent, resumeWhen, terminalOf, withEvent,
+  CLOSED_EVENT, agentBySession, agentState, claimRole, closeAgents, inFlightAgain, loopForFixer, migrateTesting, noEvents, openAgent, resumeWhen, terminalOf, withEvent,
 } from '../src/shared/agent-loop';
 import { agentOf, allAgents, loopsOf, testAgentsOf } from '../src/main/task-suites';
 import { claimAgent } from '../src/main/test-agents';
@@ -70,6 +70,20 @@ describe('one open agent per role per task', () => {
     const request = { taskId: 't1', taskTitle: 'Cart', role: 'fixer' as const, brief: 'Fix bugs.', preferred: null };
     expect(await claimAgent(root, request)).toEqual({ note: 'Open a Petal window first.' });
     expect(testAgentsOf(root)).toEqual([]);
+  });
+
+  it('a bug sent during a draft keeps the drafting agent as the loop’s testing agent', () => {
+    const events = withEvent(noEvents(), 'tester', 'Started Quinn to draw up the suite', 5);
+    const draft = loop({ kind: 'draft', testerSessionId: 's-t', fixerSessionId: null, events, approvedScenarios: ['adds an item'] });
+    const agents = [agent({ sessionId: 's-t' })];
+    expect(loopForFixer(draft, agents, 't1', 's-f', 20)).toEqual({ ...draft, kind: 'loop', fixerSessionId: 's-f', startedAt: 20 });
+  });
+
+  it('a bug sent with no open drafting agent starts a loop with the bug fix agent alone', () => {
+    const draft = loop({ kind: 'draft', testerSessionId: 's-t', fixerSessionId: null });
+    expect(loopForFixer(draft, [agent({ sessionId: 's-t', closedAt: 9 })], 't1', 's-f', 20).testerSessionId).toBeNull();
+    expect(loopForFixer(loop({ stoppedAt: 15 }), [agent({ sessionId: 's-t' })], 't1', 's-f', 20).testerSessionId).toBeNull(); // a stopped loop isn't a draft
+    expect(loopForFixer(undefined, [], 't1', 's-f', 20)).toMatchObject({ kind: 'loop', testerSessionId: null, fixerSessionId: 's-f', events: noEvents() });
   });
 });
 

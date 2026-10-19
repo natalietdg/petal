@@ -29,7 +29,7 @@ import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
 import { agentView, claimAgent, closeTaskAgents, findAgent, herEvent, listedLoops, loopView, openAgentTerminal, repliesOf, sendToAgent, startTestAgents, stopTaskLoop, watchRoot, windowReady, type Claim } from './test-agents';
-import { cleanSentBug, noEvents, openAgent, withEvent } from '../shared/agent-loop';
+import { cleanSentBug, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
 import { addSent } from '../shared/bug-queue';
 import { buildSentFixerBrief, ITEMS_CAP, NAME_CAP } from '../shared/test-loop';
 import { scenariosApprovedText } from '../shared/suite-draft';
@@ -682,7 +682,7 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 
   // Send to bug fix agent: the failure joins the queue of the task's open bug fix agent (a stopped loop starts again
-  // around it), else a bug fix agent starts on it. A running loop keeps its testing agent.
+  // around it), else a bug fix agent starts on it. A running loop keeps its testing agent; a draft's becomes the loop's.
   handle('testing:send-bug', async (event, { tabId, root: picked, taskId, bug }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
@@ -694,8 +694,9 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const prior = loopsOf(root)[task.id];
     const running = prior?.kind === 'loop' && prior.stoppedAt === null ? prior : null;
     const now = Date.now();
-    const fresh = (fixerSessionId: string): StoredLoop => ({ kind: 'loop', testerSessionId: null, fixerSessionId, startedAt: now, stoppedAt: null, queue: [], events: noEvents() });
-    const open = openAgent(testAgentsOf(root), task.id, 'fixer');
+    const agents = testAgentsOf(root);
+    const fresh = (fixerSessionId: string): StoredLoop => loopForFixer(prior, agents, task.id, fixerSessionId, now);
+    const open = openAgent(agents, task.id, 'fixer');
     if (open) {
       const base = running?.fixerSessionId === open.sessionId ? running : fresh(open.sessionId);
       const { queue, added } = addSent(base.queue, clean, now);

@@ -169,6 +169,16 @@ export function claimRole(agents: readonly TestAgent[], fresh: TestAgent): { age
   return { agents: [...agents, { ...fresh, closedAt: null }], agent: { ...fresh, closedAt: null }, created: true };
 }
 
+// A new loop around a bug fix agent. A draft whose testing agent is still open hands it over as the loop's tester.
+export function loopForFixer(prior: StoredLoop | undefined, agents: readonly TestAgent[], taskId: string, fixerSessionId: string, now: number): StoredLoop {
+  const tester = openAgent(agents, taskId, 'tester');
+  const draft = prior?.kind === 'draft' && tester && prior.testerSessionId === tester.sessionId ? prior : null;
+  return {
+    kind: 'loop', testerSessionId: draft?.testerSessionId ?? null, fixerSessionId, startedAt: now, stoppedAt: null, queue: [], events: draft?.events ?? noEvents(),
+    ...(draft?.approvedScenarios ? { approvedScenarios: draft.approvedScenarios } : {}),
+  };
+}
+
 // Closed agents beyond the cap are dropped, oldest first; open ones always stay.
 export function closeAgents(agents: readonly TestAgent[], sessionIds: readonly string[], now: number): TestAgent[] {
   const closed = agents.map((a) => (sessionIds.includes(a.sessionId) && a.closedAt === null ? { ...a, closedAt: now } : a));
