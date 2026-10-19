@@ -516,3 +516,7 @@
 #519 | 2026-10-18 | ACTION | Natalie | Recreated the notarytool keychain profile "petal" after the 1.1.3 preflight found it missing | notarytool history OK
 #520 | 2026-10-18 | ACTION | Claude | Released 1.1.3 from pastel-release-r2 at ef57405: notarised; release.sh hit a network fetch failure mid-upload, remaining zips/blockmaps re-uploaded, all files 200, feed last (version 1.1.3) | release-113.log, ship-113-resume.log
 #521 | 2026-10-18 | ACTION | Claude | Installed notarised 1.1.3 arm64 via install-now.sh (Notarized Developer ID, reads 1.1.3); site rebuilt and deployed, live page shows 1.1.3 | ship-113-resume.log
+#522 | 2026-10-19 | DECISION | Natalie | Testing and History swap places in the dock | dbe3321
+#523 | 2026-10-19 | ACTION | Claude | Testing outside a repo now picks a task (grouped by PRD), not a project | 5021c0c, merge c52d861
+#524 | 2026-10-19 | ACTION | Claude | First gate stopped mid-run left its snapshot Petal orphaned; it shared the scratch dir with the rerun and caused 4 false failures. Killed it; dock-order check updated | 91772af
+#525 | 2026-10-19 | ACTION | Claude | Gate passed (3112 ok, 0 fail, 70/70); local build installed 09:50, updates off until next notarised release | gate-picker2.log
