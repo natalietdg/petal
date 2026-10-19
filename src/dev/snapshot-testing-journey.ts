@@ -72,7 +72,7 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     await waitFor(() => safeJs<boolean>("Boolean(document.querySelector('#testing .tst-pickerbox .tst-task-select'))"), 8000);
     await js(`(() => { const s = document.querySelector('#testing .tst-pickerbox .tst-task-select'); s.value = 'task:${TASK}'; s.dispatchEvent(new Event('change')); })()`);
   };
-  const message = (role: string, text: string) => js(`(() => { const lane = '#testing .tst-agent-lane[data-role="${role}"]'; const i = document.querySelector(lane + ' .tst-agent-input'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); document.querySelector(lane + ' .tst-agent-send').requestSubmit(); })()`);
+  const message = (role: string, text: string) => js(`(() => { const lane = '#testing .tst-agent-lane[data-role="${role}"]'; const i = document.querySelector(lane + ' .tst-agent-input'); if (i) i.value = ${JSON.stringify(text)}; i?.dispatchEvent(new Event('input')); const form = document.querySelector(lane + ' .tst-agent-send'); form?.requestSubmit(); return Boolean(i && form); })()`) as Promise<boolean>;
   let second: BrowserWindow | null = null;
   let collisionTab: string | null = null;
 
@@ -91,7 +91,8 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     await js("document.querySelector('#testing .tst-ask-suite').click()");
     const started = await waitFor(() => testingFixture.loopStarts[startsBefore] ?? null, 6000);
     const firstHost = await waitFor(() => hostOf(win.webContents.id, project, TESTER), 10000);
-    check(started?.command.includes(`--session-id ${TESTER} --`) && firstHost && agentTerminals().includes(firstHost) && (await stripCount()) === stripBefore, `the drafting agent starts in an agent terminal, no tab-bar entry: ${JSON.stringify({ host: firstHost, strip: [stripBefore, await stripCount()] })}`);
+    await waitFor(() => (firstHost && agentTerminals().includes(firstHost) ? true : null), 10000); // main counts it once its shell starts
+    check(started?.command.includes(`--session-id ${TESTER} --`) && firstHost && agentTerminals().includes(firstHost) && (await stripCount()) === stripBefore, `the drafting agent starts in an agent terminal, no tab-bar entry: ${JSON.stringify({ host: firstHost, strip: [stripBefore, await stripCount()], started: started?.command.match(/&& .{0,80}/)?.[0] ?? null, starts: testingFixture.loopStarts.length - startsBefore, terminals: agentTerminals() })}`);
     fs.appendFileSync(logOf(TESTER), say(TESTER, 'j1', 'draw up the suite', 'Wrote the first scenario for **Account email**. It waits for your review.'));
     put(path.join(project, '.petal', 'criteria', `${TASK}.md`), ['# Test criteria', '', '## Scenarios', `- [todo] ${SCENARIO} · task: ${TASK}`, '', '## Bugs', ''].join('\n'));
     const ready = await waitLane('tester', (l) => l.status === 'Scenarios ready' && l.turns > 0);
@@ -135,12 +136,12 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     // once, in a new agent terminal, and nothing reaches the unrelated tab.
     extraTabFixtures.push(fixtureOf(UNRELATED));
     collisionTab = firstHost;
-    await js(`PastelTerm.tabs.create({ background: true, id: ${JSON.stringify(collisionTab)} })`);
+    await js(`void PastelTerm.tabs.create({ background: true, id: ${JSON.stringify(collisionTab)} })`); // a Tab can't cross IPC
     check(await waitFor(() => safeJs<boolean>(`PastelTerm.tabs.get(${JSON.stringify(collisionTab)})?.update?.sessionId === ${JSON.stringify(UNRELATED)} || null`), 10000), `an unrelated session's tab now has the old id ${collisionTab}`);
     extraTabFixtures.push(fixtureOf(TESTER));
     const pastesBefore = pasteWrites.length;
     const startsBeforeMessage = testingFixture.loopStarts.length;
-    await message('tester', 'ping from the lane');
+    check(await message('tester', 'ping from the lane'), `the tester lane has its message box: ${JSON.stringify(await js("({ open: PastelTerm.testing.isOpen(), lanes: [...document.querySelectorAll('#testing .tst-agent-lane')].map((l) => l.dataset.role + ':' + l.querySelectorAll('textarea, form').length) })"))}`);
     const pinged = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('ping from the lane')) ?? null, 15000);
     const newHost = hostOf(win.webContents.id, project, TESTER);
     await wait(1500);
