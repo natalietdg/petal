@@ -10,6 +10,7 @@ import type { Kit, TabsDeps } from './snapshot';
 import { extraTabFixtures, folderFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import * as store from '../main/testing-store';
+import { lockedCopiesDir } from '../main/test-lock';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import type { PipelineRun, RunState } from '../shared/testing';
 
@@ -183,6 +184,8 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
       return lock?.enabled && lock.approved['src/cart.test.ts'] ? lock : null;
     }, 10000);
     const settings = fs.existsSync(settingsFile) ? fs.readFileSync(settingsFile, 'utf8') : '';
+    const copy = path.join(lockedCopiesDir(repo), 'src', 'cart.test.ts');
+    check(fs.existsSync(copy) && copy.startsWith(store.testingDir()) && !fs.existsSync(path.join(repo, '.petal', 'locked')), `the approved copy is kept in Petal's storage, not the repo where test runners look: ${copy}`);
     check(approved && settings.includes('.petal/test-lock.mjs') && settings.includes('PreToolUse') && fs.existsSync(path.join(repo, '.petal', 'test-lock.mjs')), `the lock's hook lands in the repo's settings.local.json and the test is approved: ${settings.slice(0, 160)}`);
     appendSuiteWrite(transcript, SESSION, 'prd-a-edit-test', repo, cartTest);
     put(cartTest, 'it.skip("rounds to the cent", () => {});\n');

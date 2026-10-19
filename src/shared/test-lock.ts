@@ -4,7 +4,7 @@ import type { AgentNames, AgentRole } from './agent-names';
 import type { Criteria } from './test-loop';
 
 export const LOCK_FILE = '.petal/lock.json';
-export const LOCKED_COPIES = '.petal/locked';
+export const LEGACY_LOCKED_COPIES = '.petal/locked'; // older builds kept copies here, where test runners found them
 export const SUITE_PREFIX = '.petal/suites/';
 
 export interface RestoredFlag {
@@ -20,7 +20,7 @@ export interface LockManifest {
   lockedPaths: string[]; // repo-relative
   sessions: Record<string, { role: AgentRole; taskId: string }>;
   names: AgentNames;
-  approved: Record<string, string>; // path -> sha256 of the copy kept under .petal/locked/
+  approved: Record<string, string>; // path -> sha256 of the copy Petal keeps outside the repo
   owners: Record<string, string>; // path -> the task it belongs to
   restored: RestoredFlag[];
 }

@@ -103,7 +103,7 @@ export const writeJsonAtomic = (file: string, data: unknown, indent?: number): v
 
 // For a file that isn't Petal's: fsync before the rename, keep `mode`, and leave no temp file if a step fails.
 // A file in someone's repo passes `within: repo`, so a link in a cloned repo can't aim the write elsewhere.
-export function writeFileDurable(file: string, contents: string, mode?: number, guard: WriteGuard = {}): void {
+export function writeFileDurable(file: string, contents: string | Buffer, mode?: number, guard: WriteGuard = {}): void {
   const target = writeTarget(file, guard);
   const tmp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
   let fd: number | null = null;
