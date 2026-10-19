@@ -97,6 +97,16 @@ function rowDetail(row: SessionRow): HTMLDivElement {
   return detail;
 }
 
+// The agent panel's own show(), registered by agent-panel.ts; it imports this file, so this one cannot import it back.
+type OpenAgent = (sessionId: string, agentId: string) => void;
+let openAgent: OpenAgent | null = null;
+export const onOpenAgent = (open: OpenAgent): void => { openAgent = open; };
+
+function pickAgent(sessionId: string, agentId: string): void {
+  setOpen(false);
+  openAgent?.(sessionId, agentId);
+}
+
 // Under every row with active agents, expanded or not: task · what it is doing now · when it last wrote.
 function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
   const list = el('ul', 'session-agents');
@@ -104,9 +114,13 @@ function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
     const item = el('li', 'session-agent opens-agent');
     item.dataset.agentId = agent.id;
     item.title = 'Open what this agent is doing';
-    item.addEventListener('click', () => {
-      setOpen(false);
-      window.dispatchEvent(new CustomEvent('petal:open-agent', { detail: { sessionId, agentId: agent.id } }));
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.addEventListener('click', () => pickAgent(sessionId, agent.id));
+    item.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      pickAgent(sessionId, agent.id);
     });
     item.append(
       el('span', 'agent-task', agent.task),

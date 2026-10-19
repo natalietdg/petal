@@ -128,10 +128,7 @@ sessionsPanel.onView(() => {
   void refreshHead();
 });
 
-// A Sessions panel row opens that session's agent here.
-window.addEventListener('petal:open-agent', (event) => {
-  const { sessionId: id, agentId } = (event as CustomEvent<{ sessionId: string; agentId: string }>).detail;
-  void show(id, agentId);
-});
+// A Sessions panel row opens that session's agent here, the same show() the header's Agents menu calls.
+sessionsPanel.onOpenAgent((id, agentId) => void show(id, agentId));
 
 export const openAgentId = (): string | null => openId;
