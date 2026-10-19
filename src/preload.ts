@@ -163,7 +163,7 @@ const api = {
     onInfoChanged: (callback: (change: EventChannels['conclusion:info-changed']) => void) => subscribe('conclusion:info-changed', callback),
   },
   testing: {
-    detect: (tabId: TabId, root: string | null = null) => invoke('testing:detect', { tabId, root }),
+    detect: (tabId: TabId, root: string | null = null, session: string | null = null) => invoke('testing:detect', { tabId, root, session }),
     history: (tabId: TabId, root: string | null = null) => invoke('testing:history', { tabId, root }),
     saveSuite: (request: InvokeArgs<'testing:save-suite'>[0]) => invoke('testing:save-suite', request),
     seedSuite: (request: InvokeArgs<'testing:seed-suite'>[0]) => invoke('testing:seed-suite', request),
@@ -180,7 +180,7 @@ const api = {
   },
   tasks: {
     get: (tabId: TabId) => invoke('tasks:get', { tabId }),
-    change: (tabId: TabId, op: InvokeArgs<'tasks:change'>[0]['op'], root: string | null = null) => invoke('tasks:change', { tabId, op, root }),
+    change: (tabId: TabId, op: InvokeArgs<'tasks:change'>[0]['op']) => invoke('tasks:change', { tabId, op }),
   },
   coord: {
     get: () => invoke('coord:get'),

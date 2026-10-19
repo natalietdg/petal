@@ -49,7 +49,7 @@ export type TaskOp =
   | { kind: 'set-prd'; id: string; prdId: string | null }
   | { kind: 'split'; id: string; titles: string[] };
 
-export type TaskChangeResult = TasksView & { confirm?: string; brief?: string; owner?: TaskOwner; added?: string };
+export type TaskChangeResult = TasksView & { confirm?: string; brief?: string; owner?: TaskOwner };
 
 // A card's task: its newest unfinished one, else the one it finished last.
 export function sessionTask(tasks: readonly Task[], sessionId: string): CoordTask | null {

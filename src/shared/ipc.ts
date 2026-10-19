@@ -244,7 +244,7 @@ export interface InvokeChannels {
   // A concluded session's This session line: its Library notes, test runs and test loop; null when its log can't be read.
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
-  'testing:detect': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<TestingState> };
+  'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string | null; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief: string; fixerBrief: string }]; result: Guarded<{ tester: AgentStart; fixer: AgentStart } | { note: string }> };
@@ -302,7 +302,7 @@ export interface InvokeChannels {
   'activity:list': { args: []; result: Guarded<ActivityEvent[]> };
   // The Board's Tasks: the tab's project list, and one change to it (giving a task returns the brief to send).
   'tasks:get': { args: [request: { tabId: TabId }]; result: Guarded<TasksView> };
-  'tasks:change': { args: [request: { tabId: TabId; op: TaskOp; root?: string | null }]; result: Guarded<TaskChangeResult> };
+  'tasks:change': { args: [request: { tabId: TabId; op: TaskOp }]; result: Guarded<TaskChangeResult> };
   // Every live session's repo, branch, task and file clashes.
   'coord:get': { args: []; result: Guarded<CoordView> };
   // A picture a reply names (main/reply-image.ts checks each): why it isn't shown, Show in Finder, Open in its default app.

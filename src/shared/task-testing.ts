@@ -2,7 +2,7 @@
 import { groupTasks } from './task-groups';
 import { forTask, suiteFor, type SuiteViews } from './task-suite';
 import { openBugs, type Criteria } from './test-loop';
-import type { PipelineRun, ProjectRef } from './testing';
+import type { PipelineRun } from './testing';
 import type { Task, TaskData } from './tasks';
 
 export type TestTarget = { kind: 'task'; id: string } | { kind: 'prd'; id: string };
@@ -63,20 +63,30 @@ export function prdOverview(data: TaskData, prdId: string, suites: SuiteViews, r
   });
 }
 
-// ---- The task picker for a tab outside any project: recent projects' tasks, grouped by PRD.
-export interface ProjectTasks extends TaskData { root: string; name: string; suited: readonly string[] }
-export interface PickTask { id: string; title: string; subtask: boolean; suite: boolean }
-export interface PickGroup { root: string; project: string; prd: string | null; tasks: PickTask[] }
+// ---- The session picker for a tab outside any project: her Claude sessions in a repo, each opening its task's suite.
+export type PickStatus = 'busy' | 'idle' | 'closed';
+export interface SessionCandidate { sessionId: string; root: string | null; status: PickStatus }
+export interface PickSession { sessionId: string; name: string; root: string; project: string; status: PickStatus; suite: boolean }
 
-// Projects in the order given, each PRD then No PRD, a subtask right after its task; empty groups left out.
-export function pickGroups(projects: readonly ProjectTasks[]): PickGroup[] {
-  return projects.flatMap((p) => groupTasks(p).filter((g) => g.tasks.length).map((g) => ({
-    root: p.root, project: p.name, prd: g.prd?.title ?? null,
-    tasks: g.tasks.flatMap((tree) => [tree.task, ...tree.subtasks]).map((t) => ({ id: t.id, title: t.title, subtask: t.parentId !== null, suite: p.suited.includes(t.id) })),
-  })));
+// Live sessions then recent ones, each in the order given; one outside a repo or already listed is left out.
+export function listedSessions<T extends SessionCandidate>(live: readonly T[], recent: readonly T[], max: number): (T & { root: string })[] {
+  const seen = new Set<string>();
+  const out: (T & { root: string })[] = [];
+  for (const s of [...live, ...recent]) {
+    if (out.length >= max) break;
+    if (!s.root || seen.has(s.sessionId)) continue;
+    seen.add(s.sessionId);
+    out.push({ ...s, root: s.root });
+  }
+  return out;
 }
 
-// A root the renderer names, kept only when it is exactly one of the recent projects main listed.
-export function listedRoot(root: unknown, projects: readonly ProjectRef[]): string | null {
-  return typeof root === 'string' && projects.some((p) => p.root === root) ? root : null;
+// The picked session, only when the picker listed it; the renderer never names a folder.
+export const listedSession = <T extends { sessionId: string }>(listed: readonly T[], sessionId: unknown): T | null =>
+  (typeof sessionId === 'string' && listed.find((s) => s.sessionId === sessionId)) || null;
+
+// The task a session owns: its unfinished one given most recently, else its newest finished one.
+export function ownedTask(tasks: readonly Task[], sessionId: string): Task | null {
+  const owned = tasks.filter((t) => t.owner?.sessionId === sessionId).sort((a, b) => (b.claimedAt ?? 0) - (a.claimedAt ?? 0));
+  return owned.find((t) => t.status !== 'done') ?? owned[0] ?? null;
 }

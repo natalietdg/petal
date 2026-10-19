@@ -256,11 +256,6 @@
 .tst-pick:hover { background: var(--code-bg); }
 .tst-pick-name { font-weight: 600; }
 .tst-pick-path { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
-.tst-pick-group { margin: 6px 0 0; color: var(--muted); font-size: 13px; font-weight: 600; }
-.tst-picker-list .is-subtask { padding-left: 22px; }
-.tst-add-first { display: flex; flex-direction: column; gap: 8px; }
-.tst-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
-.tst-add-title { flex: 1 1 14em; }
 .tst-pick-suite { padding: 0 7px; border-radius: 999px; background: var(--next-pill); color: var(--next-ink); font-weight: 700; }
 
 /* ---- What it tests with. */
