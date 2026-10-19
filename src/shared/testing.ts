@@ -4,8 +4,7 @@ import type { SuiteRecord, SuiteViews } from './task-suite';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { LockRefusal, RestoredFlag } from './test-lock';
 import type { PickSession } from './task-testing';
-import type { QueuedBug, SentBug } from './bug-queue';
-import type { CriteriaItem } from './test-loop';
+import type { QueuedBug } from './bug-queue';
 
 export type TestStatus = 'passed' | 'failed' | 'skipped';
 export type StageStatus = 'waiting' | 'running' | 'passed' | 'failed' | 'skipped' | 'stopped';
@@ -69,34 +68,60 @@ export interface ProjectTesting {
   pipeline: PipelineConfig | null; // the commands she confirmed; its stages are the old project pipeline, now only a seed
   runs: PipelineRun[]; // newest first
   suites?: Record<string, SuiteRecord>; // per task: what Petal last took from .petal/suites/<taskId>.json
-  agents?: Record<string, AgentRecord[]>; // per task: the sessions Petal launched as its agents (claude --session-id)
+  agents?: Record<string, AgentRecord[]>; // per task: every session Petal launched as its agent; the lock reads it
+  testAgents?: TestAgent[]; // the Testing screen's agents; absent until the old records were migrated
   agentNames?: AgentNames; // her names for the two agents, for every task in the project
-  loops?: Record<string, SavedLoop>; // per task: its agents' lanes and bug queue, so they outlive a reload
+  loops?: Record<string, StoredLoop>; // per task: its agents' lanes and bug queue, so they outlive a reload
   autoTasks?: string[]; // tasks Testing made for a session itself, the only ones it may prune
 }
 
 export interface AgentRecord { sessionId: string; role: AgentRole }
 
+// One of a task's agents, owned by the Testing screen and found only by its session id. No tab id is ever saved.
+export interface TestAgent {
+  sessionId: string;
+  taskId: string;
+  role: AgentRole;
+  cwd: string; // where it was started, and where it resumes
+  startedAt: number;
+  closedAt: number | null; // Close agents; a closed agent is never resumed
+}
+
+// ended: no claude runs it now; a message resumes it. asking: a prompt on its screen waits on her.
+export type AgentState = 'starting' | 'working' | 'idle' | 'asking' | 'ended' | 'closed';
+
+// An agent as main reports it to a window.
+export interface AgentView extends TestAgent {
+  name: string; // her name for its role
+  state: AgentState;
+  hostTabId: string | null; // the terminal running it, when that terminal is in the asking window
+  hostElsewhere: boolean; // it runs in another window's terminal
+  note: string | null; // why it can't be reached now, in her words
+}
+
 // Petal's own line in an agent's log: a handoff, a queue move, her message.
 export interface LoopEvent { at: number; text: string }
 
-export interface LoopAgent { tabId: string | null; sessionId: string }
-
 // A task's agents as Petal last left them. draft: the testing agent alone, drawing up the suite before one exists.
-export interface SavedLoop {
+export interface StoredLoop {
   kind: 'loop' | 'draft';
-  tester: LoopAgent | null; // null for a loop whose bug fix agent started alone, from a failed run
-  fixer: LoopAgent | null; // null for a draft
+  testerSessionId: string | null; // null for a loop whose bug fix agent started alone, from a failed run
+  fixerSessionId: string | null; // null for a draft
   startedAt: number; // 0 when rebuilt from agent records saved before loops were
   stoppedAt: number | null;
   queue: QueuedBug[];
   events: Record<AgentRole, LoopEvent[]>;
+  approvedScenarios?: string[]; // scenario names she said look right; none yet means round 1 stops for her review
 }
 
-// A loop the asking window can step or shows, with what stepping its queue needs. Only the owner steps and saves;
-// added holds bugs sent from another window since its last tick.
-export interface LoopFacts { root: string; taskId: string; loop: SavedLoop; bugs: CriteriaItem[]; runs: PipelineRun[]; names: AgentNames; owner: boolean; added: AddedBug[] }
-export interface AddedBug { bug: SentBug; at: number }
+// A stored loop with its agents filled in, as a window shows it.
+export interface LoopView extends Omit<StoredLoop, 'testerSessionId' | 'fixerSessionId'> {
+  tester: AgentView | null;
+  fixer: AgentView | null;
+}
+
+// One task's loop or draft for a window; main steps every queue itself.
+export interface LoopFacts { root: string; taskId: string; loop: LoopView; names: AgentNames }
 
 export type StackKind = 'unit' | 'e2e' | 'mobile' | 'load' | 'lint' | 'ci' | 'skill' | 'agent' | 'command';
 

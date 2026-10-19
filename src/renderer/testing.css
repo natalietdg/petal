@@ -328,6 +328,7 @@
 .tst-crit-tag.is-fail { background: var(--decide-pill); color: var(--decide-ink); }
 .tst-crit-tag.is-flaky { background: var(--watch-pill); color: var(--watch-ink); }
 .tst-crit-tag.is-regression { background: var(--why-pill); color: var(--why-ink); }
+.tst-crit-tag.is-source { background: var(--next-pill); color: var(--next-ink); font-weight: 600; }
 .tst-crit-meta { margin: 1px 0 0 18px; color: var(--muted); font: 12px var(--mono-font); overflow-wrap: anywhere; }
 .tst-dot.is-flaky { border-color: var(--watch-ink); border-style: dashed; }
 .tst-dot.is-fixed { border-color: var(--done-ink); background: var(--reader-bg); box-shadow: inset 0 0 0 2px var(--done-ink); }
@@ -348,7 +349,9 @@
 .tst-agent-name { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .tst-agent-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tst-agent-name-input { width: 16em; max-width: 100%; }
-.tst-agent-tab { margin-left: auto; font-size: 13px; }
+/* The lane's terminal controls, right of the name: Terminal, Pop out, Show its tab, Back to lane. */
+.tst-agent-controls { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-left: auto; }
+:is(.tst-agent-tab, .tst-agent-popin, .tst-agent-terminal, .tst-agent-popout) { font-size: 13px; }
 .tst-agent-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--reader-fg); font-size: 13px; }
 .tst-agent-tokens, .tst-agent-step-tokens, .tst-agent-step-time { color: var(--muted); font-size: 12px; }
 .tst-agent-log-head { cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 600; }
@@ -388,3 +391,24 @@
 .tst-agent-input { flex: 1; min-width: 0; resize: vertical; font-size: 13px; }
 .tst-agent-refusal { margin: 0; color: var(--decide-ink); font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
 .tst-agent-note { font-size: 12px; }
+/* Scenarios first: her review on the testing agent's lane, before any test is written. */
+.tst-scenario-review { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--rule); }
+.tst-scenario-intro { margin: 0; font-size: 13px; }
+.tst-scenario-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; max-height: 280px; overflow-y: auto; }
+.tst-scenario { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-top: 1px solid var(--rule); font-size: 13px; }
+.tst-scenario:first-child { border-top: 0; }
+.tst-scenario-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* A Testing agent's live terminal, moved in by tabs.mountAgent; drag the corner to resize. */
+.tst-agent-term {
+  position: relative; /* the .term-host inside is absolutely placed */
+  height: 280px;
+  min-height: 160px;
+  max-height: 70vh;
+  resize: vertical;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--term-bg);
+}
+.tst-agent-term > .term-host { inset: 8px 10px; }

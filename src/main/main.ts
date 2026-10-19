@@ -32,7 +32,7 @@ import { claudeLaunch } from './claude-launch';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
-import { activeSession, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions, tabLabelOf } from './tabs';
+import { activeSession, agentOpening, closeWindowTabs, openSessionIds, openTab, registerTabIpc, sessions, tabLabelOf } from './tabs';
 import { applyCat, applyReading, applyScene, applyTheme, currentTheme, onLookChanged, registerLookIpc, settings, themes } from './look';
 import type { EventArgs, EventChannel } from '../shared/ipc';
 
@@ -168,7 +168,7 @@ function registerIpc(): void {
   registerWorkflowIpc({ sessions, history, organizer });
   registerSlashIpc();
   registerLibraryIpc({ sessions });
-  registerTestingIpc({ sessions, openTab });
+  registerTestingIpc({ sessions, openTab, agentOpening });
   registerSessionInfoIpc({ sessions });
   registerFactoryIpc({ activeSession });
   registerLookIpc();

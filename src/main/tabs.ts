@@ -34,24 +34,38 @@ const SHELL_SETTLE_MS = 500;
 export const sessions: TabSessions = new Map();
 const activeTabs = new Map<number, TabId>(); // webContents.id -> tabId shown in that window
 const pendingCommands = new Map<string, string>(); // tabKey -> command typed once that tab's shell starts
+const pendingAgents = new Set<string>(); // tabKeys main opened as agent terminals, until their shell starts
 let openedTabs = 0; // main-picked tab ids are m1, m2, ...; the renderer's own are t1, t2, ...
 
 const tabKey = (contentsId: number, tabId: TabId | undefined) => `${contentsId}:${tabId}`;
 const tabsOf = (contentsId: number) => [...sessions.values()].filter((s) => s.contentsId === contentsId);
+const stripTabsOf = (contentsId: number) => tabsOf(contentsId).filter((s) => !s.agent);
 export const activeSession = (contentsId: number) => sessions.get(tabKey(contentsId, activeTabs.get(contentsId)));
 // One tab of one window, for main-side sends that name a tab (mentions); never a pty the renderer picked.
 export const tabSession = (contentsId: number, tabId: TabId): TabSession | undefined => sessions.get(tabKey(contentsId, tabId));
 export const openSessionIds = (): string[] => [...sessions.values()].flatMap((s) => (s.feed.session?.sessionId ? [s.feed.session.sessionId] : []));
 
 // The renderer creates the tab and starts its shell; a pending command is typed into it.
-// A background tab starts without being shown.
-export const openTab: OpenTab = (contents, { command, background = false } = {}) => {
+// A background tab starts without being shown; an agent tab is a Testing agent's terminal with no tab-bar entry.
+export const openTab: OpenTab = (contents, { command, background = false, agent = false } = {}) => {
   if (!contents || contents.isDestroyed()) return undefined;
   const tabId: TabId = `m${++openedTabs}`;
   if (command) pendingCommands.set(tabKey(contents.id, tabId), command);
-  send(contents, 'tabs:new', { background, tabId });
+  if (agent) pendingAgents.add(tabKey(contents.id, tabId));
+  send(contents, 'tabs:new', { background: background || agent, tabId, ...(agent ? { agent } : {}) });
   return tabId;
 };
+
+// An agent terminal main opened whose shell hasn't started yet.
+export const agentOpening = (contentsId: number, tabId: TabId): boolean => pendingAgents.has(tabKey(contentsId, tabId));
+
+// A reload drops the renderer's terminals, so its agent terminals close too; their agents resume later by session id.
+const reloadWatched = new WeakSet<WebContents>();
+function closeAgentsOnReload(sender: WebContents): void {
+  if (reloadWatched.has(sender)) return;
+  reloadWatched.add(sender);
+  sender.on('did-start-loading', () => { for (const session of tabsOf(sender.id)) if (session.agent) closeSession(session); });
+}
 
 // What each tab was last called, so a title that lands later (organizer, Claude Code's ai-title) is pushed once.
 const RELABEL_MS = 2000;
@@ -124,9 +138,11 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     if (update.sessionId) sessionLabels.set(tabKey(contentsId, tabId), label);
     if (!sender.isDestroyed()) send(sender, channel, { ...update, tabId, label });
   }, { fixture, onReplyFinished, onConcluded: (target) => void concludeTab(session, target), onEnded: harvest });
-  const session: TabSession = { pty, feed, contentsId, tabId };
+  const agent = pendingAgents.delete(tabKey(contentsId, tabId));
+  const session: TabSession = { pty, feed, contentsId, tabId, agent };
   sessions.set(tabKey(contentsId, tabId), session);
-  if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
+  if (agent) closeAgentsOnReload(sender);
+  else if (!activeTabs.has(contentsId)) activeTabs.set(contentsId, tabId);
 
   // A tab opened from History types its resume command once the shell prints its prompt; Add Session's types `claude`.
   const pending = pendingCommands.get(tabKey(contentsId, tabId));
@@ -139,13 +155,13 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
     if (!sender.isDestroyed()) send(sender, 'pty:data', { tabId, data });
     if (!typed && typeFirst) { typed = true; setTimeout(typeFirst, PENDING_COMMAND_DELAY_MS); }
   });
-  // Closing the last tab closes the window, as the shell exiting always has.
+  // Closing the last tab-bar tab closes the window, as the shell exiting always has; agent terminals don't count.
   pty.onExit(() => {
     harvest(feed.session); // the Library reads what this session added; a no-op unless she turned it on
     feed.stop();
     sessions.delete(tabKey(contentsId, tabId));
     if (!sender.isDestroyed()) send(sender, 'tab:closed', { tabId });
-    if (!tabsOf(contentsId).length && win && !win.isDestroyed()) win.close();
+    if (!session.agent && !stripTabsOf(contentsId).length && win && !win.isDestroyed()) win.close();
   });
 }
 
@@ -186,7 +202,7 @@ async function concludeTab(session: TabSession, target: ConcludedSession): Promi
   await new Promise((resolve) => setTimeout(resolve, SHELL_SETTLE_MS));
   if (!sessions.has(tabKey(session.contentsId, session.tabId))) return;
   const foregroundJob = await foregroundJobIn([session.pty.pid]);
-  if (shouldCloseConcludedTab({ claudeClosed: true, tabsInWindow: tabsOf(session.contentsId).length, foregroundJob })) closeSession(session);
+  if (shouldCloseConcludedTab({ claudeClosed: true, tabsInWindow: stripTabsOf(session.contentsId).length, foregroundJob })) closeSession(session);
 }
 
 // A window closed: stop every tab it had.
@@ -197,6 +213,7 @@ export function closeWindowTabs(contentsId: number): void {
   }
   activeTabs.delete(contentsId);
   for (const key of pendingCommands.keys()) if (key.startsWith(`${contentsId}:`)) pendingCommands.delete(key);
+  for (const key of pendingAgents) if (key.startsWith(`${contentsId}:`)) pendingAgents.delete(key);
 }
 
 export function registerTabIpc(): void {
@@ -230,7 +247,12 @@ export function registerTabIpc(): void {
     if (session) closeSession(session);
   });
 
-  on('tab:activate', (event, { tabId }) => activeTabs.set(event.sender.id, tabId));
+  // The renderer never activates an agent terminal unless it popped out to the tab bar: from then on it is an ordinary tab.
+  on('tab:activate', (event, { tabId }) => {
+    activeTabs.set(event.sender.id, tabId);
+    const session = tabFor(event, tabId);
+    if (session) session.agent = false;
+  });
 
   on('reader:pick-session', (event, { tabId, sessionId }) => {
     if (typeof sessionId === 'string') tabFor(event, tabId)?.feed.pick(sessionId);

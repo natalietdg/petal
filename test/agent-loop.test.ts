@@ -1,20 +1,21 @@
-// A task's saved loop: one queue step with its events, a failed send put back, the saved copy taken over this window's,
-// lanes rebuilt from agent records, the save check, saving next to the agent records, and the last round's tokens.
+// A task's stored loop: one queue step with its events, a failed send put back, lanes rebuilt from agent records, the
+// check on a loop read from disk (old shape too), saving next to the registered agents, and the last round's tokens.
 import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
-import { cleanSavedLoop, loopFromAgents, noEvents, rerunOf, roundLabel, roundTokens, stepLoop, takesSaved, unsent, type LoopInputs } from '../src/shared/agent-loop';
-import { loopsOf, rememberAgent, saveLoop } from '../src/main/task-suites';
+import { cleanStoredLoop, loopFromAgents, noEvents, rerunOf, roundLabel, roundTokens, stepLoop, unsent, type LoopInputs } from '../src/shared/agent-loop';
+import { loopsOf, saveLoop } from '../src/main/task-suites';
+import * as store from '../src/main/testing-store';
 import type { AgentAction } from '../src/shared/agent-actions';
 import type { CriteriaItem } from '../src/shared/test-loop';
-import type { SavedLoop } from '../src/shared/testing';
+import type { StoredLoop } from '../src/shared/testing';
 
 afterEach(removeTempDirs);
 
 const names = { tester: 'Quinn', fixer: 'Fixie' };
-const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, round: 1, regression: true, taskId: 't1' });
+const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, tests: [{ path: 'src/cart.test.ts', name: 'rounds' }], source: null, round: 1, regression: true, taskId: 't1' });
 const inputs = (over: Partial<LoopInputs> = {}): LoopInputs => ({ bugs: [], runs: [], testerRound: 1, fixerBusy: false, fixesDone: [], now: 1000, ...over });
-const loop = (over: Partial<SavedLoop> = {}): SavedLoop => ({
-  kind: 'loop', tester: { tabId: 'tab-t', sessionId: 'sess-t' }, fixer: { tabId: 'tab-f', sessionId: 'sess-f' }, startedAt: 500, stoppedAt: null, queue: [], events: noEvents(), ...over,
+const loop = (over: Partial<StoredLoop> = {}): StoredLoop => ({
+  kind: 'loop', testerSessionId: 'sess-t', fixerSessionId: 'sess-f', startedAt: 500, stoppedAt: null, queue: [], events: noEvents(), ...over,
 });
 const action = (at: number, round: number | null, tokens: number): AgentAction => ({ id: `a${at}`, at, kind: 'bash', text: 'Ran npm test · exit 0', path: null, detail: '', tokens, round });
 
@@ -56,45 +57,54 @@ describe('stepping the queue', () => {
 });
 
 describe('rehydrating', () => {
-  it('the saved copy replaces this window’s only when it has none or the saved one is from a newer start', () => {
-    expect(takesSaved(null, loop())).toBe(true);
-    expect(takesSaved(loop({ startedAt: 500 }), loop({ startedAt: 500 }))).toBe(false); // this window's copy is the newer state
-    expect(takesSaved(loop({ startedAt: 500 }), loop({ startedAt: 900 }))).toBe(true);
-  });
-
   it('rebuilds lanes from agent records saved before loops were: a tester then a fixer is a loop, a lone tester a draft', () => {
     const saved = loop();
     expect(loopFromAgents(saved, [])).toBe(saved);
-    expect(loopFromAgents(undefined, [{ sessionId: 'a', role: 'tester' }, { sessionId: 'b', role: 'fixer' }])).toMatchObject({ kind: 'loop', tester: { sessionId: 'a' }, fixer: { sessionId: 'b' }, startedAt: 0, stoppedAt: null });
-    expect(loopFromAgents(undefined, [{ sessionId: 'a', role: 'tester' }, { sessionId: 'b', role: 'fixer' }, { sessionId: 'c', role: 'tester' }])).toMatchObject({ kind: 'draft', tester: { sessionId: 'c' }, fixer: null });
+    expect(loopFromAgents(undefined, [{ sessionId: 'a', role: 'tester' }, { sessionId: 'b', role: 'fixer' }])).toMatchObject({ kind: 'loop', testerSessionId: 'a', fixerSessionId: 'b', startedAt: 0, stoppedAt: null });
+    expect(loopFromAgents(undefined, [{ sessionId: 'a', role: 'tester' }, { sessionId: 'b', role: 'fixer' }, { sessionId: 'c', role: 'tester' }])).toMatchObject({ kind: 'draft', testerSessionId: 'c', fixerSessionId: null });
     expect(loopFromAgents(undefined, [])).toBeNull();
   });
 
-  it('saves a loop next to the agent records only for that task’s agents in their roles, and reads it back', () => {
+  it('saves a loop only for that task’s registered agents in their roles, and reads it back', () => {
     useTempUserData();
     const root = tempDir();
-    rememberAgent(root, 't1', 'sess-t', 'tester');
-    rememberAgent(root, 't1', 'sess-f', 'fixer');
-    rememberAgent(root, 't2', 'draft-t', 'tester');
+    const agents = { t1: [{ sessionId: 'sess-t', role: 'tester' as const }, { sessionId: 'sess-f', role: 'fixer' as const }], t2: [{ sessionId: 'draft-t', role: 'tester' as const }] };
+    store.save({ version: 1, root, pipeline: null, runs: [], agents }); // records from before loops were: migrated on first read
     const first = stepLoop(loop(), inputs({ bugs: [bug('cart total drops a cent')] }), names);
     expect(saveLoop(root, 't1', loop({ queue: first.queue, events: first.events }))).toBe(true);
-    expect(saveLoop(root, 't1', loop({ tester: { tabId: null, sessionId: 'sess-f' } }))).toBe(false); // the fixer can't pose as the tester
+    expect(saveLoop(root, 't1', loop({ testerSessionId: 'sess-f' }))).toBe(false); // the fixer can't pose as the tester
     expect(saveLoop(root, 't2', loop())).toBe(false); // another task's sessions
     const read = loopsOf(root);
     expect(read.t1?.queue.map((b) => b.state)).toEqual(['fixing']);
     expect(read.t1?.events.fixer.map((e) => e.text)).toEqual(['Quinn → Fixie · cart total drops a cent']);
-    expect(read.t2).toMatchObject({ kind: 'draft', tester: { sessionId: 'draft-t' } }); // rebuilt from its record
+    expect(read.t2).toMatchObject({ kind: 'draft', testerSessionId: 'draft-t' }); // rebuilt from its record
   });
 
-  it('the save check keeps the shape and drops anything else', () => {
+  it('the check keeps the shape and drops anything else', () => {
     const good = loop({ queue: stepLoop(loop(), inputs({ bugs: [bug('x')] }), names).queue, events: { tester: [{ at: 1, text: 'hi' }], fixer: [] } });
-    expect(cleanSavedLoop(JSON.parse(JSON.stringify({ ...good, extra: 'dropped' })))).toEqual(good);
-    expect(cleanSavedLoop({ ...good, kind: 'loop', fixer: null })).toBeNull(); // a loop has a fixer
-    expect(cleanSavedLoop({ ...good, kind: 'draft' })).toBeNull(); // a draft has none
-    expect(cleanSavedLoop({ ...good, queue: [{ key: 'x' }] })).toBeNull();
-    expect(cleanSavedLoop({ ...good, tester: { tabId: null, sessionId: '' } })).toBeNull();
-    expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [{ at: 'x' }] } })?.events).toMatchObject({ fixer: [] });
-    expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [] } })?.events.tester).toHaveLength(100);
+    expect(cleanStoredLoop(JSON.parse(JSON.stringify({ ...good, extra: 'dropped' })))).toEqual(good);
+    expect(cleanStoredLoop({ ...good, kind: 'loop', fixerSessionId: null })).toBeNull(); // a loop has a fixer
+    expect(cleanStoredLoop({ ...good, kind: 'draft' })).toBeNull(); // a draft has none
+    expect(cleanStoredLoop({ ...good, queue: [{ key: 'x' }] })).toBeNull();
+    expect(cleanStoredLoop({ ...good, testerSessionId: '' })).toBeNull();
+    expect(cleanStoredLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [{ at: 'x' }] } })?.events).toMatchObject({ fixer: [] });
+    expect(cleanStoredLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [] } })?.events.tester).toHaveLength(100);
+  });
+
+  it('reads the shape from before main owned agents, dropping its tab ids', () => {
+    const old = { kind: 'loop', tester: { tabId: 'm3', sessionId: 'sess-t' }, fixer: { tabId: 'm4', sessionId: 'sess-f' }, startedAt: 500, stoppedAt: null, queue: [], events: noEvents() };
+    expect(cleanStoredLoop(old)).toEqual(loop());
+    expect(JSON.stringify(cleanStoredLoop(old))).not.toContain('m3');
+    expect(cleanStoredLoop({ ...old, tester: null })).toEqual(loop({ testerSessionId: null }));
+    expect(cleanStoredLoop({ ...old, fixer: { tabId: null, sessionId: '' } })).toBeNull();
+  });
+
+  it('keeps the scenario names she approved, capped, and drops anything that isn’t a name', () => {
+    const draft: StoredLoop = { kind: 'draft', testerSessionId: 'draft-t', fixerSessionId: null, startedAt: 5, stoppedAt: null, queue: [], events: noEvents() };
+    expect(cleanStoredLoop({ ...draft, approvedScenarios: ['refund is capped', 7, '', 'x'.repeat(400)] })?.approvedScenarios).toEqual(['refund is capped', 'x'.repeat(300)]);
+    expect(cleanStoredLoop({ ...draft, approvedScenarios: Array.from({ length: 250 }, (_, i) => `s${i}`) })?.approvedScenarios).toHaveLength(200);
+    expect(cleanStoredLoop({ ...draft, approvedScenarios: 'yes' })).not.toHaveProperty('approvedScenarios');
+    expect(cleanStoredLoop(draft)).not.toHaveProperty('approvedScenarios');
   });
 });
 
@@ -145,9 +155,9 @@ describe('a bug she sent from a failed run', () => {
   });
 
   it('a loop whose bug fix agent started alone saves without a testing agent, and keeps what she sent', () => {
-    const alone = loop({ tester: null, queue: [sent] });
-    expect(cleanSavedLoop(JSON.parse(JSON.stringify(alone)))).toEqual(alone);
-    expect(cleanSavedLoop({ ...alone, kind: 'draft', fixer: null })).toBeNull(); // a draft has its testing agent
-    expect(cleanSavedLoop({ ...alone, queue: [{ ...sent, sent: { stage: 'Unit', failure: 'x'.repeat(5000) } }] })?.queue[0]?.sent).toBeUndefined();
+    const alone = loop({ testerSessionId: null, queue: [sent] });
+    expect(cleanStoredLoop(JSON.parse(JSON.stringify(alone)))).toEqual(alone);
+    expect(cleanStoredLoop({ ...alone, kind: 'draft', fixerSessionId: null })).toBeNull(); // a draft has its testing agent
+    expect(cleanStoredLoop({ ...alone, queue: [{ ...sent, sent: { stage: 'Unit', failure: 'x'.repeat(5000) } }] })?.queue[0]?.sent).toBeUndefined();
   });
 });

@@ -15,6 +15,8 @@ import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrite
 import { READING_CHOICES } from '../main/menu';
 import * as store from '../main/testing-store';
 import { writeSuite } from '../main/task-suites';
+import { sessions } from '../main/tabs';
+import { agentView, findAgent } from '../main/test-agents';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
 import vitestReport from '../../test/fixtures/testing/vitest-report.json?raw';
 
@@ -60,15 +62,31 @@ const PICK_AGENT = '5e550000-0000-4000-8000-0000000000a4'; // the notes task's t
 const tasksJson = (repo: string): string => path.join(repo, '.petal', 'tasks.json');
 export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
 
-// A loop step's cleanup: Stop if the loop still runs, then close the two agent tabs Start opened; true once only startTabs remain.
-export async function endLoop({ js, waitFor }: Pick<Kit, 'js' | 'waitFor'>, startTabs: readonly string[]): Promise<boolean> {
+// The terminal main says runs an agent in a window: the one following its session, else the one it is starting in.
+export function hostOf(contentsId: number, root: string, sessionId: string | null): string | null {
+  const agent = findAgent(root, sessionId);
+  return agent ? agentView(root, agent, contentsId).hostTabId : null;
+}
+
+// Every agent terminal Testing opened, in any window; a popped-out one counts as a tab until it is back in its lane.
+export const agentTerminals = (): string[] => [...sessions.values()].filter((s) => s.agent).map((s) => s.tabId);
+
+// Closes every tab-bar tab not in startTabs and every agent terminal; true once only startTabs remain.
+export async function closeExtraTabs({ js, waitFor }: Pick<Kit, 'js' | 'waitFor'>, startTabs: readonly string[]): Promise<boolean> {
+  const extra = [...((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t)), ...agentTerminals()];
+  for (const id of new Set(extra)) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
+  return Boolean(await waitFor(async () => (!agentTerminals().length && JSON.stringify(await js('PastelTerm.tabs.ids()')) === JSON.stringify(startTabs)) || null, 8000));
+}
+
+// A loop step's cleanup: Stop if the loop still runs, then close the agent terminals and tabs it opened.
+export async function endLoop(kit: Pick<Kit, 'js' | 'waitFor'>, startTabs: readonly string[]): Promise<boolean> {
+  const { js, waitFor } = kit;
   const running = async () => ['starting', 'running'].includes(await js('PastelTerm.testing.state().loop'));
   if (await running()) {
     await js("document.querySelector('#testing .tst-stop')?.click()");
     await waitFor(async () => !(await running()) || null, 8000);
   }
-  for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
-  return Boolean(await waitFor(async () => JSON.stringify(await js('PastelTerm.tabs.ids()')) === JSON.stringify(startTabs) || null, 8000));
+  return closeExtraTabs(kit, startTabs);
 }
 
 // The loop's two agents in snapshot runs: the fixture session plays the testing agent, so its replies and Loop lines
@@ -314,24 +332,31 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(inserted && await js("document.getElementById('testing').hidden"), 'Use in reply puts /prove-it in the reply box and shows it');
     await js("(() => { const i = document.getElementById('composer-input'); i.value = ''; i.dispatchEvent(new Event('input')); })()");
 
-    // Send this test to bug fix agent: with no loop running, the task's bug fix agent starts alone on it, in a tab she is
-    // shown, the failure as its brief and the bug already fixing in its queue. Nothing is pasted into the session.
+    // Send this test to bug fix agent: with no loop running, the task's bug fix agent starts alone on it, in its own
+    // terminal with no tab-bar entry, the failure as its brief and the bug already fixing in its queue. Nothing is pasted into the session.
     await click('#testing-button');
     await settle((p) => (p.failRows as string[]).length > 0);
     const fixEstimate: string = await js("document.querySelector('#testing .tst-fix-stage + .tst-ask-here + .tst-fix-estimate')?.textContent ?? ''");
     check(/^About [\d.]+k tokens\. A rough estimate from the brief and typical turns\.$/.test(fixEstimate), `a one-line estimate under Send to bug fix agent: ${JSON.stringify(fixEstimate)}`);
     const pastesBefore = pasteWrites.length;
     const startsBefore = testingFixture.loopStarts.length;
+    const fixerLog = path.join(outDir, 'testing-fixture', 'agents', `${FIXER_SESSION}.jsonl`);
+    fs.mkdirSync(path.dirname(fixerLog), { recursive: true });
+    fs.writeFileSync(fixerLog, '');
+    testingFixture.agentIds.splice(0, Infinity, FIXER_SESSION); // its terminal reports this session, as a real claude would
+    extraTabFixtures.push({ sessionId: FIXER_SESSION, transcript: fixerLog, status: 'idle', cwd: project });
     await click('#testing .tst-row.is-failed .tst-fix');
     const fixerStart = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.startsWith('You are Bug fix agent, the bug fix agent')) ?? null, 4000);
     const fixerBrief = fixerStart?.brief ?? '';
     check(fixerBrief.includes('rejects an expired token') && fixerBrief.includes('src/auth.test.js') && fixerBrief.includes('`npm test`') && fixerBrief.includes('Fix the app code only. Never edit tests') && !/[\u2014\u2013]/.test(fixerBrief), `the bug fix agent starts on the failing test, app code only: ${JSON.stringify(fixerBrief.slice(0, 160))}`);
     check(testingFixture.loopStarts.length === startsBefore + 1 && !pasteWrites.slice(pastesBefore).some((w) => w.data.includes('rejects an expired token')), 'only the bug fix agent starts, and nothing is pasted into the session');
     const fixerLoop = await waitFor(() => { const l = store.load(project).loops?.[FIXTURE_TASK]; return l?.queue.length ? l : null; }, 4000);
-    check(fixerLoop && fixerLoop.tester === null && fixerLoop.fixer && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.tester, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
-    const fixerTab = fixerLoop?.fixer?.tabId ?? null;
-    check(fixerTab && (await js('PastelTerm.tabs.active()?.id')) === fixerTab, `its tab is shown: ${fixerTab}`);
-    const lanes = await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as string[][];
+    check(fixerLoop && fixerLoop.testerSessionId === null && fixerLoop.fixerSessionId && JSON.stringify(fixerLoop.queue.map((b) => [b.name, b.state])) === JSON.stringify([['auth > tokens > rejects an expired token', 'fixing']]), `it is saved as the task's bug fix agent, the bug fixing: ${JSON.stringify(fixerLoop && { tester: fixerLoop.testerSessionId, queue: fixerLoop.queue.map((b) => [b.name, b.state]) })}`);
+    const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, fixerLoop?.fixerSessionId ?? null), 10000);
+    await waitFor(() => (fixerTab && agentTerminals().includes(fixerTab) ? true : null), 10000); // main counts it once its shell starts
+    check(fixerTab && agentTerminals().includes(fixerTab) && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab) && (await js('PastelTerm.tabs.active()?.id')) === startTabs[0], `it runs in an agent terminal, off the tab bar, and her tab stays shown: ${fixerTab}`);
+    const laneStatuses = () => js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.status])") as Promise<string[][]>;
+    const lanes = await waitFor(async () => { const l = await laneStatuses(); return l.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing')) ? l : null; }, 10000) ?? await laneStatuses(); // the lanes read main on their next tick
     check(lanes.some(([role, status]) => role === 'fixer' && status.startsWith('Fixing auth > tokens')) && lanes.some(([role, status]) => role === 'tester' && status === 'Not started'), `its lane shows it fixing; the testing agent's is not started: ${JSON.stringify(lanes)}`);
 
     // A second send of the same test while it is being fixed adds nothing.
@@ -348,7 +373,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const pasted = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('rejects an expired token')) ?? null, 4000);
     check(pasted && pasted.data.includes('src/auth.test.js') && pasted.data.includes('`npm test`') && pasted.data.length < 3100, `the fix prompt names the test, file and command: ${JSON.stringify(pasted?.data.slice(0, 140))}`);
     if (fixerTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(fixerTab)})`);
-    check(await waitFor(async () => (fixerTab && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(fixerTab)) || null, 8000), 'the bug fix agent tab closes again');
+    check(await waitFor(() => (fixerTab && !agentTerminals().includes(fixerTab)) || null, 8000), 'the bug fix agent terminal closes again');
 
     // A tab in the home folder is not a project: pick one of her Claude sessions instead, newest activity first, its repo and status as the small line.
     // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (2 h ago).
@@ -441,20 +466,20 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       })()`), 8000);
       check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens( \([\d.]+k? of them cached reads\))?$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];
-      check(draft?.kind === 'draft' && draft.fixer === null && lane?.events.some((t) => /^Started Testing agent in a new tab to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
+      check(draft?.kind === 'draft' && draft.fixerSessionId === null && lane?.events.some((t) => /^Started Testing agent to draw up the suite$/.test(t)), `the draft is saved with its agent, and its start shows in the lane: ${JSON.stringify(draft && { kind: draft.kind, events: draft.events.tester })}`);
       await capture('testing-draft-lane');
 
-      // Ask Claude shows her the agent's tab, and while it draws, a status replaces the button and main refuses a second.
-      const agentTab = draft?.tester?.tabId ?? null;
-      check(agentTab && (await js('PastelTerm.tabs.active()?.id')) === agentTab, `the drafting agent's tab is shown, not opened in the background: ${agentTab}`);
+      // Ask Claude starts the agent in its own terminal, off the tab bar; while it draws, a status replaces the button and main refuses a second.
+      const agentTab = await waitFor(() => hostOf(win.webContents.id, emptyRepo, draft?.testerSessionId ?? null), 10000);
+      check(agentTab && agentTerminals().includes(agentTab) && !((await js('PastelTerm.tabs.ids()')) as string[]).includes(agentTab), `the drafting agent runs in an agent terminal with no tab-bar entry: ${agentTab}`);
       const drawing = await settle((p) => p.drawing !== null);
       check(drawing && drawing.drawing === 'Testing agent is drawing up the suite' && !drawing.askSuite, `a status replaces Ask Claude while the agent draws: ${JSON.stringify({ drawing: drawing?.drawing, ask: drawing?.askSuite })}`);
       const startsNow = testingFixture.loopStarts.length;
-      const again = await js(`window.pastel.testing.agentStart({ tabId: ${JSON.stringify(agentTab)}, root: ${JSON.stringify(emptyRepo)}, taskId: ${JSON.stringify(made[0]?.id)}, prompt: 'again' })`) as { note?: string };
+      const again = await js(`window.pastel.testing.agentStart({ tabId: ${JSON.stringify(startTabs[0])}, root: ${JSON.stringify(emptyRepo)}, taskId: ${JSON.stringify(made[0]?.id)}, prompt: 'again' })`) as { note?: string };
       check(again?.note === 'This task’s testing agent is already drawing up its suite.' && testingFixture.loopStarts.length === startsNow, `a second start for the task is refused: ${JSON.stringify(again)}`);
-      await js(`PastelTerm.tabs.activate(${JSON.stringify(startTabs[0])})`);
       await click('#testing .tst-show-draft');
-      check(await waitFor(async () => ((await js('PastelTerm.tabs.active()?.id')) === agentTab ? true : null), 3000), 'Show its tab switches to the drafting agent');
+      const shown = await waitFor(() => js(`(() => { const lane = PastelTerm.testing.state().agents.lanes.find((l) => l.role === 'tester'); return lane?.mounted === ${JSON.stringify(agentTab)} && document.querySelector('#testing .tst-agent-lane.is-tester .tst-agent-term .term-host') ? lane.mounted : null; })()`), 3000);
+      check(shown, `Show terminal mounts the drafting agent's terminal in its lane: ${JSON.stringify(shown)}`);
 
       // A tab with no Claude in a repo with no tasks: one line, and no task is made.
       testingFixture.project = noClaudeRepo;
@@ -479,10 +504,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     testingFixture.claudeDir = null;
     await js('PastelTerm.overlays.hideCurrent()');
     await js('PastelTerm.testing.resetLeftovers()'); // the history row it opened to its repeats
-    await js('PastelTerm.testing.forgetLoops()'); // the bug fix agent's loop: keepingStores drops the saved one, this the window's copy
-    // Run suite's tab: later steps (Get started) count tabs from a clean start.
-    for (const id of ((await js('PastelTerm.tabs.ids()')) as string[]).filter((t) => !startTabs.includes(t))) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(id)})`);
-    check(await waitFor(async () => ((await js('PastelTerm.tabs.ids().length')) === startTabs.length ? true : null), 8000), `the run's tab closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
+    // Run suite's tab and the drafting agent's terminal: later steps (Get started) count tabs from a clean start.
+    check(await closeExtraTabs(kit, startTabs), `the run's tab and the agent terminals closed again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }
 }

@@ -16,7 +16,7 @@ const subscribe = <C extends EventChannel>(channel: C, callback: (payload: Event
 };
 
 export type TabCommand =
-  | { kind: 'new'; background: boolean; tabId: TabId }
+  | { kind: 'new'; background: boolean; tabId: TabId; agent: boolean } // agent: a Testing agent's terminal, no tab-bar entry
   | { kind: 'new-session' }
   | { kind: 'close-active' }
   | { kind: 'cycle'; delta: number }
@@ -68,7 +68,7 @@ const api = {
   onSessionTitles: (callback: () => void) => subscribe('session:titles', callback),
   onTabCommand: (callback: (command: TabCommand) => void) => {
     const offs = [
-      subscribe('tabs:new', ({ background, tabId }) => callback({ kind: 'new', background, tabId })),
+      subscribe('tabs:new', ({ background, tabId, agent = false }) => callback({ kind: 'new', background, tabId, agent })),
       subscribe('tabs:new-session', () => callback({ kind: 'new-session' })),
       subscribe('tabs:close-active', () => callback({ kind: 'close-active' })),
       subscribe('tabs:cycle', (delta) => callback({ kind: 'cycle', delta })),
@@ -176,10 +176,18 @@ const api = {
     stop: (runId: string) => invoke('testing:stop', { runId }),
     loopStart: (request: InvokeArgs<'testing:loop-start'>[0]) => invoke('testing:loop-start', request),
     agentStart: (request: InvokeArgs<'testing:agent-start'>[0]) => invoke('testing:agent-start', request),
+    openCriteria: (request: InvokeArgs<'testing:open-criteria'>[0]) => invoke('testing:open-criteria', request),
     agentLog: (request: InvokeArgs<'testing:agent-log'>[0]) => invoke('testing:agent-log', request),
     closeAgents: (request: InvokeArgs<'testing:close-agents'>[0]) => invoke('testing:close-agents', request),
     loops: (request: InvokeArgs<'testing:loops'>[0]) => invoke('testing:loops', request),
-    loopAddBug: (request: InvokeArgs<'testing:loop-add-bug'>[0]) => invoke('testing:loop-add-bug', request),
+    agentSend: (request: InvokeArgs<'testing:agent-send'>[0]) => invoke('testing:agent-send', request),
+    agentOpen: (request: InvokeArgs<'testing:agent-open'>[0]) => invoke('testing:agent-open', request),
+    approveScenarios: (request: InvokeArgs<'testing:scenarios-approve'>[0]) => invoke('testing:scenarios-approve', request),
+    sendBug: (request: InvokeArgs<'testing:send-bug'>[0]) => invoke('testing:send-bug', request),
+    loopStop: (request: InvokeArgs<'testing:loop-stop'>[0]) => invoke('testing:loop-stop', request),
+    onAgentPaste: (callback: (request: EventChannels['testing:agent-paste']) => void) => subscribe('testing:agent-paste', callback),
+    agentPasted: (reply: SendChannels['testing:agent-pasted'][0]) => send('testing:agent-pasted', reply),
+    reportAsking: (tabIds: TabId[]) => send('testing:agent-asking', { tabIds }),
     notify: (request: InvokeArgs<'testing:notify'>[0]) => invoke('testing:notify', request),
     onShowTab: (callback: (event: EventChannels['testing:show-tab']) => void) => subscribe('testing:show-tab', callback),
     onRunUpdate: (callback: (update: EventChannels['testing:run-update']) => void) => subscribe('testing:run-update', callback),

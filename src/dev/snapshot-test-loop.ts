@@ -1,16 +1,16 @@
 // Test loop: Start pastes the brief into the fixture's Claude tab (never a real claude) and makes .petal/ kept out of git;
 // fixture Loop lines drive the round progress here and in the reader's strip; a criteria fixture renders grouped;
-// Start stays off while the loop runs; with Testing closed the queue still steps and is saved, and the lanes come back
-// from what was saved; the last round's tokens show next to the estimate; Stop records one Esc, then the stop message once idle;
+// Start stays off while the loop runs; with Testing closed main still steps the queue and saves it, and the lanes come
+// back from main on the next open; the last round's tokens show next to the estimate; Stop records one Esc, then the stop message once idle;
 // tagged lines in the old shared criteria file move to the task's own file; Close agents closes both without a signal.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { setFixtureStatus } from './snapshot';
-import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXER_SESSION, FIXTURE_TASK, agentTerminals, endLoop, hostOf, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { agentCloses, fixtureFile, pasteWrites, promptWrites, testingFixture } from '../main/snapshot-mode';
+import { agentCloses, fixtureFile, pasteWrites, stopWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import { STOP_MESSAGE } from '../shared/test-loop';
 import * as store from '../main/testing-store';
@@ -110,16 +110,16 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     await js("document.getElementById('testing-button').click()");
     const idle = await settle((p) => p.state.project === 'acme' && p.state.loop === 'idle' && p.state.stages.length === 3);
     check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.aboveStrip, `the Loop panel sits above the pipeline, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, above: idle.aboveStrip })}`);
-    check(idle && /two tabs/.test(String(idle.hint)) && /Neither commits/.test(String(idle.hint)), `the hint says Start opens the two agents: ${JSON.stringify(idle?.hint)}`);
+    check(idle && /two agents/.test(String(idle.hint)) && /Neither commits/.test(String(idle.hint)), `the hint says Start starts the two agents: ${JSON.stringify(idle?.hint)}`);
     await capture('test-loop-start');
 
-    // Start: the testing agent and the bug fix agent each start in a new tab with their own brief and session id.
+    // Start: the testing agent and the bug fix agent each start in their own terminal with their own brief and session id.
     const pastesBefore = pasteWrites.length;
     await js(`(() => { const f = document.querySelector('#testing .tst-loop-focus'); f.value = 'checkout flow'; f.dispatchEvent(new Event('input')); const r = document.querySelector('#testing .tst-loop-rounds-input'); r.value = '5'; })()`);
     await js("document.querySelector('#testing .tst-loop-go').click()");
     const starts = await waitFor(() => (testingFixture.loopStarts.length === 2 ? [...testingFixture.loopStarts] : null), 5000);
     const brief = starts?.[0]?.brief ?? '';
-    check(starts && /--session-id snapshot-fixture -- /.test(starts[0]?.command ?? '') && starts[1]?.command.includes(`--session-id ${FIXER_SESSION} -- `), `two agents start in new tabs, each under its own session id: ${JSON.stringify(starts?.map((l) => l.command.slice(0, 120)))}`);
+    check(starts && /--session-id snapshot-fixture -- /.test(starts[0]?.command ?? '') && starts[1]?.command.includes(`--session-id ${FIXER_SESSION} -- `), `two agents start, each under its own session id: ${JSON.stringify(starts?.map((l) => l.command.slice(0, 120)))}`);
     check(brief.includes('Focus: checkout flow.') && brief.includes('up to 5 rounds') && brief.includes('1. Typecheck: `npm run typecheck`\n2. Unit: `npm test`\n3. Mobile flows: `maestro test .maestro`'),
       `the testing agent's brief carries the focus, rounds and exact stage commands: ${JSON.stringify(brief.slice(0, 200))}`);
     check(brief.includes('Never commit, push, or change git history.') && brief.includes('Never weaken, skip or delete a test') && brief.includes('plus Maestro flows') && brief.includes('Never edit app code') && !brief.includes('\u2014'), 'the brief has the no-commit, no-weakening and tests-only rules, Maestro, and no em dash');
@@ -166,7 +166,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(fs.readFileSync(ownCriteria, 'utf8').includes('coupon can take the total below zero') && !shared.includes('task:') && shared.includes('a stray note'), `tagged lines moved to the task’s own file once, the stray line kept: ${JSON.stringify(shared.slice(0, 120))}`);
     check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows as the live result: ${JSON.stringify(grouped?.live)}`);
     // The open bugs join the queue; the idle bug fix agent gets the oldest one.
-    const fixerTab: string | null = await js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(FIXER_SESSION)}) ?? null`);
+    const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, FIXER_SESSION), 8000);
     const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: coupon can take the total below zero.')) ?? null, 8000);
     check(handed && handed.data.includes('Failing test: src/checkout/coupon.test.ts::caps at the total.') && handed.data.includes('**Fix:** coupon can take the total below zero · done'), `the oldest open bug goes to the bug fix agent: ${JSON.stringify(handed?.data.slice(0, 120))}`);
     await capture('test-loop-running');
@@ -196,8 +196,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     const saved = await waitFor(() => { const q = store.load(project).loops?.[FIXTURE_TASK]?.queue ?? []; return q.some((b) => b.name === 'coupon can take the total below zero' && b.state === 'verify') && q.some((b) => b.state === 'fixing') ? q : null; }, 6000);
     check(saved, `the queue is saved with the agent records: ${JSON.stringify(store.load(project).loops?.[FIXTURE_TASK]?.queue.map((b) => [b.name, b.state]))}`);
 
-    // A new window (or a reload) knows only what main saved: the lanes, the queue and Petal's events come back on open.
-    await js('PastelTerm.testing.forgetLoops()');
+    // Testing opens on main's loop: the lanes, the queue and Petal's events. (A reload is the journey step's.)
     await js("document.getElementById('testing-button').click()");
     await settle((p) => p.state.loop === 'running');
     type Lanes = { lanes: number; queue: string[][]; fixerEvents: string[]; tokens: number };
@@ -205,7 +204,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
       const l: Lanes = await js(`(() => { const a = PastelTerm.testing.state().agents; return { lanes: document.querySelectorAll('#testing .tst-agent-lane').length, queue: a.queue.map((b) => [b.name, b.state]), fixerEvents: a.events.fixer.map((e) => e.text), tokens: document.querySelectorAll('#testing .tst-agent-tokens').length }; })()`);
       return l.lanes === 2 && l.tokens === 2 && l.queue.some(([, state]) => state === 'verify') ? l : null;
     }, 8000);
-    check(back && back.fixerEvents.includes('Testing agent → Bug fix agent · coupon can take the total below zero') && back.queue.some(([name, state]) => name === 'Place order stays enabled with an empty cart' && state === 'fixing'), `the lanes rebuild from the saved loop: ${JSON.stringify(back)}`);
+    check(back && back.fixerEvents.includes('Testing agent → Bug fix agent · coupon can take the total below zero') && back.queue.some(([name, state]) => name === 'Place order stays enabled with an empty cart' && state === 'fixing'), `the lanes come back from main: ${JSON.stringify(back)}`);
 
     // Every theme and reading style; then widths.
     for (const theme of ['paleSky', 'blush', 'nightPastel']) {
@@ -233,11 +232,12 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     const testerTab: string | null = await js('PastelTerm.testing.state().loopTab');
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(testerTab)})?.update?.busy`)) || null, 6000), 'the testing agent is busy');
     check(await waitFor(async () => ((await js("document.querySelector('#testing .tst-close-agents-button')")) ? null : true), 3000), 'no Close agents while an agent works');
-    const escBefore = promptWrites.length;
+    const escBefore = stopWrites.length;
     const pastesAtStop = pasteWrites.length;
     await js("document.querySelector('#testing .tst-stop').click()");
-    const escs = await waitFor(() => { const e = promptWrites.slice(escBefore).filter((keys) => JSON.stringify(keys) === JSON.stringify(['\x1b'])); return e.length === 2 ? e : null; }, 3000);
-    check(escs && promptWrites.length === escBefore + 2, `Stop sends one Esc to each agent: ${JSON.stringify(promptWrites.slice(escBefore))}`);
+    const escs = await waitFor(() => { const e = stopWrites.slice(escBefore); return e.length ? e : null; }, 3000);
+    await wait(500);
+    check(escs && stopWrites.length === escBefore + 1 && escs[0]?.tabId === testerTab && escs[0].keys.join() === '\x1b', `Stop sends one Esc, to the working testing agent only (Esc would clear an idle one's input): ${JSON.stringify(stopWrites.slice(escBefore))}`);
     const stopping = await settle((p) => p.pill === 'Stopping', 3000);
     const fixerStop = await waitFor(() => pasteWrites.slice(pastesAtStop).find((w) => w.tabId === fixerTab && w.data.includes(STOP_MESSAGE)) ?? null, 4000);
     await wait(2000);
@@ -267,7 +267,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(/so far for both agents$/.test(await js("document.querySelector('#testing .tst-agent-total')?.textContent ?? ''")), 'and the total so far');
 
     // Close agents: offered once the loop is over; asks inline like the Board's Close, then closes each agent's claude
-    // through the Sessions panel's Close (snapshot runs stop before any signal) and their tabs, and the loop stays stopped.
+    // through the Sessions panel's Close (snapshot runs stop before any signal) and their terminals, and the loop stays stopped.
     const closeButton = await waitFor<string | null>(() => js("document.querySelector('#testing .tst-close-agents-button')?.textContent ?? null"), 6000);
     check(closeButton === 'Close agents', `a Close agents button once the loop is done: ${JSON.stringify(closeButton)}`);
     await js("document.querySelector('#testing .tst-close-agents-button').click()");
@@ -277,7 +277,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     await js("document.querySelector('#testing .tst-close-yes').click()");
     const closes = await waitFor(() => (agentCloses.length >= closesBefore + 2 ? agentCloses.slice(closesBefore) : null), 8000);
     check(closes && JSON.stringify(closes.map((c) => c.sessionId).sort()) === JSON.stringify(['snapshot-fixture', FIXER_SESSION].sort()) && closes.every((c) => c.outcome !== 'closed'), `each agent goes through the close path, and nothing is signalled: ${JSON.stringify(closes)}`);
-    check(await waitFor(async () => (JSON.stringify(await js('PastelTerm.tabs.ids()')) === JSON.stringify(startTabs) ? true : null), 8000), `the agents' tabs close and the coding session's stays: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
+    check(await waitFor(async () => (!agentTerminals().length && JSON.stringify(await js('PastelTerm.tabs.ids()')) === JSON.stringify(startTabs) ? true : null), 8000), `the agents' terminals close and the coding session's tab stays: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     check(store.load(project).loops?.[FIXTURE_TASK]?.stoppedAt && !(await js("document.querySelector('#testing .tst-close-agents-button')")), 'the loop is saved stopped and Close agents goes away');
   } finally {
     testingFixture.project = null;
@@ -285,7 +285,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     testingFixture.agentIds.length = 0;
     fixer.status = 'idle';
     setFixtureStatus(feed, 'idle');
-    check(await endLoop(kit, startTabs), `the two agent tabs close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
+    check(await endLoop(kit, startTabs), `the two agent terminals close again: ${JSON.stringify(await js('PastelTerm.tabs.ids()'))}`);
     await js('PastelTerm.overlays.hideCurrent()');
     resizeOffscreen(win, startWidth ?? 1280, startHeight ?? 900);
   }

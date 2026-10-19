@@ -1,12 +1,11 @@
 // IPC for the Testing tab: what the active tab's project tests with, each task's suite and run history, and running it.
 // A run is a script Petal writes under userData and types into a NEW tab after her click (never a tab with claude in it);
 // main watches each stage's exit-code file and report. Reading the project and her skills waits for the folder gate.
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { BrowserWindow, Notification, webContents, type WebContents } from 'electron';
+import { BrowserWindow, Notification, shell, webContents, type WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { allowedClaudeHome, claudeFolderAllowed, projectClaudeDir } from './claude-folder';
 import { isSnapshotRun, slashFixture, testingFixture } from './snapshot-mode';
@@ -22,31 +21,31 @@ import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { load as loadConfig } from './config-store';
-import { agentOf, allAgents, loopsOf, rememberAgent, saveLoop, settleOutsideChange, suiteFile, syncSuites, undoSuiteChange, writeSuite } from './task-suites';
+import { agentOf, allAgents, loopsOf, saveLoop, settleOutsideChange, suiteFile, syncSuites, testAgentsOf, undoSuiteChange, writeSuite } from './task-suites';
 import { setAgentTitle } from './agent-titles';
 import { draftWithSkill } from './testing-skill';
 import { readAgentLog } from './agent-log';
 import { NO_TOKENS } from '../shared/token-usage';
 import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
 import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
-import { cleanSavedLoop, cleanSentBug, noEvents, withEvent } from '../shared/agent-loop';
+import { agentView, claimAgent, closeTaskAgents, findAgent, herEvent, listedLoops, loopView, openAgentTerminal, repliesOf, sendToAgent, startTestAgents, stopTaskLoop, watchRoot, windowReady, type Claim } from './test-agents';
+import { cleanSentBug, isRunning, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
 import { addSent } from '../shared/bug-queue';
-import { hasAgentIn, loopOwner, runningHere, takesSave } from '../shared/loop-signals';
+import { buildSentFixerBrief, ITEMS_CAP, NAME_CAP } from '../shared/test-loop';
+import { scenariosApprovedText } from '../shared/suite-draft';
+import type { LoopNotice } from '../shared/loop-signals';
 import type { LockManifest } from '../shared/test-lock';
-import { checkSuite, emptySuite, forTask, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
+import { checkSuite, emptySuite, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
 import { foldAgents, listedSession, listedSessions, needsOwnTask, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
 import { lastRunAt, latest } from '../shared/task-activity';
 import { panelSessions } from './agents-ipc';
 import { giveSessionTask } from './tasks-ipc';
-import { closeAgentSession } from './sessions-ipc';
 import { pruneProject } from './testing-prune';
 import * as store from './testing-store';
-import { buildStartCommand, shellQuote } from './resume-command';
-import { claudeLaunch } from './claude-launch';
-import { prepareLoop, readCriteria } from './criteria-store';
+import { criteriaFile, prepareLoop, readCriteria } from './criteria-store';
 import {
   normalizeCommand, runGoing, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type AddedBug, type Elsewhere, type LoopFacts, type SavedLoop, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
+  type Elsewhere, type LoopFacts, type LoopView, type StoredLoop, type TestAgent, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -60,24 +59,19 @@ import { scopeFacts, taskIdAt } from './testing-tasks';
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
-const LOOP_STAND_IN = ': petal-loop-start'; // typed in snapshot runs instead of starting claude
 const BRIEF_CAP = 12000;
 const CHANGED_DAYS = 7; // Suite health's core stage counts files changed this recently
 const CHANGED_CAP = 300;
-const LOOP_RUNS = 10; // a loop's newest task runs, where a bug's failure output is looked up
-const STARTING_MS = 120_000; // a loop's bug fix agent counts as live this long after the loop started, while its tab opens
-const ADDED_CAP = 50; // bugs from other windows waiting for one loop's owner
 const KNOWN_CAP = 50; // loops one window asks about per tick
+const NAMES_CAP = 200; // scenario names approved in one go
 const NOTICE_MAX = 200;
+const EVENT_MAX = 200; // a lane line Petal writes for a follow-up
 
 interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
 const watching = new Map<string, Watched>(); // run id -> its watch
 const editsSeen = new Map<string, number>(); // transcript -> edits counted at the last auto check
 const runTabs = new Map<string, string>(); // `${contentsId}:${tabId}` of a tab a run opened -> its project root
-const loopOwners = new Map<string, number>(); // `${root}:${taskId}` -> the window (contents id) that steps that loop
-const addedBugs = new Map<string, AddedBug[]>(); // `${root}:${taskId}` -> bugs sent from other windows, for the owner's next tick
 const notices = new Set<Notification>(); // held until clicked or closed, so the click still lands
-const loopKey = (root: string, taskId: string): string => `${root}:${taskId}`;
 
 // The repo's runs still going, and whether one blocks this task: one run at a time per task.
 const runsGoing = (): { root: string; taskId: string | null }[] => [...watching.values()].map((w) => ({ root: w.root, taskId: w.run.taskId ?? null }));
@@ -389,9 +383,9 @@ function giveAutoTask(root: string, session: { sessionId: string; cwd: string | 
   return id;
 }
 
-// This window's tab with a Claude session on the project: the asking tab first, else any other.
+// This window's tab with her Claude session on the project: the asking tab first, else any other. Never an agent's.
 async function sessionOnProject(root: string, sessions: TabSessions, asking: TabSession | undefined): Promise<TabSession | null> {
-  const mine = [...sessions.values()].filter((s) => s.contentsId === asking?.contentsId && s.feed.session);
+  const mine = [...sessions.values()].filter((s) => s.contentsId === asking?.contentsId && s.feed.session && !s.agent && !agentOf(root, s.feed.session.sessionId));
   const ordered = [...mine.filter((s) => s === asking), ...mine.filter((s) => s !== asking)];
   for (const s of ordered) if ((await projectOf(s)) === root) return s;
   return null;
@@ -548,15 +542,16 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   return { started: id, typed };
 }
 
-export interface TestingDeps { sessions: TabSessions; openTab: OpenTab }
+export interface TestingDeps { sessions: TabSessions; openTab: OpenTab; agentOpening: (contentsId: number, tabId: string) => boolean }
 let deps: TestingDeps | null = null;
 
 const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): TabSession | undefined =>
   [...sessions.values()].find((s) => s.contentsId === contentsId && s.tabId === tabId);
 
-export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
-  deps = { sessions, openTab };
+export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingDeps): void {
+  deps = { sessions, openTab, agentOpening };
   startLockTimer(sessions);
+  startTestAgents({ sessions, openTab, agentOpening, notify: showNotice });
   // The project and one of its tasks, for the calls that act on a task's suite.
   const taskTarget = async (contentsId: number, tabId: unknown, picked: unknown, taskId: unknown): Promise<{ root: string; task: Task; tasks: Task[] } | { note: string }> => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
@@ -566,21 +561,6 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const task = tasks.find((t) => t.id === taskId);
     return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
   };
-  // ---- One owner per loop: the window that steps its queue and saves it.
-  const windowOpen = (id: number): boolean => { const c = webContents.fromId(id); return Boolean(c && !c.isDestroyed()); };
-  const sessionsIn = (id: number): Set<string> => new Set([...sessions.values()].flatMap((s) => (s.contentsId === id && s.feed.session ? [s.feed.session.sessionId] : [])));
-  const ownerOf = (root: string, taskId: string, loop: SavedLoop, asking: number): number | null => {
-    const key = loopKey(root, taskId);
-    const owner = loopOwner(loopOwners.get(key) ?? null, asking, { open: windowOpen, hasAgents: (id) => hasAgentIn(loop, sessionsIn(id)) });
-    if (owner === null) loopOwners.delete(key); else loopOwners.set(key, owner);
-    return owner;
-  };
-  // An agent's session is open in some window.
-  const sessionOpen = (sessionId: string): boolean => [...sessions.values()].some((s) => s.feed.session?.sessionId === sessionId);
-  const fixerOpen = (loop: SavedLoop): boolean => loop.fixer !== null && sessionOpen(loop.fixer.sessionId);
-  const fixerTakesBugs = (loop: SavedLoop): boolean => loop.kind === 'loop' && loop.stoppedAt === null && loop.fixer !== null && (fixerOpen(loop) || Date.now() - loop.startedAt < STARTING_MS);
-  const takeAdded = (key: string): AddedBug[] => { const list = addedBugs.get(key) ?? []; addedBugs.delete(key); return list; };
-
   const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
 
   // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
@@ -611,188 +591,198 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
     const onProject = await sessionOnProject(root, sessions, asking);
     return {
       runs: named(data.runs), running: runningIn(root), sessionTab: onProject?.tabId ?? null,
-      criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopsOf(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+      criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopViews(root, event.sender.id), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
 
-  // Starts one of a task's agents: claude with the brief in a new tab, under a session id Petal picks and remembers with
-  // its role, so the lock and the suite reader know it. Its tab is named for its role and the task.
-  const startAgent = async (contents: WebContents, root: string, task: Task, role: AgentRole, brief: string, background: boolean): Promise<{ tabId: string | null; sessionId: string }> => {
-    const sessionId = (isSnapshotRun() && testingFixture.agentIds.shift()) || crypto.randomUUID();
-    rememberAgent(root, task.id, sessionId, role);
-    setAgentTitle(sessionId, agentTabTitle(store.load(root).agentNames, role, task.title));
-    const command = `cd ${shellQuote(root)} && ${buildStartCommand(brief, `${(await claudeLaunch()).command} --session-id ${sessionId}`)}`;
-    if (isSnapshotRun()) testingFixture.loopStarts.push({ command, brief });
-    const opened = openTab(contents, { command: isSnapshotRun() ? harnessLine(LOOP_STAND_IN) : command, background });
-    if (opened) runTabs.set(`${contents.id}:${opened}`, root);
-    return { tabId: opened ?? null, sessionId };
+  // A role's brief: its open agent gets it as a message, else that agent starts with it. The registry decides which.
+  const briefRole = async (contentsId: number, root: string, task: Task, role: AgentRole, brief: string): Promise<Claim | { note: string }> => {
+    const claim = await claimAgent(root, { taskId: task.id, taskTitle: task.title, role, brief, preferred: contentsId });
+    if ('note' in claim || claim.created) return claim;
+    const sent = await sendToAgent(root, claim.agent, brief, null, contentsId);
+    return 'note' in sent ? sent : claim;
   };
+  const startedWords = (claim: Claim, name: string): string => (claim.created ? `Started ${name} in its own terminal` : `${name} moves on to the test loop`);
 
-  // The loop for a task: its testing agent and its bug fix agent, each in its own new tab, working at once.
-  // One brief starts that agent alone: the bug fix agent for a failed run, or the testing agent joining a running one.
-  // reuseDraft: the drafting agent's open tab becomes the loop's testing agent; the renderer pastes its brief there.
-  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief, show, reuseDraft }) => {
+  // The loop for a task: its testing agent and its bug fix agent, working at once. Each role's open agent is reused
+  // (the drafting agent moves on to the loop this way), else one starts. One brief joins a running bug fix agent.
+  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     const briefs = [testerBrief, fixerBrief].filter((brief) => brief !== null && brief !== undefined);
     if (!briefs.length || briefs.some((brief) => typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP)) return { note: 'A loop brief is empty or too long.' };
-    const prior = loopsOf(target.root)[target.task.id];
-    const running = prior?.kind === 'loop' && prior.stoppedAt === null && briefs.length === 1 ? prior : null;
-    if (!fixerBrief && !running?.fixer) return { note: 'Start the loop to start its testing agent.' };
-    if (fixerBrief && prior?.kind === 'loop' && prior.stoppedAt === null && fixerOpen(prior)) return { note: `${agentName(store.load(target.root).agentNames ?? {}, 'fixer')} is already running for this task, maybe in another window.` };
-    const drafter = reuseDraft === true && !testerBrief && prior?.kind === 'draft' && draftLive(target.root, target.task.id) ? prior.tester : null;
-    if (reuseDraft === true && !drafter) return { note: 'The drafting agent’s tab is gone. Start the loop again.' };
-    prepareLoop(target.root, target.task.id);
-    const tester = drafter ?? (testerBrief ? await startAgent(event.sender, target.root, target.task, 'tester', testerBrief, true) : null);
-    const fixer = fixerBrief ? await startAgent(event.sender, target.root, target.task, 'fixer', fixerBrief, show !== true) : null;
-    saveLoop(target.root, target.task.id, running
-      ? { ...running, tester: tester ?? running.tester, fixer: fixer ?? running.fixer }
-      : { kind: 'loop', tester, fixer, startedAt: Date.now(), stoppedAt: null, queue: [], events: noEvents() });
-    loopOwners.set(loopKey(target.root, target.task.id), event.sender.id); // the window that started it steps it
-    return { tester, fixer };
+    const { root, task } = target;
+    const prior = loopsOf(root)[task.id];
+    const running = isRunning(prior) ? prior : null;
+    const names = store.load(root).agentNames ?? {};
+    if (!fixerBrief && !running?.fixerSessionId) return { note: 'Start the loop to start its testing agent.' };
+    if (fixerBrief && running) return { note: `${agentName(names, 'fixer')} is already running for this task, maybe in another window.` };
+    prepareLoop(root, task.id);
+    const tester = typeof testerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'tester', testerBrief) : null;
+    if (tester && 'note' in tester) return tester;
+    const fixer = typeof fixerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'fixer', fixerBrief) : null;
+    if (fixer && 'note' in fixer) return fixer;
+    const now = Date.now();
+    const carried = prior?.approvedScenarios ? { approvedScenarios: prior.approvedScenarios } : {};
+    const base: StoredLoop = running ?? { kind: 'loop', testerSessionId: null, fixerSessionId: null, startedAt: now, stoppedAt: null, queue: [], events: prior?.kind === 'draft' ? prior.events : noEvents(), ...carried };
+    let events = base.events;
+    if (tester) events = withEvent(events, 'tester', startedWords(tester, agentName(names, 'tester')), now);
+    if (fixer) events = withEvent(events, 'fixer', startedWords(fixer, agentName(names, 'fixer')), now);
+    const loop: StoredLoop = { ...base, testerSessionId: tester?.agent.sessionId ?? base.testerSessionId, fixerSessionId: fixer?.agent.sessionId ?? base.fixerSessionId, events };
+    saveLoop(root, task.id, loop);
+    watchRoot(root);
+    const view = loopView(root, loop, event.sender.id);
+    return { tester: view.tester, fixer: view.fixer };
   });
 
-  // A draft still drawing up its suite: not stopped, and its testing agent's tab is open in some window.
-  const draftLive = (root: string, taskId: string): boolean => {
-    const loop = loopsOf(root)[taskId];
-    if (loop?.kind !== 'draft' || loop.stoppedAt !== null) return false;
-    const tester = loop.tester;
-    return tester !== null && ([...sessions.values()].some((s) => s.tabId === tester.tabId) || sessionOpen(tester.sessionId));
-  };
-  const drafting = new Set<string>(); // `${root}:${taskId}` while its draft agent is being started
-
-  // Ask Claude to draw one up: the testing agent, started on the testing-suite skill for this task, in a tab she is shown.
-  // The skill is checked first: Petal's unedited old copy is updated, a missing or edited one is replaced by its bundled
-  // instructions in the brief. One per task: a second ask while the first is still drawing gets a note.
+  // Ask Claude to draw one up: the task's testing agent (its open one if any) on the testing-suite skill, checked first.
   handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
-    const key = loopKey(target.root, target.task.id);
-    if (drafting.has(key) || draftLive(target.root, target.task.id)) return { note: 'This task’s testing agent is already drawing up its suite.' };
-    drafting.add(key);
-    try {
-      const skill = draftWithSkill(isSnapshotRun() ? testingFixture.claudeDir : allowedClaudeHome(), prompt.trim());
-      prepareLoop(target.root, target.task.id); // bugs it finds go in the criteria file as [fail] lines
-      const tester = await startAgent(event.sender, target.root, target.task, 'tester', skill.brief, false);
-      const name = agentName(store.load(target.root).agentNames ?? {}, 'tester');
-      const now = Date.now();
-      saveLoop(target.root, target.task.id, { kind: 'draft', tester, fixer: null, startedAt: now, stoppedAt: null, queue: [], events: withEvent(noEvents(), 'tester', `Started ${name} in a new tab to draw up the suite`, now) });
-      loopOwners.set(key, event.sender.id);
-      return { tabId: tester.tabId, updatedSkill: skill.updated };
-    } finally {
-      drafting.delete(key);
-    }
+    const { root, task } = target;
+    const prior = loopsOf(root)[task.id];
+    const tester = openAgent(testAgentsOf(root), task.id, 'tester');
+    if (prior?.stoppedAt === null && prior.kind === 'loop') return { note: 'The test loop is running for this task. Stop it first.' };
+    if (prior?.stoppedAt === null && tester && prior.testerSessionId === tester.sessionId) return { note: 'This task’s testing agent is already drawing up its suite.' };
+    const skill = draftWithSkill(isSnapshotRun() ? testingFixture.claudeDir : allowedClaudeHome(), prompt.trim());
+    prepareLoop(root, task.id); // bugs it finds go in the criteria file as [fail] lines
+    const claim = await briefRole(event.sender.id, root, task, 'tester', skill.brief);
+    if ('note' in claim) return claim;
+    const name = agentName(store.load(root).agentNames ?? {}, 'tester');
+    const now = Date.now();
+    const words = claim.created ? `Started ${name} to draw up the suite` : `You → ${name} · draw up the suite`;
+    saveLoop(root, task.id, {
+      kind: 'draft', testerSessionId: claim.agent.sessionId, fixerSessionId: null, startedAt: now, stoppedAt: null, queue: [],
+      events: withEvent(prior?.events ?? noEvents(), 'tester', words, now), ...(prior?.approvedScenarios ? { approvedScenarios: prior.approvedScenarios } : {}),
+    });
+    return { agent: agentView(root, claim.agent, event.sender.id), reused: !claim.created, updatedSkill: skill.updated };
   });
 
-  // The renderer's timer: saves one loop when its owner asks, then lists the loops this window steps or shows. Roots come
-  // from the saved loops of this window's open sessions too, so a loop keeps stepping after a restart or in a new window.
-  // The save comes first and nothing awaits, so the next tick always reads it.
-  handle('testing:loops', async (event, { save, known }) => {
+  // Edit scenarios: only the task's own criteria file, made first if missing, in her default editor.
+  handle('testing:open-criteria', async (event, { tabId, root: picked, taskId }) => {
+    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+    if ('note' in target) return target;
+    prepareLoop(target.root, target.task.id);
+    const file = criteriaFile(target.root, target.task.id);
+    if (isSnapshotRun()) { testingFixture.opened.push(file); return { ok: true as const }; }
+    const failure = await shell.openPath(file); // '' means it opened
+    return failure ? { note: `Couldn’t open the scenarios file: ${failure}` } : { ok: true as const };
+  });
+
+  // The lanes' read model. Main steps every queue itself, so a window only reads.
+  handle('testing:loops', (event, { known }) => {
     if (!claudeFolderAllowed()) return { loops: [] };
-    const me = event.sender.id;
-    const roots = new Set([...runTabs].filter(([key]) => key.startsWith(`${me}:`)).map(([, root]) => root));
-    if (save && typeof save.root === 'string' && projectRootOf(save.root) === save.root && isTaskId(save.taskId)) {
-      const loop = cleanSavedLoop(save.loop);
-      if (loop && takesSave(ownerOf(save.root, save.taskId, loop, me), me) && saveLoop(save.root, save.taskId, loop)) {
-        loopOwners.set(loopKey(save.root, save.taskId), me);
-        roots.add(save.root);
-      }
-    }
-    const shown = new Set<string>();
-    for (const k of Array.isArray(known) ? known.slice(0, KNOWN_CAP) : []) {
-      if (typeof k?.root !== 'string' || projectRootOf(k.root) !== k.root || !isTaskId(k.taskId)) continue;
-      roots.add(k.root);
-      shown.add(loopKey(k.root, k.taskId));
-    }
-    const open = sessionsIn(me);
-    for (const s of sessions.values()) {
-      if (s.contentsId !== me || !s.feed.session) continue;
-      const root = projectRootOf((isSnapshotRun() && testingFixture.project) || s.feed.session.cwd || null); // Claude's folder only, no lsof each tick
-      if (root) roots.add(root);
-    }
-    const loops: LoopFacts[] = [];
-    for (const root of roots) {
-      const saved = loopsOf(root);
-      const listed = new Map(runningHere(saved, open));
-      for (const [taskId, loop] of Object.entries(saved)) if (loop.kind === 'loop' && shown.has(loopKey(root, taskId))) listed.set(taskId, loop);
-      if (!listed.size) continue;
-      const bugs = readCriteria(root)?.bugs ?? [];
-      const data = store.load(root);
-      for (const [taskId, loop] of listed) {
-        const owner = ownerOf(root, taskId, loop, me) === me;
-        loops.push({ root, taskId, loop, bugs: forTask(bugs, taskId), runs: forTask(data.runs, taskId).slice(0, LOOP_RUNS), names: data.agentNames ?? {}, owner, added: owner ? takeAdded(loopKey(root, taskId)) : [] });
-      }
-    }
+    windowReady(event.sender.id);
+    const asked = (Array.isArray(known) ? known.slice(0, KNOWN_CAP) : []).filter((k) => typeof k?.root === 'string' && projectRootOf(k.root) === k.root && isTaskId(k.taskId));
+    const loops: LoopFacts[] = listedLoops(asked, event.sender.id).map((listed) => ({ ...listed, names: store.load(listed.root).agentNames ?? {} }));
     return { loops };
   });
 
-  // A bug sent from a window that doesn't step the loop: it joins the saved queue while the bug fix agent is live
-  // anywhere, and the owner merges it on its next tick. queued false: no live bug fix agent, so the sender starts one.
-  handle('testing:loop-add-bug', async (event, { tabId, root: picked, taskId, bug }) => {
+  // Send to bug fix agent: the failure joins the queue of the task's open bug fix agent (a stopped loop starts again
+  // around it), else a bug fix agent starts on it. A running loop keeps its testing agent; a draft's becomes the loop's.
+  handle('testing:send-bug', async (event, { tabId, root: picked, taskId, bug }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
     const clean = cleanSentBug(bug);
     if (!clean) return { note: 'That failure can’t be sent.' };
-    const loop = loopsOf(target.root)[target.task.id];
-    if (!loop || !fixerTakesBugs(loop)) return { queued: false, added: false };
+    const { root, task } = target;
+    const names = store.load(root).agentNames ?? {};
+    const fixerName = agentName(names, 'fixer');
+    const prior = loopsOf(root)[task.id];
+    const running = isRunning(prior) ? prior : null;
     const now = Date.now();
-    const { queue, added } = addSent(loop.queue, clean, now);
-    if (!added) return { queued: true, added: false };
-    const fixer = agentName(store.load(target.root).agentNames ?? {}, 'fixer');
-    saveLoop(target.root, target.task.id, { ...loop, queue, events: withEvent(loop.events, 'fixer', `You → ${fixer} · ${clean.name}`, now) });
-    const key = loopKey(target.root, target.task.id);
-    addedBugs.set(key, [...(addedBugs.get(key) ?? []), { bug: clean, at: now }].slice(-ADDED_CAP));
-    return { queued: true, added: true };
+    const agents = testAgentsOf(root);
+    const fresh = (fixerSessionId: string): StoredLoop => loopForFixer(prior, agents, task.id, fixerSessionId, now);
+    const open = openAgent(agents, task.id, 'fixer');
+    if (open) {
+      const base = running?.fixerSessionId === open.sessionId ? running : fresh(open.sessionId);
+      const { queue, added } = addSent(base.queue, clean, now);
+      const fixer = agentView(root, open, event.sender.id, names);
+      if (!added) return { outcome: 'already' as const, fixer };
+      saveLoop(root, task.id, { ...base, queue, events: withEvent(base.events, 'fixer', `You → ${fixerName} · ${clean.name}`, now) });
+      watchRoot(root);
+      return { outcome: 'queued' as const, fixer };
+    }
+    const brief = buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: clean.name, prompt: clean.sent.failure, names: { tester: agentName(names, 'tester'), fixer: fixerName } });
+    const claim = await claimAgent(root, { taskId: task.id, taskTitle: task.title, role: 'fixer', brief, preferred: event.sender.id });
+    if ('note' in claim) return claim;
+    const base = running ? { ...running, fixerSessionId: claim.agent.sessionId, queue: running.queue.map((b) => (b.state === 'fixing' ? { ...b, state: 'open' as const, asked: false } : b)) } : fresh(claim.agent.sessionId);
+    const queue = addSent(base.queue, clean, now, 'fixing').queue; // its brief carries this bug
+    saveLoop(root, task.id, { ...base, queue, events: withEvent(base.events, 'fixer', `Started ${fixerName} on ${clean.name}`, now) });
+    watchRoot(root);
+    return { outcome: 'started' as const, fixer: agentView(root, claim.agent, event.sender.id, names) };
   });
 
-  // A loop notification: only while no Petal window is focused. Snapshot runs record it, never show it.
+  // One of the project's agents, by session id only; root must be a repo root Petal reads.
+  const agentAt = (root: unknown, sessionId: unknown): { root: string; agent: TestAgent } | { note: string } => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const agent = typeof root === 'string' && projectRootOf(root) === root ? findAgent(root, sessionId) : null;
+    return agent && typeof root === 'string' ? { root, agent } : { note: 'That isn’t one of this project’s agents.' };
+  };
+
+  // Her message to one agent from its lane, or Petal's follow-up with its own lane line.
+  handle('testing:agent-send', async (event, { root: asked, sessionId, text, event: line }) => {
+    const found = agentAt(asked, sessionId);
+    if ('note' in found) return found;
+    if (typeof text !== 'string' || !text.trim() || text.length > BRIEF_CAP) return { note: 'Type a message first.' };
+    const name = agentName(store.load(found.root).agentNames ?? {}, found.agent.role);
+    const words = typeof line === 'string' && line.trim() ? line.trim().slice(0, EVENT_MAX) : herEvent(name, text);
+    return sendToAgent(found.root, found.agent, text.trim(), words, event.sender.id);
+  });
+
+  // Open terminal: an ended agent resumes into this window with no message. Also Back to lane for a popped-out one.
+  handle('testing:agent-open', async (event, { root: asked, sessionId }) => {
+    const found = agentAt(asked, sessionId);
+    if ('note' in found) return found;
+    const problem = await openAgentTerminal(found.root, found.agent, event.sender.id);
+    return problem ? { note: problem } : { agent: agentView(found.root, found.agent, event.sender.id) };
+  });
+
+  // Looks right: the go-ahead goes to the task's testing agent, and the names she approved are saved with its loop.
+  handle('testing:scenarios-approve', async (event, { root, taskId, names }) => {
+    const loop = typeof root === 'string' && isTaskId(taskId) ? loopsOf(root)[taskId] : undefined;
+    const found = agentAt(root, loop?.testerSessionId);
+    if ('note' in found || !loop || typeof taskId !== 'string') return { note: 'Start the testing agent first.' };
+    const approved = (Array.isArray(names) ? names : []).filter((n): n is string => typeof n === 'string' && n.length > 0).map((n) => n.slice(0, NAME_CAP)).slice(0, NAMES_CAP);
+    if (!approved.length) return { note: 'There are no scenarios to approve.' };
+    const name = agentName(store.load(found.root).agentNames ?? {}, 'tester');
+    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(taskId), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
+    if ('note' in sent) return sent;
+    const latest = loopsOf(found.root)[taskId] ?? loop;
+    saveLoop(found.root, taskId, { ...latest, approvedScenarios: [...(latest.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
+    return sent;
+  });
+
+  // Stop: the queue stops stepping now; each running agent gets Esc, then the stop message once idle.
+  handle('testing:loop-stop', (_event, { root, taskId }) => {
+    if (!claudeFolderAllowed() || typeof root !== 'string' || projectRootOf(root) !== root || !isTaskId(taskId)) return { note: 'That loop isn’t one of this project’s.' };
+    const problem = stopTaskLoop(root, taskId);
+    return problem ? { note: problem } : { ok: true as const };
+  });
+
+  // A loop notification from the renderer: only while no Petal window is focused.
   handle('testing:notify', (event, { title, body, tabId }) => {
-    if (typeof title !== 'string' || typeof body !== 'string' || !title.trim() || !loadConfig().testing.notify) return { shown: false };
-    const tab = typeof tabId === 'string' ? tabId : null;
-    const focused = BrowserWindow.getFocusedWindow() !== null;
-    if (isSnapshotRun()) { testingFixture.notices.push({ title, body, tabId: tab, focused }); return { shown: false }; }
-    if (focused || !Notification.isSupported()) return { shown: false };
-    const sender = event.sender;
-    const notice = new Notification({ title: title.slice(0, NOTICE_MAX), body: body.slice(0, NOTICE_MAX) });
-    notices.add(notice);
-    notice.on('close', () => notices.delete(notice));
-    notice.on('click', () => {
-      notices.delete(notice);
-      const win = sender.isDestroyed() ? null : BrowserWindow.fromWebContents(sender);
-      if (!win) return;
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-      if (tab) send(sender, 'testing:show-tab', { tabId: tab });
-    });
-    notice.show();
-    return { shown: true };
+    if (typeof title !== 'string' || typeof body !== 'string') return { shown: false };
+    return { shown: showNotice({ title, body, tabId: typeof tabId === 'string' ? tabId : null }, event.sender.id) };
   });
 
-  // An agent's action log and tokens, from its transcript: the open tab's log, else History's copy.
+  // An agent's action log, tokens and replies, from its transcript: the open terminal's log, else History's copy.
   handle('testing:agent-log', async (event, { tabId, root: picked, sessionId }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
     const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root || typeof sessionId !== 'string' || !agentOf(root, sessionId)) return { note: 'That isn’t one of this project’s agents.' };
     const open = [...sessions.values()].find((s) => s.feed.session?.sessionId === sessionId)?.feed.session?.transcript;
     const file = open ?? history.findRecord(sessionId)?.file;
-    return file ? readAgentLog(file, root) : { actions: [], tokens: NO_TOKENS };
+    const replies = [...repliesOf(sessionId)];
+    return file ? { ...(await readAgentLog(file, root)), replies } : { actions: [], tokens: NO_TOKENS, replies };
   });
 
-  // Close agents: each loop agent's claude through the Sessions panel's Close, then the loop is stopped. Refused while one works.
+  // Close agents: each open agent's claude through the Sessions panel's Close, its terminal closed, the loop stopped.
   handle('testing:close-agents', async (event, { tabId, root: picked, taskId }) => {
     const target = await taskTarget(event.sender.id, tabId, picked, taskId);
     if ('note' in target) return target;
-    const loop = loopsOf(target.root)[target.task.id];
-    const agents = [loop?.tester, loop?.fixer].filter((a): a is NonNullable<typeof a> => Boolean(a));
-    if (!loop || !agents.length) return { note: 'This task has no agents to close.' };
-    const busy = (sessionId: string) => [...sessions.values()].some((s) => s.feed.session?.sessionId === sessionId && s.feed.session.status === 'busy');
-    if (loop.stoppedAt === null && agents.some((a) => busy(a.sessionId))) return { note: 'An agent is still working. Stop the loop first.' };
-    const closed = [];
-    for (const agent of agents) closed.push(await closeAgentSession(agent.sessionId));
-    if (loop.stoppedAt === null) saveLoop(target.root, target.task.id, { ...loop, stoppedAt: Date.now() });
-    return { closed };
+    return closeTaskAgents(target.root, target.task.id);
   });
 
   // The task's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.
@@ -893,12 +883,33 @@ export function registerTestingIpc({ sessions, openTab }: TestingDeps): void {
   });
 }
 
-// Snapshot runs only: forget the tabs runs opened, as a restart does, and read or set the window that owns a loop.
-export const snapshotLoops = {
-  forgetRunTabs: (): void => { if (isSnapshotRun()) runTabs.clear(); },
-  owner: (root: string, taskId: string): number | null => loopOwners.get(loopKey(root, taskId)) ?? null,
-  setOwner: (root: string, taskId: string, id: number): void => { if (isSnapshotRun()) loopOwners.set(loopKey(root, taskId), id); },
-};
+// Each task's loop as a window shows it.
+const loopViews = (root: string, contentsId: number): Record<string, LoopView> =>
+  Object.fromEntries(Object.entries(loopsOf(root)).map(([taskId, loop]) => [taskId, loopView(root, loop, contentsId)]));
+
+// A loop notification: only while no Petal window is focused, and a click shows that window and tab. Snapshot runs
+// record it, never show it.
+function showNotice({ title, body, tabId }: LoopNotice, contentsId: number | null): boolean {
+  if (!title.trim() || !loadConfig().testing.notify) return false;
+  const focused = BrowserWindow.getFocusedWindow() !== null;
+  if (isSnapshotRun()) { testingFixture.notices.push({ title, body, tabId, focused }); return false; }
+  if (focused || !Notification.isSupported()) return false;
+  const notice = new Notification({ title: title.slice(0, NOTICE_MAX), body: body.slice(0, NOTICE_MAX) });
+  notices.add(notice);
+  notice.on('close', () => notices.delete(notice));
+  notice.on('click', () => {
+    notices.delete(notice);
+    const sender = contentsId === null ? undefined : webContents.fromId(contentsId);
+    const win = sender && !sender.isDestroyed() ? BrowserWindow.fromWebContents(sender) : null;
+    if (!sender || !win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    if (tabId) send(sender, 'testing:show-tab', { tabId });
+  });
+  notice.show();
+  return true;
+}
 
 // After a Claude turn: run its task's suite if she turned auto-run on for it, the turn edited files, every command was
 // confirmed before, nothing is running, and no claude on this project is mid-turn. Still a visible new tab.

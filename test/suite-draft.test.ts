@@ -6,7 +6,7 @@ import { installPetalSkills, petalSkills, updatePetalSkill, type PetalSkillPaths
 import { parseCriteria, CRITERIA_SKELETON } from '../src/shared/test-loop';
 import { forTask } from '../src/shared/task-suite';
 import { noEvents } from '../src/shared/agent-loop';
-import type { SavedLoop } from '../src/shared/testing';
+import type { StoredLoop } from '../src/shared/testing';
 import { removeTempDirs, tempDir } from './helpers';
 
 const BUNDLED = fs.readFileSync(path.join(__dirname, '..', 'resources', 'skills', TESTING_SKILL, 'SKILL.md'), 'utf8');
@@ -73,18 +73,19 @@ describe('updatePetalSkill', () => {
 });
 
 describe('draft finished rule', () => {
-  const base: DraftFacts = { suite: false, tab: 'open', busy: false, asking: false, worked: true };
-  it('ends when it worked and sits idle, or its tab is gone, with no suite', () => {
+  const base: DraftFacts = { suite: false, state: 'idle', worked: true };
+  it('ends when it worked and sits idle, or no claude runs it any more, with no suite', () => {
     expect(draftEnded(base)).toBe(true);
-    expect(draftEnded({ ...base, tab: 'gone', worked: false })).toBe(true);
+    expect(draftEnded({ ...base, state: 'ended', worked: false })).toBe(true);
+    expect(draftEnded({ ...base, state: 'closed', worked: false })).toBe(true);
   });
-  it('keeps drawing while busy, asking her, starting, not yet worked, or once a suite exists', () => {
-    expect(draftEnded({ ...base, busy: true })).toBe(false);
-    expect(draftEnded({ ...base, asking: true })).toBe(false);
+  it('keeps drawing while working, asking her, starting, not yet worked, or once a suite exists', () => {
+    expect(draftEnded({ ...base, state: 'working' })).toBe(false);
+    expect(draftEnded({ ...base, state: 'asking' })).toBe(false);
     expect(draftEnded({ ...base, worked: false })).toBe(false);
-    expect(draftEnded({ ...base, tab: 'starting' })).toBe(false);
+    expect(draftEnded({ ...base, state: 'starting' })).toBe(false);
     expect(draftEnded({ ...base, suite: true })).toBe(false);
-    expect(draftEnded({ ...base, tab: 'gone', suite: true })).toBe(false);
+    expect(draftEnded({ ...base, state: 'ended', suite: true })).toBe(false);
   });
   it('follow-ups name the task’s suite file', () => {
     expect(askAgainText('t-1a2b')).toContain('.petal/suites/t-1a2b.json');
@@ -93,8 +94,8 @@ describe('draft finished rule', () => {
 });
 
 describe('suite write rights', () => {
-  const loop = (kind: SavedLoop['kind'], tester: string | null): SavedLoop => ({
-    kind, tester: tester ? { tabId: 'tab', sessionId: tester } : null, fixer: kind === 'loop' ? { tabId: 'f', sessionId: 'fixer' } : null,
+  const loop = (kind: StoredLoop['kind'], tester: string | null): StoredLoop => ({
+    kind, testerSessionId: tester, fixerSessionId: kind === 'loop' ? 'fixer' : null,
     startedAt: 1, stoppedAt: null, queue: [], events: noEvents(),
   });
   const agents = [{ sessionId: 'old-tester', role: 'tester' as const }, { sessionId: 'drafter', role: 'tester' as const }, { sessionId: 'fixer', role: 'fixer' as const }];
@@ -116,7 +117,7 @@ describe('the skill’s bug line', () => {
     expect(line).toContain('· task: t-1a2b');
     const criteria = parseCriteria(`${CRITERIA_SKELETON}${line}\n`);
     expect(criteria.malformed).toBe(0);
-    expect(criteria.bugs).toEqual([{ status: 'fail', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, round: null, regression: true, taskId: 't-1a2b' }]);
+    expect(criteria.bugs).toEqual([{ status: 'fail', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, tests: [{ path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }], source: null, round: null, regression: true, taskId: 't-1a2b' }]);
     expect(forTask(criteria.bugs, 't-1a2b')).toHaveLength(1);
   });
 });

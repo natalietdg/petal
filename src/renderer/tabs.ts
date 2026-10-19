@@ -1,5 +1,7 @@
 // Session tabs: each tab owns one xterm and one pty in main; only the active one is shown.
+// An agent tab is a Testing agent's terminal: no tab-bar entry, shown only where Testing mounts it.
 import * as terminal from './terminal';
+import { cycleTarget, neighbourOf, stripOrder } from './tab-order';
 import { toXterm } from './theme';
 import * as pendingEcho from './pending-echo';
 import { byId, el, focusTerminal, query } from './dom';
@@ -29,6 +31,8 @@ interface Hooks {
 const strip = byId('tab-strip');
 const stage = byId('terminal');
 const tabs = new Map<TabId, Tab>();
+const agents = new Set<TabId>(); // agent tabs not popped out
+const agentListeners = new Set<(ids: TabId[]) => void>();
 let activeId: TabId | null = null;
 let nextNumber = 1;
 let theme: Theme | null = null;
@@ -62,17 +66,23 @@ export function init(options: { theme: Theme } & Partial<Hooks>): void {
 // A background tab (a reply from History) starts unshown at the default grid; activating it refits.
 // startClaude: main types `claude` once the shell is ready, if Claude Code is installed.
 // id: set when main opened the tab, so main can match its pending command to it.
-export function create({ background = false, startClaude = false, id = `t${nextNumber++}` }: { background?: boolean; startClaude?: boolean; id?: TabId } = {}): Tab {
+// agent: a Testing agent's terminal; starts unshown and stays off the tab bar.
+interface CreateOptions { background?: boolean; startClaude?: boolean; id?: TabId; agent?: boolean }
+export function create({ background = false, startClaude = false, id = `t${nextNumber++}`, agent = false }: CreateOptions = {}): Tab {
   if (!theme) throw new Error('tabs.init() must run before the first tab');
   const host = el('div', 'term-host');
   stage.append(host);
   const { term, renderer, refit } = terminal.create(host, theme, id);
   const tab: Tab = { id, host, term, renderer, refit, element: tabElement(id), update: null, pending: [] };
-  strip.insertBefore(tab.element, newTabButton);
+  if (agent) agents.add(id);
+  else strip.insertBefore(tab.element, newTabButton);
   tabs.set(id, tab);
   term.onWriteParsed(() => hooks.onScreen(tab));
   hooks.onCreated(tab);
-  if (background) {
+  if (agent) {
+    host.hidden = true;
+    agentTabsChanged();
+  } else if (background) {
     host.hidden = true;
     tab.element.setAttribute('aria-selected', 'false');
   } else {
@@ -84,9 +94,10 @@ export function create({ background = false, startClaude = false, id = `t${nextN
 
 export function activate(id: TabId): void {
   const tab = tabs.get(id);
-  if (!tab) return;
+  if (!tab || agents.has(id)) return;
   activeId = id;
   for (const other of tabs.values()) {
+    if (agents.has(other.id)) continue;
     other.host.hidden = other !== tab;
     other.element.setAttribute('aria-selected', String(other === tab));
   }
@@ -98,9 +109,7 @@ export function activate(id: TabId): void {
 }
 
 export function cycle(delta: number): void {
-  const ids = [...tabs.keys()];
-  if (ids.length < 2 || activeId === null) return;
-  const next = ids[(ids.indexOf(activeId) + delta + ids.length) % ids.length];
+  const next = cycleTarget(ids(), activeId, delta);
   if (next) activate(next);
 }
 
@@ -110,16 +119,76 @@ export const requestClose = (id: TabId | undefined): void => { if (id && tabs.ha
 export function remove(id: TabId): void {
   const tab = tabs.get(id);
   if (!tab) return;
-  const ids = [...tabs.keys()];
-  const index = ids.indexOf(id);
+  const neighbour = neighbourOf(ids(), id);
+  const wasAgent = agents.delete(id);
   clearTimeout(staleTimers.get(id));
   staleTimers.delete(id);
   tab.term.dispose();
   tab.host.remove();
   tab.element.remove();
   tabs.delete(id);
-  const neighbour = ids[index + 1] ?? ids[index - 1];
-  if (id === activeId && tabs.size && neighbour) activate(neighbour);
+  if (wasAgent) agentTabsChanged();
+  if (id !== activeId) return;
+  activeId = null;
+  if (neighbour) activate(neighbour);
+}
+
+export const isAgent = (id: TabId): boolean => agents.has(id);
+
+// Into Testing's lane: refit to the lane's size and take the keyboard. False when no such agent tab.
+export function mountAgent(id: TabId, container: HTMLElement): boolean {
+  const tab = tabs.get(id);
+  if (!tab || !agents.has(id)) return false;
+  container.append(tab.host);
+  tab.host.hidden = false;
+  tab.refit();
+  terminal.pinToBottom(tab.term);
+  tab.term.focus();
+  return true;
+}
+
+// Back to its hidden home in the terminal pane; claude keeps running at its last grid.
+export function unmountAgent(id: TabId): void {
+  const tab = tabs.get(id);
+  if (!tab || !agents.has(id)) return;
+  tab.host.hidden = true;
+  stage.append(tab.host);
+}
+
+// The agent's terminal becomes an ordinary tab-bar tab, shown; activating it tells main it now counts as one.
+export function popOut(id: TabId): void {
+  const tab = tabs.get(id);
+  if (!tab || !agents.has(id)) return;
+  unmountAgent(id);
+  agents.delete(id);
+  strip.insertBefore(tab.element, newTabButton);
+  agentTabsChanged();
+  activate(id);
+}
+
+// Back from the tab bar to Testing's lane: off the strip, unshown until the lane mounts it. False when it is the only tab.
+export function popIn(id: TabId): boolean {
+  const tab = tabs.get(id);
+  const order = ids();
+  if (!tab || agents.has(id) || !order.includes(id) || order.length < 2) return false;
+  const neighbour = neighbourOf(order, id);
+  tab.element.remove();
+  agents.add(id);
+  tab.host.hidden = true;
+  agentTabsChanged();
+  if (id === activeId && neighbour) activate(neighbour);
+  return true;
+}
+
+// Called with every agent tab's id whenever one appears, goes, pops out or pops back in. Returns the unsubscribe.
+export function onAgentTabsChanged(callback: (ids: TabId[]) => void): () => void {
+  agentListeners.add(callback);
+  return () => { agentListeners.delete(callback); };
+}
+
+function agentTabsChanged(): void {
+  const current = [...agents];
+  for (const callback of [...agentListeners]) callback(current);
 }
 
 // A reply-box echo a picker swallowed must still go once it is stale, though no update may come to drop it.
@@ -199,4 +268,4 @@ export function setFontSize(px: number): void {
 
 export const active = (): Tab | null => (activeId === null ? null : tabs.get(activeId) ?? null);
 export const get = (id: TabId): Tab | null => tabs.get(id) ?? null;
-export const ids = (): TabId[] => [...tabs.keys()];
+export const ids = (): TabId[] => stripOrder([...tabs.keys()], agents);

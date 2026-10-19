@@ -9,6 +9,7 @@ export interface TabSession {
   feed: ReaderFeed;
   contentsId: number;
   tabId: TabId;
+  agent: boolean; // a Testing agent's terminal: no tab-bar entry, closed on a window reload
 }
 
 // `${webContents.id}:${tabId}` -> session
@@ -16,4 +17,4 @@ export type TabSessions = Map<string, TabSession>;
 
 export type ActiveSession = (contentsId: number) => TabSession | undefined;
 
-export type OpenTab = (contents: WebContents | undefined, options?: { command?: string; background?: boolean }) => TabId | undefined; // the new tab's id
+export type OpenTab = (contents: WebContents | undefined, options?: { command?: string; background?: boolean; agent?: boolean }) => TabId | undefined; // the new tab's id

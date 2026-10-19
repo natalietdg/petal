@@ -1,6 +1,6 @@
 // The IPC contract: every channel between main and the renderer, with its payload and reply types.
 // main/ipc.ts and preload.ts only accept channels listed here, so a renamed channel fails typecheck.
-import type { Choice, FlowTarget, IpcError, TabId, TabReaderUpdate, Theme, TermSize } from './types';
+import type { Choice, FlowTarget, IpcError, Reply, TabId, TabReaderUpdate, Theme, TermSize } from './types';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
 import type { ListedSession, PastSessionsSummary } from '../main/history';
@@ -31,7 +31,7 @@ import type { TokenEstimate } from './library-cost';
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
-import type { LockView, LoopFacts, PipelineRun, RunReply, SavedLoop, SuiteSeed, TestingState } from './testing';
+import type { AgentView, LockView, LoopFacts, LoopView, PipelineRun, RunReply, SuiteSeed, TestingState } from './testing';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
@@ -40,8 +40,13 @@ import type { SentBug } from './bug-queue';
 // One agent's Close: closed, already not running, refused (not its claude), or still running after the wait.
 export interface AgentCloseResult { sessionId: string; outcome: 'closed' | 'gone' | 'refused' | 'running'; note: string }
 
-export interface AgentStart { tabId: string | null; sessionId: string }
-export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage }
+export interface AgentLog { actions: AgentAction[]; tokens: TokenUsage; replies: Reply[] } // replies: newest first, from its transcript or live terminal
+// How main took a message for an agent: pasted now, waiting for its claude to be ready, or resuming it first.
+export type AgentSendOutcome = 'sent' | 'queued' | 'resuming';
+// A host window's answer to main's paste: pasted, refused because a prompt waits on her, or its terminal is gone.
+export type AgentPasteOutcome = 'sent' | 'asking' | 'gone';
+// What became of a bug she sent: joined the queue, already there, or a bug fix agent was started on it.
+export type SendBugOutcome = 'queued' | 'already' | 'started';
 import type { SuiteViews, TaskSuite } from './task-suite';
 import type { Criteria } from './test-loop';
 import type { TextStep } from './text-size';
@@ -249,21 +254,34 @@ export interface InvokeChannels {
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, SavedLoop>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
-  // A task's loop: its testing agent and bug fix agent, each claude in a new tab under a session id Petal remembers.
-  // One brief starts that agent alone; show opens the bug fix agent's tab in front; reuseDraft makes the drafting agent the tester.
-  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null; show?: boolean; reuseDraft?: boolean }]; result: Guarded<{ tester: AgentStart | null; fixer: AgentStart | null } | { note: string }> };
-  // The testing agent alone, to draw up a task's suite; only its writes change the suite.
-  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ tabId: string | null; updatedSkill: boolean } | { note: string }> };
-  // The loop timer: saves one task's loop (from its owner window only), then lists the running loops with an agent
-  // session open in this window, plus the known ones this window shows, each marked with whether this window steps it.
-  'testing:loops': { args: [request: { save?: { root: string; taskId: string; loop: SavedLoop } | null; known?: { root: string; taskId: string }[] }]; result: Guarded<{ loops: LoopFacts[] }> };
-  // A bug sent from a window that doesn't step the loop: added to the saved queue when its bug fix agent is live anywhere.
-  'testing:loop-add-bug': { args: [request: { tabId: TabId; root?: string | null; taskId: string; bug: SentBug }]; result: Guarded<{ queued: boolean; added: boolean } | { note: string }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  // A task's loop: its testing agent and bug fix agent. Each role's open agent is reused (its brief is sent to it),
+  // else started under a session id Petal picks. One brief starts or briefs that agent alone.
+  'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null }]; result: Guarded<{ tester: AgentView | null; fixer: AgentView | null } | { note: string }> };
+  // The testing agent alone, to draw up a task's suite; only its writes change the suite. reused: the task's open testing
+  // agent got the request instead of a new one starting.
+  'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ agent: AgentView; reused: boolean; updatedSkill: boolean } | { note: string }> };
+  // Edit scenarios: the task's own criteria file opened in her default editor; main works out the path from the task.
+  'testing:open-criteria': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  // The lanes' read model: every loop or draft main knows with an open agent or a running queue, plus the ones this
+  // window shows. Main steps every queue itself; this never writes.
+  'testing:loops': { args: [request: { known?: { root: string; taskId: string }[] }]; result: Guarded<{ loops: LoopFacts[] }> };
+  // Her message (or Petal's follow-up, with its lane event) to one agent: pasted when its claude is ready, resumed first
+  // when none runs it. Refused while a prompt on its screen waits on her.
+  'testing:agent-send': { args: [request: { root: string; sessionId: string; text: string; event?: string }]; result: Guarded<{ outcome: AgentSendOutcome } | { note: string }> };
+  // Open terminal: resumes an ended agent into the asking window with no message; hostTabId once its terminal is open here.
+  'testing:agent-open': { args: [request: { root: string; sessionId: string }]; result: Guarded<{ agent: AgentView } | { note: string }> };
+  // Looks right: the go-ahead goes to the task's testing agent and the names she approved are saved with its loop.
+  'testing:scenarios-approve': { args: [request: { root: string; taskId: string; names: string[] }]; result: Guarded<{ outcome: AgentSendOutcome } | { note: string }> };
+  // Send to bug fix agent: the failure joins the task's bug queue, else the task's bug fix agent starts on it.
+  'testing:send-bug': { args: [request: { tabId: TabId; root?: string | null; taskId: string; bug: SentBug }]; result: Guarded<{ outcome: SendBugOutcome; fixer: AgentView } | { note: string }> };
+  // Stop: the loop stops stepping now; each running agent gets Esc, then the stop message once idle.
+  'testing:loop-stop': { args: [request: { root: string; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
   // An OS notification for the loop, shown only while no Petal window is focused; a click shows that tab.
   'testing:notify': { args: [request: { title: string; body: string; tabId?: string | null }]; result: Guarded<{ shown: boolean }> };
   'testing:agent-log': { args: [request: { tabId: TabId; root?: string | null; sessionId: string }]; result: Guarded<AgentLog | { note: string }> };
-  // Close agents: each of a task's loop agents closed through the Sessions panel's Close, and the loop marked stopped.
+  // Close agents: each of the task's open agents closed through the Sessions panel's Close, its terminal closed, its
+  // record marked closed, and the loop marked stopped.
   'testing:close-agents': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ closed: AgentCloseResult[] } | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
   'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
@@ -348,6 +366,8 @@ export interface SendChannels {
   'look:reading': [id: string];
   'look:cat': [id: string];
   'look:scene': [id: string];
+  'testing:agent-pasted': [reply: { requestId: number; outcome: AgentPasteOutcome }]; // the answer to testing:agent-paste
+  'testing:agent-asking': [report: { tabIds: TabId[] }]; // this window's agent terminals with a prompt on screen now
 }
 
 // main -> renderer: webContents.send / ipcRenderer.on. void = no payload.
@@ -361,7 +381,8 @@ export interface EventChannels {
   'tab:closed': { tabId: TabId };
   'tab:label': { tabId: TabId; label: string }; // its session got a (new) title after the last reader update
   'session:titles': void; // some open session's title changed; History re-lists
-  'tabs:new': { background: boolean; tabId: TabId }; // main picks the id, so its pending command reaches this tab
+  // main picks the id, so its pending command reaches this tab. agent: a Testing agent's terminal, kept out of the tab bar.
+  'tabs:new': { background: boolean; tabId: TabId; agent?: boolean };
   'tabs:new-session': void; // ⌘T: a tab meant for Claude, so her limit applies
   'tabs:close-active': void;
   'tabs:cycle': number;
@@ -388,6 +409,9 @@ export interface EventChannels {
   'library:backfill': BackfillState; // reading past sessions moved on
   'testing:run-update': { root: string; run: PipelineRun }; // a stage started or finished
   'testing:show-tab': { tabId: string }; // a loop notification was clicked
+  // Main asks the window holding an agent's terminal to paste through the reply box's path, which refuses while a prompt
+  // waits on her; the window answers with testing:agent-pasted.
+  'testing:agent-paste': { requestId: number; tabId: TabId; text: string };
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };

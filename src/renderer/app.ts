@@ -176,7 +176,8 @@ async function start(): Promise<void> {
     petGuide.refresh();
   });
   window.pastel.onTabCommand((command) => {
-    if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true, id: command.tabId }).id);
+    if (command.kind === 'new' && command.agent) tabs.create({ agent: true, id: command.tabId }); // Testing mounts it; History never adopts it
+    else if (command.kind === 'new' && command.background) history.adoptTab(tabs.create({ background: true, id: command.tabId }).id);
     else if (command.kind === 'new') tabs.create({ id: command.tabId });
     else if (command.kind === 'new-session') newSessionTab();
     else if (command.kind === 'close-active') tabs.requestClose(tabs.active()?.id);
