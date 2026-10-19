@@ -131,25 +131,21 @@
   font: 500 14px var(--ui-font);
 }
 
-/* Decisions tab */
-.decision-filter { margin: 4px 0 18px; }
-.decision-list { display: grid; gap: 12px; }
-.decision { padding: 14px 18px; border: 1px solid var(--rule); border-radius: 14px; background: var(--reader-bg); }
-.decision.superseded { opacity: 0.62; }
-.decision.superseded .decision-what { text-decoration: line-through; text-decoration-thickness: 1px; }
-.decision-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; font: 600 0.8em var(--ui-font); }
-.decision-n, .decision-rec { color: var(--muted); }
-.decision-what { display: block; padding: 0; border: 0; background: none; color: inherit; font: 600 1.05em/1.4 var(--ui-font); text-align: left; cursor: pointer; }
-.decision-what:hover { text-decoration: underline; text-underline-offset: 3px; }
-.decision-waiting { margin-bottom: 16px; }
+/* Decisions on their step card: who decided, then what; a replaced one is struck through. */
+.flow-decision { margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--rule); font-family: var(--ui-font); }
+.flow-decision-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 600 0.8em var(--ui-font); }
+.flow-decision-tag { color: var(--muted); }
+.prose .flow-decision-what { margin: 4px 0 0; font: 600 0.95em/1.4 var(--ui-font); }
+.flow-decision.superseded { opacity: 0.62; }
+.flow-decision.superseded .flow-decision-what { text-decoration: line-through; text-decoration-thickness: 1px; }
 
 /* Cards lift slightly on hover and arrive one after another. */
-.flow-step, .decision { transition: transform 160ms ease, box-shadow 160ms ease; animation: rise-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.flow-step:hover, .decision:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgb(0 0 0 / 0.06); }
+.flow-step { transition: transform 160ms ease, box-shadow 160ms ease; animation: rise-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.flow-step:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgb(0 0 0 / 0.06); }
 .flow-line > :nth-child(2) { animation-delay: 60ms; }
 .flow-line > :nth-child(3) { animation-delay: 120ms; }
 .flow-line > :nth-child(n+4) { animation-delay: 180ms; }
-@media (prefers-reduced-motion: reduce) { .flow-step, .decision { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .flow-step { animation: none; transition: none; } }
 /* Quiet outcomes inside flow cards: no boxes, just pills in line. */
 .flow-outcome.callout-done, .flow-outcome.callout-why { margin: 6px 0; }
 

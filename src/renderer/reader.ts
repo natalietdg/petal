@@ -21,7 +21,7 @@ import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 import { emptyLine } from '../shared/reader-empty';
 
-export type ReaderView = 'replies' | 'flow' | 'decisions';
+export type ReaderView = 'replies' | 'flow';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
@@ -249,27 +249,23 @@ scroller.addEventListener('click', (event) => {
   window.pastel.openLink(link.href);
 });
 
-// Replies | Flow | Decisions toggle for this window's session.
+// Replies | Flow toggle for this window's session.
 const repliesView = byId('replies-view');
 const flowView = byId('flow-view');
-const decisionsView = byId('decisions-view');
 const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
 
 export async function refreshFlow(): Promise<void> {
   const result = await window.pastel.flow.get({ kind: 'current' });
-  const container = view === 'decisions' ? decisionsView : flowView;
-  const draw = view === 'decisions' ? flow.renderDecisions : flow.render;
-  draw(container, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
+  flow.render(flowView, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
 }
 
-const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'decisions';
+const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow';
 
 export function setView(next: ReaderView): void {
   view = next;
   repliesView.hidden = view !== 'replies';
   flowView.hidden = view !== 'flow';
-  decisionsView.hidden = view !== 'decisions';
   for (const button of toggles) button.setAttribute('aria-selected', String(button.dataset.view === view));
   if (view !== 'replies') refreshFlow();
 }
