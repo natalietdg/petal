@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 // The test lock on disk: the hook script and its entry in the project's .claude/settings.local.json (never ~/.claude),
-// the manifest the hook reads, and the integrity check that restores a locked file changed outside the testing agent.
+// the manifest the hook reads, and the integrity check that restores a locked file another Claude session changed.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -86,6 +86,8 @@ function restoreCopy(root: string, rel: string): boolean {
   return true;
 }
 
+const isUnconfirmed = (flag: RestoredFlag): boolean => flag.by === 'unconfirmed';
+
 // With the lock on: refreshes what is locked and who the agents are, then checks every locked test file against its
 // approved copy. Suite files are checked by the suite reader instead. Returns the manifest as it now stands.
 export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, names: AgentNames): LockManifest {
@@ -94,19 +96,42 @@ export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, name
   const owners = lockedFiles({ root, ...inputs });
   const sessions = Object.fromEntries(inputs.agents.map((a) => [a.sessionId, { role: a.role, taskId: a.taskId }]));
   const approved = { ...before.approved };
-  const restored: RestoredFlag[] = [...before.restored];
+  const restored: RestoredFlag[] = before.restored.filter((f) => !isUnconfirmed(f));
+  const waiting = new Map(before.restored.filter(isUnconfirmed).map((f) => [f.path, f]));
+  const unconfirmed: RestoredFlag[] = [];
   for (const rel of Object.keys(owners)) {
     if (rel.startsWith(SUITE_PREFIX)) continue;
     const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root), sessions);
     if (step.kind === 'approve') { keepCopy(root, rel); approved[rel] = hashOf(at(root, rel)) as string; }
     if (step.kind === 'restore' && restoreCopy(root, rel)) restored.push({ path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: step.by });
+    if (step.kind === 'unconfirmed') unconfirmed.push(waiting.get(rel) ?? { path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: 'unconfirmed' });
   }
-  const next: LockManifest = { ...before, lockedPaths: Object.keys(owners).sort(), owners, sessions, names, approved, restored: restored.slice(-RESTORED_KEPT) };
+  // A question drops once the file is back to its approved copy or a session's touch settled it.
+  const flags = [...restored.slice(-RESTORED_KEPT), ...unconfirmed];
+  const next: LockManifest = { ...before, lockedPaths: Object.keys(owners).sort(), owners, sessions, names, approved, restored: flags };
   if (JSON.stringify(next) !== JSON.stringify(before)) saveManifest(root, next);
   return next;
 }
 
+// Her answer to "changed outside Claude": Keep approves the file as it is now, Restore puts the locked copy back.
+// Null when done, else why not.
+export function resolveUnconfirmed(root: string, rel: string, keep: boolean): string | null {
+  const manifest = loadManifest(root);
+  if (!manifest.restored.some((f) => isUnconfirmed(f) && f.path === rel)) return 'That change was already handled.';
+  const approved = { ...manifest.approved };
+  if (keep) {
+    const hash = hashOf(at(root, rel));
+    if (hash === null) delete approved[rel]; // deleted on purpose: nothing left to lock
+    else { keepCopy(root, rel); approved[rel] = hash; }
+  } else if (!restoreCopy(root, rel)) {
+    return 'The locked copy is missing, so there is nothing to restore.';
+  }
+  saveManifest(root, { ...manifest, approved, restored: manifest.restored.filter((f) => !(isUnconfirmed(f) && f.path === rel)) });
+  return null;
+}
+
+// Clears the task's "Restored" lines; questions still waiting for Keep or Restore stay.
 export function dismissRestored(root: string, taskId: string): void {
   const manifest = loadManifest(root);
-  saveManifest(root, { ...manifest, restored: manifest.restored.filter((f) => f.taskId !== taskId) });
+  saveManifest(root, { ...manifest, restored: manifest.restored.filter((f) => f.taskId !== taskId || isUnconfirmed(f)) });
 }

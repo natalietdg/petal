@@ -191,8 +191,9 @@ function consentBody(): HTMLElement {
   const more = el('details', 'pg-more');
   const list = el('ul', 'consent-reads');
   list.append(...consent.READS.map((line) => el('li', null, line)));
-  more.append(el('summary', null, 'What exactly does Petal read?'), list,
-    el('p', 'consent-line', 'Petal writes nothing there unless you ask it to. Not now keeps the terminal working; the reader stays empty.'));
+  more.append(el('summary', null, 'What exactly does Petal read and write?'), list,
+    el('p', 'consent-line', consent.WRITES_TITLE), consent.writesList(),
+    el('p', 'consent-line', 'Not now keeps the terminal working; the reader stays empty.'));
   box.append(said, more);
   return box;
 }

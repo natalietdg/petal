@@ -11,7 +11,7 @@ export interface RestoredFlag {
   path: string;
   at: number;
   taskId: string | null;
-  by: AgentRole | 'main'; // who changed it: the bug fix agent, or any session that is not one of the task's agents
+  by: AgentRole | 'main' | 'unconfirmed'; // the fixer, another Claude session, or nobody seen (waits for her Keep or Restore)
 }
 
 export interface LockManifest {
@@ -96,17 +96,24 @@ export function lastToucher(touches: readonly Touch[], rel: string, root: string
   return best?.sessionId ?? null;
 }
 
-export type IntegrityStep = { kind: 'approve'; path: string } | { kind: 'restore'; path: string; by: RestoredFlag['by'] } | { kind: 'keep'; path: string };
+export type IntegrityStep =
+  | { kind: 'approve'; path: string }
+  | { kind: 'restore'; path: string; by: 'fixer' | 'main' }
+  | { kind: 'unconfirmed'; path: string }
+  | { kind: 'keep'; path: string };
 
-// For one locked file whose content changed since it was approved: the testing agent's change is approved; anyone
-// else's is put back. A file with no approved copy yet is approved as it is.
+// For one locked file whose content changed since it was approved: the testing agent's change is approved; another
+// Claude session's is put back. A change no session made (her editor, say) waits for her. No approved copy yet: approved as it is.
 export function integrityStep(rel: string, nowHash: string | null, approvedHash: string | undefined, toucher: string | null, sessions: LockManifest['sessions']): IntegrityStep {
   if (approvedHash === undefined) return nowHash === null ? { kind: 'keep', path: rel } : { kind: 'approve', path: rel };
   if (nowHash === approvedHash) return { kind: 'keep', path: rel };
-  const role = toucher ? sessions[toucher]?.role : undefined;
+  if (toucher === null) return { kind: 'unconfirmed', path: rel };
+  const role = sessions[toucher]?.role;
   if (role === 'tester') return { kind: 'approve', path: rel };
   return { kind: 'restore', path: rel, by: role === 'fixer' ? 'fixer' : 'main' };
 }
 
-// "Main session changed a test. Restored." or the fixer's name in its place.
-export const restoredText = (flag: RestoredFlag, fixerName: string): string => `${flag.by === 'fixer' ? fixerName : 'Main session'} changed a test. Restored.`;
+// "Main session changed a test. Restored." or the fixer's name in its place; an unconfirmed change asks instead.
+export const restoredText = (flag: RestoredFlag, fixerName: string): string => (flag.by === 'unconfirmed'
+  ? `${flag.path} changed outside Claude. Keep it or restore the locked copy?`
+  : `${flag.by === 'fixer' ? fixerName : 'Main session'} changed a test. Restored.`);

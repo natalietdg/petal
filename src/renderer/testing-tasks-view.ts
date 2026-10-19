@@ -7,6 +7,7 @@ import type { SuiteChange } from '../shared/task-suite';
 import type { TaskData } from '../shared/tasks';
 import type { LockView } from '../shared/testing';
 import { restoredText, type RestoredFlag } from '../shared/test-lock';
+import { unconfirmedRow, type ResolveUnconfirmed } from './test-lock-confirm';
 
 // Grouped by PRD, then No PRD; each PRD opens with its overview, subtasks sit under their task.
 export function taskPicker(data: TaskData, target: TestTarget, pick: (target: TestTarget) => void): HTMLElement {
@@ -133,9 +134,10 @@ export function suiteChangeLine(change: SuiteChange | null, problem: string | nu
   return line;
 }
 
-export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => void }
+export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => void; resolve?: ResolveUnconfirmed }
 
-// "Lock tests to the testing agent", and a red line for each locked test someone else changed and Petal put back.
+// "Lock tests to the testing agent", a Keep or Restore question for each locked test changed outside Claude, and a
+// red line for each one another session changed and Petal put back.
 export function lockBar(lock: LockView, restored: RestoredFlag[], fixerName: string, handlers: LockHandlers, busy: boolean): HTMLElement {
   const box = el('div', 'tst-lock');
   const label = el('label', 'tst-toggle tst-lock-toggle');
@@ -147,9 +149,16 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], fixerName: str
   label.append(box2, el('span', null, 'Lock tests to the testing agent'), el('span', 'tst-muted', 'Only the testing agent may change tests and suites. Adds a hook to this repo’s .claude/settings.local.json.'));
   box.append(label);
   if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from .claude/settings.local.json. Turn the lock off and on again.'));
-  if (restored.length) {
+  const asks = restored.filter((f) => f.by === 'unconfirmed');
+  if (asks.length) {
     const list = el('ul', 'tst-lock-flags');
-    for (const flag of restored.slice(-5).reverse()) {
+    list.append(...asks.map((flag) => unconfirmedRow(flag, handlers.resolve, busy)));
+    box.append(list);
+  }
+  const done = restored.filter((f) => f.by !== 'unconfirmed');
+  if (done.length) {
+    const list = el('ul', 'tst-lock-flags');
+    for (const flag of done.slice(-5).reverse()) {
       const item = el('li', 'tst-lock-flag');
       item.append(el('span', null, `${restoredText(flag, fixerName)} · ${flag.path} · ${when(flag.at)}`));
       list.append(item);
