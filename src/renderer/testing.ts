@@ -10,7 +10,7 @@ import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhe
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
-import { buildSentFixerBrief, isActive, type Criteria } from '../shared/test-loop';
+import { buildSentFixerBrief, criteriaPath, isActive, type Criteria } from '../shared/test-loop';
 import { DRAFT_TURNS, FIX_TURNS, SUITE_SKILL_CHARS, agentEstimateText, agentTokens } from '../shared/token-usage';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
@@ -601,7 +601,7 @@ async function askForSuite(task: Task): Promise<void> {
   const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task));
   const prompt = [
     `for task ${task.id}: "${task.title}".`, task.notes ? `Notes: ${task.notes}` : '', prd ? `PRD: ${prd.title}${prd.notes ? `. ${prd.notes}` : ''}.` : '',
-    `You are this task's testing agent, so you may write ${suitePath(task.id)}.`,
+    `You are this task's testing agent, so you may write ${suitePath(task.id)}. Record bugs in ${criteriaPath(task.id)}.`,
   ].filter(Boolean).join(' ');
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
   const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';

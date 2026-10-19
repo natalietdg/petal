@@ -41,7 +41,7 @@ Say in a few lines what the suite will be: runners, the stages, which paths get 
 
 Run every stage. Make it green by fixing setup and test mistakes. When a test fails because the code is wrong, keep the test and record the bug; don't fix app code. Never weaken, skip or delete a test to get green.
 
-Record each bug as one line under `## Bugs` in `.petal/test-criteria.md` (create the file with a `## Scenarios` and a `## Bugs` heading if it is missing), so Petal hands it to the task's bug fix agent:
+Record each bug as one line under `## Bugs` in your task's criteria file, `.petal/criteria/<task id>.md` (Petal's request names the exact path; create the file with a `## Scenarios` and a `## Bugs` heading if it is missing), so Petal hands it to the task's bug fix agent:
 
 ```
 - [fail] coupon can take the total below zero · test: src/checkout/coupon.test.ts::caps at the total · task: t-1a2b

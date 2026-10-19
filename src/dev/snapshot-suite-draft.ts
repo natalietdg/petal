@@ -48,7 +48,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
   const drafterLog = path.join(dir, 'tabs', `${DRAFTER}.jsonl`);
   const fixerLog = path.join(dir, 'tabs', `${FIXER}.jsonl`);
   const suiteFile = path.join(repo, '.petal', 'suites', 't-draft.json');
-  const criteriaFile = path.join(repo, '.petal', 'test-criteria.md');
+  const criteriaFile = path.join(repo, '.petal', 'criteria', 't-draft.md');
   const saved = { project: testingFixture.project, claudeDir: testingFixture.claudeDir };
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
@@ -98,7 +98,8 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(started?.brief?.startsWith('/petal-testing-suite for task t-draft: "Refunds".') && started.command.includes(`--session-id ${DRAFTER} --`), `the brief runs the skill: ${JSON.stringify(started?.brief?.slice(0, 80))}`);
     check(note.startsWith('Updated Petal’s testing skill. Started this task’s testing agent'), `the note says the skill was updated: ${note}`);
     check(fs.readFileSync(skillFile, 'utf8') === bundled, 'the stand-in skill now matches the bundled one');
-    check(fs.existsSync(criteriaFile), 'the criteria file exists for the bugs it records');
+    check(fs.existsSync(criteriaFile), 'the task’s own criteria file exists for the bugs it records');
+    check(Boolean(started?.brief?.includes('Record bugs in .petal/criteria/t-draft.md.')), 'the brief names the task’s own criteria file');
 
     // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show its tab.
     const drafterTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(DRAFTER)}) ?? null`), 10000);
