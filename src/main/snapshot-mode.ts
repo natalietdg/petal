@@ -102,4 +102,5 @@ export const testingFixture: {
   loopStarts: { command: string; brief?: string }[]; // an agent started in a new tab: the line it would have typed, and its brief
   changed: string[] | null; // the project's recently changed files, instead of asking git
   agentIds: string[]; // session ids for the next agents Testing starts, so their fixture tabs match; taken in order
-} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [] };
+  notices: { title: string; body: string; tabId: string | null; focused: boolean }[]; // loop notifications, recorded instead of shown
+} = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [] };

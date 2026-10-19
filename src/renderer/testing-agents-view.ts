@@ -22,6 +22,7 @@ export interface LaneModel {
   tabId: string | null; // its tab, when open here
   status: string; // what it is doing now
   busy: boolean;
+  needsYou: boolean; // a prompt on its screen waits on her
   tokens: number | null; // null before it started
   actions: AgentAction[]; // oldest first
   events: PetalEvent[]; // Petal's own: handoffs, queue moves, restores, suite changes
@@ -156,7 +157,7 @@ function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTM
 }
 
 function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElement {
-  const box = el('section', `tst-agent-lane is-${lane.role}${lane.busy ? ' is-busy' : ''}`);
+  const box = el('section', `tst-agent-lane is-${lane.role}${lane.busy ? ' is-busy' : ''}${lane.needsYou ? ' is-needs-you' : ''}`);
   box.dataset.role = lane.role;
   box.setAttribute('aria-label', lane.name);
   const head = el('div', 'tst-agent-head');
@@ -170,16 +171,22 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
     rename.addEventListener('click', () => on.rename(lane.role));
     head.append(name, rename);
   }
-  if (lane.tabId) {
+  if (lane.tabId && !lane.needsYou) { // Needs you has its own Show its tab
     const open = el('button', 'tst-link tst-agent-tab', 'Open tab');
     open.type = 'button';
     open.addEventListener('click', () => on.openTab(lane.tabId as string));
     head.append(open);
   }
   const facts = el('p', 'tst-agent-status');
-  const dot = el('span', `tst-dot is-${lane.busy ? 'running' : 'waiting'}`);
+  const dot = el('span', `tst-dot is-${lane.needsYou ? 'needs-you' : lane.busy ? 'running' : 'waiting'}`);
   dot.setAttribute('aria-hidden', 'true');
-  facts.append(dot, el('span', null, lane.status));
+  facts.append(dot, el('span', lane.needsYou ? 'tst-agent-needs' : null, lane.status));
+  if (lane.needsYou && lane.tabId) {
+    const show = el('button', 'tst-link tst-agent-show', 'Show its tab');
+    show.type = 'button';
+    show.addEventListener('click', () => on.openTab(lane.tabId as string));
+    facts.append(show);
+  }
   if (lane.tokens !== null) facts.append(el('span', 'tst-agent-tokens', `${tokenText(lane.tokens)} tokens`));
   box.append(head, facts);
   if (!lane.started) return box;

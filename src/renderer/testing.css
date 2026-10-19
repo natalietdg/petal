@@ -335,6 +335,12 @@
 .tst-agent-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
 .tst-agent-lane { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; }
 .tst-agent-lane.is-busy { border-color: var(--next-ink); }
+.tst-agent-lane.is-needs-you { border-color: var(--watch-ink); }
+.tst-dot.is-needs-you { border-color: var(--watch-ink); background: var(--watch-ink); }
+.tst-agent-needs { color: var(--watch-ink); font-weight: 600; }
+.tst-agent-show { font-size: 13px; }
+/* An agent waits on her: a dot on the dock's Testing button, seen with Testing closed. */
+.dock-badge { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--watch-ink); }
 .tst-agent-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .tst-agent-name { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .tst-agent-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

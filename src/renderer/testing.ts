@@ -99,6 +99,8 @@ const runsWith = (): SuiteFor | null => (data ? suiteFor(data.tasks, data.suites
 const suite = (): TaskSuite | null => runsWith()?.suite ?? null;
 const taskId = (): string | null => shownTask()?.id ?? null;
 const taskRuns = (): PipelineRun[] => forTask(data?.runs ?? [], taskId());
+// The shown task's run still going; other tasks in the repo may run at the same time.
+const taskRunning = (): PipelineRun | null => (data?.running ?? []).map(runById).find((r) => r !== null && (r.taskId ?? null) === taskId()) ?? null;
 const taskDistillation = (): DistillRecord[] => forTask(distillation, taskId());
 function taskCriteria(): Criteria | null {
   if (!criteria) return null;
@@ -184,7 +186,7 @@ function drawHead(): void {
     change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); target = null; targetPicked = false; selectedRun = null; selectedStage = null; void load(); });
     summary.append(' · ', change);
   }
-  const busy = Boolean(data?.running);
+  const busy = Boolean(taskRunning());
   tools.hidden = !onTask;
   runButton.disabled = !p?.stages.length || busy || draft !== null;
   runButton.textContent = busy ? 'Running…' : 'Run suite';
@@ -201,7 +203,7 @@ function drawNote(): void {
   } else if (message) {
     note.append(el('span', null, message));
   }
-  const running = runById(data?.running ?? null);
+  const running = taskRunning();
   if (running) {
     const stop = el('button', 'tst-link', 'Stop watching');
     stop.type = 'button';
@@ -267,14 +269,14 @@ function drawStrip(): void {
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
-    }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(data.running)));
+    }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(taskRunning())));
     return;
   }
   const current = shownStage();
   strip.append(pipelineStrip(p, (id) => resultOf(id)?.stage ?? null, current?.stage.stageId ?? null, {
     select: (id) => { selectedStage = id; drawAll(); strip.querySelector<HTMLElement>(`[data-stage="${id}"]`)?.focus(); },
     runStage: (id) => void run(id, false),
-  }, Boolean(data.running) || draft !== null));
+  }, Boolean(taskRunning()) || draft !== null));
 }
 
 function drawEditor(): void {
@@ -741,7 +743,7 @@ runButton.addEventListener('click', () => void run(null, false));
 window.pastel.testing.onRunUpdate(({ run: updated }) => {
   if (!isOpen() || !data) return;
   const others = data.runs.filter((r) => r.id !== updated.id);
-  data = { ...data, runs: [updated, ...others].sort((a, b) => b.startedAt - a.startedAt), running: updated.state === 'running' ? updated.id : data.running === updated.id ? null : data.running };
+  data = { ...data, runs: [updated, ...others].sort((a, b) => b.startedAt - a.startedAt), running: updated.state === 'running' ? [...new Set([...data.running, updated.id])] : data.running.filter((id) => id !== updated.id) };
   if (!draft) drawAll();
 });
 // A Loop line or a busy flip in the loop's tab shows at once, not on the next poll.

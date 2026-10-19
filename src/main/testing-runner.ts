@@ -1,11 +1,33 @@
 // What Petal types to run a pipeline: each stage's command with a machine reporter added where the runner has one,
 // wrapped in script(1) so its output is logged and Ctrl+C still lets the next line record the exit code.
+import fs from 'node:fs';
 import path from 'node:path';
 import { shellQuote } from './resume-command';
 import { runnerOf } from '../shared/testing';
 import type { ReportKind } from './testing-parse';
 
 export interface Report { kind: ReportKind; file: string }
+
+export const LOG_TAIL_BYTES = 2 * 1024 * 1024; // a stage log is read from its last 2 MB only
+export const trimmedNote = (bytes = LOG_TAIL_BYTES): string => `Output trimmed to the last ${Math.round(bytes / (1024 * 1024))} MB.`;
+
+// The end of a stage log, at most maxBytes, starting at a line when trimmed; empty when there is no file.
+export function readLogTail(file: string, maxBytes = LOG_TAIL_BYTES): { text: string; trimmed: boolean } {
+  let fd: number;
+  try { fd = fs.openSync(file, 'r'); } catch { return { text: '', trimmed: false }; }
+  try {
+    const size = fs.fstatSync(fd).size;
+    const length = Math.min(size, maxBytes);
+    const buffer = Buffer.alloc(length);
+    const read = fs.readSync(fd, buffer, 0, length, size - length);
+    const text = buffer.toString('utf8', 0, read);
+    if (size <= maxBytes) return { text, trimmed: false };
+    const cut = text.indexOf('\n');
+    return { text: cut >= 0 ? text.slice(cut + 1) : text, trimmed: true };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
 export interface StagePlan { exec: string; runner: string | null; report: Report | null }
 
 // "npm test", "pnpm run test:unit", "yarn e2e": the package manager and script name.

@@ -46,6 +46,7 @@ import { libraryCostCheck } from './snapshot-library-cost';
 import { lessonsCheck } from './snapshot-lessons';
 import { testingCheck } from './snapshot-testing';
 import { testLoopCheck } from './snapshot-test-loop';
+import { loopSignalsCheck } from './snapshot-loop-signals';
 import { distillationCheck } from './snapshot-distillation';
 import { petalSkillsCheck } from './snapshot-petal-skills';
 import { suiteDraftCheck } from './snapshot-suite-draft';
@@ -452,6 +453,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['testing', keepingStores(['testing', 'activity'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
     ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
+    ['loop signals', keepingStores(['testing', 'activity'], () => loopSignalsCheck(kit, win), kit.outDir)], // fixture agent tabs and runs only; notifications recorded, never shown
     ['distillation', keepingStores(['testing', 'activity'], () => distillationCheck(kit, win), kit.outDir)], // appends two loop rounds; records the thread, answer and brief pastes, never a real claude
     ['prd tasks', keepingStores(['testing', 'activity'], () => prdTasksCheck(kit, { win, openTab: tabs.openTab }), kit.outDir)], // seeds runs for a fixture repo's tasks; never runs a command
     ['suite draft', keepingStores(['testing', 'activity'], () => suiteDraftCheck(kit, win), kit.outDir)], // stand-in ~/.claude, userData record and fixture sessions only; never a real claude
@@ -672,6 +674,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'test-loop') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testLoopCheck(kit, win, feed).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'loop-signals') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await keepingStores(['testing', 'activity'], () => loopSignalsCheck(kit, win), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
