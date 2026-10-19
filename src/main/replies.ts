@@ -1,5 +1,6 @@
 // Groups Claude Code jsonl entries into replies: all assistant text between two user prompts.
-import { contentItems, isAgentMessage, isUserTurn, queuedPromptText, rawPromptText } from './prompts';
+import { contentItems, imagePasteIds, imageSources, isAgentMessage, isUserTurn, queuedPromptText, rawPromptText } from './prompts';
+import { placeImageSources } from '../shared/image-paths';
 import type { TranscriptEntry } from './transcript-entry';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
@@ -18,6 +19,7 @@ export class ReplyCollector {
   private readonly replies: Reply[] = [];
   private turnOpen = false;
   private waitingPrompts: WaitingPrompt[] = []; // her prompts since Claude last wrote text
+  private imageTurn: { holder: { prompt: string }; ids: number[] } | null = null; // her latest prompt, until its image paths arrive
   promptCount = 0; // her prompts so far; the renderer matches its sent-message echoes against it
 
   constructor(maxReplies = MAX_REPLIES) {
@@ -26,13 +28,18 @@ export class ReplyCollector {
 
   // Returns true when the visible replies changed.
   add(entry: TranscriptEntry): boolean {
+    const sources = imageSources(entry);
+    if (sources.length) return this.placeSources(sources);
     const queued = queuedPromptText(entry);
     if (isUserTurn(entry) || queued) {
       this.turnOpen = false; // Claude's answer to a queued message is a new reply too
       const prompt = queued || rawPromptText(entry); // the bubble splits out pasted blocks
       if (!prompt) return false;
+      this.imageTurn = null;
       if (this.adoptLatePrompt(entry, prompt)) return true;
-      this.waitingPrompts.push({ id: entry.uuid, timestamp: entry.timestamp, prompt });
+      const waiting = { id: entry.uuid, timestamp: entry.timestamp, prompt };
+      this.waitingPrompts.push(waiting);
+      this.imageTurn = { holder: waiting, ids: imagePasteIds(entry) };
       this.promptCount += 1;
       return true; // shown at once, before any reply
     }
@@ -51,7 +58,9 @@ export class ReplyCollector {
     } else {
       // What she asked, shown above the reply; two sends before Claude answers share one bubble.
       const prompt = this.waitingPrompts.map((p) => p.prompt).join('\n\n');
-      this.replies.push({ id: entry.uuid, timestamp: entry.timestamp, markdown: text, prompt });
+      const reply: Reply = { id: entry.uuid, timestamp: entry.timestamp, markdown: text, prompt };
+      this.replies.push(reply);
+      if (this.imageTurn) this.imageTurn.holder = reply; // its paths can land after the reply starts
       this.waitingPrompts = [];
       this.turnOpen = true;
       if (this.replies.length > this.maxReplies) this.replies.shift();
@@ -68,7 +77,17 @@ export class ReplyCollector {
     const replyAt = Date.parse(newest.timestamp ?? '');
     if (!Number.isFinite(promptAt) || !Number.isFinite(replyAt) || promptAt > replyAt) return false;
     newest.prompt = prompt;
+    this.imageTurn = { holder: newest, ids: imagePasteIds(entry) };
     this.promptCount += 1;
+    return true;
+  }
+
+  // Her pasted images' paths, put where their "[Image #n]" sits so the bubble shows the pictures.
+  private placeSources(sources: string[]): boolean {
+    if (!this.imageTurn) return false;
+    const { holder, ids } = this.imageTurn;
+    holder.prompt = placeImageSources(holder.prompt, sources, ids);
+    this.imageTurn = null;
     return true;
   }
 

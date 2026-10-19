@@ -6,7 +6,7 @@ import { readTurns, toMarkdown } from '../src/main/handoff';
 import { readHead, readTail } from '../src/main/jsonl-window';
 import { pageOfTurns, TURNS_PER_PAGE, turnsFor } from '../src/main/history-turns';
 import type { Turn } from '../src/main/handoff';
-import { assistantEntry, removeTempDirs, tempDir, toolResultEntry, toolUseEntry, useTempUserData, userEntry, writeJsonl } from './helpers';
+import { assistantEntry, imageTurnEntries, removeTempDirs, tempDir, toolResultEntry, toolUseEntry, useTempUserData, userEntry, writeJsonl } from './helpers';
 
 let dir: string;
 
@@ -17,6 +17,12 @@ beforeEach(() => {
 afterEach(removeTempDirs);
 
 describe('readTurns', () => {
+  it('puts her pasted images\' paths into her turn, from the meta note Claude Code logs after it', async () => {
+    const pasted = '/var/folders/fs/ab/T/petal-paste/paste-2026-10-19T08-55-19-646Z-0b0b0b0b.png';
+    const file = writeJsonl(path.join(dir, 's.jsonl'), [...imageTurnEntries('[Image #2] this one', [2], [pasted]), assistantEntry('Got it.')]);
+    expect(await readTurns(file)).toEqual([{ prompt: `[Image: source: ${pasted}] this one`, reply: ['Got it.'] }]);
+  });
+
   it('an empty file has no turns', async () => {
     const file = path.join(dir, 'empty.jsonl');
     fs.writeFileSync(file, '');

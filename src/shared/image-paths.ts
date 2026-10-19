@@ -43,6 +43,21 @@ export function findImageRefs(text: string): ImageRef[] {
   return refs;
 }
 
+// Claude Code logs her turn with "[Image #id]" only and each pasted image's path in a meta entry after it.
+// Each path goes back as a "[Image: source: …]" note where its placeholder was; ids default to the placeholders in order.
+export function placeImageSources(prompt: string, sources: readonly string[], ids: readonly number[] = []): string {
+  const order = ids.length ? ids : [...prompt.matchAll(PLACEHOLDER)].map((match) => Number(match[1]));
+  const unplaced: string[] = [];
+  let text = prompt;
+  sources.forEach((source, i) => {
+    const note = `[Image: source: ${source}]`;
+    const placeholder = order[i] === undefined ? '' : `[Image #${order[i]}]`;
+    if (placeholder && text.includes(placeholder)) text = text.replace(placeholder, () => note);
+    else unplaced.push(note);
+  });
+  return [text, ...unplaced].filter(Boolean).join('\n');
+}
+
 // Text and images in reading order; "[Image #n]" takes the nth path's picture and that path leaves the text.
 export function splitPromptImages(text: string): PromptPart[] {
   const refs = findImageRefs(text);

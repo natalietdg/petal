@@ -36,6 +36,19 @@ export function rawPromptText(entry: TranscriptEntry): string {
   return isUserTurn(entry) ? promptOf(contentItems(entry)) : '';
 }
 
+const SOURCE_NOTE = /^\[Image: source: ([^\]\n]+)\]$/;
+
+// The image paths Claude Code logs in a meta entry right after her turn; [] for any other entry.
+export function imageSources(entry: TranscriptEntry): string[] {
+  if (entry.type !== 'user' || !entry.isMeta || entry.isSidechain) return [];
+  const items = contentItems(entry);
+  const paths = items.map((item) => (isTextItem(item) ? SOURCE_NOTE.exec(item.text.trim())?.[1].trim() : undefined));
+  return items.length && paths.every(Boolean) ? (paths as string[]) : [];
+}
+
+export const imagePasteIds = (entry: TranscriptEntry): number[] =>
+  Array.isArray(entry.imagePasteIds) ? entry.imagePasteIds.filter((id): id is number => Number.isInteger(id)) : [];
+
 // Her message sent while Claude works: Claude Code logs it only as a queued_command attachment, never a user entry.
 export function queuedPromptText(entry: TranscriptEntry): string {
   const queued = entry.type === 'attachment' && !entry.isSidechain ? entry.attachment : undefined;
