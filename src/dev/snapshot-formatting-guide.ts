@@ -1,11 +1,13 @@
-// Customize › Formatting › Shape guide (PASTEL_SNAPSHOT_MODE=shape-guide): in every reading look and theme each row shows its raw
-// markdown and a preview holding the element the reader renders; Copy copies the raw text; previews stay inert; nothing overflows at 800px.
+// Customize › Formatting › Formatting guide (PASTEL_SNAPSHOT_MODE=formatting-guide). Shapes: in every reading look and theme each row shows
+// its raw markdown and a preview holding the element the reader renders; Copy copies the raw text; previews stay inert; nothing overflows at
+// 800px. Colour labels: snapshot-formatting-guide-colours.ts.
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { applyReading, settings } from '../main/look';
 import { READING_CHOICES } from '../main/menu';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { SHAPE_ENTRIES } from '../renderer/shape-guide-entries';
+import { SHAPE_ENTRIES } from '../renderer/formatting-guide-entries';
+import { colourLabelsCheck } from './snapshot-formatting-guide-colours';
 
 const WIDTH = 800;
 const HEIGHT = 900;
@@ -53,9 +55,9 @@ const ROWS = `(() => {
 
 const rowSel = (id: string): string => `#customize .sg-row[data-shape="${id}"]`;
 
-export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+async function shapesCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, log, wait, waitFor, capture, themes, applyTheme } = kit;
-  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} shape guide: ${what}`);
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} formatting guide shapes: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
   const startReading = settings().reading;
   const showFormatting = async () => {
@@ -82,7 +84,7 @@ export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<voi
         const bad = state.rows.filter((r: Page) => !r.found || !r.rawOk || !r.copy || r.missing.length || r.present.length || !r.shows || r.wide.length);
         check(bad.length === 0, `${look} ${theme}: ${state.rows.length - bad.length}/${SHAPE_ENTRIES.length} rows show raw markdown, a Copy button and the expected rendered element, no overflow${bad.length ? ` ${JSON.stringify(bad)}` : ''}`);
         check(state.page[0] <= state.page[1] && state.doc[0] <= state.doc[1], `${look} ${theme}: no horizontal overflow at ${WIDTH}px ${JSON.stringify({ page: state.page, doc: state.doc })}`);
-        check(state.cards === 1 && !state.oldTable && state.title === 'Shape guide', `${look} ${theme}: one Shape guide card, old table gone (${state.title})`);
+        check(state.cards === 1 && !state.oldTable && state.title === 'Formatting guide', `${look} ${theme}: one Formatting guide card, old table gone (${state.title})`);
         await js('PastelTerm.customize.close()');
       }
       if (CAPTURE_LOOKS.includes(look)) {
@@ -98,7 +100,7 @@ export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<voi
         const pages = Math.ceil(span.height / span.view);
         for (let i = 0; i < pages; i++) {
           await js(`document.getElementById('customize').scrollTop = ${Math.round(span.top + i * span.view)}`);
-          await capture(`shape-guide-${look}-paleSky-${i + 1}`);
+          await capture(`formatting-guide-${look}-paleSky-${i + 1}`);
         }
         await js('PastelTerm.customize.close()');
       }
@@ -158,4 +160,10 @@ export async function shapeGuideCheck(kit: Kit, win: BrowserWindow): Promise<voi
     applyReading(startReading);
     resizeOffscreen(win, startWidth, startHeight);
   }
+}
+
+// One step for the whole guide: the shapes, then the colour labels (which replace the reader's reply with their own sample).
+export async function formattingGuideCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+  await shapesCheck(kit, win);
+  await colourLabelsCheck(kit, win);
 }

@@ -19,7 +19,7 @@ import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as sceneCards from './scene-card';
 import * as tarotReading from './tarot-reading';
-import * as colourKey from './colour-key';
+import { COLOUR_LABELS_ID } from './formatting-guide';
 import './planet-reading';
 import * as getStarted from './get-started';
 import * as consent from './consent';
@@ -51,7 +51,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, colourKey, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -107,7 +107,7 @@ async function start(): Promise<void> {
     screenTimer = setTimeout(() => { if (tab === tabs.active()) readScreen(tab); }, SCREEN_SETTLE_MS);
   };
 
-  // Esc closes the sessions panel, the open overlay, a scene card or the colour key, or leaves focus, instead of reaching claude, only while one is open.
+  // Esc closes the sessions panel, the open overlay or a scene card, or leaves focus, instead of reaching claude, only while one is open.
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
@@ -115,7 +115,6 @@ async function start(): Promise<void> {
     else if (overlays.isOpen('pet-guide')) void petGuide.skip(); // a setup card; the bubble leaves Esc to the shell and Claude
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
-    else if (colourKey.isOpen()) colourKey.close();
     else if (focusMode.isOn()) focusMode.setLevel('normal');
     else return true;
     return false;
@@ -212,11 +211,13 @@ async function start(): Promise<void> {
     history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
-  // Help > Colour key: back to the reader first, since an open overlay hides the header the key hangs from.
-  window.pastel.onOpenColourKey(() => {
-    overlays.hideCurrent();
-    colourKey.open();
-  });
+  // The header's Colour key and Help > Colour key: Customize › Formatting, scrolled to the colour labels.
+  const openColourLabels = async () => {
+    await customize.open('formatting');
+    document.getElementById(COLOUR_LABELS_ID)?.scrollIntoView({ block: 'start' });
+  };
+  byId('colour-key-button').addEventListener('click', () => void openColourLabels());
+  window.pastel.onOpenColourKey(() => void openColourLabels());
   dockFit.init();
   headFit.init();
   updatePill.init();

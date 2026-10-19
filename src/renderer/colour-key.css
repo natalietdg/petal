@@ -1,5 +1,4 @@
-/* Colour key (colour-key.ts): header button plus a popover of live samples.
-   Samples keep every colour from the reader's CSS; the :root #colour-key rules below only shrink size and spacing. */
+/* Colour key: the header button that opens Customize › Formatting at the colour labels (app.ts). */
 
 /* View toggle on the left; the key's quiet button and the Notes toggle on the right, no taller than the toggle. */
 .reader-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -18,7 +17,7 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.colour-key-button:hover, .colour-key-button[aria-expanded="true"] { color: var(--reader-fg); background: var(--code-bg); }
+.colour-key-button:hover { color: var(--reader-fg); background: var(--code-bg); }
 /* Three dots in the theme's own callout colours. */
 .ck-dots {
   width: 22px;
@@ -28,62 +27,3 @@
     radial-gradient(circle at 11px 3px, var(--highlight) 2.6px, transparent 3px),
     radial-gradient(circle at 19px 3px, var(--watch-ink) 2.6px, transparent 3px);
 }
-
-.colour-key {
-  position: fixed;
-  z-index: 20;
-  width: min(400px, calc(100vw - 32px));
-  max-height: calc(100vh - 140px);
-  overflow-y: auto;
-  padding: 14px 16px 10px;
-  box-sizing: border-box;
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  background: var(--reader-bg);
-  color: var(--reader-fg);
-  font: 400 13px/1.45 var(--ui-font);
-  box-shadow: 0 4px 18px rgba(20, 10, 30, 0.22);
-}
-.colour-key[hidden] { display: none; }
-.ck-title { margin: 0; font: 700 12px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; }
-.ck-sub { margin: 2px 0 10px; color: var(--muted); }
-.ck-list { margin: 0; padding: 0; list-style: none; }
-.ck-entry {
-  display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 7px 0;
-  border-top: 1px solid var(--rule);
-}
-.ck-meaning { margin: 0; color: var(--muted); }
-.ck-meaning strong { color: var(--reader-fg); font-weight: 600; }
-
-/* Sample geometry only: the reader column and its section wrappers shrink to fit one row. */
-:root #colour-key .ck-sample.reader-column {
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  font-size: 13.5px;
-  line-height: 1.35;
-  min-width: 0;
-  overflow: hidden;
-}
-:root #colour-key .prose :is(p, section, .section-body > *) { margin: 0; }
-:root #colour-key .prose .story-section { display: block; }
-:root #colour-key .prose :is(.section-body, .rail) { display: contents; }
-:root #colour-key .prose .callout-decide { padding: 0.35em 0.6em; }
-:root #colour-key .prose .story-section { padding: 0.35em 0.5em; border-radius: 10px; }
-
-/* Lifestyle's extra colour: listed only in that look. */
-.ck-look { display: none; }
-[data-reading="lifestyle"] .ck-look { display: block; }
-.ck-look-head { margin: 10px 0 4px; font: 700 11px var(--ui-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-:root #colour-key .ck-sample .status { margin: 0; font-size: 11px; }
-:root #colour-key .prose .story-head { margin: 0; padding: 0.4em 0.6em; border-radius: 12px; }
-:root #colour-key .prose .headline { font-size: 1.25em; line-height: 1.15; margin: 0; }
-:root #colour-key .prose .headline + p { font-size: 1em; line-height: 1.35; }
-:root #colour-key .prose :is(.status-block, blockquote.sidebar) { margin: 0; padding: 0.4em 0.6em; font-size: 0.9em; }
-:root #colour-key .prose blockquote.pull-quote { margin: 0; font-size: 1.1em; line-height: 1.2; }
-:root #colour-key .prose h2 { margin: 0; font-size: 1.1em; }
-:root #colour-key .prose table { margin: 0; font-size: 0.85em; }

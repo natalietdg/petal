@@ -1,4 +1,4 @@
-// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (shape guide, output styles, preview).
+// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (formatting guide, output styles, preview).
 import * as markdown from './markdown';
 import * as tarotReading from './tarot-reading';
 import * as textSize from './text-size';
@@ -7,7 +7,7 @@ import { el } from './dom';
 import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
 import { outputStylesCard } from './customize-styles';
 import { petalSkillsCard } from './customize-skills';
-import { shapeGuide } from './shape-guide';
+import { formattingGuide } from './formatting-guide';
 import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
@@ -168,7 +168,7 @@ export function renderFormatting(): HTMLElement[] {
   const column = el('div', 'reader-column cz-preview');
   column.append(markdown.render(PREVIEW));
   return [
-    card('Shape guide', note(`Each shape as Claude types it, and how the reader shows it in ${readingName}. Switch the reading style under Look to compare.`), shapeGuide(), style),
+    card('Formatting guide', note(`Each shape as Claude types it and how the reader shows it in ${readingName}, then what each colour means. Switch the reading style under Look to compare.`), formattingGuide(), style),
     outputStylesCard(),
     petalSkillsCard(),
     card(`Live preview · ${readingName}`, note('Switch the reading style under Look to see this change.'), column),

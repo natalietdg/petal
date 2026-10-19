@@ -1,7 +1,7 @@
-// Colour key: opens from the header button and Help > Colour key, lists the four coded treatments (Lifestyle adds its own under
-// "In this look"), and each sample's colours equal the same element in a real rendered reply, in every look × light and dark.
-// Newspaper, Editorial and Print: every other treatment uses only ink and paper. Lifestyle: its restored colours equal the pre-cut tokens.
-// Esc and an outside click close it.
+// Formatting guide, colour labels half: the header's Colour key and Help > Colour key open Customize › Formatting scrolled to them; they list
+// the four coded treatments (Lifestyle adds its own under "In this look"), and each sample's colours equal the same element in a real
+// rendered reply, in every look × light and dark. Newspaper, Editorial and Print: every other treatment uses only ink and paper.
+// Lifestyle: its restored colours equal the pre-cut tokens. Esc closes Customize.
 import fs from 'node:fs';
 import path from 'node:path';
 import { Menu, type BrowserWindow, type MenuItem } from 'electron';
@@ -9,7 +9,7 @@ import type { Kit } from './snapshot';
 import { OPEN_SECTIONS } from './snapshot-reader-collapse';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
-import { DECIDE_PROBES, KEY_ENTRIES, LIFESTYLE_ENTRIES, LIFESTYLE_EXPECT, NEUTRAL_PROBES, type KeyEntry } from '../renderer/colour-key-entries';
+import { DECIDE_PROBES, KEY_ENTRIES, LIFESTYLE_ENTRIES, LIFESTYLE_EXPECT, NEUTRAL_PROBES, type KeyEntry } from '../renderer/formatting-guide-entries';
 import { SINGLE_SCREEN } from './snapshot-prompts';
 
 // A real reply carrying every treatment where replies put it: callouts, quotes and tables inside sections.
@@ -58,7 +58,7 @@ const REPLY = [
   '',
   '## Sources',
   '',
-  '- `src/renderer/colour-key.ts`',
+  '- `src/renderer/formatting-guide.ts`',
 ].join('\n');
 
 const keyUpdate = { state: 'live', replies: [{ id: 'colour-key-reply', timestamp: '2026-10-08T09:00:00.000Z', prompt: 'add an index for the colour code\n<pasted_content id="p1">\nthe colours inside replies\n</pasted_content id="p1">', markdown: REPLY }] };
@@ -134,7 +134,7 @@ const compare = (entries: readonly KeyEntry[]) => `(() => {
   ${SIG}
   const entries = ${JSON.stringify(entries.map(({ id, probes, real }) => ({ id, probes, real: real ?? { scope: '#latest', pick: 'last' } })))};
   return entries.flatMap(({ id, probes, real: where }) => probes.map((probe) => {
-    const sample = document.querySelector('#colour-key [data-key="' + id + '"] ' + probe);
+    const sample = document.querySelector('#colour-labels [data-key="' + id + '"] ' + probe);
     const reals = document.querySelectorAll(where.scope + ' ' + probe);
     const real = where.pick === 'first' ? reals[0] : reals[reals.length - 1];
     return { id, probe, sample: sample ? full(sample) : null, real: real ? full(real) : null };
@@ -155,48 +155,53 @@ const LIFESTYLE = `(() => {
   return rows;
 })()`;
 
+// The colour labels inside Customize: shown means Formatting is the open tab and the part's top is scrolled into the pane.
 const STATE = `(() => {
-  const popover = document.getElementById('colour-key');
-  const button = document.getElementById('colour-key-button');
-  const toggle = document.querySelector('#reader-head .view-toggle');
-  const r = popover.getBoundingClientRect();
+  const pane = document.getElementById('customize');
+  const part = document.getElementById('colour-labels');
+  const tab = document.querySelector('#customize-tabs [aria-selected="true"]')?.dataset.section;
+  const r = part?.getBoundingClientRect();
+  const p = pane.getBoundingClientRect();
   return {
-    shown: !popover.hidden && r.height > 0,
-    keys: [...popover.querySelectorAll('.ck-entry')].filter((li) => li.getClientRects().length > 0).map((li) => li.dataset.key),
-    meanings: [...popover.querySelectorAll('.ck-meaning')].filter((p) => p.getClientRects().length > 0).map((p) => p.textContent),
-    lookHead: [...popover.querySelectorAll('.ck-look-head')].filter((p) => p.getClientRects().length > 0).map((p) => p.textContent),
-    text: popover.innerText,
-    buttonHeight: Math.round(button.getBoundingClientRect().height),
-    toggleHeight: Math.round(toggle.getBoundingClientRect().height),
-    expanded: button.getAttribute('aria-expanded'),
+    shown: !pane.hidden && tab === 'formatting' && Boolean(r) && r.height > 0 && r.top >= p.top - 1 && r.top < p.bottom,
+    keys: part ? [...part.querySelectorAll('.ck-entry')].filter((li) => li.getClientRects().length > 0).map((li) => li.dataset.key) : [],
+    meanings: part ? [...part.querySelectorAll('.ck-meaning')].filter((n) => n.getClientRects().length > 0).map((n) => n.textContent) : [],
+    lookHead: part ? [...part.querySelectorAll('.ck-look-head')].filter((n) => n.getClientRects().length > 0).map((n) => n.textContent) : [],
+    text: part?.innerText ?? '',
     history: !document.getElementById('history').hidden,
   };
 })()`;
 
-const clickButton = "document.getElementById('colour-key-button').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
-const escape = "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))";
-const clickOutside = "document.getElementById('reader').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
+// The header button, measured with Customize closed so the header is on screen.
+const HEAD = `(() => ({
+  buttonHeight: Math.round(document.getElementById('colour-key-button').getBoundingClientRect().height),
+  toggleHeight: Math.round(document.querySelector('#reader-head .view-toggle').getBoundingClientRect().height),
+}))()`;
 
-// Captures just the popover, after a repaint so the unfocused window hands back a fresh frame.
-async function capturePopover(kit: Kit, win: BrowserWindow, name: string): Promise<string> {
+const clickButton = "document.getElementById('colour-key-button').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
+const escape = "document.getElementById('customize').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))";
+const customizeClosed = "document.getElementById('customize').hidden";
+
+// Captures just the colour labels, after a repaint so the unfocused window hands back a fresh frame.
+async function captureLabels(kit: Kit, win: BrowserWindow, name: string): Promise<string> {
   win.webContents.invalidate();
   await kit.wait(400);
   await win.webContents.capturePage();
   await kit.wait(300);
-  const box = await kit.js("(() => { const r = document.getElementById('colour-key').getBoundingClientRect(); return { x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()");
+  const box = await kit.js("(() => { const r = document.getElementById('colour-labels').getBoundingClientRect(); const p = document.getElementById('customize').getBoundingClientRect(); const top = Math.max(r.top, p.top); return { x: Math.floor(r.left), y: Math.floor(top), width: Math.ceil(r.width), height: Math.ceil(Math.min(r.bottom, p.bottom) - top) }; })()");
   const file = path.join(kit.outDir, `snapshot-${name}.png`);
   fs.writeFileSync(file, (await win.webContents.capturePage(box)).toPNG());
   kit.log(`captured ${name}: ${file}`);
   return file;
 }
 
-export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void> {
+export async function colourLabelsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, themes, applyTheme } = kit;
-  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} colour key: ${what}`);
+  const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} formatting guide colours: ${what}`);
   const [startWidth, startHeight] = win.getContentSize();
   resizeOffscreen(win, 1280, 1100);
   await waitFor(async () => (await js('window.innerWidth')) === 1280, 3000);
-  await js('PastelTerm.overlays.hideCurrent()'); // an open overlay hides the header the key hangs from
+  await js('PastelTerm.overlays.hideCurrent()'); // the header button lives over the reader
   await js("PastelTerm.reader.setView('replies')");
   // The fixture feed can redraw its own reply; re-send the sample before each look and theme.
   const showReply = async () => {
@@ -217,19 +222,8 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
       applyTheme(theme, { persist: false });
       await showReply();
       await wait(250);
-      await js(clickButton);
-      await wait(200);
-      const state = await js(STATE);
-      check(state.shown && state.expanded === 'true', `${look} ${theme}: header button opens it`);
       const lifestyle = look === 'lifestyle';
-      const wantKeys = lifestyle ? lifestyleKeys : expectedKeys;
-      check(JSON.stringify(state.keys) === JSON.stringify(wantKeys) && state.lookHead.length === (lifestyle ? 1 : 0),
-        `${look} ${theme}: lists ${wantKeys.length} treatments${lifestyle ? ' (the four, then "In this look")' : ''}: ${state.keys.join(', ')}`);
-      const rows = await js(compare(lifestyle ? [...KEY_ENTRIES, ...LIFESTYLE_ENTRIES] : KEY_ENTRIES));
-      // any: the rows' shape is built in COMPARE above.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const wrong = rows.filter((r: any) => !r.sample || !r.real || r.sample !== r.real);
-      check(wrong.length === 0, `${look} ${theme}: ${rows.length - wrong.length}/${rows.length} sample colours equal the real reply's${wrong.length ? ` ${JSON.stringify(wrong)}` : ''}`);
+      // The reply side first, with the reader on screen.
       await js(`PastelTerm.promptDock.readScreen(PastelTerm.tabs.active().id, ${JSON.stringify(SINGLE_SCREEN)})`);
       const decide = await waitFor(async () => { const d = await js(DECIDE); return d.shown ? d : null; }, 3000);
       check(decide && decide.found === decide.total && decide.accents.length === 0,
@@ -246,24 +240,39 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
         check(neutral.found === neutral.total && neutral.accents.length === 0,
           `${look} ${theme}: ${neutral.found}/${neutral.total} uncoded treatments use only ink and paper ${JSON.stringify(neutral.base)}${neutral.accents.length ? ` accents: ${JSON.stringify(neutral.accents)}` : ''}`);
       }
-      await capturePopover(kit, win, `colour-key-${look}-${theme}`);
+
+      // Then the guide: the header button opens Customize › Formatting at the colour labels.
+      await js(clickButton);
+      const state = await waitFor(async () => { const s = await js(STATE); return s.shown ? s : null; }, 3000);
+      check(state, `${look} ${theme}: header button opens Formatting at the colour labels`);
+      const keys: string[] = state?.keys ?? [];
+      const wantKeys = lifestyle ? lifestyleKeys : expectedKeys;
+      check(JSON.stringify(keys) === JSON.stringify(wantKeys) && state?.lookHead.length === (lifestyle ? 1 : 0),
+        `${look} ${theme}: lists ${wantKeys.length} treatments${lifestyle ? ' (the four, then "In this look")' : ''}: ${keys.join(', ')}`);
+      // The reply sits in the hidden reader now; computed colours still resolve there.
+      const rows = await js(compare(lifestyle ? [...KEY_ENTRIES, ...LIFESTYLE_ENTRIES] : KEY_ENTRIES));
+      // any: the rows' shape is built in COMPARE above.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const wrong = rows.filter((r: any) => !r.sample || !r.real || r.sample !== r.real);
+      check(wrong.length === 0, `${look} ${theme}: ${rows.length - wrong.length}/${rows.length} sample colours equal the real reply's${wrong.length ? ` ${JSON.stringify(wrong)}` : ''}`);
+      await captureLabels(kit, win, `formatting-guide-colours-${look}-${theme}`);
       await js(escape);
-      check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), `${look} ${theme}: Esc closes it`);
+      check(await waitFor(() => js(customizeClosed), 3000), `${look} ${theme}: Esc closes Customize`);
     }
   }
   applyTheme(light, { persist: false });
   await js("window.pastel.look.setReading('newspaper')");
   await wait(250);
 
+  const head = await js(HEAD);
+  check(head.buttonHeight <= head.toggleHeight, `button (${head.buttonHeight}px) is no taller than the view toggle (${head.toggleHeight}px)`);
   await js(clickButton);
-  await wait(200);
-  const opened = await js(STATE);
-  check(opened.buttonHeight <= opened.toggleHeight, `button (${opened.buttonHeight}px) is no taller than the view toggle (${opened.toggleHeight}px)`);
-  check(opened.meanings.length === expectedKeys.length && !/[–—]/.test(opened.text), `every row has a meaning line and the copy has no em dashes: ${JSON.stringify(opened.meanings)}`);
-  await js(clickOutside);
-  check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), 'a click outside closes it');
+  const opened = await waitFor(async () => { const s = await js(STATE); return s.shown ? s : null; }, 3000);
+  check(opened && opened.meanings.length === expectedKeys.length && !/[–—]/.test(opened.text), `every row has a meaning line and the copy has no em dashes: ${JSON.stringify(opened?.meanings)}`);
+  await js(escape);
+  await waitFor(() => js(customizeClosed), 3000);
 
-  // Help > Colour key, from over an open overlay: the overlay gives way and the key opens.
+  // Help > Colour key, from over an open overlay: History gives way to Customize at the colour labels.
   const item = Menu.getApplicationMenu()?.items.find((m) => m.role === 'help')?.submenu?.items.find((i: MenuItem) => i.label === 'Colour key');
   check(item, 'Help menu has a Colour key item');
   await js('PastelTerm.history.open()');
@@ -273,9 +282,9 @@ export async function colourKeyCheck(kit: Kit, win: BrowserWindow): Promise<void
     const now = await js(STATE);
     return now.shown ? now : null;
   }, 3000);
-  check(fromMenu && !fromMenu.history && fromMenu.keys.length === expectedKeys.length, `Help > Colour key closes History and opens the key: ${JSON.stringify(fromMenu && { history: fromMenu.history, keys: fromMenu.keys.length })}`);
+  check(fromMenu && !fromMenu.history && fromMenu.keys.length === expectedKeys.length, `Help > Colour key closes History and opens the colour labels: ${JSON.stringify(fromMenu && { history: fromMenu.history, keys: fromMenu.keys.length })}`);
   await js(escape);
-  check(await waitFor(async () => !(await js(STATE)).shown || null, 3000), 'Esc closes the key opened from Help');
+  check(await waitFor(() => js(customizeClosed), 3000), 'Esc closes Customize opened from Help');
 
   resizeOffscreen(win, startWidth, startHeight);
 }

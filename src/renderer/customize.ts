@@ -19,7 +19,7 @@ const button = byId('customize-button');
 const workflowSection = (id: workflow.TabId): { id: SectionId; name: string; summary: string } => ({ id, name: workflow.TABS.find((t) => t.id === id)?.name ?? id, summary: '' });
 const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
   { id: 'look', name: 'Look', summary: 'Theme, reading style, text size, pet and pet size, scene and your tarot birthday. Changes apply at once and tick the same menu items.' },
-  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, and the Claude Code output styles that ask for them.' },
+  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, what each colour means, and the Claude Code output styles that ask for them.' },
   workflowSection('setup'), // beside Formatting: both show the output style Claude answers in
   { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
   { id: 'organizer', name: 'Organizer', summary: 'Optional background agents: one titles, files and tags your recent sessions for History; one builds your Library and lessons from them. All are off by default and use your Claude plan.' },
