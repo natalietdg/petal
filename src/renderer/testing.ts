@@ -698,8 +698,9 @@ async function load(): Promise<void> {
 async function refresh(): Promise<void> {
   const id = tabId();
   if (!id || !data) return load();
-  const result = await window.pastel.testing.history(id, picked());
-  if (isIpcError(result) || !data) return;
+  const root = picked();
+  const result = await window.pastel.testing.history(id, root);
+  if (isIpcError(result) || !data || picked() !== root) return; // a session picked or let go meanwhile: this answer is another repo's
   data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, seed: result.seed, suites: result.suites, lock: result.lock, agentNames: result.agentNames, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
   followSessionTask();
   criteria = result.criteria;

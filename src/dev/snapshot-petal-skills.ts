@@ -2,7 +2,7 @@
 // Customize › Formatting lists both skills as not installed; Install copies them into skills/<name>/SKILL.md with the
 // Library path filled in, leaves her own skills alone, and an edit shows as Edited. Testing offers the old
 // .petal/pipeline.json as a seed for a task with no suite, the seed writes the task's suite file, new commands still
-// ask first, and a suite change from outside the testing agent is refused with its reason. Text contrast in every theme.
+// ask first, and a suite change from outside the testing agent is not taken, with its reason. Text contrast in every theme.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -96,6 +96,9 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const openTesting = async (want: (p: Page) => boolean) => {
     await js('PastelTerm.overlays.hideCurrent()');
     await js("document.getElementById('testing-button').click()");
+    // The tab's own Claude session gets a task of its own and opens on it; Checkout is picked like she would.
+    await waitFor(() => js(TESTING), 6000);
+    await js("(() => { const s = document.querySelector('#testing .tst-task-select'); if (s && s.value !== 'task:t-shop') { s.value = 'task:t-shop'; s.dispatchEvent(new Event('change')); } })()");
     return waitFor(async () => { const p: Page = await js(TESTING); return p && want(p) ? p : null; }, 6000);
   };
 
@@ -161,10 +164,11 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(asked && JSON.stringify(asked.confirm) === JSON.stringify(expected) && testingFixture.runs.length === runsBefore, `the confirm names every command, new ones marked: ${JSON.stringify(asked?.confirm)}`);
     await js("[...document.querySelectorAll('#testing .tst-confirm .tst-button')].find((b) => b.textContent === 'Cancel').click()");
 
-    // A change to the suite file from outside the task's testing agent is not applied: the stages stay and the reason shows.
+    // A change to the suite file from outside the task's testing agent is not taken: the stages stay and the reason shows.
+    // Lock off and no session seen writing it, so it reads as her own edit: hers to use or keep the old suite.
     put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test\nrm -rf ~' }] }));
-    const refused: Page = await openTesting((p) => /not applied/.test(p.change));
-    check(refused && refused.change === 'Changed outside the testing agent, not applied.' && refused.state.stages.length === names.length, `an outside change is refused and the suite stays: ${refused?.change}`);
+    const refused: Page = await openTesting((p) => /^Changed outside the testing agent\./.test(p.change));
+    check(refused && refused.change === 'Changed outside the testing agent. Use this file · Keep the old suite' && refused.state.stages.length === names.length, `an outside change is not taken and the suite stays: ${refused?.change}`);
   } finally {
     stylesFixture.claudeDir = null;
     testingFixture.project = null;

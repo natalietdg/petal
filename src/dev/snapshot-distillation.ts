@@ -157,6 +157,13 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
   testingFixture.changed = ['src/settings.ts'];
   seedHistory(project);
   testingFixture.loopStarts.length = 0;
+  // Earlier steps' pastes to the fixture tab (stop messages, fix prompts) were never logged by a real Claude, so they still
+  // count as her unanswered messages and would hide the needs-you card; log them as Claude Code would.
+  const leftovers = await js("PastelTerm.tabs.ids().map((id) => PastelTerm.tabs.get(id)).filter((t) => t.update?.sessionId === 'snapshot-fixture').flatMap((t) => t.pending.map((p) => p.text))") as string[];
+  if (transcript && leftovers.length) {
+    fs.appendFileSync(transcript, leftovers.map((text, i) => line({ type: 'user', uuid: `distill-left-${i}`, message: { role: 'user', content: text } })).join(''));
+    await waitFor(async () => ((await js("PastelTerm.tabs.ids().map((id) => PastelTerm.tabs.get(id)).filter((t) => t.update?.sessionId === 'snapshot-fixture').every((t) => !t.pending.length)")) ? true : null), 5000);
+  }
   useAgentFixtures(outDir);
   await js('PastelTerm.getStarted.close()');
   await js('PastelTerm.overlays.hideCurrent()');
