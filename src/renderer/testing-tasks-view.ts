@@ -101,7 +101,7 @@ export function noTasks(): HTMLElement {
 }
 
 // draftEnded: the testing agent stopped with no suite; askAgain then stands where Ask Claude was.
-export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; draftEnded: boolean; askAgain: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null; askEstimate?: string | null }
+export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; draftEnded: boolean; askAgain: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null; askEstimate?: string | null; scenariosReady?: boolean }
 
 export function noSuite(actions: NoSuiteActions, seedProblem: string | null, busy: boolean): HTMLElement {
   const box = el('div', 'tst-no-suite');
@@ -125,7 +125,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     }
   } else if (actions.showDraft) {
     // While its testing agent draws, a status stands where Ask Claude was, so a second agent can't be started.
-    const status = el('span', 'tst-button tst-drawing', 'Testing agent is drawing up the suite');
+    const status = el('span', 'tst-button tst-drawing', actions.scenariosReady ? 'Scenarios ready for your review above' : 'Testing agent is drawing up the suite');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-disabled', 'true');
     const show = button('tst-show-draft', 'Show its tab', actions.showDraft, true);

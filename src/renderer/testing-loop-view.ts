@@ -24,8 +24,9 @@ export interface LoopHandlers { start: (focus: string, rounds: number) => void; 
 
 const STATUS_WORD: Record<LoopStatus, string> = { idle: 'Not started', starting: 'Starting', running: 'Running', done: 'Done', stopped: 'Stopped' };
 const STEPS: LoopPhase[] = ['scenarios', 'testing', 'fixing', 'verifying'];
-const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed' };
-const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed' };
+const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed', todo: 'no test yet' };
+const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed', todo: 'waiting' };
+const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const;
 
 export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement; update: (model: LoopModel) => void; focusInput: HTMLInputElement } {
   const panel = el('section', 'tst-loop');
@@ -113,8 +114,10 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
     dot.setAttribute('aria-label', ITEM_WORD[item.status]);
     line.append(dot, el('span', 'tst-crit-name', item.name), el('span', `tst-crit-tag is-${item.status}`, ITEM_WORD[item.status]));
     if (item.regression) line.append(el('span', 'tst-crit-tag is-regression', 'regression'));
+    if (item.source) line.append(el('span', `tst-crit-tag is-source is-${item.source}`, SOURCE_WORD[item.source]));
     row.append(line);
-    const meta = [item.test ? `${item.test.path}${item.test.name ? ` › ${item.test.name}` : ''}` : '', item.round === null ? '' : `round ${item.round}`].filter(Boolean).join(' · ');
+    const tests = item.tests.map((t) => `${t.path}${t.name ? ` › ${t.name}` : ''}`);
+    const meta = [...tests, item.round === null ? '' : `round ${item.round}`].filter(Boolean).join(' · ');
     if (meta) row.append(el('p', 'tst-crit-meta', meta));
     return row;
   }

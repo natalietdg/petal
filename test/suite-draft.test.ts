@@ -116,7 +116,7 @@ describe('the skill’s bug line', () => {
     expect(line).toContain('· task: t-1a2b');
     const criteria = parseCriteria(`${CRITERIA_SKELETON}${line}\n`);
     expect(criteria.malformed).toBe(0);
-    expect(criteria.bugs).toEqual([{ status: 'fail', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, round: null, regression: true, taskId: 't-1a2b' }]);
+    expect(criteria.bugs).toEqual([{ status: 'fail', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, tests: [{ path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }], source: null, round: null, regression: true, taskId: 't-1a2b' }]);
     expect(forTask(criteria.bugs, 't-1a2b')).toHaveLength(1);
   });
 });

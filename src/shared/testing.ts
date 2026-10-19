@@ -91,6 +91,7 @@ export interface SavedLoop {
   stoppedAt: number | null;
   queue: QueuedBug[];
   events: Record<AgentRole, LoopEvent[]>;
+  scenariosApprovedAt?: number | null; // a draft: when she said its scenarios look right
 }
 
 // A loop the asking window can step or shows, with what stepping its queue needs. Only the owner steps and saves;

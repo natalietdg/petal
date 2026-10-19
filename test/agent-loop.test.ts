@@ -11,7 +11,7 @@ import type { SavedLoop } from '../src/shared/testing';
 afterEach(removeTempDirs);
 
 const names = { tester: 'Quinn', fixer: 'Fixie' };
-const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, round: 1, regression: true, taskId: 't1' });
+const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, tests: [{ path: 'src/cart.test.ts', name: 'rounds' }], source: null, round: 1, regression: true, taskId: 't1' });
 const inputs = (over: Partial<LoopInputs> = {}): LoopInputs => ({ bugs: [], runs: [], testerRound: 1, fixerBusy: false, fixesDone: [], now: 1000, ...over });
 const loop = (over: Partial<SavedLoop> = {}): SavedLoop => ({
   kind: 'loop', tester: { tabId: 'tab-t', sessionId: 'sess-t' }, fixer: { tabId: 'tab-f', sessionId: 'sess-f' }, startedAt: 500, stoppedAt: null, queue: [], events: noEvents(), ...over,
@@ -95,6 +95,13 @@ describe('rehydrating', () => {
     expect(cleanSavedLoop({ ...good, tester: { tabId: null, sessionId: '' } })).toBeNull();
     expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [{ at: 'x' }] } })?.events).toMatchObject({ fixer: [] });
     expect(cleanSavedLoop({ ...good, events: { tester: Array.from({ length: 150 }, (_, i) => ({ at: i, text: 't' })), fixer: [] } })?.events.tester).toHaveLength(100);
+  });
+
+  it('keeps when she approved a draft’s scenarios, and drops a value that isn’t a time', () => {
+    const draft: SavedLoop = { kind: 'draft', tester: { tabId: 'tab-1', sessionId: 'draft-t' }, fixer: null, startedAt: 5, stoppedAt: null, queue: [], events: noEvents() };
+    expect(cleanSavedLoop({ ...draft, scenariosApprovedAt: 9 })?.scenariosApprovedAt).toBe(9);
+    expect(cleanSavedLoop({ ...draft, scenariosApprovedAt: 'yes' })).not.toHaveProperty('scenariosApprovedAt');
+    expect(cleanSavedLoop(draft)).not.toHaveProperty('scenariosApprovedAt');
   });
 });
 

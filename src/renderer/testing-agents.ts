@@ -8,18 +8,18 @@ import * as composer from './composer';
 import { isIpcError } from './dom';
 import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { isTerminal, latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type LoopStatus } from '../shared/test-loop';
+import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, isActive, loopStatus, stopAll, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { activeBugs, addSent, fixLines, queueDone, type SentBug } from '../shared/bug-queue';
-import { finishNotice, fixesLanded, fixNotice, laneWord, needsNotice, newlyWaiting, NEEDS_YOU, type LoopNotice } from '../shared/loop-signals';
+import { finishNotice, fixesLanded, fixNotice, laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
 import { agentOf, finishedRounds, noEvents, roundLabel, roundTokens, stepLoop, takesSaved, unsent, withEvent } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { NO_TOKENS, cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
-import { askAgainText, draftEnded, suiteProblemText } from '../shared/suite-draft';
+import { askAgainText, draftEnded, scenarioReview, scenariosApprovedText, suiteProblemText, type ScenarioReview } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
 import { chatTurns, routeMessage } from '../shared/agent-chat';
 import type { AddedBug, LoopAgent, LoopFacts, PipelineRun, SavedLoop, StackItem } from '../shared/testing';
-import type { Task } from '../shared/tasks';
+import type { Prd, Task } from '../shared/tasks';
 import type { QueueMessage } from '../shared/bug-queue';
 
 export interface AgentLoop extends SavedLoop {
@@ -37,6 +37,8 @@ export interface AgentContext {
   picked: () => string | null;
   tabId: () => string | null; // the tab Testing was opened from
   task: () => Task | null;
+  prd: () => Prd | null; // the shown task's
+  scenarios: () => CriteriaItem[]; // the shown task's
   suite: () => TaskSuite | null;
   stack: () => StackItem[];
   names: () => AgentNames;
@@ -53,7 +55,7 @@ const STARTING_MS = 120_000; // a lane with no tab here reads as starting this l
 
 const keyOf = (root: string, taskId: string): string => `${root}:${taskId}`;
 const isRunning = (r: AgentLoop): boolean => r.kind === 'loop' && !r.stoppedAt;
-const toSaved = ({ kind, tester, fixer, startedAt, stoppedAt, queue, events }: AgentLoop): SavedLoop => ({ kind, tester, fixer, startedAt, stoppedAt, queue, events });
+const toSaved = ({ kind, tester, fixer, startedAt, stoppedAt, queue, events, scenariosApprovedAt }: AgentLoop): SavedLoop => ({ kind, tester, fixer, startedAt, stoppedAt, queue, events, ...(scenariosApprovedAt ? { scenariosApprovedAt } : {}) });
 const fromSaved = (root: string, taskId: string, saved: SavedLoop): AgentLoop => ({
   ...saved, root, taskId, actions: { tester: [], fixer: [] }, tokens: { tester: null, fixer: null }, sending: false, stopping: false, inputs: null,
 });
@@ -99,8 +101,39 @@ export function createAgents(ctx: AgentContext) {
       tab: id ? 'open' : r.tester.tabId === null && Date.now() - r.startedAt < STARTING_MS ? 'starting' : 'gone',
       busy: Boolean(screen?.busy), asking: Boolean(screen?.asking),
       worked: replies.some((reply) => Date.parse(reply.timestamp ?? '') >= since),
+      reviewing: review() === 'ready',
     });
     return { tabId: id, ended };
+  }
+
+  // Scenarios first: whether the shown draft's scenarios wait on her, from its tab and the task's criteria file.
+  function review(): ScenarioReview {
+    const r = drafting();
+    if (!r?.tester || !tabOf(r.tester)) return 'none';
+    const screen = screenOf(r.tester);
+    return scenarioReview({ kind: r.kind, stopped: Boolean(r.stoppedAt), approvedAt: r.scenariosApprovedAt ?? null, scenarios: ctx.scenarios(), busy: Boolean(screen?.busy), asking: Boolean(screen?.asking) });
+  }
+
+  // Looks right: the go-ahead goes into the testing agent's tab, and the approval is saved with the draft.
+  async function approveScenarios(): Promise<void> {
+    const r = drafting();
+    const task = ctx.task();
+    if (!r || !task || review() !== 'ready') return;
+    r.scenariosApprovedAt = Date.now();
+    const sent = await pasteToDrafter(r, scenariosApprovedText(task.id), `You → ${nameOf('tester')} · scenarios look right, write the tests`);
+    if (!sent) r.scenariosApprovedAt = null;
+    notes.tester = sent ? `Sent. ${nameOf('tester')} is writing the tests.` : 'Couldn’t reach its tab. Try again.';
+    ctx.redraw();
+  }
+
+  // Edit scenarios: the task's criteria file in her editor; Petal reads it again on its next refresh.
+  async function editScenarios(): Promise<void> {
+    const from = ctx.tabId();
+    const task = ctx.task();
+    if (!from || !task) return;
+    const reply = await window.pastel.testing.openCriteria({ tabId: from, root: ctx.picked(), taskId: task.id });
+    notes.tester = isIpcError(reply) ? `Couldn’t open the file: ${reply.error}` : 'note' in reply ? reply.note : 'Opened in your editor. Save it, then come back here.';
+    draw();
   }
 
   // A follow-up to the drafting agent through the reply box's paste path; worked counts again from now.
@@ -323,7 +356,7 @@ export function createAgents(ctx: AgentContext) {
     if (!task || !suite) return null;
     const names = { tester: nameOf('tester'), fixer: nameOf('fixer') };
     return {
-      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names }),
+      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() } }),
       fixer: buildFixerBrief({ taskId: task.id, taskTitle: task.title, stages: suite.stages, names }),
     };
   }
@@ -508,6 +541,7 @@ export function createAgents(ctx: AgentContext) {
     return laneWord({
       role, kind: r?.kind ?? 'loop', started: Boolean(r && agent), stopped: Boolean(r?.stoppedAt), tab: screenOf(agent), starting: Boolean(r && Date.now() - r.startedAt < STARTING_MS),
       testerLine: progress ? `${phaseWord(progress.phase)} · round ${progress.round}/${progress.total}` : null, fixing: r?.queue.find((b) => b.state === 'fixing')?.name ?? null, draftEnded: r?.kind === 'draft' && Boolean(draft()?.ended),
+      scenariosReady: role === 'tester' && review() === 'ready',
     });
   }
 
@@ -543,6 +577,7 @@ export function createAgents(ctx: AgentContext) {
         role, name: nameOf(role), started: Boolean(agent), tabId: tabOf(agent), status, busy: Boolean(r && agent && !r.stoppedAt && updateOf(agent)?.busy), needsYou: status === NEEDS_YOU,
         tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
         turns: r && agent ? chatTurns(updateOf(agent)?.replies ?? [], r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
+        review: status === SCENARIOS_READY ? { scenarios: ctx.scenarios() } : null,
       };
     });
     const loop = r?.kind === 'loop' ? r : null;
@@ -564,6 +599,8 @@ export function createAgents(ctx: AgentContext) {
       send: (role, text) => void send(role, text),
       askClose: (asking) => { closeAsking = asking; draw(); },
       close: () => void closeAgents(),
+      editScenarios: () => void editScenarios(),
+      approveScenarios: () => void approveScenarios(),
     }));
   }
 
@@ -579,10 +616,10 @@ export function createAgents(ctx: AgentContext) {
   // For the snapshot harness: what the shown task's lanes say, and forgetting this window's copies as a new window would.
   const state = () => {
     const r = record();
-    return { kind: r?.kind ?? null, draft: draft(), queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
+    return { kind: r?.kind ?? null, draft: draft(), review: review(), approvedAt: r?.scenariosApprovedAt ?? null, queue: r?.queue ?? [], events: r ? r.events : noEvents(), renaming, notes: { ...notes }, lanes: ROLES.map((role) => ({ role, name: nameOf(role), status: laneStatus(role, r, facts().progress) })) };
   };
 
-  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, askAgain, checkDraft, state, forget: () => { loops.clear(); owned.clear(); elsewhere.clear(); } };
+  return { element, record, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerTab: () => facts().testerTab, draft, review, askAgain, checkDraft, state, forget: () => { loops.clear(); owned.clear(); elsewhere.clear(); } };
 }
 
 export type Agents = ReturnType<typeof createAgents>;

@@ -99,7 +99,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(note.startsWith('Updated Petal’s testing skill. Started this task’s testing agent'), `the note says the skill was updated: ${note}`);
     check(fs.readFileSync(skillFile, 'utf8') === bundled, 'the stand-in skill now matches the bundled one');
     check(fs.existsSync(criteriaFile), 'the task’s own criteria file exists for the bugs it records');
-    check(Boolean(started?.brief?.includes('Record bugs in .petal/criteria/t-draft.md.')), 'the brief names the task’s own criteria file');
+    check(Boolean(started?.brief?.includes('Write its scenarios and record its bugs in .petal/criteria/t-draft.md.')), 'the brief names the task’s own criteria file');
 
     // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show its tab.
     const drafterTab = await waitFor<string | null>(() => js(`PastelTerm.tabs.ids().find((t) => PastelTerm.tabs.get(t).update?.sessionId === ${JSON.stringify(DRAFTER)}) ?? null`), 10000);

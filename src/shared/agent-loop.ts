@@ -129,6 +129,7 @@ export function cleanSavedLoop(v: unknown): SavedLoop | null {
   return {
     kind: v.kind, tester, fixer, startedAt: v.startedAt, stoppedAt: v.stoppedAt,
     queue: (queue as QueuedBug[]).slice(-QUEUE_KEPT), events: { tester: cleanEvents(v.events.tester), fixer: cleanEvents(v.events.fixer) },
+    ...(isTime(v.scenariosApprovedAt) ? { scenariosApprovedAt: v.scenariosApprovedAt } : {}),
   };
 }
 

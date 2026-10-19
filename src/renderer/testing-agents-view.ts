@@ -10,6 +10,7 @@ import { tokenText, usageText, type RoundEstimate } from '../shared/token-usage'
 import { render } from './markdown';
 import type { ChatTurn } from '../shared/agent-chat';
 import type { LoopEvent } from '../shared/testing';
+import type { CriteriaItem } from '../shared/test-loop';
 
 const LOG_PAGE = 20;
 
@@ -29,6 +30,7 @@ export interface LaneModel {
   turns: ChatTurn[]; // the last few turns of its session, oldest first
   startedAt: number; // when the loop started; 0 before
   note: string; // why her last message didn't go, or that it did
+  review: { scenarios: CriteriaItem[] } | null; // the testing agent's scenarios, while they wait on her
 }
 
 export interface Spent { total: number; cached: number } // cached: the cache reads among them
@@ -58,6 +60,8 @@ export interface AgentsHandlers {
   send: (role: AgentRole, text: string) => void;
   askClose: (asking: boolean) => void; // show or cancel the confirm
   close: () => void;
+  editScenarios: () => void;
+  approveScenarios: () => void;
 }
 
 type LogRow = { at: number; text: string; detail: string; kind: string; tokens: number; cached: number };
@@ -161,6 +165,36 @@ function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTM
   return box;
 }
 
+const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const;
+
+// Scenarios first: the rules the tests will be written from, for her to read, edit or accept before any test exists.
+function scenarioReview(lane: LaneModel, scenarios: CriteriaItem[], on: AgentsHandlers): HTMLElement {
+  const box = el('div', 'tst-scenario-review');
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', 'Scenarios to review');
+  box.append(el('p', 'tst-scenario-intro', `${lane.name} wrote ${scenarios.length} scenario${scenarios.length === 1 ? '' : 's'}. No tests yet: they get written from these once you say so.`));
+  const list = el('ul', 'tst-scenario-list');
+  for (const item of scenarios) {
+    const row = el('li', 'tst-scenario');
+    row.append(el('span', 'tst-scenario-name', item.name));
+    if (item.source) row.append(el('span', `tst-crit-tag is-source is-${item.source}`, SOURCE_WORD[item.source]));
+    list.append(row);
+  }
+  const actions = el('div', 'tst-actions');
+  const edit = el('button', 'tst-button tst-edit-scenarios', 'Edit scenarios');
+  edit.type = 'button';
+  edit.title = 'Opens this task’s criteria file in your editor';
+  edit.addEventListener('click', () => on.editScenarios());
+  const approve = el('button', 'tst-button tst-primary tst-approve-scenarios', 'Looks right · write the tests');
+  approve.type = 'button';
+  approve.title = `Tells ${lane.name} in its tab to write the tests`;
+  approve.addEventListener('click', () => on.approveScenarios());
+  actions.append(edit, approve);
+  box.append(list, actions);
+  if (lane.note) box.append(el('p', 'tst-muted tst-agent-note', lane.note));
+  return box;
+}
+
 function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElement {
   const box = el('section', `tst-agent-lane is-${lane.role}${lane.busy ? ' is-busy' : ''}${lane.needsYou ? ' is-needs-you' : ''}`);
   box.dataset.role = lane.role;
@@ -195,6 +229,7 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
   if (lane.tokens !== null) facts.append(el('span', 'tst-agent-tokens', usageText(lane.tokens.total, lane.tokens.cached)));
   box.append(head, facts);
   if (!lane.started) return box;
+  if (lane.review) { box.append(scenarioReview(lane, lane.review.scenarios, on)); return box; } // her review comes before chat
   const view = model.view[lane.role] ?? 'chat';
   const switcher = el('div', 'tst-agent-views');
   switcher.setAttribute('role', 'group');

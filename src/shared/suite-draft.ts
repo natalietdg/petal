@@ -1,7 +1,9 @@
 // A task's testing agent drawing up its suite, pure: how its brief reaches the testing-suite skill, when the draft has
 // ended with no suite, what Petal pastes back to it, and which one session may write the suite file.
 import { suitePath } from './task-suite';
+import { criteriaPath, scenarioSources, type CriteriaItem } from './test-loop';
 import type { AgentRecord, SavedLoop } from './testing';
+import type { Prd, Task } from './tasks';
 
 export const TESTING_SKILL = 'petal-testing-suite';
 
@@ -22,11 +24,41 @@ export function draftBrief(inline: boolean, request: string, skillText: string):
   return `${request}\n\nFollow these instructions, from Petal's testing-suite skill:\n\n${skillBody(skillText)}`;
 }
 
+// What Petal asks the testing agent to draw up: the task, the files it may write, and the notes and PRD its scenarios come from.
+export function draftRequest(task: Pick<Task, 'id' | 'title' | 'notes'>, prd: Pick<Prd, 'title' | 'notes'> | null): string {
+  return [
+    `for task ${task.id}: "${task.title}". You are this task's testing agent, so you may write ${suitePath(task.id)}. Write its scenarios and record its bugs in ${criteriaPath(task.id)}.`,
+    ...scenarioSources({ notes: task.notes, prd }),
+  ].join('\n');
+}
+
 export type DraftTab = 'open' | 'starting' | 'gone';
-export interface DraftFacts { suite: boolean; tab: DraftTab; busy: boolean; asking: boolean; worked: boolean }
+// reviewing: idle because its scenarios wait on her review, as the skill says
+export interface DraftFacts { suite: boolean; tab: DraftTab; busy: boolean; asking: boolean; worked: boolean; reviewing?: boolean }
 
 // Ended with no suite: its tab is gone, or it worked since the last ask and now sits idle (not asking her something).
-export const draftEnded = (f: DraftFacts): boolean => !f.suite && (f.tab === 'gone' || (f.tab === 'open' && !f.busy && !f.asking && f.worked));
+export const draftEnded = (f: DraftFacts): boolean => !f.suite && (f.tab === 'gone' || (f.tab === 'open' && !f.busy && !f.asking && f.worked && !f.reviewing));
+
+// ---- Scenarios first: the drafting agent writes them and stops; she reviews them in Petal before any test is written.
+export type ScenarioReview = 'none' | 'ready' | 'approved';
+export interface ReviewFacts {
+  kind: SavedLoop['kind'];
+  stopped: boolean;
+  approvedAt: number | null;
+  scenarios: readonly Pick<CriteriaItem, 'status'>[]; // this task's
+  busy: boolean;
+  asking: boolean;
+}
+
+// Ready once a live draft sits idle with scenarios still [todo] and she hasn't said they look right.
+export function scenarioReview(f: ReviewFacts): ScenarioReview {
+  if (f.kind !== 'draft' || f.stopped) return 'none';
+  if (f.approvedAt !== null) return 'approved';
+  return !f.busy && !f.asking && f.scenarios.some((s) => s.status === 'todo') ? 'ready' : 'none';
+}
+
+export const scenariosApprovedText = (taskId: string): string =>
+  `I reviewed the scenarios in ${criteriaPath(taskId)} and they look right. Read the file again first, since I may have edited it. Then write the tests: one or more per scenario, each named on its scenario line with "test: path::test name", and carry on with the suite as your instructions say.`;
 
 export const askAgainText = (taskId: string): string =>
   `You stopped without writing ${suitePath(taskId)}. Finish drawing up this task's suite and write that file, as your instructions say.`;

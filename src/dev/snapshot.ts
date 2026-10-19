@@ -50,6 +50,7 @@ import { loopSignalsCheck } from './snapshot-loop-signals';
 import { distillationCheck } from './snapshot-distillation';
 import { petalSkillsCheck } from './snapshot-petal-skills';
 import { suiteDraftCheck } from './snapshot-suite-draft';
+import { scenariosFirstCheck } from './snapshot-scenarios-first';
 import { planetCheck } from './snapshot-planet';
 import { sceneIdle } from './snapshot-idle';
 import { sceneMotionCheck } from './snapshot-scenes';
@@ -666,6 +667,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'suite-draft') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await keepingStores(['testing', 'activity'], () => suiteDraftCheck(kit, win), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'scenarios-first') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await keepingStores(['testing', 'activity'], () => scenariosFirstCheck(kit, win), kit.outDir)().catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

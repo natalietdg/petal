@@ -10,7 +10,7 @@ import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhe
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
-import { buildSentFixerBrief, criteriaPath, isActive, type Criteria } from '../shared/test-loop';
+import { buildSentFixerBrief, isActive, type Criteria } from '../shared/test-loop';
 import { DRAFT_TURNS, FIX_TURNS, SUITE_SKILL_CHARS, agentEstimateText, agentTokens } from '../shared/token-usage';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
@@ -21,12 +21,12 @@ import { sentBug, type SentBug } from '../shared/bug-queue';
 import { lockBar, noSuite, noTasks, prdOverview, sessionPicker, suiteChangeLine, taskPicker } from './testing-tasks-view';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
-import { forTask, suiteFor, suitePath, type SuiteFor, type TaskSuite } from '../shared/task-suite';
+import { forTask, suiteFor, type SuiteFor, type TaskSuite } from '../shared/task-suite';
+import { draftRequest } from '../shared/suite-draft';
 import { keepTarget, prdOverview as overviewRows, type TestTarget } from '../shared/task-testing';
 import type { Prd, Task } from '../shared/tasks';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
-const ASK_PROMPT_CHARS = 250; // the draft request's own words around the task's title and notes
 const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh faster
 
 const view = byId('testing');
@@ -271,7 +271,8 @@ function drawStrip(): void {
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
-      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + ASK_PROMPT_CHARS + task.title.length + task.notes.length, DRAFT_TURNS)),
+      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd()).length, DRAFT_TURNS)),
+      scenariosReady: agents.review() === 'ready',
     }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(taskRunning())));
     return;
   }
@@ -484,6 +485,8 @@ const agents = createAgents({
   picked: () => picked(),
   tabId: () => tabId(),
   task: () => shownTask(),
+  prd: () => shownPrd(),
+  scenarios: () => taskCriteria()?.scenarios ?? [],
   suite: () => suite(),
   stack: () => data?.stack ?? [],
   names: () => data?.agentNames ?? {},
@@ -598,11 +601,8 @@ function insertSkill(item: StackItem): void {
 async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
   if (!id) return;
-  const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task));
-  const prompt = [
-    `for task ${task.id}: "${task.title}".`, task.notes ? `Notes: ${task.notes}` : '', prd ? `PRD: ${prd.title}${prd.notes ? `. ${prd.notes}` : ''}.` : '',
-    `You are this task's testing agent, so you may write ${suitePath(task.id)}. Record bugs in ${criteriaPath(task.id)}.`,
-  ].filter(Boolean).join(' ');
+  const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task)) ?? null;
+  const prompt = draftRequest(task, prd);
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
   const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note
