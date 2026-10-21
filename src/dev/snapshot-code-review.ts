@@ -8,6 +8,8 @@ import { app } from 'electron';
 import type { Kit } from './snapshot';
 import { codeReviewFixture, historyFixture } from '../main/snapshot-mode';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { keepActivity } from './snapshot-activity';
+import { listActivity } from '../main/activity-feed';
 
 const SESSION = 'c0dec0de-0000-4000-8000-00000000c0de';
 const ORIGINAL = "import { round } from './money';\n\nexport function total(items: Item[]): number {\n  return items.reduce((sum, i) => sum + i.price, 0);\n}\n";
@@ -69,6 +71,9 @@ export async function codeReviewCheck(kit: Kit, fixtureFile: string): Promise<vo
   codeReviewFixture.review = async (prompt) => { prompts.push(prompt); return STUB_REPLY; };
   const fixtureBefore = fs.existsSync(fixtureFile) ? fs.readFileSync(fixtureFile, 'utf8') : null;
   const H = '#history-preview';
+  const restoreActivity = keepActivity();
+  const activityBefore = new Set(listActivity().map((e) => e.id));
+  let appended = false;
   try {
     // History: the turn that changed code has the switch; Reply is shown first.
     await js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(SESSION)}); return PastelTerm.history.setPreviewMode('replies'); })`);
@@ -96,6 +101,7 @@ export async function codeReviewCheck(kit: Kit, fixtureFile: string): Promise<vo
     // Reader: the live tab's newest reply changed code, so it has the same switch.
     if (fixtureBefore !== null) {
       fs.appendFileSync(fixtureFile, jsonl(turnLines('r', dir, 'fix the cart total in the reader too')));
+      appended = true;
       const reader = await probe('#latest', (p) => p.tabs.length === 2, 10000);
       check(reader?.tabs[1] === 'Code review (2)', `the reader's newest reply has Reply · Code review (2): ${JSON.stringify(reader?.tabs)}`);
       await click('#latest .cr-tab:last-of-type');
@@ -116,7 +122,10 @@ export async function codeReviewCheck(kit: Kit, fixtureFile: string): Promise<vo
   } finally {
     codeReviewFixture.review = null;
     historyFixture.records = [];
+    // The appended turn's edits land in Activity on coord's next tick; wait for that before putting the feed back.
+    if (appended) await waitFor(() => listActivity().some((e) => e.kind === 'edits' && !activityBefore.has(e.id)) || null, 8000);
     if (fixtureBefore !== null) fs.writeFileSync(fixtureFile, fixtureBefore);
+    restoreActivity();
     fs.rmSync(path.join(app.getPath('userData'), 'code-review', `${SESSION}.json`), { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
     await js('PastelTerm.overlays.hideCurrent()');

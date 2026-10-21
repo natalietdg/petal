@@ -36,17 +36,19 @@ export function attach(stripEl: HTMLElement, pinEl: HTMLElement, prsEl: HTMLElem
   strip = stripEl;
   pin = pinEl;
   prs = prsEl;
-  bar.setAttribute('aria-controls', `${stripEl.id} ${pinEl.id} ${prsEl.id}`);
   stripEl.before(bar);
 }
 
-// After each repaint: the bar names what it folds, and goes when there is nothing to fold.
+// After each repaint: the bar names and controls exactly what it folds, and goes when there is nothing to fold.
 export function paint(): void {
   const chips = strip && !strip.hidden ? [...strip.querySelectorAll('.status-chip')].map((chip) => chip.textContent ?? '') : [];
+  const pinShown = Boolean(pin && !pin.hidden);
   const prsTab = prs && !prs.hidden ? prs.querySelector('.prs-tab-text')?.textContent : null;
-  const shown = [...chips, ...(pin && !pin.hidden ? ['Conclusion'] : []), ...(prsTab ? [prsTab] : [])];
+  const shown = [...chips, ...(pinShown ? ['Conclusion'] : []), ...(prsTab ? [prsTab] : [])];
+  const controls = [chips.length ? strip?.id : null, pinShown ? pin?.id : null, prsTab ? prs?.id : null].filter(Boolean);
   bar.hidden = shown.length === 0;
   names.textContent = shown.join(' · ');
+  if (controls.length) bar.setAttribute('aria-controls', controls.join(' ')); else bar.removeAttribute('aria-controls');
 }
 
 bar.addEventListener('click', () => setCollapsed(!isCollapsed()));

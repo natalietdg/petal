@@ -43,6 +43,7 @@ const STATE = `(() => {
     order: [...document.querySelectorAll('#reader-prs .prs-order > li > strong')].map((e) => e.textContent),
     inferred: document.querySelector('#reader-prs .prs-inferred')?.textContent ?? null,
     bar: document.querySelector('#reader-banners-bar .banners-names')?.textContent ?? '',
+    controls: document.getElementById('reader-banners-bar')?.getAttribute('aria-controls') ?? '',
   };
 })()`;
 
@@ -76,10 +77,11 @@ export async function sessionPrsCheck(kit: Kit, file: string): Promise<void> {
   prsFixture.mainSafe = async (dir) => { asked.mainSafe.push(dir); return MAIN_SAFE_REPORT; };
   prsFixture.deployOrder = async (prompt) => { asked.order.push(prompt); return ORDER_ANSWER; };
   try {
-    await js("PastelTerm.tabs.activate(PastelTerm.tabs.ids()[0]); PastelTerm.reader.setView('replies')");
+    // Run alone on a fresh home, Get started is still open over the reader; the full run has closed it already.
+    await js("PastelTerm.overlays.hideCurrent(); PastelTerm.tabs.activate(PastelTerm.tabs.ids()[0]); PastelTerm.reader.setView('replies')");
     appendPrTurns(file, repos);
     const tab = await waitFor(async () => { const s = await js(STATE); return s.shown && s.tab === 'PRs (3)' ? s : null; }, 8000);
-    check(tab && !tab.open && tab.bar.includes('PRs (3)'), `the tab reads PRs (3), folded, and the banners bar names it: ${JSON.stringify(tab)}`);
+    check(tab && !tab.open && tab.bar.includes('PRs (3)') && tab.controls.split(' ').includes('reader-prs'), `the tab reads PRs (3), folded, and the banners bar names and controls it: ${JSON.stringify(tab)}`);
 
     await js("document.querySelector('#reader-prs .prs-tab').click()");
     const open = await waitFor(async () => { const s = await js(STATE); return s.open && s.diagram ? s : null; }, 8000);
