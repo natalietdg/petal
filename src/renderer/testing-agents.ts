@@ -3,7 +3,7 @@ import * as tabs from './tabs';
 import * as composer from './composer';
 import * as agentTerms from './agent-terms';
 import { isIpcError } from './dom';
-import { agentsPanel, type AgentsModel, type LaneModel } from './testing-agents-view';
+import { agentsPanel, keepTurnsScroll, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
 import { IDLE_GIVE_UP_MS, buildFixerBrief, buildLoopBrief, isActive, loopStatus, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { queueDone, type SentBug } from '../shared/bug-queue';
@@ -14,7 +14,7 @@ import { cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type Rou
 import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
 import { askAgainText, awaitingReview, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
-import { canMessage, chatPlaceholder, chatTurns, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, type LaneTerminal } from '../shared/agent-chat';
+import { canMessage, chatPlaceholder, chatTurns, isAnswered, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, withPending, type ChatTurn, type LaneTerminal, type PendingMessage } from '../shared/agent-chat';
 import type { AgentView, LoopFacts, LoopView, PipelineRun, StackItem } from '../shared/testing';
 import type { Prd, Task } from '../shared/tasks';
 import type { Reply } from '../shared/types';
@@ -75,6 +75,7 @@ export function createAgents(ctx: AgentContext) {
   const termBoxes = new Map<string, HTMLDivElement>();
   const mounted = new Map<string, string>(); // sessionId -> the agent terminal's tab id in its box
   const resumeAsked = new Set<string>(); // sessions Open terminal already asked main to resume
+  const pending = new Map<string, PendingMessage[]>(); // sessionId -> her lane messages no reply has answered yet
 
   const key = (): string | null => { const root = ctx.root(); const task = ctx.task(); return root && task ? keyOf(root, task.id) : null; };
   const record = (): AgentLoop | null => loops.get(key() ?? '') ?? null; // the shown task's loop or draft
@@ -413,16 +414,22 @@ export function createAgents(ctx: AgentContext) {
   }
 
   // Her message to one agent, through main: pasted when its claude is ready, resumed first when none runs it.
+  // It shows in the lane at once, Working…, and comes back to the box if main refuses it.
   async function send(role: AgentRole, text: string): Promise<void> {
     const r = record();
     const agent = r ? agentOf(r, role) : null;
     const route = routeMessage(agent, text);
     if ('note' in route || !r) { notes[role] = 'note' in route ? route.note : ''; draw(); return; }
-    const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: route.sessionId, text });
-    const sent = !isIpcError(reply) && !('note' in reply);
-    if (sent) drafts[role] = '';
-    notes[role] = isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note : sentNote(nameOf(role), reply.outcome);
+    const message = { text: text.trim(), at: Date.now() };
+    const forget = (): void => { pending.set(route.sessionId, (pending.get(route.sessionId) ?? []).filter((m) => m !== message)); };
+    pending.set(route.sessionId, [...(pending.get(route.sessionId) ?? []), message]);
+    drafts[role] = '';
+    notes[role] = '';
     (document.activeElement as HTMLElement | null)?.blur();
+    draw();
+    const reply = await window.pastel.testing.agentSend({ root: r.root, sessionId: route.sessionId, text });
+    if (isIpcError(reply) || 'note' in reply) { forget(); drafts[role] = text; }
+    notes[role] = isIpcError(reply) ? `Couldn’t send it: ${reply.error}` : 'note' in reply ? reply.note : sentNote(nameOf(role), reply.outcome);
     await tick();
     draw();
   }
@@ -530,6 +537,14 @@ export function createAgents(ctx: AgentContext) {
     }
   }
 
+  // The lane's turns: the transcript's, then her messages still waiting for a reply.
+  function laneTurns(r: AgentLoop, role: AgentRole, agent: AgentView): ChatTurn[] {
+    const turns = chatTurns(repliesOf(r, role), r.startedAt);
+    const waiting = (pending.get(agent.sessionId) ?? []).filter((m) => !isAnswered(m, turns, agent.state === 'working'));
+    pending.set(agent.sessionId, waiting);
+    return withPending(turns, waiting);
+  }
+
   function laneModel(role: AgentRole, r: AgentLoop | null, progress: LoopProgress | null): LaneModel {
     const agent = r ? agentOf(r, role) : null;
     const status = laneStatus(role, r, progress);
@@ -540,7 +555,7 @@ export function createAgents(ctx: AgentContext) {
       canSend: canMessage(agent), placeholder: chatPlaceholder(nameOf(role), agent?.state ?? null),
       terminal, termOpen, termBox: agent && termOpen ? boxOf(agent.sessionId) : null, terminalNote: terminalNote(terminal), agentNote: agent?.note ?? null,
       tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
-      turns: r && agent ? chatTurns(repliesOf(r, role), r.startedAt) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
+      turns: r && agent ? laneTurns(r, role, agent) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
       review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
     };
   }
@@ -559,6 +574,7 @@ export function createAgents(ctx: AgentContext) {
     const round = loop ? roundTokens(loop.actions.tester, loop.actions.fixer, loop.startedAt) : null;
     const started = lanes.filter((l) => l.started);
     const sum = (pick: (t: { total: number; cached: number }) => number) => started.reduce((n, l) => n + (l.tokens ? pick(l.tokens) : 0), 0);
+    const restoreScroll = keepTurnsScroll(element);
     element.replaceChildren(agentsPanel({
       lanes, queue: loop?.queue ?? null, estimate: estimate(status), round: round ? { label: roundLabel(round), tokens: round.tokens, cached: round.cached } : null,
       total: started.length ? { total: sum((t) => t.total), cached: sum((t) => t.cached) } : null, renaming, logOpen, logShown, view, drafts,
@@ -581,6 +597,7 @@ export function createAgents(ctx: AgentContext) {
       editScenarios: () => void editScenarios(),
       approveScenarios: () => void approveScenarios(),
     }));
+    restoreScroll();
     syncTerminals(r);
   }
 
@@ -602,7 +619,7 @@ export function createAgents(ctx: AgentContext) {
       lanes: ROLES.map((role) => {
         const lane = laneModel(role, r, progress);
         const agent = r ? agentOf(r, role) : null;
-        return { role, name: lane.name, status: lane.status, state: lane.state, sessionId: agent?.sessionId ?? null, hostTabId: agent?.hostTabId ?? null, terminal: lane.terminal, mounted: agent ? mounted.get(agent.sessionId) ?? null : null, canSend: lane.canSend, placeholder: lane.placeholder, turns: lane.turns.length };
+        return { role, name: lane.name, status: lane.status, state: lane.state, sessionId: agent?.sessionId ?? null, hostTabId: agent?.hostTabId ?? null, terminal: lane.terminal, mounted: agent ? mounted.get(agent.sessionId) ?? null : null, canSend: lane.canSend, placeholder: lane.placeholder, turns: lane.turns.length, lastTurn: lane.turns.at(-1) ?? null };
       }),
     };
   };

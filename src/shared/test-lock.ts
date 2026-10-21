@@ -95,20 +95,28 @@ export interface Touch { target: string; at: number; sessionId: string; kind: 'e
 const TEST_CONFIG = /(^|\/)(conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|package\.json|(jest|vitest|playwright|cypress|karma)\.(config|setup|workspace)\.[a-z0-9.]+|karma\.conf\.[a-z]+|setupTests\.[a-z]+|\.mocharc(\.[a-z]+)?)$/;
 export const isTestConfig = (rel: string): boolean => TEST_CONFIG.test(rel);
 
-// Each task's suite file, the tests its criteria lines name, and every file its testing agent edited but test config; with the task each belongs to.
+// Test-looking paths, the same list as the hook's TEST_PATH.
+const TEST_PATH = /(^|\/)(tests?|__tests__|e2e|spec|\.maestro)\/|\.(test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]+\.py$|^\.petal\//;
+export const isTestPath = (rel: string): boolean => TEST_PATH.test(rel);
+
+// What the lock may hold: a task's suite file or a test file. Never app code, runner config or the rest of .petal/.
+export const isLockable = (rel: string): boolean =>
+  rel.startsWith(SUITE_PREFIX) || (isTestPath(rel) && !isTestConfig(rel) && !rel.startsWith('.petal/'));
+
+// Each task's suite file, the tests its criteria lines name, and every test file its testing agent edited; with the task each belongs to.
 export function lockedFiles({ root, suiteTasks, criteria, agents, touches }: LockInputs): Record<string, string> {
   const owners: Record<string, string> = {};
   for (const taskId of suiteTasks) owners[`${SUITE_PREFIX}${taskId}.json`] = taskId;
   for (const item of [...(criteria?.scenarios ?? []), ...(criteria?.bugs ?? [])]) {
     const file = item.test?.path.trim();
     const rel = file && item.taskId ? repoPath(file, root) : null;
-    if (rel) owners[rel] ??= item.taskId as string;
+    if (rel && isLockable(rel)) owners[rel] ??= item.taskId as string;
   }
   const testers = new Map(agents.filter((a) => a.role === 'tester').map((a) => [a.sessionId, a.taskId]));
   for (const touch of touches) {
     const taskId = testers.get(touch.sessionId);
     const rel = taskId && touch.kind === 'edit' ? repoPath(touch.target, root, touch.cwd) : null;
-    if (rel && !isTestConfig(rel) && (!rel.startsWith('.petal/') || rel.startsWith(SUITE_PREFIX))) owners[rel] ??= taskId as string;
+    if (rel && isLockable(rel)) owners[rel] ??= taskId as string;
   }
   return owners;
 }

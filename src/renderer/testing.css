@@ -385,6 +385,7 @@
 .tst-agent-turn { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tst-agent-prompt { align-self: flex-end; max-width: 90%; margin: 0; padding: 4px 10px; border-radius: 10px; background: var(--code-bg); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .tst-agent-reply { font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.tst-agent-working { font-size: 13px; }
 .tst-agent-reply > :first-child { margin-top: 0; }
 .tst-agent-reply > :last-child { margin-bottom: 0; }
 .tst-agent-send { display: flex; gap: 6px; align-items: flex-end; }

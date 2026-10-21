@@ -6,7 +6,7 @@ import { buildFixerBrief, buildLoopBrief, buildSentFixerBrief, parseCriteria, st
 import { estimateRoundTokens, sumUsage, tokenText, totalTokens, CHARS_PER_TOKEN, TURNS_PER_ROUND, BASE_CONTEXT_TOKENS } from '../src/shared/token-usage';
 import { actionsFrom, roundSummaries } from '../src/shared/agent-actions';
 import { agentTabTitle } from '../src/shared/agent-names';
-import { ASKING_NOTE, CLOSED_NOTE, canMessage, chatPlaceholder, chatTurns, laneTerminal, mountStep, routeMessage, sentNote, terminalNote } from '../src/shared/agent-chat';
+import { ASKING_NOTE, CLOSED_NOTE, canMessage, chatPlaceholder, chatTurns, isAnswered, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, withPending } from '../src/shared/agent-chat';
 import type { AgentState } from '../src/shared/testing';
 
 const words = { tester: 'Quinn', fixer: 'Fixie', failure: () => 'Failure output:\nexpected 10 to be 9' };
@@ -274,5 +274,27 @@ describe('the lane conversation', () => {
     const turns = chatTurns([reply('e', 50), reply('d', 40), reply('c', 30), reply('b', 20), reply('a', 5)], 10_000, 3);
     expect(turns.map((t) => t.id)).toEqual(['c', 'd', 'e']);
     expect(chatTurns([reply('a', 5)], 10_000)).toEqual([]);
+  });
+
+  it('her sent message shows at once as a Working… turn, last, until a reply answers it', () => {
+    const turn = (id: string, at: number, prompt: string, markdown = `reply ${id}`) => ({ id, prompt, markdown, at });
+    const old = [turn('brief', 1000, 'You are Bug fix agent, the bug fix agent for the task…', 'x\n'.repeat(47))];
+    const sent = { text: 'dso can u fix?', at: 5000 };
+    const shown = withPending(old, [sent]);
+    expect(shown.at(-1)).toEqual({ id: 'pending-5000', prompt: 'dso can u fix?', markdown: '', at: 5000, working: true });
+    expect(isAnswered(sent, old, false)).toBe(false);
+    // A queued second message is folded into the same reply's prompt, as Claude Code writes it.
+    const answered = [...old, turn('fix', 6000, 'dso can u fix?\n\nso can u fix?')];
+    expect(isAnswered(sent, answered, true)).toBe(true);
+    expect(isAnswered({ text: 'so  can u\nfix?', at: 5100 }, answered, true)).toBe(true);
+    expect(isAnswered({ text: 'dso can u fix?', at: 7000 }, answered, false)).toBe(false); // the same words sent again wait for their own reply
+  });
+
+  it('a reply to an earlier message never answers hers while the agent keeps working', () => {
+    const sent = { text: 'please also check VN', at: 5000 };
+    const earlier = [{ id: 'r1', prompt: 'fix the stage', markdown: 'Done.', at: 6000 }];
+    expect(isAnswered(sent, earlier, true)).toBe(false);
+    expect(isAnswered(sent, earlier, false)).toBe(true); // a reworded paste: answered once a newer reply lands and it is idle
+    expect(withPending(earlier, [sent, { text: 'and MY', at: 5200 }], 2).map((t) => t.id)).toEqual(['pending-5000', 'pending-5200']);
   });
 });

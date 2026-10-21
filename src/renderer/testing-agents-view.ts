@@ -107,11 +107,13 @@ function logRows(lane: LaneModel): LogRow[] {
 function chat(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElement {
   const box = el('div', 'tst-agent-chat');
   const turns = el('ol', 'tst-agent-turns');
+  turns.dataset.role = lane.role;
   for (const turn of lane.turns) {
-    const item = el('li', 'tst-agent-turn');
+    const item = el('li', turn.working ? 'tst-agent-turn is-pending' : 'tst-agent-turn');
     item.dataset.turn = turn.id;
     if (turn.prompt) item.append(el('p', 'tst-agent-prompt', turn.prompt.length > 400 ? `${turn.prompt.slice(0, 399)}…` : turn.prompt));
     if (turn.markdown) { const reply = render(turn.markdown); reply.classList.add('tst-agent-reply'); item.append(reply); }
+    if (turn.working) item.append(el('p', 'tst-muted tst-agent-working', 'Working…'));
     turns.append(item);
   }
   if (!lane.turns.length) turns.append(el('li', 'tst-muted', lane.state === 'starting' ? `${lane.name} is starting.` : 'No replies yet.'));
@@ -134,6 +136,19 @@ function chat(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElem
   if (lane.agentNote) box.append(el('p', 'tst-muted tst-agent-reach', lane.agentNote));
   if (lane.note) box.append(el('p', 'tst-muted tst-agent-note', lane.note));
   return box;
+}
+
+// Each lane's conversation across a redraw: it follows the newest turn, unless she scrolled up to read and nothing new came.
+export function keepTurnsScroll(box: HTMLElement): () => void {
+  const lists = (): HTMLElement[] => [...box.querySelectorAll<HTMLElement>('.tst-agent-turns')];
+  const newest = (list: HTMLElement): string => (list.lastElementChild as HTMLElement | null)?.dataset.turn ?? '';
+  const before = new Map(lists().map((list) => [list.dataset.role, { top: list.scrollTop, reading: list.scrollTop + list.clientHeight < list.scrollHeight - 8, newest: newest(list) }]));
+  return () => {
+    for (const list of lists()) {
+      const was = before.get(list.dataset.role);
+      list.scrollTop = was?.reading && was.newest === newest(list) ? was.top : list.scrollHeight;
+    }
+  };
 }
 
 function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLElement {

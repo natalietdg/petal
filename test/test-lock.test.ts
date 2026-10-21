@@ -9,9 +9,9 @@ import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 // @ts-expect-error: a plain .mjs shipped as the hook, no type declarations
 import { bashWrites, configNote, decide, isTestConfig, isTestPath, logRefusal } from '../resources/hooks/petal-test-lock.mjs';
 import { LEGACY_LOCK_COMMAND, hasLockHook, lockCommand, lockHookStale, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
-import { TOUCH_SLACK_MS, emptyManifest, integrityStep, isTestConfig as sharedIsTestConfig, lastToucher, lockedFiles, mainRefusals, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
+import { TOUCH_SLACK_MS, emptyManifest, integrityStep, isTestConfig as sharedIsTestConfig, isTestPath as sharedIsTestPath, lastToucher, lockedFiles, mainRefusals, readManifest, repoPath, restoredText } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
-import { dismissRestored, loadManifest, lockRefusals, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from '../src/main/test-lock';
+import { dismissRestored, droppedCopiesDir, loadManifest, lockRefusals, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
 
 afterEach(removeTempDirs);
@@ -218,6 +218,54 @@ describe('what is locked', () => {
     expect(owners).toEqual({ '.petal/suites/t-cart.json': 't-cart', 'src/cart.test.ts': 't-cart', 'e2e/flow.spec.ts': 't-cart' });
     expect(repoPath('../x', ROOT, `${ROOT}/src`)).toBe('x');
     expect(repoPath('/etc/passwd', ROOT)).toBeNull();
+  });
+
+  it('app code is never locked, though the testing agent edited it or a criteria line names it', () => {
+    const app = 'app/[lang]/(modules)/employee/add-single/preview/preview-view.tsx';
+    const test = 'app/[lang]/(modules)/employee/add-single/preview/preview-view.vn-salary.test.tsx';
+    const criteria = parseCriteria(`## Bugs\n- [fail] vn salary · test: ${app} · round 1 · task: t-vn\n`);
+    const owners = lockedFiles({
+      root: ROOT, suiteTasks: ['t-vn'], criteria, agents: [{ sessionId: 'tester', role: 'tester', taskId: 't-vn' }],
+      touches: [app, test, '.petal/notes.md'].map((target, at) => ({ target, at, sessionId: 'tester', kind: 'edit' as const, cwd: ROOT })),
+    });
+    expect(owners).toEqual({ '.petal/suites/t-vn.json': 't-vn', [test]: 't-vn' });
+    for (const file of [app, test, 'src/a.ts', 'tests/x.py', '.petal/suites/t.json', 'latest/a.ts']) expect(sharedIsTestPath(file), file).toBe(isTestPath(file)); // one list in both places
+  });
+
+  it('an older lock set drops its app code: the fix stays, the copy moves to locked-dropped, tests stay locked', () => {
+    useTempUserData();
+    const repo = tempDir('petal-repo-');
+    const app = 'app/[lang]/preview/preview-view.tsx';
+    const test = 'app/[lang]/preview/preview-view.vn-salary.test.tsx';
+    const file = (rel: string) => path.join(repo, ...rel.split('/'));
+    const copy = (rel: string, dir = lockedCopiesDir(repo)) => path.join(dir, ...rel.split('/'));
+    const sha = (text: string) => crypto.createHash('sha256').update(text).digest('hex');
+    for (const [rel, text] of [[app, 'old view\n'], [test, 'it("vn")\n']]) {
+      fs.mkdirSync(path.dirname(file(rel)), { recursive: true });
+      fs.writeFileSync(file(rel), text);
+      fs.mkdirSync(path.dirname(copy(rel)), { recursive: true });
+      fs.writeFileSync(copy(rel), text);
+    }
+    setLock(repo, true);
+    const older = loadManifest(repo);
+    const flags = [{ path: app, at: 1, taskId: 't', by: 'fixer' as const }, { path: app, at: 2, taskId: 't', by: 'unconfirmed' as const }, { path: test, at: 3, taskId: 't', by: 'main' as const }];
+    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), JSON.stringify({ ...older, lockedPaths: [app, test], owners: { [app]: 't', [test]: 't' }, approved: { [app]: sha('old view\n'), [test]: sha('it("vn")\n') }, restored: flags }));
+    fs.writeFileSync(file(app), 'fixed view\n'); // the bug fix agent's fix
+    const fixerTouch = { target: app, at: Date.now(), sessionId: 'fixer', kind: 'edit' as const, cwd: repo };
+    const agents = [{ sessionId: 'tester', role: 'tester' as const, taskId: 't' }, { sessionId: 'fixer', role: 'fixer' as const, taskId: 't' }];
+    const testerTouch = { target: app, at: 0, sessionId: 'tester', kind: 'edit' as const, cwd: repo }; // the edit that locked it before
+    const after = refreshLock(repo, { suiteTasks: [], criteria: parseCriteria(`## Scenarios\n- [pass] vn · test: ${test} · round 1 · task: t\n`), agents, touches: [testerTouch, fixerTouch] }, {});
+    expect(fs.readFileSync(file(app), 'utf8')).toBe('fixed view\n');
+    expect(after.lockedPaths).toEqual([test]);
+    expect(Object.keys(after.approved)).toEqual([test]);
+    expect(after.restored).toEqual([flags[2]]);
+    expect(fs.existsSync(copy(app))).toBe(false);
+    expect(fs.readFileSync(copy(app, droppedCopiesDir(repo)), 'utf8')).toBe('old view\n');
+    expect(fs.readFileSync(copy(test), 'utf8')).toBe('it("vn")\n');
+    fs.writeFileSync(file(app), 'fixed again\n');
+    refreshLock(repo, { suiteTasks: [], criteria: null, agents, touches: [testerTouch, { ...fixerTouch, at: Date.now() }] }, {});
+    expect(fs.readFileSync(file(app), 'utf8')).toBe('fixed again\n'); // never put back again
+    expect(fs.readFileSync(copy(app, droppedCopiesDir(repo)), 'utf8')).toBe('old view\n');
   });
 
   it('the integrity step: approve the tester’s change, restore anyone else’s, approve a first sight', () => {
