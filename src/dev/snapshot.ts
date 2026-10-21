@@ -45,6 +45,7 @@ import { libraryCheck } from './snapshot-library';
 import { libraryCostCheck } from './snapshot-library-cost';
 import { lessonsCheck } from './snapshot-lessons';
 import { testingCheck } from './snapshot-testing';
+import { agentChatCheck } from './snapshot-agent-chat';
 import { testLoopCheck } from './snapshot-test-loop';
 import { loopSignalsCheck } from './snapshot-loop-signals';
 import { distillationCheck } from './snapshot-distillation';
@@ -454,6 +455,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['library cost', keepingStores(['library', 'cost', 'activity'], () => libraryCostCheck(kit, win), kit.outDir)], // stubbed usage numbers only; never a real claude
     ['lessons', keepingStores(['library', 'cost', 'activity'], () => lessonsCheck(kit, win), kit.outDir)], // a stubbed extractor and a stand-in CLAUDE.md only; puts back what it changes
     ['testing', keepingStores(['testing', 'activity'], () => testingCheck(kit, win), kit.outDir)], // records the pipeline line, never runs it; appends a Claude run to the fixture
+    ['agent chat', keepingStores(['testing', 'activity'], () => agentChatCheck(kit, win), kit.outDir)], // a resumed fixture agent and her lane message; never a real claude
     ['petal skills', keepingStores(['testing', 'activity'], () => petalSkillsCheck(kit, win), kit.outDir)], // stand-in ~/.claude and project only; never runs a command
     ['test loop', keepingStores(['testing', 'activity'], () => testLoopCheck(kit, win, feed), kit.outDir)], // records the brief paste and Esc, never a real claude; appends Loop lines
     ['loop signals', keepingStores(['testing', 'activity'], () => loopSignalsCheck(kit, win), kit.outDir)], // fixture agent tabs and runs only; notifications recorded, never shown
@@ -663,6 +665,7 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'testing') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await testingCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    await agentChatCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
