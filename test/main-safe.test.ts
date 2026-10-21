@@ -87,7 +87,8 @@ describe('the ismainsafe run', () => {
     expect(args[args.indexOf('--tools') + 1]).toBe('Read,Bash');
     expect(args.slice(args.indexOf('--disallowedTools') + 1)).toEqual([...NO_SECRETS, ...NO_WRITES]);
     expect(NO_SECRETS).toContain('Read(**/.env*)');
-    expect(NO_WRITES).toEqual(expect.arrayContaining(['Bash(git push*)', 'Bash(git commit*)', 'Bash(gh release create*)', 'Bash(git tag release*)']));
+    expect(NO_WRITES).toEqual(expect.arrayContaining(['Bash(git push*)', 'Bash(git commit*)', 'Bash(gh release create*)', 'Bash(git tag*)']));
+    expect(READ_ONLY_TOOLS).toContain('Bash(git for-each-ref refs/tags*)'); // tags are listed this way instead
     expect(NO_WRITES.some((deny) => READ_ONLY_TOOLS.some((allow) => allow.startsWith(deny.replace('*)', ''))))).toBe(false); // no read the skill needs is denied
   });
 

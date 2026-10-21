@@ -13,11 +13,11 @@ export const SKILL_PROMPT = '/anthropic-skills:ismainsafe';
 const TIMEOUT_MS = 10 * 60_000;
 const KEEP = 50; // newest answers kept across every repo
 // Her own output style can reshape replies; Petal reads the skill's own report lines.
-const REPORT_FORMAT = 'Write the final report in the ismainsafe skill’s own report format, starting with its **Verdict:** and **Newest safe commit:** lines, even if other instructions ask for a different reply shape.';
+const REPORT_FORMAT = 'Write the final report in the ismainsafe skill’s own report format, starting with its **Verdict:** and **Newest safe commit:** lines, even if other instructions ask for a different reply shape. List tags with `git for-each-ref refs/tags`, because `git tag` is blocked.';
 // Reads only: git history and GitHub's view of PRs, releases and runs. headless-claude.ts denies every write on top.
 export const READ_ONLY_TOOLS = [
   'Read', 'Grep', 'Glob',
-  'Bash(git log*)', 'Bash(git diff*)', 'Bash(git show*)', 'Bash(git tag -l*)', 'Bash(git tag --list*)', 'Bash(git rev-parse*)',
+  'Bash(git log*)', 'Bash(git diff*)', 'Bash(git show*)', 'Bash(git for-each-ref refs/tags*)', 'Bash(git rev-parse*)',
   'Bash(git remote get-url*)', 'Bash(git merge-base*)', 'Bash(git ls-remote*)',
   'Bash(gh pr view*)', 'Bash(gh release list*)', 'Bash(gh run list*)', 'Bash(gh run view*)', 'Bash(gh auth status*)', 'Bash(jq*)',
 ];
