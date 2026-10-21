@@ -246,12 +246,19 @@ export function createAgents(ctx: AgentContext) {
 
   // Every tick: Needs you is read from this window's screens, then main's loops are read while one is at work.
   let ticks = 0;
-  let ticking = false;
   async function tick(): Promise<void> {
     ticks += 1;
     scanWaiting();
-    if (ticking || (ticks > 1 && ![...loops.values()].some(atWork) && ticks % FIND_EVERY)) return;
-    ticking = true;
+    if (ticks > 1 && ![...loops.values()].some(atWork) && ticks % FIND_EVERY) return;
+    await readLoops();
+  }
+
+  // Main's loops into this window's copy; a read asked for mid-read runs right after it.
+  let reading = false;
+  let readAgain = false;
+  async function readLoops(): Promise<void> {
+    if (reading) { readAgain = true; return; }
+    reading = true;
     try {
       const known = [...loops.values()].map((r) => ({ root: r.root, taskId: r.taskId }));
       const reply = await window.pastel.testing.loops({ known });
@@ -267,7 +274,8 @@ export function createAgents(ctx: AgentContext) {
       for (const k of known.map((x) => keyOf(x.root, x.taskId))) if (!listed.has(k)) changed = drop(k) || changed;
       if (changed) ctx.redraw();
     } finally {
-      ticking = false;
+      reading = false;
+      if (readAgain) { readAgain = false; void readLoops(); }
     }
   }
   setInterval(() => void tick(), TICK_MS);
@@ -286,8 +294,8 @@ export function createAgents(ctx: AgentContext) {
     const outcome = !tab ? 'gone' : composer.claudeIsAsking(tab) ? 'asking' : (await composer.pasteToClaude(tab, composer.stripControls(text).trim())) ? 'sent' : 'gone';
     window.pastel.testing.agentPasted({ requestId, outcome });
   })());
-  // An agent terminal came or went (resumed, closed, popped out): the lanes follow at once.
-  agentTerms.onAgentTabsChanged(() => ctx.redraw());
+  // An agent terminal came or went: the lanes follow at once, and main's loops are read now (it may be a loop new here).
+  agentTerms.onAgentTabsChanged(() => { ctx.redraw(); void readLoops(); });
 
   // The shown task's agents: their action logs, tokens and replies, from each session's transcript or live terminal.
   async function refreshLogs(): Promise<void> {
