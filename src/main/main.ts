@@ -21,6 +21,7 @@ import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
 import { registerMentionsIpc } from './mentions-ipc';
 import { registerTasksIpc } from './tasks-ipc';
+import { registerCodeReviewIpc } from './code-review-ipc';
 import * as coord from './coord';
 import { flush as flushActivity } from './activity-feed';
 import { registerReplyImages, registerReplyImageScheme } from './reply-image-ipc';
@@ -190,6 +191,7 @@ function registerIpc(): void {
   registerPasteIpc();
   registerMentionsIpc();
   registerTasksIpc({ sessions });
+  registerCodeReviewIpc({ sessions });
   registerReplyImages({ sessions });
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));

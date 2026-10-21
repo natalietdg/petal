@@ -1,0 +1,83 @@
+/* Code review: the Reply · Code review switch, function cards with their diffs and answers, and the Board's task roll-up.
+   Theme tokens only, so light and dark themes both read. */
+
+.cr-tabs { display: flex; align-items: baseline; gap: 4px; margin: 0.2em 0 0.9em; font: 600 13px var(--ui-font); }
+.cr-tab {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.cr-tab:hover { color: var(--reader-fg); }
+.cr-tab[aria-selected="true"] { background: var(--code-bg); color: var(--reader-fg); }
+.cr-tab:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.cr-tab-sep { color: var(--muted); }
+
+.cr-panel { display: flex; flex-direction: column; gap: 14px; margin: 0 0 1em; font-family: var(--ui-font); }
+.cr-loading, .cr-outcome, .cr-skipped, .cr-running { margin: 0; font-size: 14px; color: var(--muted); }
+.cr-outcome { flex-basis: 100%; }
+.cr-explain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cr-explain:empty { display: none; }
+
+.cr-card {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--reader-bg);
+  color: var(--reader-fg);
+}
+.cr-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.cr-name { font: 700 14px var(--mono-font); overflow-wrap: anywhere; }
+.cr-file { font: 12.5px var(--mono-font); color: var(--muted); overflow-wrap: anywhere; }
+.cr-change { margin: 4px 0 0; font: 600 12px var(--ui-font); letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted); }
+.cr-note { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+.cr-diff {
+  margin: 10px 0 0;
+  padding: 8px 0;
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--code-bg);
+  font: 12.5px/1.5 var(--mono-font);
+}
+.cr-line { display: block; padding: 0 10px; white-space: pre; }
+.cr-sign { display: inline-block; width: 1.4em; color: var(--muted); user-select: none; }
+.cr-add { background: var(--done-wash); color: var(--done-ink); }
+.cr-add .cr-sign { color: var(--done-ink); }
+.cr-del { background: var(--decide-wash); color: var(--decide-ink); }
+.cr-del .cr-sign { color: var(--decide-ink); }
+.cr-gap { color: var(--muted); font-style: italic; font-family: var(--ui-font); font-size: 12px; }
+
+.cr-why { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--why-wash); font-size: 14px; line-height: 1.5; }
+.cr-why.inferred { background: var(--watch-wash); }
+.cr-basis { margin: 0 0 6px; font: 700 12px var(--ui-font); color: var(--why-ink); }
+.cr-why.inferred .cr-basis { color: var(--watch-ink); }
+.cr-why-row { margin: 4px 0 0; }
+.cr-why-label { display: inline-block; min-width: 6.2em; margin-right: 6px; font-weight: 700; }
+.cr-quote { margin: 8px 0 0; padding: 2px 0 2px 10px; border-left: 3px solid var(--why-ink); font-style: italic; }
+.cr-missing { display: flex; align-items: baseline; gap: 8px; background: var(--code-bg); color: var(--muted); }
+.cr-retry { margin: 0; }
+
+.cr-reasoning { font-size: 14px; color: var(--muted); }
+.cr-reasoning summary { cursor: pointer; font-weight: 600; }
+.cr-excerpt { margin: 6px 0 0; white-space: pre-wrap; color: var(--reader-fg); }
+.cr-excerpt-label { margin-right: 6px; font-weight: 700; color: var(--muted); }
+
+/* Board: the task roll-up replaces the cards until Back. */
+.board-code-review[hidden] { display: none; }
+.board-code-review-open { align-self: flex-start; margin: 6px 0 0; }
+.cr-task { display: flex; flex-direction: column; gap: 14px; }
+.cr-task-head { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cr-back { padding-left: 0; }
+.cr-task-title { margin: 0; font: 600 1.3em/1.2 var(--display-font); overflow-wrap: anywhere; }
+.cr-task-summary { margin: 0; font-size: 14px; color: var(--muted); }
+.cr-file-group { padding-top: 10px; border-top: 1px solid var(--rule); }
+.cr-file-name { margin: 0 0 8px; font: 700 14px var(--mono-font); overflow-wrap: anywhere; }
+.cr-fn-group { margin: 0 0 14px; }
+.cr-fn-name { margin: 0 0 6px; font: 600 13.5px var(--mono-font); }
+.cr-task-changes { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cr-when { margin: 0 0 4px; font-size: 12.5px; color: var(--muted); }

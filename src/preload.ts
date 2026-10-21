@@ -4,6 +4,7 @@ import type { FlowTarget, TabId, TermSize } from './shared/types';
 import type { PromptAnswer } from './shared/prompt-answer';
 import type { BackfillDays, BackfillState } from './shared/library';
 import type { LessonTarget } from './shared/lessons';
+import type { ExplainTarget, ReviewSource } from './shared/code-review';
 
 // Typed against the contract in shared/ipc.ts; ipcRenderer itself is untyped.
 const invoke = <C extends InvokeChannel>(channel: C, ...args: InvokeArgs<C>): Promise<InvokeResult<C>> => ipcRenderer.invoke(channel, ...args);
@@ -208,6 +209,14 @@ const api = {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),
     useGlobal: (repo: string) => invoke('factory:use-global', { repo }),
+  },
+  codeReview: {
+    summary: (source: ReviewSource) => invoke('code-review:summary', { source }),
+    turn: (source: ReviewSource, turnId: string) => invoke('code-review:turn', { source, turnId }),
+    task: (sessionId: string, taskId: string) => invoke('code-review:task', { sessionId, taskId }),
+    explain: (targets: ExplainTarget[]) => invoke('code-review:explain', { targets }),
+    cancel: () => invoke('code-review:cancel'),
+    onChanged: (callback: (change: EventChannels['code-review:changed']) => void) => subscribe('code-review:changed', callback),
   },
   history: {
     list: () => invoke('history:list'),

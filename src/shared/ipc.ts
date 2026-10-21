@@ -54,6 +54,7 @@ import type { SessionInfo } from './session-info';
 import type { ActivityEvent } from './activity';
 import type { CoordView, TaskChangeResult, TaskOp, TasksView } from './coord';
 import type { Prd, Task } from './tasks';
+import type { ExplainResult, ExplainTarget, ReviewSource, SessionSummary, TaskReview, TurnReview } from './code-review';
 
 // A guarded handler never rejects: a failure comes back as { error }.
 export type Guarded<T> = T | IpcError;
@@ -343,6 +344,16 @@ export interface InvokeChannels {
   'reply-image:status': { args: [request: { path: string; cwd: string | null }]; result: Guarded<ReplyImageStatus> };
   'reply-image:reveal': { args: [request: { path: string; cwd: string | null }]; result: Guarded<{ ok: boolean }> };
   'reply-image:open': { args: [request: { path: string; cwd: string | null }]; result: Guarded<{ ok: boolean }> };
+  // Code review. summary: which turns changed code, so the reader and History know where a Code review tab goes.
+  'code-review:summary': { args: [request: { source: ReviewSource }]; result: Guarded<SessionSummary> };
+  // One turn's function cards, cached answers and token estimate, loaded only when she opens its Code review tab.
+  'code-review:turn': { args: [request: { source: ReviewSource; turnId: string }]; result: Guarded<TurnReview> };
+  // The Board's roll-up: main maps the task to its sessions, since the renderer never names folders or logs.
+  'code-review:task': { args: [request: { sessionId: string; taskId: string }]; result: Guarded<TaskReview> };
+  // Runs the headless reviewer on her click; main owns the claude process and resolves when the run ends.
+  'code-review:explain': { args: [request: { targets: ExplainTarget[] }]; result: Guarded<ExplainResult> };
+  // Cancel: stops the running reviewer and anything queued behind it.
+  'code-review:cancel': { args: []; result: Guarded<Ok> };
 }
 
 // What the renderer reports once its terminal is up; logged by snapshot runs only.
@@ -417,6 +428,7 @@ export interface EventChannels {
   'agents:timeline': TimelineUpdate & { agentId: string };
   'activity:changed': void; // the activity feed gained or changed an event
   'coord:update': CoordView; // a session's task, branch or file clashes changed
+  'code-review:changed': { sessionId: string }; // answers landed or a run started or ended, so open views repaint
 }
 
 export type InvokeChannel = keyof InvokeChannels;

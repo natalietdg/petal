@@ -37,6 +37,7 @@ export interface TranscriptEntry {
   aiTitle?: string;
   origin?: { kind?: string; handback?: boolean }; // another agent's message arrives as a meta user entry, kind 'peer'
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
+  toolUseResult?: unknown; // on a tool_result entry: Claude Code's own record of the call, e.g. an edit's originalFile
   attachment?: { type?: string; commandMode?: string; prompt?: string | ContentItem[]; origin?: { kind?: string } }; // queued_command: her message sent while Claude works
 }
 

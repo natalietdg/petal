@@ -11,6 +11,7 @@ import * as boardActivity from './board-activity';
 import * as reader from './reader';
 import * as distillCard from './distill-card';
 import * as testing from './testing';
+import * as codeReviewTask from './code-review-task';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
@@ -52,7 +53,7 @@ const branchSelect = el('select', 'board-branch');
 branchSelect.setAttribute('aria-label', 'Branch');
 branchSelect.addEventListener('change', () => { branchFilter = branchSelect.value || null; boardActivity.setBranch(branchFilter); render(true); });
 head.append(title, viewTabs, summary, branchSelect, filterRow);
-view.append(head, grid, boardActivity.element());
+view.append(head, grid, boardActivity.element(), codeReviewTask.element());
 
 let filter: BoardFilter = 'all';
 let boardView: BoardView = 'sessions';
@@ -176,6 +177,7 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
   const message = boardMessage.control(card);
   if (message) item.append(message);
+  if (info?.task) item.append(reviewControl(card.sessionId, info.task.id, info.task.title));
   item.append(closeControl(card));
   if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId));
 
@@ -218,6 +220,20 @@ async function choose(card: BoardCard, confirmFork: boolean): Promise<void> {
   else if ('confirm' in result) confirms.set(card.sessionId, result.confirm);
   else if ('note' in result) notes.set(card.sessionId, result.note);
   else return close();
+  render(true);
+}
+
+// Code review for the card's task: every function its sessions changed, in place of the cards until Back.
+function reviewControl(sessionId: string, taskId: string, title: string): HTMLButtonElement {
+  const button = el('button', 'session-link board-code-review-open', 'Code review');
+  button.type = 'button';
+  button.setAttribute('aria-label', `Code review for ${title}`);
+  button.addEventListener('click', () => openCodeReview({ sessionId, taskId, title }));
+  return button;
+}
+
+export function openCodeReview(target: codeReviewTask.TaskTarget): void {
+  codeReviewTask.open(target, () => render(true));
   render(true);
 }
 
@@ -344,7 +360,7 @@ function render(force = false): void {
   const shown = filterCards(cards, filter);
   const stops = cards.map((c) => (c.tabId ? stopClaude.phaseOf(c.tabId) : 'hidden'));
   for (const b of viewButtons) b.setAttribute('aria-selected', String(b.dataset.view === boardView));
-  const sessionsView = boardView === 'sessions';
+  const sessionsView = boardView === 'sessions' && !codeReviewTask.isOpen();
   filterRow.hidden = !sessionsView;
   grid.hidden = !sessionsView;
   const key = JSON.stringify([filter, boardView, branchFilter, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
@@ -421,6 +437,7 @@ new MutationObserver(() => {
   notes.clear();
   confirms.clear();
   closeAsking = null;
+  if (codeReviewTask.isOpen()) codeReviewTask.close();
 })
   .observe(view, { attributes: true, attributeFilter: ['hidden'] });
 window.addEventListener('petal:open-board', open);

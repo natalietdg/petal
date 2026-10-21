@@ -41,6 +41,7 @@ const fixtureState = () => ({
   slash: fixtures.slashFixture.claudeDir,
   testing: [fixtures.testingFixture.project, fixtures.testingFixture.claudeDir],
   library: fixtures.libraryFixture.extract !== null,
+  codeReview: fixtures.codeReviewFixture.review !== null,
   panel: [fixtures.panelFixture.sessions?.length ?? null, fixtures.panelFixture.subagentsRoot],
   claudeInstalled: fixtures.claudeFixture.installed,
   folderHome: fixtures.folderFixture.home,
@@ -54,7 +55,7 @@ function fixtureRestorer(): () => void {
   const f = fixtures;
   const saved = {
     setup: f.setupFixture.claudeDir, styles: f.stylesFixture.claudeDir, factory: { ...f.factoryFixture }, slash: f.slashFixture.claudeDir,
-    testing: [f.testingFixture.project, f.testingFixture.claudeDir] as const, extract: f.libraryFixture.extract, panel: { ...f.panelFixture },
+    testing: [f.testingFixture.project, f.testingFixture.claudeDir] as const, extract: f.libraryFixture.extract, review: f.codeReviewFixture.review, panel: { ...f.panelFixture },
     installed: f.claudeFixture.installed, folder: { ...f.folderFixture }, records: [...f.historyFixture.records], live: [...f.historyFixture.live], extraTabs: [...f.extraTabFixtures],
   };
   return () => {
@@ -64,6 +65,7 @@ function fixtureRestorer(): () => void {
     f.slashFixture.claudeDir = saved.slash;
     [f.testingFixture.project, f.testingFixture.claudeDir] = saved.testing;
     f.libraryFixture.extract = saved.extract;
+    f.codeReviewFixture.review = saved.review;
     Object.assign(f.panelFixture, saved.panel);
     f.claudeFixture.installed = saved.installed;
     Object.assign(f.folderFixture, saved.folder);

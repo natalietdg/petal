@@ -9,6 +9,9 @@ import { copyReplyBar } from './copy-reply-button';
 import * as slashMenu from './slash-menu';
 import { hooks, type Session } from './history-state';
 import { parsePermissionPrompt, parseQuestionPicker } from '../shared/prompt-answer';
+import * as codeReviewTab from './code-review-tab';
+import type { TurnMatch } from './code-review-tab';
+import type { ReviewSource } from '../shared/code-review';
 import type { Tab } from './tabs';
 
 export type Turn = { index: number; prompt: string; reply: string };
@@ -16,8 +19,8 @@ export type Turn = { index: number; prompt: string; reply: string };
 const drafts = new Map<string, string>(); // sessionId -> unsent text, so switching sessions loses nothing
 
 // One turn: what she asked, then Claude's reply rendered like the reader.
-// cwd: the session's folder, so a relative picture path in the reply resolves.
-export function turnCard(turn: Turn, youClass = '', cwd: string | null = null): HTMLElement {
+// cwd: the session's folder, so a relative picture path in the reply resolves. review: where its Code review tab looks.
+export function turnCard(turn: Turn, youClass = '', cwd: string | null = null, review: { source: ReviewSource; match: TurnMatch } | null = null): HTMLElement {
   const card = el('article', 'history-turn');
   card.dataset.turn = String(turn.index);
   // No prompt: Claude answering a subagent's report, so no empty bubble of hers.
@@ -31,6 +34,7 @@ export function turnCard(turn: Turn, youClass = '', cwd: string | null = null): 
     const prose = markdown.render(turn.reply, { fold: `history:${turn.index}:${turn.reply.slice(0, 120)}`, images: { cwd } });
     body.append(prose, copyReplyBar(turn.reply, () => [prose]));
     card.append(body);
+    if (review) codeReviewTab.attach(card, [body], review.source, review.match);
   }
   return card;
 }
@@ -45,7 +49,8 @@ export function liveThread(tab: Tab): HTMLElement {
   const { replies = [], waiting = [] } = tab.update ?? {};
   const thread = el('div', 'history-thread');
   const cwd = tab.update?.cwd ?? null;
-  [...replies].reverse().forEach((r, i) => thread.append(turnCard({ index: i, prompt: r.prompt, reply: r.markdown }, '', cwd)));
+  const source = { tabId: tab.id };
+  [...replies].reverse().forEach((r, i) => thread.append(turnCard({ index: i, prompt: r.prompt, reply: r.markdown }, '', cwd, { source, match: { replyId: r.id } })));
   waiting.forEach((w, i) => thread.append(turnCard({ index: replies.length + i, prompt: w.prompt, reply: '' })));
   thread.querySelectorAll<HTMLElement>('.history-turn').forEach((card) => diagrams.render(card));
   return thread;
