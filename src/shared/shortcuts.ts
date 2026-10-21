@@ -107,7 +107,7 @@ export const GUIDE: readonly GuideGroup[] = [
       menuRow('Bigger text: the terminal when it has focus, else the reader', ACCEL.biggerText, ACCEL.biggerTextPlus),
       menuRow('Smaller text', ACCEL.smallerText),
       menuRow('Actual size', ACCEL.actualSize),
-      { gesture: 'Click the bar above the status lines', does: 'Folds the status lines and conclusion' },
+      { gesture: 'Click the bar above the status lines', does: 'Folds the status lines, conclusion and PRs' },
     ],
   },
   {

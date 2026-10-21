@@ -36,6 +36,10 @@ import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
 import type { SentBug } from './bug-queue';
+import type { PrNotes, SessionPrsView } from './session-prs';
+import type { MainSafe } from './main-safe';
+import type { DeployOrder } from './deploy-order';
+import type { SaveResult as PrNotesSaveResult } from '../main/pr-notes-store';
 
 // One agent's Close: closed, already not running, refused (not its claude), or still running after the wait.
 export interface AgentCloseResult { sessionId: string; outcome: 'closed' | 'gone' | 'refused' | 'running'; note: string }
@@ -253,6 +257,11 @@ export interface InvokeChannels {
   'lessons:add': { args: [request: { token: string }]; result: Guarded<LessonEditResult> };
   // A concluded session's This session line: its Library notes, test runs and test loop; null when its log can't be read.
   'conclusion:info': { args: [request: { sessionId: string }]; result: Guarded<SessionInfo | null> };
+  // The reader's PRs tab: a session's PRs and repos; main-safe runs ismainsafe in one repo's folder, deploy-order asks a reviewer.
+  'prs:list': { args: [request: { sessionId: string }]; result: Guarded<SessionPrsView | null> };
+  'prs:main-safe': { args: [request: { sessionId: string; service: string }]; result: Guarded<MainSafe> };
+  'prs:deploy-order': { args: [request: { sessionId: string }]; result: Guarded<DeployOrder> };
+  'prs:notes-save': { args: [request: { sessionId: string; url: string; notes: PrNotes }]; result: Guarded<PrNotesSaveResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };

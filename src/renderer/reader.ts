@@ -10,6 +10,7 @@ import { createStrip, paintStrip } from './status-strip';
 import { paintConclusion } from './conclusion-banner';
 import { infoFor, onInfo } from './conclusion-info';
 import * as banners from './reader-banners';
+import * as prsTab from './prs-tab';
 import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
 import { noticeLines } from './reader-notice';
@@ -45,7 +46,9 @@ const conclusionPin = Object.assign(document.createElement('div'), { id: 'reader
 const conclusionSlot = Object.assign(document.createElement('div'), { id: 'reader-conclusion', hidden: true });
 older.before(conclusionPin);
 latest.after(conclusionSlot);
-banners.attach(strip, conclusionPin);
+conclusionPin.after(prsTab.slot); // the PRs tab sits right under the pinned conclusion
+banners.attach(strip, conclusionPin, prsTab.slot);
+prsTab.afterPaint(banners.paint);
 
 // The conclusion shown, and its session, so a This session line that lands later repaints only the banners.
 let pinned: { sessionId: string; conclusion: Conclusion } | null = null;
@@ -173,6 +176,7 @@ export function update(shown: ShownUpdate): void {
   const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
   pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
   paintPinned();
+  prsTab.paint(notesSession ?? null, `${replies.length}:${replies[0]?.id}:${replies[0]?.markdown.length ?? 0}:${waiting.length}`);
   paintStrip(strip, replies.map((r) => r.markdown));
   banners.paint();
   repoLine.textContent = repo ?? '';

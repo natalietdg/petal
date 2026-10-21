@@ -234,6 +234,12 @@ const api = {
     get: (sessionId: string) => invoke('notes:get', { sessionId }),
     save: (sessionId: string, text: string) => invoke('notes:save', { sessionId, text }),
   },
+  prs: {
+    list: (sessionId: string) => invoke('prs:list', { sessionId }),
+    checkMain: (sessionId: string, service: string) => invoke('prs:main-safe', { sessionId, service }),
+    deployOrder: (sessionId: string) => invoke('prs:deploy-order', { sessionId }),
+    saveNotes: (request: InvokeArgs<'prs:notes-save'>[0]) => invoke('prs:notes-save', request),
+  },
   repos: {
     list: (tabId: TabId) => invoke('repos:list', { tabId }),
     open: (tabId: TabId, path: string) => invoke('repos:open', { tabId, path }),
