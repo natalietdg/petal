@@ -11,7 +11,7 @@ import { ensureSelfIgnore } from './factory-store';
 import { projectHash, testingDir } from './testing-store';
 import { LOCK_SCRIPT, hasLockHook, lockHookStale, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
 import {
-  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, SUITE_PREFIX, emptyManifest, integrityStep, lastToucher, lockedFiles, mainRefusals, readManifest,
+  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, SUITE_PREFIX, emptyManifest, integrityStep, isLockable, lastToucher, lockedFiles, mainRefusals, readManifest,
   type LockInputs, type LockManifest, type LockRefusal, type RestoredFlag,
 } from '../shared/test-lock';
 import type { AgentNames } from '../shared/agent-names';
@@ -101,6 +101,8 @@ const hashOf = (file: string): string | null => {
 // Approved copies live in Petal's storage, keyed like the testing store, so no test runner in the repo finds them.
 export const lockedCopiesDir = (root: string, dir = testingDir()): string => path.join(dir, 'locked', projectHash(root));
 const copyOf = (root: string, rel: string): string => path.join(lockedCopiesDir(root), ...rel.split('/'));
+// Copies of files the lock no longer holds: moved here, never deleted.
+export const droppedCopiesDir = (root: string, dir = testingDir()): string => path.join(dir, 'locked-dropped', projectHash(root));
 
 // A plain file's bytes; null for a link, a folder or nothing there.
 function plainFile(file: string): Buffer | null {
@@ -178,17 +180,40 @@ export function migrateLegacyCopies(root: string, approved: Record<string, strin
 
 const isUnconfirmed = (flag: RestoredFlag): boolean => flag.by === 'unconfirmed';
 
+// A dropped file's copy moves aside; one already there is never written over, so this one then stays put.
+function moveToDropped(root: string, rel: string): void {
+  const from = copyOf(root, rel);
+  const to = path.join(droppedCopiesDir(root), ...rel.split('/'));
+  try {
+    if (!fs.existsSync(from) || fs.existsSync(to)) return;
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.renameSync(from, to);
+  } catch (error) {
+    console.warn(`[petal] locked copy ${rel} stays where it is:`, error);
+  }
+}
+
+// Older builds locked app code a testing agent had edited, then put back every fix to it. Those entries leave the
+// manifest (approved copy, Restored lines, questions); their copies move to locked-dropped/.
+function dropUnlockable(root: string, manifest: LockManifest): LockManifest {
+  const stale = Object.keys(manifest.approved).filter((rel) => !isLockable(rel));
+  stale.forEach((rel) => moveToDropped(root, rel));
+  const approved = Object.fromEntries(Object.entries(manifest.approved).filter(([rel]) => isLockable(rel)));
+  return { ...manifest, approved, restored: manifest.restored.filter((f) => isLockable(f.path)) };
+}
+
 // With the lock on: refreshes what is locked and who the agents are, then checks every locked test file against its
 // approved copy. Suite files are checked by the suite reader instead. Returns the manifest as it now stands.
 export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, names: AgentNames): LockManifest {
   const before = loadManifest(root);
   migrateLegacyCopies(root, before.approved);
   if (!before.enabled) return before;
+  const current = dropUnlockable(root, before);
   const owners = lockedFiles({ root, ...inputs });
   const sessions = Object.fromEntries(inputs.agents.map((a) => [a.sessionId, { role: a.role, taskId: a.taskId }]));
-  const approved = { ...before.approved };
-  const restored: RestoredFlag[] = before.restored.filter((f) => !isUnconfirmed(f));
-  const waiting = new Map(before.restored.filter(isUnconfirmed).map((f) => [f.path, f]));
+  const approved = { ...current.approved };
+  const restored: RestoredFlag[] = current.restored.filter((f) => !isUnconfirmed(f));
+  const waiting = new Map(current.restored.filter(isUnconfirmed).map((f) => [f.path, f]));
   const unconfirmed: RestoredFlag[] = [];
   for (const rel of Object.keys(owners)) {
     if (rel.startsWith(SUITE_PREFIX)) continue;
