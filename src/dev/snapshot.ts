@@ -69,6 +69,7 @@ import { clashesCheck } from './snapshot-clashes';
 import { prdTasksCheck } from './snapshot-prd-tasks';
 import { windowFitCheck } from './snapshot-window-fit';
 import { conclusionCheck } from './snapshot-conclusion';
+import { sessionPrsCheck } from './snapshot-session-prs';
 import { minimiseCheck } from './snapshot-minimise';
 import { textSizeCheck } from './snapshot-text-size';
 import { launchCheck, organizerOffCheck, setupEmptyCheck } from './snapshot-onboarding';
@@ -470,6 +471,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['text size', withStandInClaude('text-size', () => textSizeCheck(kit, win, { activeSession: tabs.activeSession }), kit.outDir)], // appends a reply; puts both sizes and the window back
     ['stop', withStandInClaude('stop', () => stopButtonCheck(kit, { win, feed, activeSession: tabs.activeSession }), kit.outDir)], // fixture busy/idle; Escs recorded in main, never typed
     ['mentions', keepingStores(['activity'], withStandInClaude('mentions', () => mentionsCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions, fixtureFile: fakeTranscript() ?? '' }), kit.outDir), kit.outDir)], // fixture tabs, pastes recorded never typed; closes its tabs
+    ['session prs', () => sessionPrsCheck(kit, fakeTranscript() ?? '')], // appends PR turns; stubbed ismainsafe and reviewer, never a real claude
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
@@ -743,6 +745,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await historyLayoutCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'session-prs' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await sessionPrsCheck(kit, fakeTranscript() ?? '').catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

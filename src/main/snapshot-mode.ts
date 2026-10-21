@@ -109,3 +109,7 @@ export const testingFixture: {
   opened: string[]; // criteria files Edit scenarios would have opened in her editor
   resumes: { sessionId: string; command: string }[]; // an agent resumed in an agent terminal: the line it would have typed
 } = { project: null, claudeDir: null, runs: [], loopStarts: [], changed: null, agentIds: [], notices: [], opened: [], resumes: [] };
+
+// The reader's PRs tab in snapshot runs: the harness's stubs for ismainsafe (given the repo folder) and the
+// deploy-order reviewer (given its prompt). null refuses the run. Never a real claude.
+export const prsFixture: { mainSafe: ((dir: string) => Promise<string>) | null; deployOrder: ((prompt: string) => Promise<string>) | null } = { mainSafe: null, deployOrder: null };

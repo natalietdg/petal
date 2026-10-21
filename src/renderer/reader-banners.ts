@@ -1,4 +1,4 @@
-// One bar folds the reader's Doing / Recommend / Next strip and pinned conclusion away; remembered in Petal's config.
+// One bar folds the reader's Doing / Recommend / Next strip, pinned conclusion and PRs tab away; remembered in Petal's config.
 import { byId, el, isIpcError } from './dom';
 
 const area = byId('reader-area');
@@ -16,7 +16,7 @@ export const isCollapsed = (): boolean => area.classList.contains('banners-colla
 export function setCollapsed(collapsed: boolean, persist = true): void {
   area.classList.toggle('banners-collapsed', collapsed);
   bar.setAttribute('aria-expanded', String(!collapsed));
-  bar.title = collapsed ? 'Show the status lines and conclusion' : 'Hide the status lines and conclusion';
+  bar.title = collapsed ? 'Show the status lines, conclusion and PRs' : 'Hide the status lines, conclusion and PRs';
   chevron.textContent = collapsed ? '▸' : '▾';
   if (persist) void window.pastel.config.save({ reader: { bannersCollapsed: collapsed } });
 }
@@ -29,19 +29,22 @@ export async function restore(): Promise<void> {
 
 let strip: HTMLElement | null = null;
 let pin: HTMLElement | null = null;
+let prs: HTMLElement | null = null;
 
 // The bar sits just above the strip, in the reader's header.
-export function attach(stripEl: HTMLElement, pinEl: HTMLElement): void {
+export function attach(stripEl: HTMLElement, pinEl: HTMLElement, prsEl: HTMLElement): void {
   strip = stripEl;
   pin = pinEl;
-  bar.setAttribute('aria-controls', `${stripEl.id} ${pinEl.id}`);
+  prs = prsEl;
+  bar.setAttribute('aria-controls', `${stripEl.id} ${pinEl.id} ${prsEl.id}`);
   stripEl.before(bar);
 }
 
 // After each repaint: the bar names what it folds, and goes when there is nothing to fold.
 export function paint(): void {
   const chips = strip && !strip.hidden ? [...strip.querySelectorAll('.status-chip')].map((chip) => chip.textContent ?? '') : [];
-  const shown = [...chips, ...(pin && !pin.hidden ? ['Conclusion'] : [])];
+  const prsTab = prs && !prs.hidden ? prs.querySelector('.prs-tab-text')?.textContent : null;
+  const shown = [...chips, ...(pin && !pin.hidden ? ['Conclusion'] : []), ...(prsTab ? [prsTab] : [])];
   bar.hidden = shown.length === 0;
   names.textContent = shown.join(' · ');
 }

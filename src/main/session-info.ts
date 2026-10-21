@@ -80,7 +80,7 @@ async function readAppended(file: string): Promise<LogFacts> {
 interface Located { transcript: string; cwd: string | null; live: boolean }
 
 // An open tab's session first (its log may be newer than History's list), else History's record.
-function locate(sessionId: string, sessions: TabSessions): Located | null {
+export function locate(sessionId: string, sessions: TabSessions): Located | null {
   for (const { feed } of sessions.values()) {
     const s = feed.session;
     if (s?.sessionId === sessionId && s.transcript) return { transcript: s.transcript, cwd: s.cwd ?? null, live: true };

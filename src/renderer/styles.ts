@@ -54,6 +54,7 @@ import './pet-guide.css';
 import './get-started.css';
 import './agents.css';
 import './conclusion.css';
+import './prs.css';
 import './sessions-board.css';
 import './mentions.css';
 import './board-coord.css';
