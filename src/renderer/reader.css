@@ -176,6 +176,20 @@ h2.foldable:hover .fold-toggle { color: var(--reader-fg); }
 }
 .fold-all:hover { color: var(--reader-fg); text-decoration: underline; text-underline-offset: 3px; }
 
+/* Copy: one small pill under each reply, copying it whole with its look. */
+.reply-copy-bar { display: flex; justify-content: flex-end; margin: 0.6em 0 0.2em; }
+.reply-copy {
+  padding: 2px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--reader-bg);
+  color: var(--muted);
+  font: 600 11px/1.6 var(--ui-font);
+  cursor: pointer;
+}
+.reply-copy:hover { background: var(--rule); color: var(--reader-fg); }
+.reply-copy:focus-visible { outline: 2px solid var(--reader-fg); outline-offset: 2px; }
+
 /* Steps: a numbered badge per action, a thin line joining the badges, the Check line muted underneath. */
 .prose ol.steps { --badge: 1.6em; list-style: none; padding: 0; margin: 0.3em 0 1em; }
 .prose ol.steps > li.step {

@@ -16,6 +16,7 @@ import { noticeLines } from './reader-notice';
 import * as mentions from './mentions';
 import * as setupHints from './reader-setup-hints';
 import * as distillCard from './distill-card';
+import { copyReplyBar } from './copy-reply-button';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
@@ -60,11 +61,11 @@ const foldKey = (reply: Reply): string => reply.id ?? `text:${reply.markdown.sli
 const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
 
 // Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
-// A reply ending in a `**To @<session>:**` line gets its Send to button after the text.
+// A reply ending in a `**To @<session>:**` line gets its Send to button after the text; Copy comes last.
 const replyBody = (reply: Reply): HTMLElement[] => {
   const blocks: HTMLElement[] = replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply), images: { cwd: lastUpdate?.cwd ?? null } }));
   const send = mentions.replyAction(reply, lastUpdate?.tabId ?? null);
-  return send ? [...blocks, send] : blocks;
+  return [...blocks, ...(send ? [send] : []), copyReplyBar(reply.markdown, () => blocks)];
 };
 
 // Sent from the reply box, not yet in Claude's log.
