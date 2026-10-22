@@ -1,4 +1,4 @@
-// The header's Agents chip and its dropdown: today's agents for this session; picking one opens it in the right panel.
+// The header's Agents chip and its dropdown: this session's agents, any day; picking one opens it in the right panel.
 // It lives inside #reader-head, like the Colour key, so the current look's tokens reach it.
 import * as agentPanel from './agent-panel';
 import * as sessionsPanel from './sessions-panel';
@@ -16,6 +16,7 @@ chip.setAttribute('aria-expanded', 'false');
 chip.setAttribute('aria-controls', 'agents-menu');
 
 let agents: AgentSummary[] = [];
+let total = 0; // the session's whole count; the list holds the newest of them
 
 export const isOpen = (): boolean => !menu.hidden;
 const rowButtons = (): HTMLButtonElement[] => [...menu.querySelectorAll<HTMLButtonElement>('.agents-menu-row')];
@@ -40,11 +41,13 @@ function render(): void {
   const focused = (document.activeElement as HTMLElement | null)?.dataset?.agentId;
   const rows = menuRows(agents, Date.now());
   if (!rows.length) {
-    menu.replaceChildren(el('p', 'agents-menu-empty', 'No agents in this session today.'));
+    menu.replaceChildren(el('p', 'agents-menu-empty', 'No agents in this session yet.'));
     return;
   }
   const list = el('div', 'agents-menu-list');
   list.append(...rows.map(rowButton));
+  const more = total - rows.length;
+  if (more > 0) list.append(el('p', 'agents-menu-more', `+${more} more`));
   menu.replaceChildren(list);
   const again = rowButtons().find((b) => b.dataset.agentId === focused);
   if (again) again.focus();
@@ -54,6 +57,7 @@ async function refresh(): Promise<void> {
   const result = await window.pastel.agents.list(null);
   if (isIpcError(result)) return;
   agents = result.agents;
+  total = result.total;
   if (isOpen()) render();
 }
 

@@ -28,7 +28,7 @@ export function agentsDir(sessionId: string, own: FollowedSession | null | undef
   return session ? subagentsDirOf(session) : null;
 }
 
-const NONE: AgentsList = { agents: [], running: 0 };
+const NONE: AgentsList = { agents: [], running: 0, total: 0 };
 
 // The reader's session agents, for the header chip and the list.
 export async function ownAgents(own: FollowedSession | null | undefined): Promise<AgentsList> {

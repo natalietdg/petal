@@ -25,8 +25,8 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
     const own = activeSession(event.sender.id)?.feed.session;
     const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId, nameOf }, live, subagentsDirOf);
     const { maxOpen } = configStore.load().sessions;
-    const { running, agents } = await ownAgents(own);
-    const here = { running, total: agents.length };
+    const { running, total } = await ownAgents(own);
+    const here = { running, total };
     if (!detailed) return { ...base, maxOpen, here };
     const details = board ? await boardDetails(live) : null;
     return {

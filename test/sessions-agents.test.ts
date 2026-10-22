@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { activeSubagentFiles, activeSubagents, FALLBACK_TASK, snapshot, SUBAGENT_WINDOW_MS, subagentTask } from '../src/main/sessions-monitor';
-import { agentsBadgeText, sessionsPillText } from '../src/shared/ipc';
+import { agentsBadgeText, agentsChipText, sessionsPillText } from '../src/shared/ipc';
 import type { SessionFile } from '../src/main/claude-session';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 import { allowClaudeFolder, removeTempDirs, tempDir, writeJsonl } from './helpers';
@@ -105,5 +105,10 @@ describe('pill text', () => {
   it('badge pluralises', () => {
     expect(agentsBadgeText(1)).toBe('1 agent');
     expect(agentsBadgeText(4)).toBe('4 agents');
+  });
+
+  it('header chip says how many run, else the session total with no day', () => {
+    expect(agentsChipText({ running: 2, total: 240 })).toBe('Agents · 2 running');
+    expect(agentsChipText({ running: 0, total: 240 })).toBe('Agents · 240');
   });
 });

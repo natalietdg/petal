@@ -26,9 +26,12 @@ export interface AgentSummary {
 }
 
 export interface AgentsList {
-  agents: AgentSummary[];
+  agents: AgentSummary[]; // the newest AGENTS_LISTED, plus any still running
   running: number;
+  total: number; // every agent in the session, any day
 }
+
+export const AGENTS_LISTED = 50; // older ones are counted from a stat, never read
 
 export const agentFile = (dir: string, agentId: string): string => path.join(dir, `agent-${agentId}.jsonl`);
 export const isAgentId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,80}$/.test(value);
@@ -101,27 +104,29 @@ async function describe(file: string, mtime: number, size: number, birth: number
   return next;
 }
 
-const startOfDay = (now: number): number => new Date(now).setHours(0, 0, 0, 0);
-
-// Running first, then stalled, then finished; only agents that wrote today.
+// Running first, then stalled, then finished, newest first; every day of the session.
+// Hundreds of agents stay cheap: all are stat'ed, only the newest AGENTS_LISTED (and any running) are read.
 export async function listAgents(dir: string, now = Date.now()): Promise<AgentsList> {
   let names: string[];
   try {
     names = fs.readdirSync(dir).filter((name) => /^agent-[\w-]+\.jsonl$/.test(name));
   } catch {
-    return { agents: [], running: 0 };
+    return { agents: [], running: 0, total: 0 };
   }
-  const today = startOfDay(now);
-  const agents: AgentSummary[] = [];
+  const files: { name: string; file: string; stat: fs.Stats }[] = [];
   for (const name of names) {
     const file = path.join(dir, name);
-    let stat: fs.Stats;
     try {
-      stat = fs.statSync(file);
+      files.push({ name, file, stat: fs.statSync(file) });
     } catch {
-      continue; // deleted between readdir and stat
+      // deleted between readdir and stat
     }
-    if (stat.mtimeMs < today && now - stat.mtimeMs > STALLED_AFTER_MS) {
+  }
+  files.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
+  const agents: AgentSummary[] = [];
+  for (const [index, { name, file, stat }] of files.entries()) {
+    const mayRun = now - stat.mtimeMs <= STALLED_AFTER_MS;
+    if (index >= AGENTS_LISTED && !mayRun) {
       cache.delete(file);
       continue;
     }
@@ -130,7 +135,7 @@ export async function listAgents(dir: string, now = Date.now()): Promise<AgentsL
     agents.push({ id, task: d.task, status: agentStatus(d.finished, d.mtime, now), startedAt: d.startedAt, updatedAt: d.mtime, toolCalls: d.toolCalls, step: d.step });
   }
   agents.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.updatedAt - a.updatedAt);
-  return { agents, running: agents.filter((a) => a.status === 'running').length };
+  return { agents, running: agents.filter((a) => a.status === 'running').length, total: files.length };
 }
 
 export interface TimelineUpdate {
