@@ -6,7 +6,8 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { unclippedCheck } from './snapshot-divider';
-import { appendedReport, appendedStep, FINISHED_ID, HOSTILE_OUTPUT, NEWER_ID, RUNNING_ID, writeAgentsFixture, writeManyAgents } from './snapshot-agents-fixture';
+import { appendedReport, appendedStep, FINISHED_ID, HOSTILE_OUTPUT, NEWER_ID, RUNNING_ID, writeAgentsFixture, writeManyAgents, writeYesterdayAgent, YESTERDAY_ID } from './snapshot-agents-fixture';
+import { AGENTS_LISTED } from '../main/agents';
 import { fixtureFile, panelFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
@@ -51,6 +52,7 @@ const MENU_PROBE = `(() => {
     bg: getComputedStyle(m).backgroundColor, fg: task ? getComputedStyle(task).color : null,
     inView: r.left >= 0 && r.right <= window.innerWidth + 0.5 && r.bottom <= window.innerHeight + 0.5,
     sideways: document.documentElement.scrollWidth > window.innerWidth || document.body.scrollWidth > window.innerWidth,
+    more: m.querySelector('.agents-menu-more')?.textContent ?? null,
     scrolls: m.scrollHeight > m.clientHeight + 1, height: Math.round(r.height), cap: parseFloat(getComputedStyle(m).maxHeight),
   };
 })()`;
@@ -264,9 +266,24 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
 
   // 8. A long list scrolls inside the dropdown's cap.
   writeManyAgents(dir, 24);
+  writeYesterdayAgent(dir);
   await js('PastelTerm.sessionsPanel.refresh()');
-  const long = await waitFor(async () => { await js("PastelTerm.agentsMenu.isOpen() || document.getElementById('agents-chip').click()"); const m = await menu(); return m.rows.length >= 27 ? m : null; }, 6000);
+  const long = await waitFor(async () => { await js("PastelTerm.agentsMenu.isOpen() || document.getElementById('agents-chip').click()"); const m = await menu(); return m.rows.length >= 28 ? m : null; }, 6000);
   check(long && long.scrolls && long.height <= long.cap + 1 && long.inView, `a long list scrolls inside the capped dropdown: ${JSON.stringify(long && { rows: long.rows.length, height: long.height, cap: long.cap })}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const old = long?.rows.find((r: any) => r.id === YESTERDAY_ID);
+  check(old && old.status === 'done' && long.rows.at(-1)?.id === YESTERDAY_ID && /,/.test(old.time) && long.more === null, `yesterday's agent is listed last, with its date: ${JSON.stringify(old)}`);
+  const allDays = await js(CHIP_PROBE);
+  check(allDays.text === 'Agents · 28', `with none running the chip counts the whole session, any day: ${JSON.stringify(allDays.text)}`);
+  await key('Escape');
+
+  // 8b. Past the list cap the newest show and the rest are "+N more"; the chip still counts them all.
+  writeManyAgents(dir, AGENTS_LISTED + 10);
+  const total = 3 + AGENTS_LISTED + 10 + 1;
+  await js('PastelTerm.sessionsPanel.refresh()');
+  const capped = await waitFor(async () => { await js("PastelTerm.agentsMenu.isOpen() || document.getElementById('agents-chip').click()"); await js('PastelTerm.sessionsPanel.refresh()'); const m = await menu(); return m.rows.length === AGENTS_LISTED && m.more ? m : null; }, 8000);
+  const cappedChip = await js(CHIP_PROBE);
+  check(capped && capped.more === `+${total - AGENTS_LISTED} more` && cappedChip.text === `Agents · ${total}`, `past the cap: ${JSON.stringify(capped && { rows: capped.rows.length, more: capped.more, chip: cappedChip.text })}`);
   await key('Escape');
 
   // 9. Sessions panel entry: another session's agent row opens in the panel.
@@ -298,7 +315,7 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   fs.rmSync(root, { recursive: true, force: true });
   await js('PastelTerm.sessionsPanel.setOpen(false)');
   const gone = await waitFor(() => js("document.getElementById('agents-chip').hidden"), 8000);
-  check(gone, 'the chip hides when the session has no agents today');
+  check(gone, 'the chip hides when the session has no agents');
   await js(`window.pastel.config.save({ notesPanel: { open: ${JSON.stringify(notesBefore)} } }).then(() => PastelTerm.notesPanel.loadPrefs())`);
   resizeOffscreen(win, startWidth, startHeight);
 }

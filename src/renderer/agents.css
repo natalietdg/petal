@@ -52,7 +52,7 @@
 .agents-menu-row:hover, .agents-menu-row:focus-visible { background: var(--code-bg); outline: none; }
 .agents-menu-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .agents-menu-time { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.agents-menu-empty { margin: 0; padding: 8px 10px; color: var(--muted); }
+.agents-menu-empty, .agents-menu-more { margin: 0; padding: 8px 10px; color: var(--muted); }
 /* Status dots in the theme's own quiet inks: running, stalled, done. */
 .agents-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .agents-dot.running { background: var(--next-ink); }

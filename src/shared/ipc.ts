@@ -81,16 +81,16 @@ export interface SessionsView extends SessionsSnapshot {
   maxOpen: number;
   closed?: ClosedSession[];
   oldestIdleId?: string | null;
-  here: { running: number; total: number }; // the reader's session agents, for its header chip
+  here: { running: number; total: number }; // the reader's session agents, any day, for its header chip
 }
 
 // The Agents dropdown: a session's subagents, and the one opened in the right panel.
 export type AgentsView = AgentsList & { sessionId: string | null; sessionLabel: string | null }; // the shared session name
 export type AgentOpenResult = (TimelineStart & { agentId: string }) | { missing: true };
 
-// "Agents · 3 running"; with none running, how many ran today.
+// "Agents · 3 running"; with none running, how many the session has run in all.
 export const agentsChipText = ({ running, total }: { running: number; total: number }): string =>
-  running ? `Agents · ${running} running` : `Agents · ${total} today`;
+  running ? `Agents · ${running} running` : `Agents · ${total}`;
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 

@@ -11,7 +11,13 @@ export interface MenuRow {
 }
 
 type Clock = (at: number) => string;
-const localClock: Clock = (at) => new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const sameDay = (a: Date, b: Date): boolean => a.toDateString() === b.toDateString();
+// "9:42 AM" today; "Oct 21, 9:42 AM" for an earlier day.
+const localClock: Clock = (at) => {
+  const when = new Date(at);
+  const time = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return sameDay(when, new Date()) ? time : `${when.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+};
 
 // "45s", "12m", "1h 5m".
 export function elapsed(ms: number): string {

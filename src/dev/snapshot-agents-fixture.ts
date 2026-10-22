@@ -58,6 +58,13 @@ export function writeAgentsFixture(dir: string): { running: string; finished: st
 export const appendedStep = (): string => say([use('e2', 'Edit', { file_path: '/demo/app/src/print.css' })], 0);
 export const appendedReport = (): string => say([{ type: 'text', text: '**Print styles tidied.** All tests pass.' }], 0, 'end_turn');
 
+// A finished agent from yesterday: the chip and dropdown still list it.
+export const YESTERDAY_ID = 'fxyesterday';
+export function writeYesterdayAgent(dir: string): void {
+  const hours30 = 30 * 3600_000;
+  writeAgent(dir, YESTERDAY_ID, 'Sweep from yesterday', [prompt('Sweep the old notes.', hours30 + 60_000), say([{ type: 'text', text: 'Done.' }], hours30, 'end_turn')].join(''), hours30);
+}
+
 // Many finished agents, so the dropdown has to scroll inside its cap.
 export function writeManyAgents(dir: string, count: number): void {
   for (let i = 0; i < count; i++) {

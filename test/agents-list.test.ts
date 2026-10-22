@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AgentTimeline, listAgents, type TimelineUpdate } from '../src/main/agents';
+import { AGENTS_LISTED, AgentTimeline, listAgents, type TimelineUpdate } from '../src/main/agents';
 import { STALLED_AFTER_MS } from '../src/main/agent-steps';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 import { removeTempDirs, tempDir, writeJsonl } from './helpers';
@@ -43,11 +43,27 @@ describe('agents list', () => {
     expect((await listAgents(dir)).agents[0]).toMatchObject({ toolCalls: 2, status: 'finished', step: 'Reading two.ts' });
   });
 
-  it('leaves out agents from before today and an empty folder is empty', async () => {
+  it('keeps agents from earlier days and an empty folder is empty', async () => {
     const dir = tempDir();
-    agent(dir, 'old', [prompt('Yesterday')], { ageMs: 48 * 3600_000 });
-    expect((await listAgents(dir)).agents).toEqual([]);
-    expect(await listAgents(path.join(dir, 'missing'))).toEqual({ agents: [], running: 0 });
+    agent(dir, 'old', [prompt('Yesterday'), done('Done.')], { ageMs: 48 * 3600_000 });
+    const { agents, total } = await listAgents(dir);
+    expect(agents.map((a) => [a.id, a.status, a.task])).toEqual([['old', 'finished', 'Yesterday']]);
+    expect(total).toBe(1);
+    expect(await listAgents(path.join(dir, 'missing'))).toEqual({ agents: [], running: 0, total: 0 });
+  });
+
+  it('reads only the newest AGENTS_LISTED, counts the rest, running first', async () => {
+    const dir = tempDir();
+    const extra = 5;
+    for (let i = 0; i < AGENTS_LISTED + extra; i++) agent(dir, `f${i}`, [prompt(`Filler ${i}`), done('Done.')], { ageMs: 3600_000 + i * 60_000 });
+    agent(dir, 'live', [prompt('Still going'), read('x.ts')], { ageMs: 1_000 });
+    const { agents, running, total } = await listAgents(dir);
+    expect(total).toBe(AGENTS_LISTED + extra + 1);
+    expect(agents).toHaveLength(AGENTS_LISTED);
+    expect(running).toBe(1);
+    expect(agents[0]?.id).toBe('live');
+    expect(agents[1]?.id).toBe('f0'); // newest finished next
+    expect(agents.some((a) => a.id === `f${AGENTS_LISTED + extra - 1}`)).toBe(false); // the oldest is counted, not read
   });
 });
 
