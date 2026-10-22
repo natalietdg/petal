@@ -222,6 +222,7 @@ const api = {
   history: {
     list: () => invoke('history:list'),
     pastSummary: () => invoke('history:past-summary'),
+    search: (query: string) => invoke('history:search', { query }),
     conversation: (sessionId: string, before?: number) => invoke('history:conversation', { sessionId, before }),
     resume: (sessionId: string, confirmFork = false, background = false) => invoke('history:resume', { sessionId, confirmFork, background }),
     send: (sessionId: string) => invoke('history:send', { sessionId }),

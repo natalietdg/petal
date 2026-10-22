@@ -34,7 +34,7 @@ view.innerHTML = `
       <button type="button" data-list="all" aria-selected="true">All</button>
       <button type="button" data-list="favorites" aria-selected="false">Favorites</button>
     </div>
-    <input id="history-search" class="history-search" type="search" placeholder="Search titles, first prompts and notes" aria-label="Search sessions">
+    <input id="history-search" class="history-search" type="search" placeholder="Search titles, notes and conversations" aria-label="Search sessions">
     <div class="history-toolbar">
       <div id="history-sort" class="view-toggle history-sort" role="tablist" aria-label="Sort sessions">
         <button type="button" data-sort="recent" aria-selected="true">Recent</button>
