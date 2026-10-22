@@ -98,7 +98,7 @@ export const slashFixture: { claudeDir: string | null } = { claudeDir: null };
 export const libraryFixture: { extract: ((prompt: string) => Promise<string>) | null } = { extract: null };
 
 // Code review's reviewer in snapshot runs: the harness's stub, given the prompt and returning the CLI's stdout. Never a real claude.
-export const codeReviewFixture: { review: ((prompt: string) => Promise<string>) | null } = { review: null };
+export const codeReviewFixture: { review: ((prompt: string) => Promise<string>) | null; projectsRoots: string[] } = { review: null, projectsRoots: [] }; // projectsRoots: scratch stand-ins for ~/.claude/projects
 
 // The Testing tab in snapshot runs: a stand-in project and Claude folder, and every run it would have typed (never executed).
 export const testingFixture: {

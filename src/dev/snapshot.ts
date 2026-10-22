@@ -32,6 +32,7 @@ import { notesCheck } from './snapshot-notes';
 import { notesSideCheck } from './snapshot-notes-side';
 import { historyReplyCheck } from './snapshot-history-reply';
 import { codeReviewCheck } from './snapshot-code-review';
+import { agentCodeReviewCheck } from './snapshot-agent-code-review';
 import { repoLineCheck } from './snapshot-repo-line';
 import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
@@ -426,6 +427,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['notes side', () => notesSideCheck(kit, win)],
     ['history reply', () => historyReplyCheck(kit)],
     ['code review', () => codeReviewCheck(kit, fakeTranscript() ?? '')], // a stubbed reviewer only, never a real claude; puts the fixture log back
+    ['agent code review', () => agentCodeReviewCheck(kit)], // History fixture and stubbed reviewer; takes them out again
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
     ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],
@@ -745,6 +747,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await agentsCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'agent-code-review' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await agentCodeReviewCheck(kit).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

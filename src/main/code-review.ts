@@ -7,6 +7,7 @@ import { cachedAnswers, saveAnswers, turnHash } from './code-review-store';
 import { estimateTokens, reviewPrompts } from './code-review-prompt';
 import { ReviewCanceled, answerJson, beginRun, cancel, resultText, runReviewer, wasCanceled } from './code-review-run';
 import { repoRoot } from './repo-label';
+import { subagentsByTurn } from './code-review-subagents';
 import { checkAnswers, redactSecrets, type ExplainResult, type ExplainTarget, type ReviewSource, type SessionSummary, type TurnReview } from '../shared/code-review';
 import type { CodeTurn } from './code-changes';
 
@@ -14,6 +15,7 @@ export interface ReviewSession {
   sessionId: string;
   transcript: string;
   cwd: string | null;
+  subagent?: boolean; // a subagent's own log
 }
 
 export type Resolve = (source: ReviewSource) => ReviewSession | null;
@@ -24,15 +26,16 @@ const runKey = (sessionId: string, turnId: string): string => `${sessionId}:${tu
 export const isRunning = (): boolean => active !== null;
 
 export async function sessionSummary(session: ReviewSession): Promise<SessionSummary> {
-  const turns = await codeTurns(session.transcript);
+  const turns = await codeTurns(session.transcript, session.subagent);
+  const agents = session.subagent ? new Map() : await subagentsByTurn(session, turns);
   return {
     sessionId: session.sessionId,
-    turns: turns.map((t) => ({ turnId: t.turnId, replyId: t.replyId, historyIndex: t.historyIndex, at: t.at, functions: t.cards.length })),
+    turns: turns.map((t) => ({ turnId: t.turnId, replyId: t.replyId, historyIndex: t.historyIndex, at: t.at, functions: t.cards.length, agents: agents.get(t.turnId) ?? [] })),
   };
 }
 
 async function findTurn(session: ReviewSession, turnId: string): Promise<CodeTurn> {
-  const turn = (await codeTurns(session.transcript)).find((t) => t.turnId === turnId);
+  const turn = (await codeTurns(session.transcript, session.subagent)).find((t) => t.turnId === turnId);
   if (!turn) throw new Error('That turn changed no code, or its log moved.');
   return turn;
 }

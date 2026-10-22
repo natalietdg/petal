@@ -33,8 +33,18 @@ export interface WhyAnswer {
   quote: string | null; // verbatim from a reasoning excerpt when recorded
 }
 
-// Where a session comes from: a tab here (the reader) or a log on disk (History, the Board).
-export type ReviewSource = { tabId: string } | { sessionId: string };
+// Where a session comes from: a tab here (the reader), a log on disk (History, the Board), or one of a session's subagents.
+export type ReviewSource = { tabId: string } | { sessionId: string } | { sessionId: string; agentId: string };
+
+export const isAgentSource = (source: ReviewSource): source is { sessionId: string; agentId: string } => 'agentId' in source;
+
+// A subagent a turn launched, with the code it changed; its turns are read from { sessionId, agentId }.
+export interface SubagentChanges {
+  agentId: string;
+  description: string;
+  turnIds: string[];
+  functions: number;
+}
 
 export interface TurnSummary {
   turnId: string;
@@ -42,6 +52,7 @@ export interface TurnSummary {
   historyIndex: number; // History's turn index for this turn
   at: string | null;
   functions: number;
+  agents: SubagentChanges[]; // subagents launched in this turn that changed code
 }
 
 export interface SessionSummary {

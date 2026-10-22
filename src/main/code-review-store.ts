@@ -14,7 +14,7 @@ interface CachedTurn {
 
 type SessionCache = Record<string, CachedTurn>; // by turn id
 
-const SAFE_ID = /^[\w-]{1,100}$/;
+const SAFE_ID = /^[\w-]{1,200}$/; // a subagent's cache is <sessionId>--<agentId>
 const dir = () => path.join(app.getPath('userData'), 'code-review');
 const fileFor = (sessionId: string): string | null => (SAFE_ID.test(sessionId) ? path.join(dir(), `${sessionId}.json`) : null);
 

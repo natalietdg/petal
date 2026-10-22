@@ -9,6 +9,7 @@ import { isSecretPath, type FunctionCard, type ReasoningExcerpt } from '../share
 import type { ContentItem, TranscriptEntry } from './transcript-entry';
 
 const CHANGE_TOOLS = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit'];
+const AGENT_TOOLS = ['Agent', 'Task']; // Task is the Agent tool's older name
 const MAX_EXCERPT_CHARS = 1500;
 
 export interface CodeTurn {
@@ -20,6 +21,7 @@ export interface CodeTurn {
   reasoning: ReasoningExcerpt[];
   cards: FunctionCard[];
   skipped: string[];
+  agentCalls: string[]; // tool_use ids of the subagents this turn launched (their meta.json toolUseId)
 }
 
 // The file as it is now, when the transcript lacks the original; null when unreadable.
@@ -60,12 +62,16 @@ export class CodeChangeCollector {
   private cwd: string | null = null;
   private opener: TranscriptEntry | null = null; // the entry that ended the last turn; the next turn is keyed by it
   private readonly readCurrent: ReadCurrent;
+  private readonly sidechain: boolean;
 
-  constructor(readCurrent: ReadCurrent = () => null) {
+  // sidechain: a subagent's own log, where every entry is marked isSidechain
+  constructor(readCurrent: ReadCurrent = () => null, { sidechain = false }: { sidechain?: boolean } = {}) {
     this.readCurrent = readCurrent;
+    this.sidechain = sidechain;
   }
 
-  add(entry: TranscriptEntry): void {
+  add(logged: TranscriptEntry): void {
+    const entry = this.sidechain && logged.isSidechain ? { ...logged, isSidechain: false } : logged;
     if (typeof entry.cwd === 'string') this.cwd = entry.cwd;
     this.countHistoryTurn(entry);
     if (isUserTurn(entry) || queuedPromptText(entry) || isAgentMessage(entry)) {
@@ -77,9 +83,9 @@ export class CodeChangeCollector {
     else if (entry.type === 'user' && !entry.isSidechain) this.readResults(entry);
   }
 
-  // Turns that changed code, oldest first.
+  // Turns that changed code or launched subagents (which may have), oldest first.
   changed(): CodeTurn[] {
-    return this.turns.filter((t) => t.cards.length || t.skipped.length);
+    return this.turns.filter((t) => t.cards.length || t.skipped.length || t.agentCalls.length);
   }
 
   // Mirrors readTurns: a prompt (or slash command) starts one; Claude's answer to another agent starts one with its first text.
@@ -100,7 +106,7 @@ export class CodeChangeCollector {
     const opener = this.opener ?? entry;
     this.turn = {
       turnId: opener.uuid ?? `turn-${this.turns.length}`, replyId: null, historyIndex: this.historyIndex,
-      at: entry.timestamp ?? null, cwd: this.cwd, reasoning: [], cards: [], skipped: [],
+      at: entry.timestamp ?? null, cwd: this.cwd, reasoning: [], cards: [], skipped: [], agentCalls: [],
     };
     this.turns.push(this.turn);
     this.opener = null;
@@ -118,6 +124,8 @@ export class CodeChangeCollector {
         const turn = this.current(entry);
         turn.at = entry.timestamp ?? turn.at;
         this.pending.set(item.id, { turn, tool: item.name ?? '', input: (item.input ?? {}) as Record<string, unknown>, reasoning: turn.reasoning.length });
+      } else if (item.type === 'tool_use' && item.id && AGENT_TOOLS.includes(item.name ?? '')) {
+        this.current(entry).agentCalls.push(item.id);
       }
     }
   }

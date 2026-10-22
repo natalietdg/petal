@@ -13,6 +13,7 @@ interface Indexed {
   offset: number;
   inode: number;
   carry: Buffer;
+  sidechain: boolean;
 }
 
 const logs = new Map<string, Indexed>(); // by transcript path, oldest first
@@ -27,13 +28,13 @@ export function readCurrent(file: string): string | null {
   }
 }
 
-const fresh = (inode: number): Indexed => ({ collector: new CodeChangeCollector(readCurrent), offset: 0, inode, carry: Buffer.alloc(0) });
+const fresh = (inode: number, sidechain: boolean): Indexed => ({ collector: new CodeChangeCollector(readCurrent, { sidechain }), offset: 0, inode, carry: Buffer.alloc(0), sidechain });
 
 async function readAppended(indexed: Indexed, file: string): Promise<Indexed> {
   const handle = await fs.promises.open(file, 'r');
   try {
     const { size, ino } = await handle.stat();
-    const target = size < indexed.offset || ino !== indexed.inode ? fresh(ino) : indexed; // rewritten: start over
+    const target = size < indexed.offset || ino !== indexed.inode ? fresh(ino, indexed.sidechain) : indexed; // rewritten: start over
     const buffer = Buffer.alloc(Math.min(READ_CHUNK_BYTES, Math.max(0, size - target.offset)));
     while (target.offset < size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - target.offset), target.offset);
@@ -54,17 +55,17 @@ async function readAppended(indexed: Indexed, file: string): Promise<Indexed> {
 
 const queued = new Map<string, Promise<CodeTurn[]>>(); // one read at a time per log
 
-async function readOne(file: string): Promise<CodeTurn[]> {
-  const indexed = await readAppended(logs.get(file) ?? fresh(-1), file);
+async function readOne(file: string, sidechain: boolean): Promise<CodeTurn[]> {
+  const indexed = await readAppended(logs.get(file) ?? fresh(-1, sidechain), file);
   logs.delete(file);
   logs.set(file, indexed); // most recent last
   while (logs.size > KEPT_LOGS) logs.delete(logs.keys().next().value as string);
   return indexed.collector.changed();
 }
 
-// The session's turns that changed code, up to the end of its log right now.
-export function codeTurns(file: string): Promise<CodeTurn[]> {
-  const run = (queued.get(file) ?? Promise.resolve([])).catch(() => []).then(() => readOne(file));
+// The session's turns that changed code, up to the end of its log right now. sidechain: a subagent's log.
+export function codeTurns(file: string, sidechain = false): Promise<CodeTurn[]> {
+  const run = (queued.get(file) ?? Promise.resolve([])).catch(() => []).then(() => readOne(file, sidechain));
   queued.set(file, run);
   void run.catch(() => undefined).finally(() => { if (queued.get(file) === run) queued.delete(file); });
   return run;
