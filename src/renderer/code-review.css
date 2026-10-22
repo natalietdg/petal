@@ -21,6 +21,7 @@
 .cr-outcome { flex-basis: 100%; }
 .cr-explain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .cr-explain:empty { display: none; }
+.cr-subagent { margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--rule); font: 600 14px var(--ui-font); color: var(--reader-fg); }
 
 .cr-card {
   padding: 12px 14px;

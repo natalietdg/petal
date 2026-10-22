@@ -5,7 +5,8 @@ import { claudeFolderAllowed } from './claude-folder';
 import * as history from './history';
 import { cancelRun, explain, sessionSummary, turnReview, type ReviewSession } from './code-review';
 import { taskReview } from './code-review-task';
-import type { ReviewSource } from '../shared/code-review';
+import { subagentSession } from './code-review-subagents';
+import { isAgentSource, type ReviewSource } from '../shared/code-review';
 import type { TabSessions } from './tab-session';
 
 const FOLDER_OFF = 'Petal isn’t reading your Claude folder, so it can’t see what Claude changed.';
@@ -22,6 +23,10 @@ export function registerCodeReviewIpc({ sessions }: { sessions: TabSessions }): 
   };
   const resolver = (contentsId: number) => (source: ReviewSource): ReviewSession | null => {
     if (!claudeFolderAllowed()) return null;
+    if (isAgentSource(source)) { // only a log under a Claude projects subagents folder, never a path from the renderer
+      const parent = typeof source.sessionId === 'string' ? bySessionId(source.sessionId) : null;
+      return parent ? subagentSession(parent, source.agentId) : null;
+    }
     if ('sessionId' in source) return typeof source.sessionId === 'string' ? bySessionId(source.sessionId) : null;
     const s = sessions.get(`${contentsId}:${String(source.tabId)}`)?.feed.session;
     return s ? { sessionId: s.sessionId, transcript: s.transcript, cwd: s.cwd ?? null } : null;

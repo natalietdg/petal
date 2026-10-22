@@ -1,11 +1,13 @@
-// "Reply · Code review (N)" on a reply that changed code, in the reader and in History. The reply's own blocks stay
+// "Reply · Code review (N)" on a reply that changed code, in the reader and in History, including what the subagents
+// it launched wrote. The reply's own blocks stay
 // where they are (hidden, not moved), so the reader's layout and print styles are untouched.
 import { el, isIpcError } from './dom';
 import { functionCard, reasoningList, skippedLine } from './code-review-cards';
 import * as explainButton from './code-review-explain';
-import type { ExplainTarget, ReviewSource, SessionSummary, TurnReview, TurnSummary } from '../shared/code-review';
+import { reviewGroups, sourceKey, type ReviewGroup, type TurnMatch } from './code-review-groups';
+import type { ExplainTarget, ReviewSource, SessionSummary, TurnReview } from '../shared/code-review';
 
-export type TurnMatch = { replyId: string | undefined } | { historyIndex: number };
+export type { TurnMatch } from './code-review-groups';
 
 interface Mount {
   host: HTMLElement;
@@ -24,13 +26,10 @@ const trailing = new Map<string, ReturnType<typeof setTimeout>>(); // one catch-
 const shown = new Map<string, 'reply' | 'review'>(); // which tab each reply shows, across redraws
 let mounts: Mount[] = [];
 
-const sourceKey = (source: ReviewSource): string => ('tabId' in source ? `tab:${source.tabId}` : `session:${source.sessionId}`);
 const matchKey = (mount: Pick<Mount, 'source' | 'match'>): string => `${sourceKey(mount.source)}|${JSON.stringify(mount.match)}`;
-
-function turnsFor(mount: Mount): TurnSummary[] {
-  const turns = summaries.get(sourceKey(mount.source))?.turns ?? [];
-  return turns.filter((t) => ('replyId' in mount.match ? t.replyId !== null && t.replyId === mount.match.replyId : t.historyIndex === mount.match.historyIndex));
-}
+const groupsFor = (mount: Mount): ReviewGroup[] => reviewGroups(mount.source, summaries.get(sourceKey(mount.source)), mount.match);
+const reviewKey = (group: ReviewGroup, turnId: string): string => `${sourceKey(group.source)}#${turnId}`;
+const loadedAll = (mount: Mount): boolean => groupsFor(mount).every((g) => g.turnIds.every((id) => reviews.has(reviewKey(g, id))));
 
 async function refreshSummary(source: ReviewSource, force = false): Promise<void> {
   const key = sourceKey(source);
@@ -52,33 +51,35 @@ async function refreshSummary(source: ReviewSource, force = false): Promise<void
 const openMounts = (key: string): Mount[] => mounts.filter((m) => m.host.isConnected && sourceKey(m.source) === key && shown.get(matchKey(m)) === 'review');
 
 async function loadReviews(mount: Mount): Promise<void> {
-  const key = sourceKey(mount.source);
-  const loaded = await Promise.all(turnsFor(mount).map((t) => window.pastel.codeReview.turn(mount.source, t.turnId)));
-  for (const review of loaded) if (!isIpcError(review)) reviews.set(`${key}#${review.turnId}`, review);
-  paintAll(key);
+  const asks = groupsFor(mount).flatMap((g) => g.turnIds.map(async (turnId) => ({ key: reviewKey(g, turnId), review: await window.pastel.codeReview.turn(g.source, turnId) })));
+  for (const { key, review } of await Promise.all(asks)) if (!isIpcError(review)) reviews.set(key, review);
+  paintAll(sourceKey(mount.source));
 }
+
+const unanswered = (t: TurnReview): string[] => t.cards.filter((c) => !t.answers[c.key]).map((c) => c.key);
 
 function reviewPanel(mount: Mount): HTMLElement {
   const panel = el('section', 'cr-panel');
   panel.setAttribute('aria-label', 'Code review');
-  const key = sourceKey(mount.source);
-  const turns = turnsFor(mount).map((t) => reviews.get(`${key}#${t.turnId}`));
-  if (turns.some((t) => !t)) {
+  if (!loadedAll(mount)) {
     panel.append(el('p', 'cr-loading', 'Reading the changes…'));
     return panel;
   }
-  const loaded = turns as TurnReview[];
+  const groups = groupsFor(mount).map((g) => ({ ...g, turns: g.turnIds.map((id) => reviews.get(reviewKey(g, id)) as TurnReview) }));
+  const all = groups.flatMap((g) => g.turns.map((turn) => ({ source: g.source, turn })));
   const repaint = () => void loadReviews(mount);
-  const unanswered = (t: TurnReview) => t.cards.filter((c) => !t.answers[c.key]).map((c) => c.key);
-  const targets: ExplainTarget[] = loaded.filter((t) => unanswered(t).length).map((t) => ({ source: mount.source, turnId: t.turnId, only: unanswered(t) }));
-  const running = loaded.some((t) => t.running);
-  panel.append(explainButton.explainBar(matchKey(mount), { estimate: loaded.reduce((sum, t) => sum + t.estimate, 0), running, targets, repaint }));
-  for (const turn of loaded) {
-    const extras = [skippedLine(turn.skipped), reasoningList(turn.reasoning)].filter((x): x is HTMLElement => x !== null);
-    panel.append(...extras, ...turn.cards.map((card) => functionCard(card, {
-      answer: turn.answers[card.key] ?? null, explained: turn.explained, running,
-      onRetry: () => void explainButton.run(matchKey(mount), [{ source: mount.source, turnId: turn.turnId, only: [card.key] }]).then(repaint),
-    })));
+  const targets: ExplainTarget[] = all.filter(({ turn }) => unanswered(turn).length).map(({ source, turn }) => ({ source, turnId: turn.turnId, only: unanswered(turn) }));
+  const running = all.some(({ turn }) => turn.running);
+  panel.append(explainButton.explainBar(matchKey(mount), { estimate: all.reduce((sum, { turn }) => sum + turn.estimate, 0), running, targets, repaint }));
+  for (const group of groups) {
+    if (group.heading) panel.append(el('h3', 'cr-subagent', group.heading));
+    for (const turn of group.turns) {
+      const extras = [skippedLine(turn.skipped), reasoningList(turn.reasoning)].filter((x): x is HTMLElement => x !== null);
+      panel.append(...extras, ...turn.cards.map((card) => functionCard(card, {
+        answer: turn.answers[card.key] ?? null, explained: turn.explained, running,
+        onRetry: () => void explainButton.run(matchKey(mount), [{ source: group.source, turnId: turn.turnId, only: [card.key] }]).then(repaint),
+      })));
+    }
   }
   return panel;
 }
@@ -110,7 +111,7 @@ function paint(mount: Mount): void {
   mount.panel?.remove();
   mount.tabs = null;
   mount.panel = null;
-  const count = turnsFor(mount).reduce((sum, t) => sum + t.functions, 0);
+  const count = groupsFor(mount).reduce((sum, g) => sum + g.functions, 0);
   const view = count ? shown.get(matchKey(mount)) ?? 'reply' : 'reply';
   for (const part of mount.parts) part.hidden = view === 'review';
   if (!count) return;
@@ -136,17 +137,18 @@ export function attach(host: HTMLElement, parts: HTMLElement[], source: ReviewSo
   const mount: Mount = { host, parts, source, match, tabs: null, panel: null };
   mounts = [...mounts.filter((m) => m.host.isConnected && m.host !== host), mount];
   paint(mount);
-  if (shown.get(matchKey(mount)) === 'review' && !turnsFor(mount).every((t) => reviews.has(`${sourceKey(source)}#${t.turnId}`))) void loadReviews(mount);
+  if (shown.get(matchKey(mount)) === 'review' && !loadedAll(mount)) void loadReviews(mount);
   void refreshSummary(source);
 }
 
-// Answers landed, or a run started or stopped: fresh summaries and open panels for that session.
+// Answers landed, or a run started or stopped: fresh summaries, and open panels showing that session or subagent.
 window.pastel.codeReview.onChanged(({ sessionId }) => {
   const keys = new Set<string>();
   for (const [key, summary] of summaries) if (summary.sessionId === sessionId) keys.add(key);
   for (const key of keys) {
-    for (const mount of openMounts(key)) void loadReviews(mount);
     const source = mounts.find((m) => sourceKey(m.source) === key)?.source;
     if (source) void refreshSummary(source, true);
   }
+  const touched = (m: Mount) => keys.has(sourceKey(m.source)) || groupsFor(m).some((g) => g.turnIds.some((id) => reviews.get(reviewKey(g, id))?.sessionId === sessionId));
+  for (const mount of mounts) if (mount.host.isConnected && shown.get(matchKey(mount)) === 'review' && touched(mount)) void loadReviews(mount);
 });
