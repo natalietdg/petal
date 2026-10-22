@@ -13,7 +13,7 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['src/renderer/**'],
+    files: ['src/renderer/**', 'test/renderer/**'],
     languageOptions: { globals: globals.browser },
   },
   {
