@@ -1,0 +1,80 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`markdown.render: pinned output > renders a full magazine reply unchanged 1`] = `
+"<div class="prose"><header class="story-head"><p class="headline"><strong>The reader now redraws only the reply that changed.</strong></p><p>Older replies keep their rendered nodes, so streaming stays smooth.</p><p class="checked-line"><span class="checked-label">Checked</span> reader.ts, <code>npx vitest run</code></p></header>
+
+
+<div class="status-block"><div class="status-row status-doing"><span class="status-chip">Doing</span><span class="status-text">caching each rendered reply</span></div><div class="status-row status-recommend"><span class="status-chip">Recommend</span><span class="status-text">ship it behind nothing, it is invisible</span></div><div class="status-row status-next"><span class="status-chip">Next</span><span class="status-text">run the full gate</span></div></div><p class="lede">This opening paragraph is long enough to carry a drop cap, because it wraps across more than two lines of the column and so the cap has somewhere to hang without dangling below the text.</p>
+<section class="story-section"><h2><span class="h-num">1. </span>What changed</h2><div class="section-body"><p>A <mark>highlighted</mark> phrase and a bare link <a href="https://example.com/some/very/long/path/to/a/page" title="https://example.com/some/very/long/path/to/a/page" class="bare-link">example.com/…/page</a>.</p><p class="callout callout-decide"><span class="pill">Decide</span> keep the cache per window.</p><ul>
+<li class="callout callout-watch"><span class="pill">Watch out</span> a theme switch still redraws everything.</li>
+</ul><p>Raw &lt;b&gt;html&lt;/b&gt; shows as text.</p><p>A closing paragraph inside the story.</p></div><aside class="rail"><blockquote class="sidebar assumed">
+<p><strong>Assumed</strong></p>
+<ul>
+<li>mermaid output is stable per theme</li>
+</ul>
+</blockquote><blockquote class="pull-quote">
+<p>One striking line as a pull quote.</p>
+</blockquote></aside></section>
+
+
+
+
+
+
+
+<section class="story-section"><h2>Steps</h2><div class="section-body"><ol>
+<li>Open the reader
+Check: it shows the newest reply</li>
+<li>Scroll up</li>
+</ol><p class="end-mark">Check: older turns are there</p></div></section>
+
+
+<section class="story-section back"><h2 class="back-matter threads-heading">Open threads</h2><div class="section-body"><ul>
+<li>Should History index transcripts? Check: search finds a prompt word</li>
+</ul></div></section>
+
+<section class="story-section back"><h2 class="back-matter">References</h2><div class="section-body"><ul>
+<li>marked docs</li>
+</ul></div></section>
+
+</div>"
+`;
+
+exports[`markdown.render: pinned output > renders plain prose with no sections unchanged 1`] = `
+"<div class="prose"><p class="end-mark">Just a short answer with <code>code</code> and <strong>bold</strong>.</p>
+</div>"
+`;
+
+exports[`markdown.render: pinned output > renders the folded reply unchanged 1`] = `
+"<div class="prose">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<header class="story-head"><p class="headline"><strong>The reader now redraws only the reply that changed.</strong></p><p>Older replies keep their rendered nodes, so streaming stays smooth.</p><p class="checked-line"><span class="checked-label">Checked</span> reader.ts, <code>npx vitest run</code></p></header><div class="status-block"><div class="status-row status-doing"><span class="status-chip">Doing</span><span class="status-text">caching each rendered reply</span></div><div class="status-row status-recommend"><span class="status-chip">Recommend</span><span class="status-text">ship it behind nothing, it is invisible</span></div><div class="status-row status-next"><span class="status-chip">Next</span><span class="status-text">run the full gate</span></div></div><p class="lede">This opening paragraph is long enough to carry a drop cap, because it wraps across more than two lines of the column and so the cap has somewhere to hang without dangling below the text.</p><div class="fold-bar"><button class="fold-all" type="button">Expand all</button></div><section class="story-section folded"><h2 class="foldable"><span class="h-num">1. </span>What changed<button class="fold-toggle" type="button" aria-label="1. What changed" aria-expanded="false"></button></h2><div class="section-body"><p>A <mark>highlighted</mark> phrase and a bare link <a href="https://example.com/some/very/long/path/to/a/page" title="https://example.com/some/very/long/path/to/a/page" class="bare-link">example.com/…/page</a>.</p><p class="callout callout-decide"><span class="pill">Decide</span> keep the cache per window.</p><ul>
+<li class="callout callout-watch"><span class="pill">Watch out</span> a theme switch still redraws everything.</li>
+</ul><p>Raw &lt;b&gt;html&lt;/b&gt; shows as text.</p><p>A closing paragraph inside the story.</p></div><aside class="rail"><blockquote class="sidebar assumed">
+<p><strong>Assumed</strong></p>
+<ul>
+<li>mermaid output is stable per theme</li>
+</ul>
+</blockquote><blockquote class="pull-quote">
+<p>One striking line as a pull quote.</p>
+</blockquote></aside></section><section class="story-section steps-section"><h2 class="foldable">Steps<button class="fold-toggle" type="button" aria-label="Steps" aria-expanded="true"></button></h2><div class="section-body"><ol class="steps"><li class="step"><button class="step-badge" type="button" aria-label="Step 1 done" aria-pressed="false">1</button><div class="step-body">Open the reader</div><p class="step-check"><span class="step-check-label">Check</span> it shows the newest reply</p></li><li class="step"><button class="step-badge" type="button" aria-label="Step 2 done" aria-pressed="false">2</button><div class="step-body">Scroll up</div><p class="step-check"><span class="step-check-label">Check</span> older turns are there</p></li></ol></div></section><section class="story-section back threads-section"><h2 class="back-matter threads-heading foldable">Open threads<button class="fold-toggle" type="button" aria-label="Open threads" aria-expanded="true"></button></h2><div class="section-body"><ul class="threads"><li class="thread"><button class="thread-card" type="button" title="Ask Claude this next"><span class="thread-question">Should History index transcripts? </span><span class="thread-check"><span class="thread-check-label">Check</span> search finds a prompt word</span><span class="thread-ask">Ask next</span></button></li></ul></div></section><section class="story-section back folded"><h2 class="back-matter foldable">References<button class="fold-toggle" type="button" aria-label="References" aria-expanded="false"></button></h2><div class="section-body"><ul>
+<li>marked docs</li>
+</ul></div></section></div>"
+`;

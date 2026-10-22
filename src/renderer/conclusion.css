@@ -144,3 +144,5 @@
 /* History's list: the mark beside the title, the conclusion's gist under it. */
 .history-concluded { flex-shrink: 0; padding: 0 8px; border-radius: 999px; background: var(--done-pill); color: var(--done-ink); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; }
 .history-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--reader-fg); }
+.history-match { color: var(--muted); }
+.history-match mark { background: var(--highlight); color: var(--highlight-ink); border-radius: 2px; }

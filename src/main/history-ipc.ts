@@ -15,6 +15,7 @@ import { claudeLaunch } from './claude-launch';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
 import { guardsShell, harnessLine } from './snapshot-shell';
 import { pageOfTurns, turnsFor } from './history-turns';
+import { TranscriptIndex } from './history-search';
 import { registerTagsIpc } from './tags-ipc';
 import { registerFlowIpc } from './flow-ipc';
 import { registerHandoffIpc } from './handoff-ipc';
@@ -35,13 +36,16 @@ const announceConclusions = (): void => {
 
 export function registerHistoryIpc({ sessions, activeSession, openTab, currentTheme }: HistoryIpcDeps): void {
   const own = (event: IpcMainInvokeEvent) => activeSession(event.sender.id); // the tab shown in the asking window
+  const transcripts = new TranscriptIndex();
+  const listedNow = () => history.listSessions(new Set(loadConfig().history.favorites));
 
   handle('history:list', () => {
     const labels = organizer.load();
     const tags = tagsStore.load();
     const notes = notesStore.searchable();
-    const listed = history.listSessions(new Set(loadConfig().history.favorites));
+    const listed = listedNow();
     void conclusions.refreshAll(listed, announceConclusions); // logs that grew are read in the background
+    void transcripts.refresh(listed.map((s) => s.file)); // so her first search finds the index warm
     return {
       sessions: listed.map((s) => ({
         ...s,
@@ -57,6 +61,12 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
   });
 
   handle('history:past-summary', () => history.pastSessionsSummary());
+
+  handle('history:search', async (_event, { query }) => {
+    const sessionByFile = new Map(listedNow().map((s) => [s.file, s.sessionId]));
+    const found = await transcripts.search([...sessionByFile.keys()], typeof query === 'string' ? query : '');
+    return { matches: found.map(({ file, snippet }) => ({ sessionId: sessionByFile.get(file) ?? '', snippet })) };
+  });
 
   // Joins the pass already running, if any, and resolves when it ends.
   handle('history:tidy', () => organizer.runNow());

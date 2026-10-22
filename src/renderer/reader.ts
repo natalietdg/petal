@@ -1,4 +1,3 @@
-import * as markdown from './markdown';
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import { byId, query } from './dom';
@@ -11,13 +10,12 @@ import { paintConclusion } from './conclusion-banner';
 import { infoFor, onInfo } from './conclusion-info';
 import * as banners from './reader-banners';
 import * as prsTab from './prs-tab';
-import { replyBlocks } from './reply-blocks';
 import * as stopClaude from './stop-claude';
 import { noticeLines } from './reader-notice';
 import * as mentions from './mentions';
 import * as setupHints from './reader-setup-hints';
 import * as distillCard from './distill-card';
-import { copyReplyBar } from './copy-reply-button';
+import { forgetAll, renderedReply, type RenderedReply } from './reply-cache';
 import * as codeReviewTab from './code-review-tab';
 import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
@@ -64,13 +62,31 @@ const foldKey = (reply: Reply): string => reply.id ?? `text:${reply.markdown.sli
 
 const youBubble = (prompt: string): HTMLDivElement => promptBubble('reader-you', prompt);
 
-// Claude's text for one turn; a text written after a sectioned one is its own block, never folded into a section.
+// Claude's text for one turn, from the cache unless it changed; a text written after a sectioned one is its own block.
 // A reply ending in a `**To @<session>:**` line gets its Send to button after the text; Copy comes last.
-const replyBody = (reply: Reply): HTMLElement[] => {
-  const blocks: HTMLElement[] = replyBlocks(reply.markdown, reply.breaks).map((block, i) => markdown.render(block, { fold: i ? `${foldKey(reply)}#${i}` : foldKey(reply), images: { cwd: lastUpdate?.cwd ?? null } }));
-  const send = mentions.replyAction(reply, lastUpdate?.tabId ?? null);
-  return [...blocks, ...(send ? [send] : []), copyReplyBar(reply.markdown, () => blocks)];
-};
+function replyParts(reply: Reply): RenderedReply {
+  const rendered = renderedReply(reply, foldKey(reply), lastUpdate?.cwd ?? null);
+  const send = mentions.replyAction(reply, lastUpdate?.tabId ?? null); // fresh each draw: the target tab may have started or stopped
+  if (send) rendered.send?.replaceWith(send);
+  rendered.send = send;
+  return rendered;
+}
+
+const replyBody = (rendered: RenderedReply): HTMLElement[] => [...rendered.blocks, ...(rendered.send ? [rendered.send] : []), rendered.copy];
+
+// Mermaid draws into the cached blocks, so each reply's diagrams render once.
+function drawDiagrams(rendered: RenderedReply): void {
+  if (rendered.diagramsDrawn) return;
+  rendered.diagramsDrawn = true;
+  for (const block of rendered.blocks) void diagrams.render(block);
+}
+
+// Leaves the container alone when it already holds exactly these nodes, so a redraw keeps layout and scroll.
+function placeChildren(container: Element, nodes: Node[]): void {
+  const children = container.childNodes;
+  if (children.length === nodes.length && nodes.every((node, i) => children[i] === node)) return;
+  container.replaceChildren(...nodes);
+}
 
 // Sent from the reply box, not yet in Claude's log.
 function pendingBubble(echo: PendingEcho): HTMLDivElement {
@@ -80,7 +96,7 @@ function pendingBubble(echo: PendingEcho): HTMLDivElement {
   return bubble;
 }
 
-const writingLine = (): HTMLParagraphElement => Object.assign(document.createElement('p'), { className: 'reader-writing', textContent: 'Claude is writing…' });
+const writingLine = Object.assign(document.createElement('p'), { className: 'reader-writing', textContent: 'Claude is writing…' });
 
 // A picker on the terminal: Claude has stopped to wait on her, which the log won't show until she answers.
 type Asking = 'question' | 'permission' | 'menu' | 'terminal' | null;
@@ -91,13 +107,13 @@ const ASKING_TEXT = {
   terminal: 'Claude is asking in the terminal',
 };
 let asking: Asking = null;
-const askingLine = (kind: NonNullable<Asking>): HTMLParagraphElement =>
-  Object.assign(document.createElement('p'), { className: 'reader-writing reader-asking', textContent: ASKING_TEXT[kind] });
+const askingLine = Object.assign(document.createElement('p'), { className: 'reader-writing reader-asking' });
+const askingLineFor = (kind: NonNullable<Asking>): HTMLParagraphElement => Object.assign(askingLine, { textContent: ASKING_TEXT[kind] });
 
 export function setAsking(next: Asking): void {
   if (next === asking) return;
   asking = next;
-  rerender();
+  redraw();
 }
 
 // Her messages after Claude's newest reply: from the log first, then reply-box sends still on their way.
@@ -118,16 +134,19 @@ function openTurn(waiting: WaitingPrompt[], pending: PendingEcho[]): OpenTurn | 
   };
 }
 
-// An earlier turn in full: her message, then Claude's whole reply.
+// An earlier turn in full: her message, then Claude's whole reply. Built once, then reused while the reply is unchanged.
 function olderTurn(reply: Reply): HTMLElement {
-  const turn = document.createElement('article');
-  turn.className = 'reply older-turn';
+  const rendered = replyParts(reply);
+  rendered.turn ??= {
+    article: Object.assign(document.createElement('article'), { className: 'reply older-turn' }),
+    time: Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) }),
+  };
+  const { article: turn, time } = rendered.turn;
   turn.dataset.replyId = reply.id;
-  const time = Object.assign(document.createElement('p'), { className: 'older-time', textContent: timeOfReply(reply.timestamp) });
-  const body = replyBody(reply);
-  turn.append(time, ...(reply.prompt ? [youBubble(reply.prompt)] : []), ...body);
+  const body = replyBody(rendered);
+  placeChildren(turn, [time, ...(rendered.bubble ? [rendered.bubble] : []), ...body]);
   codeReviewTab.attach(turn, body, reviewSource(), { replyId: reply.id });
-  diagrams.render(turn);
+  drawDiagrams(rendered);
   return turn;
 }
 
@@ -166,6 +185,12 @@ const ALLOW_FOLDER: EmptyAction = { label: 'Allow reading your Claude folder', e
 
 // Theme switch: rebuild so diagrams pick up the new colours.
 export function rerender(): void {
+  forgetAll();
+  redraw();
+}
+
+// A reader state changed (asking, setup, folder): draw again from the cached replies.
+function redraw(): void {
   if (lastUpdate) update(lastUpdate);
 }
 
@@ -187,7 +212,7 @@ export function update(shown: ShownUpdate): void {
   column.classList.toggle('ended', state === 'ended');
   const live = state === 'live';
   const open = live ? openTurn(waiting, pending) : null;
-  const writing = !live ? [] : asking ? [askingLine(asking)] : busy || pending.length > 0 ? [writingLine()] : [];
+  const writing = !live ? [] : asking ? [askingLineFor(asking)] : busy || pending.length > 0 ? [writingLine] : [];
   if (open) {
     showOpenTurn(open, replies, writing);
     return;
@@ -207,12 +232,13 @@ export function update(shown: ShownUpdate): void {
   appendStop();
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
   const needsYou = live && !busy ? distillCard.card(shown.tabId ?? null, 'reader') : null; // a test-loop round waiting on her
-  const body = replyBody(newest);
-  latest.replaceChildren(...(newest.prompt ? [youBubble(newest.prompt)] : []), ...body, ...(needsYou ? [needsYou] : []), ...writing);
+  const rendered = replyParts(newest);
+  const body = replyBody(rendered);
+  placeChildren(latest, [...(rendered.bubble ? [rendered.bubble] : []), ...body, ...(needsYou ? [needsYou] : []), ...writing]);
   codeReviewTab.attach(latest, body, reviewSource(), { replyId: newest.id });
   latest.dataset.replyId = newest.id;
-  older.replaceChildren(...[...rest].reverse().map(olderTurn)); // oldest first
-  diagrams.render(latest);
+  placeChildren(older, [...rest].reverse().map(olderTurn)); // oldest first
+  drawDiagrams(rendered);
   bringIntoView(newest.id);
   if (view === 'flow') scheduleFlowRefresh();
 }
@@ -231,7 +257,7 @@ function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]):
   appendStop();
   latest.replaceChildren(...open.bubbles, ...writing);
   delete latest.dataset.replyId;
-  older.replaceChildren(...[...replies].reverse().map(olderTurn)); // oldest first
+  placeChildren(older, [...replies].reverse().map(olderTurn)); // oldest first
   bringIntoView(open.id);
   if (view === 'flow') scheduleFlowRefresh();
 }
@@ -320,9 +346,9 @@ export function showReply(replyIds: readonly (string | undefined)[]): void {
   setTimeout(() => target.classList.remove('flash'), FLASH_MS);
 }
 
-export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; rerender(); };
-export const setClaudeSetup = (setup: boolean): void => { if (setup !== claudeSetup) { claudeSetup = setup; rerender(); } };
-export const setFolderAllowed = (allowed: boolean): void => { folderAllowed = allowed; rerender(); };
+export const setClaudeMissing = (missing: boolean): void => { claudeMissing = missing; redraw(); };
+export const setClaudeSetup = (setup: boolean): void => { if (setup !== claudeSetup) { claudeSetup = setup; redraw(); } };
+export const setFolderAllowed = (allowed: boolean): void => { folderAllowed = allowed; redraw(); };
 
 // A standing line above the replies, for startup reads from main that failed; reply updates leave it alone.
 const notice = Object.assign(document.createElement('p'), { className: 'status reader-notice', hidden: true });

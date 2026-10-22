@@ -69,6 +69,11 @@ export interface HistoryList {
   organizing: boolean;
 }
 
+// Sessions whose conversation mentions the query, each with the words around the first mention.
+export interface HistorySearchResult {
+  matches: { sessionId: string; snippet: string }[];
+}
+
 export interface ConversationPage {
   turns: { index: number; prompt: string; reply: string }[];
   start: number;
@@ -311,6 +316,7 @@ export interface InvokeChannels {
   'factory:use-global': { args: [request: { repo: string }]; result: Guarded<FactoryState> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
+  'history:search': { args: [request: { query: string }]; result: Guarded<HistorySearchResult> }; // her prompts and Claude's replies, not just titles
   'history:past-summary': { args: []; result: Guarded<PastSessionsSummary> }; // the setup guide's import card
   'history:conversation': { args: [request: { sessionId: string; before?: number }]; result: Guarded<ConversationPage> };
   // background: open it in a tab that isn't shown (a reply from History's preview).
@@ -409,6 +415,7 @@ export interface EventChannels {
   'tabs:activate': { tabId: TabId };
   'layout:toggle': void;
   'history:toggle': void;
+  'reader:find': void; // ⌘F: the find bar over the reader
   'board:toggle': void; // ⌘⇧O: the Sessions board
   'focus:toggle': void; // ⌘⇧F: only the reply, full window
   'headers:toggle': void; // ⌘⇧H: the dock and reader header folded to a thin strip

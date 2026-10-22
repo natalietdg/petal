@@ -39,6 +39,7 @@ import * as clashNotice from './clash-notice';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
 import * as shortcuts from './shortcuts';
+import * as readerFind from './reader-find';
 import * as library from './library';
 import * as libraryAdd from './library-add';
 import * as testing from './testing';
@@ -51,7 +52,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 

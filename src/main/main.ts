@@ -150,6 +150,7 @@ function refreshMenu(): void {
     onCycleTab: (delta) => sendToFocused('tabs:cycle', delta),
     onToggleReader: () => sendToFocused('layout:toggle'),
     onToggleHistory: () => sendToFocused('history:toggle'),
+    onFindInReader: () => sendToFocused('reader:find'),
     onToggleBoard: () => sendToFocused('board:toggle'),
     onToggleFocus: () => sendToFocused('focus:toggle'),
     onToggleHeaders: () => sendToFocused('headers:toggle'),
