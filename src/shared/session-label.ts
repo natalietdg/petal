@@ -3,6 +3,7 @@ import { stripPasted } from './pasted-content';
 
 // Where a name can come from, in History's priority order.
 export interface SessionNameSources {
+  pinned?: string | null; // the name pinned once from context (main/session-names.ts); nothing replaces it
   organizerTitle?: string | null; // Petal's organizer, once it has labelled the session
   title?: string | null; // Claude Code's own ai-title, else its first prompt (as history.ts reads it)
   firstPrompt?: string | null; // her first prompt, while Claude Code has no title yet
@@ -18,13 +19,16 @@ const flat = (text: string | null | undefined): string => stripPasted(text ?? ''
 // "~/widget-service" or "/home/x/widget-service" -> "widget-service".
 export const folderName = (cwd: string | null | undefined): string => (cwd ?? '').replace(/\/+$/, '').split('/').pop() ?? '';
 
-// Full title: organizer, Claude Code's title, first prompt, then "<folder> · new session".
-export function sessionTitle({ organizerTitle, title, firstPrompt, cwd }: SessionNameSources): string {
-  const named = flat(organizerTitle) || flat(title) || flat(firstPrompt);
+// Full title: pinned name, organizer, Claude Code's title, first prompt, then "<folder> · new session".
+export function sessionTitle({ pinned, organizerTitle, title, firstPrompt, cwd }: SessionNameSources): string {
+  const named = flat(pinned) || flat(organizerTitle) || flat(title) || flat(firstPrompt);
   if (named) return named;
   const folder = folderName(cwd);
   return folder ? `${folder} · ${NEW_SESSION}` : 'New session';
 }
+
+// The title a session earns from its own content; her first prompt is only a placeholder until one lands.
+export const contextTitle = (...candidates: (string | null | undefined)[]): string => candidates.map(flat).find(Boolean) ?? '';
 
 // What a surface shows: cut at one length everywhere, so a name reads the same in the panel, a tab and History.
 export function sessionLabelText(fullTitle: string): string {

@@ -64,7 +64,7 @@ import type { ExplainResult, ExplainTarget, ReviewSource, SessionSummary, TaskRe
 export type Guarded<T> = T | IpcError;
 
 export interface HistoryList {
-  sessions: (ListedSession & { hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string; conclusion: Conclusion | null })[];
+  sessions: (ListedSession & { name: string; hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string; conclusion: Conclusion | null })[];
   tags: TagsData['tags'];
   organizing: boolean;
 }

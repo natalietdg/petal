@@ -9,6 +9,10 @@ import { allowClaudeFolder, removeTempDirs } from './helpers';
 describe('sessionTitle priority (History order)', () => {
   const all = { organizerTitle: 'Organizer title', title: 'Claude title', firstPrompt: 'first prompt', cwd: '/Users/n/widget-service' };
 
+  it('a pinned name beats every later title', () => {
+    expect(sessionTitle({ ...all, pinned: 'Pinned name' })).toBe('Pinned name');
+  });
+
   it('prefers the organizer title', () => {
     expect(sessionTitle(all)).toBe('Organizer title');
   });
@@ -95,7 +99,8 @@ describe('one naming rule', () => {
     ['main/sessions-ipc.ts', /sessionTitleFor\(/], // Sessions panel rows and Recently closed
     ['main/agents-ipc.ts', /sessionTitleFor\(/], // Agents panel session line
     ['main/workflow-ipc.ts', /sessionTitleFor\(/],
-    ['main/workflow-common.ts', /sessionTitle\(/],
+    ['main/workflow-common.ts', /listedName\(/], // Board rows, pinned like every other surface
+    ['main/history-ipc.ts', /listedName\(/], // History's pinned name per session
     ['main/handoff-ipc.ts', /sessionTitleFor\(/],
     ['main/flow-ipc.ts', /sessionTitleFor\(/],
     ['renderer/history-state.ts', /sessionTitle\(/], // History rows, preview header, rail, Favorites list

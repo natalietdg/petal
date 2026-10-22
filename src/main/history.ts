@@ -22,7 +22,9 @@ export interface SessionRecord {
   sessionId: string;
   file: string;
   cwd: string | null;
-  title: string;
+  title: string; // latest ai-title, else first prompt: the name before naming was pinned (session-names.ts)
+  firstAiTitle?: string | null; // Claude Code's first ai-title; fixtures leave it out
+  customTitle?: string | null; // her latest /rename in Claude Code
   firstPrompt: string;
   lastAt: number;
   messages: number;
@@ -60,6 +62,8 @@ function sessionFiles(home: string | null = allowedClaudeHome()): string[] {
 
 const isMessage = (e: TranscriptEntry) => (e.type === 'user' || e.type === 'assistant') && !e.isSidechain;
 const lastAiTitle = (entries: TranscriptEntry[]) => entries.filter((e) => e.type === 'ai-title' && e.aiTitle).at(-1)?.aiTitle;
+const firstAiTitle = (entries: TranscriptEntry[]) => entries.find((e) => e.type === 'ai-title' && e.aiTitle)?.aiTitle;
+const lastCustomTitle = (entries: TranscriptEntry[]) => entries.filter((e) => e.type === 'custom-title' && e.customTitle).at(-1)?.customTitle;
 
 // A window cut inside one huge line parses to nothing, which once dropped the whole session; read more until a message shows.
 function readUntilMessage(read: typeof readHead, file: string, bytes: number): JsonlSlice {
@@ -70,6 +74,8 @@ function readUntilMessage(read: typeof readHead, file: string, bytes: number): J
   }
   return slice;
 }
+
+const trimOrNull = (text: string | undefined): string | null => (text ? trimTo(text, 80) : null);
 
 function buildRecord(file: string, stat: fs.Stats): SessionRecord {
   const head = readUntilMessage(readHead, file, HEAD_BYTES);
@@ -84,6 +90,8 @@ function buildRecord(file: string, stat: fs.Stats): SessionRecord {
     file,
     cwd: typeof cwd === 'string' ? cwd : null,
     title: trimTo(lastAiTitle(tail.entries) ?? lastAiTitle(head.entries) ?? firstPrompt ?? '', 80),
+    firstAiTitle: trimOrNull(firstAiTitle(head.entries) ?? firstAiTitle(tail.entries)),
+    customTitle: trimOrNull(lastCustomTitle(tail.entries) ?? lastCustomTitle(head.entries)),
     firstPrompt: trimTo(firstPrompt, FIRST_PROMPT_CHARS),
     lastAt: stat.mtimeMs,
     messages,

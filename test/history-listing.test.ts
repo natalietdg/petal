@@ -43,6 +43,20 @@ describe('History lists real sessions', () => {
     expect(session).toMatchObject({ sessionId: id(1), title: 'Fix the build', firstPrompt: 'fix the build', cwd: '/tmp/a', messages: 2 });
   });
 
+  it("reads the first ai-title and her latest /rename (Claude Code's custom-title entry) for pinning", async () => {
+    const { home, log } = folder();
+    log('-tmp-a', 1, [
+      userEntry('fix the build', { cwd: '/tmp/a' }),
+      JSON.stringify({ type: 'ai-title', aiTitle: 'Fix the build' }),
+      assistantEntry('Done.'),
+      JSON.stringify({ type: 'ai-title', aiTitle: 'Deploy the fix' }),
+      JSON.stringify({ type: 'custom-title', customTitle: 'Build fix', sessionId: id(1) }),
+      JSON.stringify({ type: 'custom-title', customTitle: 'Build fix v2', sessionId: id(1) }),
+    ]);
+    const [session] = await listed(home);
+    expect(session).toMatchObject({ title: 'Deploy the fix', firstAiTitle: 'Fix the build', customTitle: 'Build fix v2' });
+  });
+
   it('keeps a session whose cwd folder no longer exists', async () => {
     const { home, log } = folder();
     log('-tmp-gone', 2, [userEntry('old work', { cwd: '/tmp/petal-folder-that-is-gone' }), assistantEntry('ok')]);

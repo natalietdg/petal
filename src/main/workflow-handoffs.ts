@@ -1,6 +1,6 @@
 // Workflow, Handoffs tab: this past week's send / resume / fork hops between sessions, as a Mermaid graph.
 import { label, titleOf, WEEK_MS } from './workflow-common';
-import { sessionTitle } from '../shared/session-label';
+import { sessionTitleFor } from './session-title';
 import type { ListedSession } from './history';
 import type { OrganizerStore } from './session-organizer';
 import type { Link, LinkKind } from './links-store';
@@ -22,7 +22,7 @@ export function handoffData({ links, sessions, labels, now = Date.now() }: { lin
   if (!recent.length) return { total: 0, counts, mermaid: null, nodes: 0 };
 
   const titles = new Map(sessions.map((s) => [s.sessionId, titleOf(s, labels)]));
-  const nameOf = (id: string | null) => (id ? titles.get(id) || sessionTitle({ organizerTitle: labels[id]?.title }) : 'New tab');
+  const nameOf = (id: string | null) => (id ? titles.get(id) || sessionTitleFor(id) : 'New tab');
   const ids = new Map<string, string>(); // sessionId (or "") -> mermaid node id
   const nodeFor = (id: string | null): string => {
     const key = id ?? '';

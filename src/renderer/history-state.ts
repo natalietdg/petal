@@ -60,9 +60,8 @@ export const sortToggle = query(view, '#history-sort');
 export const listTabs = query(view, '#history-tabs');
 export const railTitle = query(view, '.history-rail-title');
 
-// The shared naming rule, so History, the tabs and the Sessions panel call a session the same thing.
-export const titleOf = (session: Session): string =>
-  sessionTitle({ organizerTitle: session.organizer?.title, title: session.title, firstPrompt: session.firstPrompt, cwd: session.cwd });
+// Main's pinned name (session-title.ts), so History, the tabs and the Sessions panel call a session the same thing.
+export const titleOf = (session: Session): string => sessionTitle({ pinned: session.name, cwd: session.cwd });
 export const selectedSession = (): Session | undefined => state.sessions.find((s) => s.sessionId === state.selectedId);
 
 const DAY_MS = 86_400_000;
