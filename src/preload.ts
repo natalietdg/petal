@@ -81,6 +81,7 @@ const api = {
   openLink: (url: string) => send('link:open', url),
   reportReady: (info: SendChannels['renderer:ready'][0]) => send('renderer:ready', info),
   onToggleHistory: (callback: () => void) => subscribe('history:toggle', callback),
+  onFindInReader: (callback: () => void) => subscribe('reader:find', callback),
   onToggleBoard: (callback: () => void) => subscribe('board:toggle', callback),
   onToggleFocus: (callback: () => void) => subscribe('focus:toggle', callback),
   onToggleHeaders: (callback: () => void) => subscribe('headers:toggle', callback),

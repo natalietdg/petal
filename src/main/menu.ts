@@ -36,6 +36,7 @@ export interface MenuOptions {
   onCycleTab: (delta: number) => void;
   onToggleReader: () => void;
   onToggleHistory: () => void;
+  onFindInReader: () => void;
   onToggleBoard: () => void;
   onToggleFocus: () => void;
   onToggleHeaders: () => void;
@@ -50,7 +51,7 @@ export interface MenuOptions {
 }
 
 // Pure, so the Shortcuts guide's drift test can read every accelerator without Electron.
-export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onToggleBoard, onToggleFocus, onToggleHeaders, onTextSize, onStopClaude, onOpenSettings, onOpenPetGuide, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
+export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatSelected, currentScene, onSceneSelected, currentReading, onReadingSelected, onNewWindow, onNewTab, onCloseTab, onCycleTab, onToggleReader, onToggleHistory, onFindInReader, onToggleBoard, onToggleFocus, onToggleHeaders, onTextSize, onStopClaude, onOpenSettings, onOpenPetGuide, onOpenColourKey, onToggleShortcuts, onOpenRepo, onCheckForUpdates }: MenuOptions): MenuItemConstructorOptions[] {
   const themeItems: MenuItemConstructorOptions[] = Object.entries(themes).map(([id, theme], index) => ({
     label: theme.label,
     type: 'radio',
@@ -127,6 +128,7 @@ export function menuTemplate({ currentTheme, onThemeSelected, currentCat, onCatS
         { label: 'Focus: Minimise Headers', accelerator: ACCEL.minimiseHeaders, click: onToggleHeaders },
         { label: 'Focus: Only the Reply', accelerator: ACCEL.focus, click: onToggleFocus },
         { label: 'History', accelerator: ACCEL.history, click: onToggleHistory },
+        { label: 'Find in Reader', accelerator: ACCEL.findInReader, click: onFindInReader },
         { label: 'Sessions Board', accelerator: ACCEL.board, click: onToggleBoard },
         { type: 'separator' },
         // Acts on the terminal when it has focus, otherwise the reader (renderer/text-size.ts).

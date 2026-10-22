@@ -409,6 +409,7 @@ export interface EventChannels {
   'tabs:activate': { tabId: TabId };
   'layout:toggle': void;
   'history:toggle': void;
+  'reader:find': void; // ⌘F: the find bar over the reader
   'board:toggle': void; // ⌘⇧O: the Sessions board
   'focus:toggle': void; // ⌘⇧F: only the reply, full window
   'headers:toggle': void; // ⌘⇧H: the dock and reader header folded to a thin strip
