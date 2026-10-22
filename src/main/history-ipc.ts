@@ -11,6 +11,7 @@ import * as conclusions from './conclusions-store';
 import { load as loadConfig } from './config-store';
 import { handle, send } from './ipc';
 import { buildResumeCommand } from './resume-command';
+import { listedName } from './session-title';
 import { claudeLaunch } from './claude-launch';
 import { historyFixture, isSnapshotRun } from './snapshot-mode';
 import { guardsShell, harnessLine } from './snapshot-shell';
@@ -49,6 +50,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     return {
       sessions: listed.map((s) => ({
         ...s,
+        name: listedName(s, labels), // pinned once from context, the same name every surface shows
         hasFlow: flowStore.has(s.sessionId),
         organizer: labels[s.sessionId] ?? null,
         tags: tags.sessions[s.sessionId]?.tags ?? [],

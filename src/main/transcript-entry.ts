@@ -35,6 +35,7 @@ export interface TranscriptEntry {
   imagePasteIds?: unknown; // her turn's "[Image #n]" numbers, in the order their source notes follow
   cwd?: unknown;
   aiTitle?: string;
+  customTitle?: string; // a 'custom-title' entry: her /rename
   origin?: { kind?: string; handback?: boolean }; // another agent's message arrives as a meta user entry, kind 'peer'
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
   toolUseResult?: unknown; // on a tool_result entry: Claude Code's own record of the call, e.g. an edit's originalFile

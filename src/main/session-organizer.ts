@@ -5,6 +5,7 @@ import readline from 'node:readline';
 import { app } from 'electron';
 import * as history from './history';
 import * as tagsStore from './tags-store';
+import * as names from './session-names';
 import { claudePath, runClaude } from './claude-cli';
 import * as configStore from './config-store';
 import { promptText, commandText } from './prompts';
@@ -166,9 +167,11 @@ function projectNames(store: OrganizerStore): string[] {
 // Organizer-owned and never tagged yet; her manual sessions are never due for tags.
 const needsTags = (session: ListedSession, tags: TagsData): boolean => !tags.sessions[session.sessionId];
 
+// A pinned name is never retitled, so a labelled session that only grew isn't due: no tokens spent on it.
 function needsLabel(session: ListedSession, store: OrganizerStore, tags: TagsData, openIds: Set<string>): boolean {
   const entry = store[session.sessionId];
-  if (entry && entry.mtimeMs === session.lastAt && !needsTags(session, tags)) return false;
+  const current = entry && (entry.mtimeMs === session.lastAt || names.pinned(session.sessionId));
+  if (current && !needsTags(session, tags)) return false;
   return !(openIds.has(session.sessionId) && Date.now() - session.lastAt < BUSY_WINDOW_MS);
 }
 
@@ -179,8 +182,9 @@ async function labelOne(session: ListedSession, store: OrganizerStore, { prompt,
   const hints = tagsStore.names().slice(0, MAX_TAG_HINTS); // deleted names are never in this list
   const { tags: suggested, ...label } = parseLabel(await runClaude(promptFor(prompt, buildDigest(turns), session.cwd, projectNames(store), hints), { model }));
   const previous = store[session.sessionId];
-  const unchanged = previous && previous.mtimeMs === mtimeMs; // tag-only backfill keeps the title she already saw
-  store[session.sessionId] = unchanged ? previous : { ...label, mtimeMs, at: new Date().toISOString() };
+  const pinned = names.pinned(session.sessionId)?.title; // grouping only: a pinned session keeps its name
+  const unchanged = previous && (previous.mtimeMs === mtimeMs || pinned); // tag-only backfill keeps the label she already saw
+  store[session.sessionId] = unchanged ? previous : { ...label, title: pinned ?? label.title, mtimeMs, at: new Date().toISOString() };
   save(store); // per session, so a crash mid-pass keeps what was already done
   tagsStore.applyOrganizerTags(session.sessionId, suggested); // a no-op once she has edited this session's tags
 }

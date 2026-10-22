@@ -1,6 +1,8 @@
 // Workflow, Today tab: today's sessions grouped by tag or project, Petal's open tabs, and recently tidied sessions.
 import { bucket, cap, groupsFor, startOfDay, titleOf, type DashboardInputs, type GroupKey } from './workflow-common';
-import { NO_SESSION_LABEL, sessionTitle } from '../shared/session-label';
+import { NO_SESSION_LABEL } from '../shared/session-label';
+import { sessionTitleFor } from './session-title';
+import { pinned } from './session-names';
 
 const RECENT_TIDIED = 6;
 const OPEN_TAB_TITLE_CHARS = 80;
@@ -57,7 +59,7 @@ export function todayData({ sessions, labels, tags, openTabs = [], now = Date.no
     .filter(([, entry]) => typeof entry?.at === 'string')
     .sort((a, b) => b[1].at.localeCompare(a[1].at))
     .slice(0, RECENT_TIDIED)
-    .map(([sessionId, entry]) => ({ sessionId, title: entry.title, project: entry.project ?? null, status: entry.status ?? null, at: entry.at }));
+    .map(([sessionId, entry]) => ({ sessionId, title: pinned(sessionId)?.title ?? entry.title, project: entry.project ?? null, status: entry.status ?? null, at: entry.at }));
   return {
     groupedBy: tags ? 'tag' : 'project',
     total: todays.length,
@@ -65,7 +67,7 @@ export function todayData({ sessions, labels, tags, openTabs = [], now = Date.no
     groups: [...groups.values()].sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name)),
     openTabs: openTabs.map((t) => ({
       sessionId: t?.sessionId ?? null,
-      title: cap(t?.title || (t?.sessionId ? sessionTitle({ organizerTitle: labels[t.sessionId]?.title }) : NO_SESSION_LABEL), OPEN_TAB_TITLE_CHARS),
+      title: cap(t?.title || (t?.sessionId ? sessionTitleFor(t.sessionId) : NO_SESSION_LABEL), OPEN_TAB_TITLE_CHARS),
       busy: Boolean(t?.busy),
     })),
     recentlyTidied,

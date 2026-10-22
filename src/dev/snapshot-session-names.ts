@@ -1,5 +1,6 @@
 // Session names (PASTEL_SNAPSHOT_MODE=session-names): one session is called the same thing in the Sessions panel,
-// its terminal tab, History and the reader header; a title that lands later renames all of them; never "<folder>-<id>".
+// its terminal tab, History and the reader header; the first title that lands names all of them, and later titles never
+// rename them again; never "<folder>-<id>".
 import fs from 'node:fs';
 import path from 'node:path';
 import { nativeImage, type BrowserWindow, type NativeImage } from 'electron';
@@ -116,6 +117,9 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
   const closedFile = path.join(userDataDir(), 'closed.json');
   const savedOrganizer = fs.existsSync(organizerFile) ? fs.readFileSync(organizerFile, 'utf8') : null;
   const savedClosed = fs.existsSync(closedFile) ? fs.readFileSync(closedFile, 'utf8') : null;
+  const namesFile = path.join(userDataDir(), 'session-names.json');
+  const savedNames = fs.existsSync(namesFile) ? fs.readFileSync(namesFile, 'utf8') : null;
+  fs.rmSync(namesFile, { force: true }); // fixture ids start unnamed, as on a fresh install
   const savedPanel = { ...panelFixture };
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
@@ -199,7 +203,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     check(every.length >= 10 && hostIds.length === 0, `no host-id labels in ${every.length} labels: ${JSON.stringify(hostIds)}`);
     await capture('session-names-1280');
 
-    // 3 A title that lands later renames the tab, the panel row, the History row and the reader header together.
+    // 3 The first title that lands names the tab, the panel row, the History row and the reader header together.
     await js('PastelTerm.history.close()');
     await js(`PastelTerm.tabs.activate(${JSON.stringify(await tabOf(UNTITLED.id))})`);
     await js('PastelTerm.sessionsPanel.setOpen(true)');
@@ -220,6 +224,24 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE, [PROMPT_ONLY.id]: 'Product name translations on test' });
     const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, 'Product name translations on test'), 8000);
     check(live, `a title landing while History is open renames its row, tab and panel row: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
+
+    // 3b Named once: a later organizer pass or ai-title renames nothing that already has a name, on any surface.
+    writeOrganizer({ [ORGANIZED.id]: 'Organizer second pass', [AI_TITLED.id]: 'Organizer late title', [UNTITLED.id]: 'Untitled retitled', [PROMPT_ONLY.id]: 'Product names, retitled' });
+    const aiRecord = historyFixture.records.find((r) => r.sessionId === AI_TITLED.id);
+    if (aiRecord) aiRecord.title = 'A later ai title from Claude Code';
+    await wait(5000); // two relabel ticks
+    await js('PastelTerm.history.close()');
+    await js('PastelTerm.history.open()'); // a fresh list, read after the later titles
+    await wait(800);
+    const kept: [Fixture, string | null][] = [[ORGANIZED, ORGANIZED.organizer], [AI_TITLED, null], [UNTITLED, LATE_TITLE], [PROMPT_ONLY, 'Product name translations on test']];
+    for (const [f, organizer] of kept) {
+      const got = await surfacesAgree(f, organizer);
+      check(got, `${f.claudeName} keeps "${expected(f, organizer).text}" after later titles: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
+    }
+    await js('PastelTerm.history.close()');
+    await js(`PastelTerm.tabs.activate(${JSON.stringify(await tabOf(AI_TITLED.id))})`);
+    const keptHead = await waitFor(async () => { const h = await readerHead(); return h.shown && h.text === expected(AI_TITLED).text ? h : null; }, 4000);
+    check(keptHead, `reader header keeps the pinned name: ${JSON.stringify(keptHead ?? await readerHead())}`);
     await js('PastelTerm.history.close()');
 
     // 4 Every theme and look, 1280 and 800: nothing sideways, long names cut with a tooltip. PNGs side by side.
@@ -272,6 +294,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     if (startActive) await js(`PastelTerm.tabs.activate(${JSON.stringify(startActive)})`);
     if (savedOrganizer === null) fs.rmSync(organizerFile, { force: true }); else fs.writeFileSync(organizerFile, savedOrganizer);
     if (savedClosed === null) fs.rmSync(closedFile, { force: true }); else fs.writeFileSync(closedFile, savedClosed);
+    if (savedNames === null) fs.rmSync(namesFile, { force: true }); else fs.writeFileSync(namesFile, savedNames);
     panelFixture.sessions = savedPanel.sessions;
     panelFixture.subagentsRoot = savedPanel.subagentsRoot;
     historyFixture.records = [];

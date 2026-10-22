@@ -165,6 +165,16 @@ describe('session-organizer passes', () => {
     expect(organizer.load().s1.title).toBe('New title');
   });
 
+  it('a pinned session is grouped once, keeps its name, and is never retitled after it grows', async () => {
+    fs.writeFileSync(path.join(userData, 'session-names.json'), JSON.stringify({ since: 0, names: { s1: { title: 'Pinned name', from: 'claude', at: 'x' } } }));
+    expect((await organizer.runNow()).titled).toBe(1);
+    expect(organizer.load().s1).toMatchObject({ title: 'Pinned name', project: 'Petal', status: 'done' });
+    fs.appendFileSync(fixture, `${JSON.stringify(userEntry('one more thing'))}\n`);
+    stub.sessions = [session('s1', fixture)];
+    expect((await organizer.runNow()).due).toBe(0);
+    expect(stub.runClaude).toHaveBeenCalledTimes(1);
+  });
+
   it('an already-titled but untagged session keeps its title (tag-only backfill)', async () => {
     const mtimeMs = fs.statSync(fixture).mtimeMs;
     fs.writeFileSync(organizerFile(), JSON.stringify({ s1: { title: 'SEEDED TITLE', project: 'Seed', status: 'done', mtimeMs, at: 'x' } }));
