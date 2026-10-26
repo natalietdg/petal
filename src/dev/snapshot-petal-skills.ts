@@ -145,7 +145,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     store.savePipeline(project, { stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], keepGoing: true, autoRun: false, confirmed: ['npm test'], savedAt: Date.now() - 60_000 });
     const names = CLAUDE_STAGES.map((s) => s.name);
     const empty: Page = await openTesting((p) => p.state.task === 'Checkout' && p.seed);
-    check(empty && empty.noSuite === 'No suite for this task yet' && empty.state.stages.length === 0 && empty.ask, `a task with no suite says so and offers the seed and Ask Claude: ${JSON.stringify(empty && { noSuite: empty.noSuite, seed: empty.seed, stages: empty.state.stages })}`);
+    check(empty && empty.noSuite === 'No suite for this repo yet' && empty.state.stages.length === 0 && empty.ask, `a task with no suite says so and offers the seed and Ask Claude: ${JSON.stringify(empty && { noSuite: empty.noSuite, seed: empty.seed, stages: empty.state.stages })}`);
     check(empty && !/project/i.test(empty.state.head), `the header names the task: ${empty?.state.head}`);
     check(empty && empty.worst[0] >= MIN_RATIO, `no-suite text contrast ${empty?.worst[0]}:1 ${JSON.stringify(empty?.worst)}`);
     await capture('testing-claude-pipeline');

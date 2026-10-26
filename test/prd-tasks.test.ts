@@ -6,7 +6,7 @@ import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 import { addTask, assignTask, removeTask, validateTaskFile, type Task, type TaskData, type TaskOwner } from '../src/shared/tasks';
 import { addPrd, editPrd, groupTasks, removePrd, setTaskPrd, siblingIndex, splitTask } from '../src/shared/task-groups';
 import { prdOf, taskAt } from '../src/shared/test-scope';
-import { forTask } from '../src/shared/task-suite';
+import { forTask } from '../src/shared/repo-suite';
 import { buildLoopBrief, parseCriteria } from '../src/shared/test-loop';
 import { loadTasks, tasksFile, updateTasks } from '../src/main/tasks-store';
 import { taskIdAt } from '../src/main/testing-tasks';
@@ -184,12 +184,13 @@ describe('criteria lines with and without a task', () => {
     expect(parsed.malformed).toBe(1);
   });
 
-  it('the loop brief asks for the task on every line only when the loop runs for a task', () => {
+  it('the loop brief asks for the ticket on every line only when it has one, never the task', () => {
     const base = { focus: 'cart', rounds: 2, stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], stack: [] };
-    const tagged = buildLoopBrief({ ...base, taskId: 't-1a2b' });
-    expect(tagged).toContain('- [status] name · test: path::test name · round n · task: t-1a2b');
-    expect(tagged).toContain('Keep "task: t-1a2b" on every line you add');
-    expect(buildLoopBrief(base)).not.toContain('task:');
+    const tagged = buildLoopBrief({ ...base, taskId: 't-1a2b', ticket: 'AB#10427' });
+    expect(tagged).toContain('- [status] name · test: path::test name · ticket: AB#10427 · level: regression');
+    expect(tagged).toContain('Tag every line you add with "ticket: AB#10427"');
+    expect(buildLoopBrief(base)).not.toContain('Tag every line');
+    expect(tagged).not.toContain('task:');
     expect(tagged).not.toMatch(/[\u2014\u2013]/);
   });
 });

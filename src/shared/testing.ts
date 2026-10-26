@@ -1,6 +1,6 @@
 // The Testing tab: each task's suite, its runs (hers or Claude's), what it tests with, and the pure helpers both sides share.
 import type { Prd, Task } from './tasks';
-import type { SuiteRecord, SuiteViews } from './task-suite';
+import type { RepoSuiteView, SuiteRecord } from './repo-suite';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { LockRefusal, RestoredFlag } from './test-lock';
 import type { PickSession } from './task-testing';
@@ -67,7 +67,8 @@ export interface ProjectTesting {
   root: string;
   pipeline: PipelineConfig | null; // the commands she confirmed; its stages are the old project pipeline, now only a seed
   runs: PipelineRun[]; // newest first
-  suites?: Record<string, SuiteRecord>; // per task: what Petal last took from .petal/suites/<taskId>.json
+  repoSuite?: SuiteRecord; // kept in the main checkout's store: what Petal last took from .petal/suite.json
+  imported?: string[]; // older per-task suite and criteria files already imported into the repo's files
   agents?: Record<string, AgentRecord[]>; // per task: every session Petal launched as its agent; the lock reads it
   testAgents?: TestAgent[]; // the Testing screen's agents; absent until the old records were migrated
   agentNames?: AgentNames; // her names for the two agents, for every task in the project
@@ -145,14 +146,15 @@ export interface TestingState {
   elsewhere: Elsewhere | null; // set when project is null because the tab is in ~ or outside a repo
   stack: StackItem[];
   proposed: StageConfig[]; // stages detection suggests
-  seed: SuiteSeed | null; // the project's commands, offered to a task with no suite
-  suites: SuiteViews; // each task's own suite, by task id
+  seed: SuiteSeed | null; // the project's commands, offered when the repo has no suite
+  suite: RepoSuiteView; // the repo's one suite, shared by its worktrees
   lock: LockView; // the project's test lock
   agentNames: AgentNames; // her names for the testing and bug fix agents
   runs: PipelineRun[];
   running: string[]; // the project's run ids still going, one at most per task
   sessionTab: string | null; // the tab with this project's Claude, where Ask in this session instead and skills go
   changed: string[]; // files changed recently (git), for Suite health's core stage
+  runners: string[]; // the runners the suite's stages call, for a scenario's own Run
   tasks: Task[]; // the project's tasks and PRDs; Testing is organised by them
   prds: Prd[];
   sessionTaskId: string | null; // the task held by sessionTab's session, shown first
@@ -165,7 +167,10 @@ export const NO_LOCK: LockView = { enabled: false, hookPresent: false, restored:
 // The project's commands from before suites were per task: .petal/pipeline.json, else the pipeline she saved. A seed only.
 export type SuiteSeed = { stages: StageConfig[] } | { problem: string };
 
-export type RunRequest = { tabId: string; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean };
+// levels and optedIn: her filter; only shown stages run, opt-in ones only when turned on. taskId tags the run.
+// One scenario's tests, or a ticket's tested scenarios (staging ones only with staging on).
+export type ScenarioRunRequest = { tabId: string; root?: string | null; taskId?: string | null; scenario?: string | null; ticket?: string | null; staging?: boolean; confirmed?: boolean };
+export type RunRequest = { tabId: string; root?: string | null; taskId?: string | null; stageId?: string | null; levels?: string[]; optedIn?: string[]; confirmed?: boolean };
 export type RunReply =
   | { started: string; typed: string }
   | { confirm: { commands: { name: string; command: string; isNew: boolean }[] } }
@@ -295,10 +300,6 @@ export function buildFixPrompt({ stage, command, tests, output }: { stage: strin
   const block = parts.length ? `\n\n\`\`\`\n${parts.join('\n\n').replace(/```/g, "'''")}\n\`\`\`` : '';
   return `${head}${block}`.slice(0, FIX_PROMPT_CAP);
 }
-
-// One run at a time per task; other tasks in the repo run alongside.
-export const runGoing = (going: readonly { root: string; taskId: string | null }[], root: string, taskId: string | null): boolean =>
-  going.some((w) => w.root === root && w.taskId === taskId);
 
 // A run's overall state from its stages.
 export function runStateOf(stages: StageResult[]): RunState {

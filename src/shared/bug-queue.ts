@@ -2,7 +2,7 @@
 // tests and files bugs as [fail] lines in the criteria file; the bug fix agent takes the oldest open bug whenever it is
 // idle; the testing agent verifies each fix on its next run. Pure: Petal's loop timer calls stepQueue and sends
 // the messages it returns.
-import type { CriteriaItem } from './test-loop';
+import { isOpenBug, type CriteriaItem } from './test-loop';
 import type { LoopPhase } from './loop-line';
 import type { TestCase } from './testing';
 
@@ -73,13 +73,13 @@ export function stepQueue(queue: readonly QueuedBug[], facts: QueueFacts, words:
     if (!line) { if (bug.state === 'verified') next.push(bug); continue; } // a recheck that passed: the line is gone
     let b: QueuedBug = { ...bug, test: testOf(line) ?? bug.test };
     if (line.status === 'fixed' && b.state !== 'verified') b = move(b, 'verified');
-    else if (line.status === 'fail' && b.state === 'recheck' && b.asked && (RECHECKED.test(line.name) || facts.testerRound > b.testerRound)) b = { ...move(b, 'open'), rechecked: true };
-    else if (line.status === 'fail' && b.state === 'verify' && facts.testerRound > b.testerRound) b = move(b, 'open');
+    else if (isOpenBug(line) && b.state === 'recheck' && b.asked && (RECHECKED.test(line.name) || facts.testerRound > b.testerRound)) b = { ...move(b, 'open'), rechecked: true };
+    else if (isOpenBug(line) && b.state === 'verify' && facts.testerRound > b.testerRound) b = move(b, 'open');
     else if (fixDone(b)) b = move(b, 'verify');
     next.push(b);
   }
   for (const [key, line] of lines) {
-    if (line.status !== 'fail' || next.some((b) => b.key === key)) continue;
+    if (!isOpenBug(line) || next.some((b) => b.key === key)) continue;
     const state: BugState = facts.fixerBusy ? 'recheck' : 'open';
     moves.push({ key, name: line.name, from: null, to: state });
     next.push({ key, name: line.name.replace(RECHECKED, ''), test: testOf(line), state, since: facts.now, asked: false, testerRound: facts.testerRound, rechecked: RECHECKED.test(line.name) });

@@ -31,7 +31,7 @@ import type { TokenEstimate } from './library-cost';
 import type { DuplicatePair } from './library-titles';
 import type { LessonEditResult, LessonPreviewResult, LessonsList, LessonTarget } from './lessons';
 import type { DistillRecord } from './distillation';
-import type { AgentView, LockView, LoopFacts, LoopView, PipelineRun, RunReply, SuiteSeed, TestingState } from './testing';
+import type { AgentView, LockView, LoopFacts, LoopView, PipelineRun, RunReply, RunRequest, ScenarioRunRequest, SuiteSeed, TestingState } from './testing';
 import type { AgentNames, AgentRole } from './agent-names';
 import type { AgentAction } from './agent-actions';
 import type { TokenUsage } from './token-usage';
@@ -51,8 +51,8 @@ export type AgentSendOutcome = 'sent' | 'queued' | 'resuming';
 export type AgentPasteOutcome = 'sent' | 'asking' | 'gone';
 // What became of a bug she sent: joined the queue, already there, or a bug fix agent was started on it.
 export type SendBugOutcome = 'queued' | 'already' | 'started';
-import type { SuiteViews, TaskSuite } from './task-suite';
-import type { Criteria } from './test-loop';
+import type { RepoSuite, RepoSuiteView } from './repo-suite';
+import type { Criteria, ManualStatus } from './test-loop';
 import type { TextStep } from './text-size';
 import type { SessionInfo } from './session-info';
 import type { ActivityEvent } from './activity';
@@ -269,7 +269,7 @@ export interface InvokeChannels {
   'prs:notes-save': { args: [request: { sessionId: string; url: string; notes: PrNotes }]; result: Guarded<PrNotesSaveResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
-  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suites: SuiteViews; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
+  'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suite: RepoSuiteView; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent. Each role's open agent is reused (its brief is sent to it),
   // else started under a session id Petal picks. One brief starts or briefs that agent alone.
   'testing:loop-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; testerBrief?: string | null; fixerBrief?: string | null }]; result: Guarded<{ tester: AgentView | null; fixer: AgentView | null } | { note: string }> };
@@ -277,7 +277,7 @@ export interface InvokeChannels {
   // agent got the request instead of a new one starting.
   'testing:agent-start': { args: [request: { tabId: TabId; root?: string | null; taskId: string; prompt: string }]; result: Guarded<{ agent: AgentView; reused: boolean; updatedSkill: boolean } | { note: string }> };
   // Edit scenarios: the task's own criteria file opened in her default editor; main works out the path from the task.
-  'testing:open-criteria': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:open-criteria': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
   // The lanes' read model: every loop or draft main knows with an open agent or a running queue, plus the ones this
   // window shows. Main steps every queue itself; this never writes.
   'testing:loops': { args: [request: { known?: { root: string; taskId: string }[] }]; result: Guarded<{ loops: LoopFacts[] }> };
@@ -299,16 +299,17 @@ export interface InvokeChannels {
   // record marked closed, and the loop marked stopped.
   'testing:close-agents': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ closed: AgentCloseResult[] } | { note: string }> };
   // A task's suite: saved from the editor, seeded from the project's commands, or a change Claude made undone.
-  'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string; suite: TaskSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:save-suite': { args: [request: { tabId: TabId; root?: string | null; suite: RepoSuite | { stages: [] } }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:seed-suite': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
   // The test lock: on or off for the project, and a restored-file flag dismissed for a task. Agent names per project.
   'testing:lock': { args: [request: { tabId: TabId; root?: string | null; on: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:lock-dismiss': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:lock-resolve': { args: [request: { tabId: TabId; root?: string | null; taskId: string; path: string; keep: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:lock-dismiss': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:lock-resolve': { args: [request: { tabId: TabId; root?: string | null; path: string; keep: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
   'testing:agent-name': { args: [request: { tabId: TabId; root?: string | null; role: AgentRole; name: string }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:suite-outside': { args: [request: { tabId: TabId; root?: string | null; taskId: string; use: boolean }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null; taskId: string }]; result: Guarded<{ ok: true } | { note: string }> };
-  'testing:run': { args: [request: { tabId: TabId; root?: string | null; taskId: string; stageId?: string | null; confirmed?: boolean }]; result: Guarded<RunReply> };
+  'testing:manual-result': { args: [request: { tabId: TabId; root?: string | null; name: string; status: ManualStatus; result: string }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:undo-suite': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ ok: true } | { note: string }> };
+  'testing:run': { args: [request: RunRequest]; result: Guarded<RunReply> };
+  'testing:run-scenarios': { args: [request: ScenarioRunRequest]; result: Guarded<RunReply> };
   'testing:stop': { args: [request: { runId: string }]; result: Guarded<{ ok: true }> };
   // The factory: global (Claude folder) and the active tab's project; repo is the one the view showed.
   'factory:get': { args: []; result: Guarded<FactoryState> };

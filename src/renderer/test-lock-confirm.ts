@@ -7,7 +7,7 @@ export type ResolveUnconfirmed = (path: string, keep: boolean) => void;
 
 export function unconfirmedRow(flag: RestoredFlag, resolve: ResolveUnconfirmed | undefined, busy: boolean): HTMLElement {
   const item = el('li', 'tst-lock-flag tst-lock-unconfirmed');
-  item.append(el('span', null, `${restoredText(flag, '')} · ${when(flag.at)} `));
+  item.append(el('span', null, `${restoredText(flag, { tester: '', fixer: '' })} · ${when(flag.at)} `));
   if (!resolve) return item;
   const button = (label: string, keep: boolean): HTMLButtonElement => {
     const node = el('button', `tst-link tst-lock-${keep ? 'keep' : 'restore'}`, label);

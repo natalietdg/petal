@@ -14,8 +14,7 @@ import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtu
 import { CRITERIA_FIXTURE } from './snapshot-test-loop';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { pasteWrites, testingFixture } from '../main/snapshot-mode';
-import { syncSuites } from '../main/task-suites';
-import { loadTasks } from '../main/tasks-store';
+import { syncSuite } from '../main/repo-suite-store';
 import { LOG_TAIL_BYTES, trimmedNote } from '../main/testing-runner';
 import * as store from '../main/testing-store';
 import * as configStore from '../main/config-store';
@@ -26,13 +25,13 @@ const OTHER_TASK = 't-checkout';
 const ASK_SCREEN = ['─'.repeat(40), ' Bash command', '', '   npm test', '', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', '', ' Esc to cancel · Tab to amend'];
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
-// A second task in the fixture repo, with its own one-stage suite.
+// A second task in the fixture repo; the repo has one one-stage suite.
 function seedOtherTask(project: string): void {
   const file = path.join(project, '.petal', 'tasks.json');
   const data = JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: unknown[] };
   const task = { id: OTHER_TASK, title: 'Checkout totals', notes: '', status: 'working', owner: null, createdAt: Date.now() - 86_400_000, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null };
   put(file, JSON.stringify({ ...data, tasks: [...data.tasks, task] }, null, 2));
-  put(path.join(project, '.petal', 'suites', `${OTHER_TASK}.json`), JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }], keepGoing: false, autoRun: false }, null, 2));
+  put(path.join(project, '.petal', 'suite.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test', level: 'regression' }], keepGoing: false, autoRun: false }, null, 2));
 }
 
 export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -40,7 +39,7 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} loop signals: ${what}`);
   const { project, claudeDir } = seedTestingProject(outDir);
   seedOtherTask(project);
-  syncSuites(project, loadTasks(project).tasks); // Petal sees both suite files before any agent exists, as her first open of Testing would
+  syncSuite(project); // Petal sees the suite file before any agent exists, as her first open of Testing would
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.loopStarts.length = 0;

@@ -12,7 +12,7 @@ import type { StoredLoop } from '../src/shared/testing';
 afterEach(removeTempDirs);
 
 const names = { tester: 'Quinn', fixer: 'Fixie' };
-const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, tests: [{ path: 'src/cart.test.ts', name: 'rounds' }], source: null, round: 1, regression: true, taskId: 't1' });
+const bug = (name: string): CriteriaItem => ({ name, status: 'fail', test: { path: 'src/cart.test.ts', name: 'rounds' }, tests: [{ path: 'src/cart.test.ts', name: 'rounds' }], source: null, round: 1, regression: true, ticket: null, level: null, details: {}, taskId: 't1' });
 const inputs = (over: Partial<LoopInputs> = {}): LoopInputs => ({ bugs: [], runs: [], testerRound: 1, fixerBusy: false, fixesDone: [], now: 1000, ...over });
 const loop = (over: Partial<StoredLoop> = {}): StoredLoop => ({
   kind: 'loop', testerSessionId: 'sess-t', fixerSessionId: 'sess-f', startedAt: 500, stoppedAt: null, queue: [], events: noEvents(), ...over,

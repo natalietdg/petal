@@ -25,10 +25,10 @@ describe('latest and byRecent', () => {
 });
 
 describe('taskActivity', () => {
-  it('is the newest of made, given, finished, its latest run and its suite file', () => {
-    const at = taskActivity([run('a', 40), run('a', 25), run('b', 10)], { b: { suite: null, change: null, problem: null, at: 70 } });
+  it('is the newest of made, given, finished and its latest run', () => {
+    const at = taskActivity([run('a', 40), run('a', 25), run('b', 10)]);
     expect(at(task('a', 1, { claimedAt: 30 }))).toBe(40);
-    expect(at(task('b', 1, { doneAt: 50 }))).toBe(70);
+    expect(at(task('b', 1, { doneAt: 50 }))).toBe(50);
     expect(at(task('c', 2))).toBe(2);
   });
 });
@@ -47,7 +47,7 @@ describe('groupsByActivity', () => {
   };
 
   it('orders tasks and groups newest first, No PRD placed by its own newest task, empty PRDs last', () => {
-    const at = taskActivity([run('sub1', 50)], {});
+    const at = taskActivity([run('sub1', 50)]);
     expect(titles(data, at)).toEqual([['p1', 'parent', '↳sub1', '↳sub2', 'old'], ['p2', 'fresh'], ['none', 'loose'], ['empty']]);
   });
 
@@ -56,7 +56,7 @@ describe('groupsByActivity', () => {
   });
 
   it('a newer subtask lifts its parent but stays under it', () => {
-    const at = taskActivity([run('sub2', 99)], {});
+    const at = taskActivity([run('sub2', 99)]);
     expect(titles(data, at)[0]).toEqual(['p1', 'parent', '↳sub2', '↳sub1', 'old']);
   });
 });

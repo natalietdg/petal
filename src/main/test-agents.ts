@@ -29,7 +29,7 @@ import { isTerminal, latestLoop } from '../shared/loop-line';
 import { finishNotice, fixesLanded, fixNotice, type LoopNotice } from '../shared/loop-signals';
 import { agentName, agentTabTitle, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { ASKING_NOTE, CLOSED_NOTE } from '../shared/agent-chat';
-import { forTask } from '../shared/task-suite';
+import { forTask } from '../shared/repo-suite';
 import { stopAll } from '../shared/test-loop';
 import type { AgentCloseResult, AgentPasteOutcome, AgentSendOutcome } from '../shared/ipc';
 import type { AgentView, LoopView, PipelineRun, StoredLoop, TestAgent } from '../shared/testing';

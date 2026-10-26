@@ -1,6 +1,7 @@
-// Testing, organised by task: each task owns its suite of stages (typecheck, unit, e2e, mobile flows...), its results
-// grouped by file with failures first, its run history with a trend, its test loop and criteria. A PRD shows an overview.
-// Nothing runs without her click; the first run of any command asks first, and runs go in a new visible tab.
+// Testing for the repo: its one suite of stages (typecheck, unit, e2e, mobile flows...) shared by every worktree, filtered
+// by level and ticket; results grouped by file with failures first; run history with a trend; scenarios, manual checks
+// and bugs; and the session's task's test loop. Nothing runs without her click; the first run of any command asks
+// first, and runs go in a new visible tab.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as composer from './composer';
@@ -11,7 +12,7 @@ import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhe
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
 import { createLoopPanel, type LoopModel } from './testing-loop-view';
 import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
-import { buildSentFixerBrief, isActive, type Criteria } from '../shared/test-loop';
+import { buildSentFixerBrief, filterCriteria, isActive, ticketsOf, type Criteria, type ManualStatus } from '../shared/test-loop';
 import { DRAFT_TURNS, FIX_TURNS, SUITE_SKILL_CHARS, agentEstimateText, agentTokens } from '../shared/token-usage';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
@@ -19,12 +20,14 @@ import { distillSection } from './testing-distill-view';
 import { healthPanel } from './testing-health-view';
 import { createAgents } from './testing-agents';
 import { sentBug, type SentBug } from '../shared/bug-queue';
-import { lockBar, noSuite, noTasks, prdOverview, sessionPicker, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { lockBar, noSuite, noTasks, sessionPicker, suiteChangeLine, taskPicker } from './testing-tasks-view';
+import { criteriaPanel, filterBar, optInList } from './testing-suite-view';
+import { scenarioBlock } from '../shared/scenario-run';
 import { agentName } from '../shared/agent-names';
 import { prdOf } from '../shared/test-scope';
-import { forTask, suiteFor, type SuiteFor, type TaskSuite } from '../shared/task-suite';
+import { LEVELS, asSuiteStage, forTask, shownStages, stagesToRun, type Level, type RepoSuite } from '../shared/repo-suite';
 import { draftRequest } from '../shared/suite-draft';
-import { keepTarget, prdOverview as overviewRows, type TestTarget } from '../shared/task-testing';
+import { keepTarget, type TestTarget } from '../shared/task-testing';
 import type { Prd, Task } from '../shared/tasks';
 
 const POLL_MS = 4000; // picks up Claude's runs from the session log while the tab is open
@@ -39,8 +42,8 @@ const summary = el('p', 'tst-summary');
 const tools = el('div', 'tst-tools-bar');
 const editButton = el('button', 'tst-button', 'Edit suite');
 editButton.type = 'button';
-editButton.title = 'This task’s stages';
-const runButton = el('button', 'tst-button tst-primary', 'Run suite');
+editButton.title = 'The repo’s stages';
+const runButton = el('button', 'tst-button tst-primary', 'Run');
 runButton.type = 'button';
 tools.append(editButton, runButton);
 head.append(title, summary, tools);
@@ -52,7 +55,9 @@ note.setAttribute('role', 'status');
 const confirmBox = el('div', 'tst-confirm');
 confirmBox.setAttribute('role', 'alertdialog');
 confirmBox.setAttribute('aria-label', 'Confirm the commands to run');
+const filterBox = el('div', 'tst-filterbox');
 const strip = el('div', 'tst-strip');
+const criteriaBox = el('div', 'tst-criteriabox');
 const editor = el('div', 'tst-editor');
 const body = el('div', 'tst-body');
 const results = el('section', 'tst-results');
@@ -67,15 +72,15 @@ stackBox.setAttribute('aria-label', 'What this project tests with');
 side.append(historyBox, healthBox, stackBox);
 body.append(results, side);
 const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop(), askThread: (prompt) => void askLoopThread(prompt) });
-view.append(head, pickerBox, changeBox, note, confirmBox, loopPanel.element, strip, editor, body);
+view.append(head, pickerBox, changeBox, note, confirmBox, filterBox, strip, editor, criteriaBox, loopPanel.element, body);
 
 // ---- State, per window.
 let data: TestingState | null = null;
 let sourceTab: string | null = null; // the tab whose project this shows; a run's own new tab doesn't change it
 let selectedRun: string | null = null; // null: the latest result of each stage
 let selectedStage: string | null = null;
-let draft: TaskSuite | null = null; // set while editing the shown task's suite
-let confirming: { stageId: string | null; commands: { name: string; command: string; isNew: boolean }[] } | null = null;
+let draft: RepoSuite | null = null; // set while editing the repo's suite
+let confirming: { again: () => Promise<void>; commands: { name: string; command: string; isNew: boolean }[] } | null = null; // again: the same run, confirmed
 let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
@@ -85,41 +90,43 @@ let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
 let loopNote = '';
 let loopTick: ReturnType<typeof setInterval> | null = null;
-let target: TestTarget | null = null; // the task or PRD shown; follows the session's task until she picks
+let target: TestTarget | null = null; // the task the loop's agents work for; follows the session's task
 let targetPicked = false;
+const levels = new Set<Level>(); // her level chips; none picked shows every level
+let ticket: string | null = null; // her ticket chip
+const optedIn = new Set<string>(); // opt-in stages she turned on for Run
 
 export const isOpen = (): boolean => overlays.isOpen('testing');
 const picked = (): string | null => (sourceTab ? pickedFor.get(sourceTab) ?? null : null);
 const runById = (id: string | null): PipelineRun | null => data?.runs.find((r) => r.id === id) ?? null;
 
-// ---- The shown task: its suite (or its parent's), and only its own runs, criteria and rounds.
+// ---- The repo's suite and runs; the session's task only for its agents and their rounds.
 const shownTask = (): Task | null => (target?.kind === 'task' ? data?.tasks.find((t) => t.id === target?.id) ?? null : null);
 const shownPrd = (): Prd | null => {
-  const id = target?.kind === 'prd' ? target.id : prdOf(data?.tasks ?? [], shownTask());
+  const id = prdOf(data?.tasks ?? [], shownTask());
   return data?.prds.find((p) => p.id === id) ?? null;
 };
-const runsWith = (): SuiteFor | null => (data ? suiteFor(data.tasks, data.suites, shownTask()?.id ?? null) : null);
-const suite = (): TaskSuite | null => runsWith()?.suite ?? null;
+const suite = (): RepoSuite | null => data?.suite.suite ?? null;
+const home = (): string | null => data?.suite.home ?? null;
 const taskId = (): string | null => shownTask()?.id ?? null;
-const taskRuns = (): PipelineRun[] => forTask(data?.runs ?? [], taskId());
-// The shown task's run still going; other tasks in the repo may run at the same time.
-const taskRunning = (): PipelineRun | null => (data?.running ?? []).map(runById).find((r) => r !== null && (r.taskId ?? null) === taskId()) ?? null;
+const taskRuns = (): PipelineRun[] => data?.runs ?? [];
+// The checkout's run still going: one at a time, since it runs the one suite.
+const taskRunning = (): PipelineRun | null => (data?.running ?? []).map(runById).find((r) => r !== null) ?? null;
 const taskDistillation = (): DistillRecord[] => forTask(distillation, taskId());
-function taskCriteria(): Criteria | null {
-  if (!criteria) return null;
-  return { ...criteria, scenarios: forTask(criteria.scenarios, taskId()), bugs: forTask(criteria.bugs, taskId()) };
-}
+const filter = () => ({ levels: [...levels], optedIn: [...optedIn] });
+const filteredCriteria = (): Criteria | null => (criteria ? filterCriteria(criteria, { ticket, levels: [...levels] }) : null);
+// The loop's agents review and test the repo's scenarios.
+const taskCriteria = (): Criteria | null => criteria;
 
 function followSessionTask(): void {
   if (!data) return;
   target = keepTarget(targetPicked ? target : null, data, data.sessionTaskId);
 }
 
+// The task whose agents the loop lanes show; the suite stays the repo's.
 function pick(next: TestTarget): void {
   target = next;
   targetPicked = true;
-  selectedRun = null;
-  selectedStage = null;
   draft = null;
   confirming = null;
   message = '';
@@ -133,18 +140,40 @@ function drawPicker(): void {
   if (data?.project && target) pickerBox.append(taskPicker(data, target, pick));
 }
 
-// The testing agent's last change to this task's suite, with Undo, or why its file was not taken; then the test lock.
+// Any session's last change to the repo's suite, with Undo, or why its file was not taken; then the test lock.
 function drawChange(): void {
   changeBox.replaceChildren();
-  const id = taskId();
-  if (!data?.project || !id || draft) { changeBox.hidden = true; return; }
-  const own = data.suites[id];
-  const outside = own?.outside ? { by: own.outside, locked: data.lock.enabled, use: () => void settleOutside(true), keepOld: () => void settleOutside(false) } : null;
-  const line = own ? suiteChangeLine(own.change, own.problem, () => void undoChange(), outside) : null;
+  if (!data?.project || draft) { changeBox.hidden = true; return; }
+  const line = suiteChangeLine(data.suite.change, data.suite.problem, () => void undoChange());
   if (line) changeBox.append(line);
-  const restored = data.lock.restored.filter((f) => f.taskId === id);
-  changeBox.append(lockBar(data.lock, restored, agentName(data.agentNames, 'fixer'), { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }, false));
+  const names = { tester: agentName(data.agentNames, 'tester'), fixer: agentName(data.agentNames, 'fixer') };
+  changeBox.append(lockBar(data.lock, data.lock.restored, names, { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }, false));
   changeBox.hidden = false;
+}
+
+// The level and ticket chips, and the opt-in stages she may turn on for Run.
+function drawFilters(): void {
+  filterBox.replaceChildren();
+  const p = suite();
+  filterBox.hidden = !data?.project || (!p && !criteria) || draft !== null;
+  if (filterBox.hidden) return;
+  filterBox.append(filterBar(levels, criteria ? ticketsOf(criteria) : [], ticket, {
+    level: (level) => { if (!levels.delete(level)) levels.add(level); selectedStage = null; drawAll(); filterBox.querySelector<HTMLElement>(`.tst-chip.is-${level}`)?.focus(); },
+    ticket: (next) => { ticket = next; drawAll(); },
+    runTicket: ticket && !taskRunning() ? () => void runScenarios({ ticket: ticket as string }) : null,
+  }));
+  const optIns = p ? optInList(shownStages(p.stages, [...levels]), optedIn, (id, on) => { if (on) optedIn.add(id); else optedIn.delete(id); drawHead(); }, Boolean(taskRunning())) : null;
+  if (optIns) filterBox.append(optIns);
+}
+
+function drawCriteria(): void {
+  criteriaBox.replaceChildren();
+  criteriaBox.hidden = !folderAllowed || !data?.project || draft !== null;
+  if (!criteriaBox.hidden) criteriaBox.append(criteriaPanel(filteredCriteria(), {
+    save: (name, status, result) => void saveManual(name, status, result),
+    run: (name) => void runScenarios({ scenario: name }),
+    blocked: (item) => (taskRunning() ? 'A run is still going.' : scenarioBlock(item, new Set(data?.runners ?? []))),
+  }, false));
 }
 
 // The newest result for a stage, from the chosen run or across all runs (Claude's land on their matching stage).
@@ -157,31 +186,31 @@ function resultOf(stageId: string): { stage: StageResult; run: PipelineRun } | n
   return null;
 }
 
+// The suite's stages her level chips show.
+const visibleStages = () => shownStages(suite()?.stages ?? [], [...levels]);
+
 // The stage the results pane shows: the chosen one, else the first failed, else the first.
 function shownStage(): { stage: StageResult; run: PipelineRun } | null {
   const run = runById(selectedRun);
   if (run && !run.stages.some((s) => suite()?.stages.some((p) => p.id === s.stageId))) return run.stages[0] ? { stage: run.stages[0], run } : null;
-  const stages = suite()?.stages ?? [];
+  const stages = visibleStages();
   const id = selectedStage ?? stages.find((s) => resultOf(s.id)?.stage.status === 'failed')?.id ?? stages[0]?.id ?? null;
   return id ? resultOf(id) : null;
 }
 
 // ---- Drawing.
-// Names the task and its PRD, or the PRD for its overview.
+// The repo, its suite, and where the suite lives when this is a worktree.
 function headLine(): string {
-  const task = shownTask();
-  const prd = shownPrd();
-  if (target?.kind === 'prd') return prd ? `PRD · ${prd.title}` : '';
-  if (!task) return '';
-  const s = runsWith();
-  const stages = s ? `${s.suite.stages.length} stage${s.suite.stages.length === 1 ? '' : 's'}` : 'No suite yet';
-  const borrowed = s && s.owner.id !== task.id ? ` from ${s.owner.title}` : '';
-  return [task.title, prd ? `PRD ${prd.title}` : 'No PRD', `${stages}${borrowed}`, s?.suite.keepGoing ? 'keeps going after a failure' : '', s?.suite.autoRun ? 'runs after Claude’s edits' : ''].filter(Boolean).join(' · ');
+  if (!data?.project) return '';
+  const p = suite();
+  const stages = p ? `${p.stages.length} stage${p.stages.length === 1 ? '' : 's'}` : 'No suite yet';
+  const shared = home() && home() !== data.project.root ? `shared from ${home()}` : '';
+  return [data.project.name, stages, shared, p?.keepGoing ? 'keeps going after a failure' : '', p?.autoRun ? 'runs after Claude’s edits' : ''].filter(Boolean).join(' · ');
 }
 
 function drawHead(): void {
   const p = suite();
-  const onTask = Boolean(shownTask());
+  const onTask = Boolean(data?.project);
   summary.replaceChildren(data?.project ? headLine() : '');
   if (data?.project && picked()) {
     const change = el('button', 'tst-link tst-change-session', 'Change session');
@@ -190,9 +219,11 @@ function drawHead(): void {
     summary.append(' · ', change);
   }
   const busy = Boolean(taskRunning());
+  const runs = p ? stagesToRun(p.stages, filter()) : [];
   tools.hidden = !onTask;
-  runButton.disabled = !p?.stages.length || busy || draft !== null;
-  runButton.textContent = busy ? 'Running…' : 'Run suite';
+  runButton.disabled = !runs.length || busy || draft !== null;
+  runButton.textContent = busy ? 'Running…' : runs.length === p?.stages.length ? 'Run all' : `Run ${runs.length} stage${runs.length === 1 ? '' : 's'}`;
+  runButton.title = 'Runs the stages shown. Opt-in stages run only when turned on.';
   editButton.disabled = !onTask || draft !== null;
 }
 
@@ -232,8 +263,8 @@ function drawConfirm(): void {
   go.type = 'button';
   const cancel = el('button', 'tst-button', 'Cancel');
   cancel.type = 'button';
-  const target = confirming.stageId;
-  go.addEventListener('click', () => { confirming = null; void run(target, true); });
+  const again = confirming.again;
+  go.addEventListener('click', () => { confirming = null; void again(); });
   cancel.addEventListener('click', () => { confirming = null; drawAll(); runButton.focus(); });
   const actions = el('div', 'tst-actions');
   actions.append(go, cancel);
@@ -246,7 +277,7 @@ function drawConfirm(): void {
   go.focus();
 }
 
-function startDraft(next: TaskSuite, note = ''): void {
+function startDraft(next: RepoSuite, note = ''): void {
   draft = { ...next, stages: next.stages.map((s) => ({ ...s })) };
   confirming = null;
   message = note;
@@ -270,14 +301,14 @@ function drawStrip(): void {
       askAgain: () => void askAgain(task),
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
-      fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude, keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
-      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd()).length, DRAFT_TURNS)),
+      fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude.map(asSuiteStage), keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
+      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd(), home()).length, DRAFT_TURNS)),
       scenariosReady: agents.awaiting().length > 0,
     }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(taskRunning())));
     return;
   }
   const current = shownStage();
-  strip.append(pipelineStrip(p, (id) => resultOf(id)?.stage ?? null, current?.stage.stageId ?? null, {
+  strip.append(pipelineStrip({ stages: visibleStages() }, (id) => resultOf(id)?.stage ?? null, current?.stage.stageId ?? null, {
     select: (id) => { selectedStage = id; drawAll(); strip.querySelector<HTMLElement>(`[data-stage="${id}"]`)?.focus(); },
     runStage: (id) => void run(id, false),
   }, Boolean(taskRunning()) || draft !== null));
@@ -311,23 +342,34 @@ function drawEditor(): void {
     remove.type = 'button';
     remove.setAttribute('aria-label', `Remove ${stage.name || 'stage'}`);
     remove.addEventListener('click', () => { d.stages.splice(i, 1); drawEditor(); });
-    row.append(el('span', 'tst-edit-num', String(i + 1)), name, command, move(-1, 'up', '↑'), move(1, 'down', '↓'), remove);
+    const level = el('select', 'tst-input tst-edit-level');
+    level.setAttribute('aria-label', `Stage ${i + 1} level`);
+    level.append(...LEVELS.map((l) => new Option(l, l, false, l === stage.level)));
+    level.addEventListener('change', () => { stage.level = level.value as Level; });
+    const optIn = el('label', 'tst-edit-optin');
+    const optBox = el('input');
+    optBox.type = 'checkbox';
+    optBox.checked = stage.optIn === true;
+    optBox.addEventListener('change', () => { stage.optIn = optBox.checked || undefined; });
+    optIn.append(optBox, el('span', null, 'Opt-in'));
+    const noteInput = el('input', 'tst-input tst-edit-note');
+    Object.assign(noteInput, { value: stage.note ?? '', placeholder: 'Note: why opt-in, or what blocks it', spellcheck: true });
+    noteInput.setAttribute('aria-label', `Stage ${i + 1} note`);
+    noteInput.addEventListener('input', () => { stage.note = noteInput.value.trim() || undefined; });
+    row.append(el('span', 'tst-edit-num', String(i + 1)), name, command, move(-1, 'up', '↑'), move(1, 'down', '↓'), remove, level, optIn, noteInput);
     rows.append(row);
   });
   const add = el('button', 'tst-button', 'Add stage');
   add.type = 'button';
   add.addEventListener('click', () => {
-    d.stages.push({ id: slugId('stage', d.stages.map((s) => s.id)), name: 'New stage', command: '' });
+    d.stages.push({ id: slugId('stage', d.stages.map((s) => s.id)), name: 'New stage', command: '', level: 'regression' });
     drawEditor();
     editor.querySelector<HTMLInputElement>('.tst-edit-row:last-child .tst-edit-name')?.select();
   });
   const reset = el('button', 'tst-button', 'Use detected stages');
   reset.type = 'button';
   reset.disabled = !data?.proposed.length;
-  reset.addEventListener('click', () => { d.stages = (data?.proposed ?? []).map((s) => ({ ...s })); drawEditor(); });
-  const task = shownTask();
-  const owner = runsWith()?.owner;
-  const borrowed = task && owner && owner.id !== task.id;
+  reset.addEventListener('click', () => { d.stages = (data?.proposed ?? []).map(asSuiteStage); drawEditor(); });
   const toggle = (label: string, key: 'keepGoing' | 'autoRun', hint: string) => {
     const wrap = el('label', 'tst-toggle');
     const box = el('input');
@@ -348,11 +390,11 @@ function drawEditor(): void {
   const lineB = el('div', 'tst-actions');
   lineB.append(save, cancel);
   editor.append(
-    el('h3', 'tst-section-title', `Edit the suite for ${task?.title ?? 'this task'}`),
-    el('p', 'tst-muted', borrowed ? `Saving gives this subtask its own suite. ${owner.title} keeps its own.` : 'Stages run in order in one new tab, each a shell command in the repo folder. Save with no stages to remove the suite.'),
+    el('h3', 'tst-section-title', `Edit the suite for ${data?.project?.name ?? 'this repo'}`),
+    el('p', 'tst-muted', 'One suite for the repo, shared by its worktrees. Stages run in order in one new tab, each a shell command in this checkout. Opt-in stages run only when turned on, never after Claude’s edits. Save with no stages to remove the suite.'),
     rows, lineA,
     toggle('Keep going after a failure', 'keepGoing', 'Otherwise the suite stops at the first failed stage.'),
-    toggle('Run this suite when Claude finishes a turn on this task that changed files', 'autoRun', 'Off by default. Only commands you already confirmed, in a new visible tab, never while Claude is mid-turn.'),
+    toggle('Run this suite when Claude finishes a turn that changed files', 'autoRun', 'Off by default. Only commands you already confirmed and never opt-in stages, in a new visible tab, never while Claude is mid-turn.'),
     lineB,
   );
 }
@@ -380,11 +422,7 @@ function drawResults(): void {
     results.append(data.elsewhere ? sessionPicker(data.elsewhere.sessions, (id) => void chooseSession(id)) : el('p', 'tst-empty', 'Open a project in this tab first. Testing shows the project of the tab you are on.'));
     return;
   }
-  if (!data.tasks.length) { results.append(noTasks()); return; } // main gives the tab's Claude session a task, so none means no session
-  if (target?.kind === 'prd') {
-    results.append(el('h3', 'tst-section-title', 'Tasks and their suites'), prdOverview(overviewRows(data, target.id, data.suites, data.runs, criteria), (id) => pick({ kind: 'task', id })));
-    return;
-  }
+  if (!data.tasks.length && !suite()) { results.append(noTasks()); return; } // main gives the tab's Claude session a task, so none means no session
   if (!suite() && !selectedRun) return;
   const shown = shownStage();
   const titleText = shown ? `${shown.stage.name}${selectedRun ? ` · ${new Date(shown.run.startedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}` : 'Results';
@@ -458,9 +496,9 @@ function drawHealth(): void {
 function drawSide(): void {
   historyBox.replaceChildren();
   stackBox.replaceChildren();
-  side.hidden = !data?.project || !shownTask();
+  side.hidden = !data?.project;
   drawHealth();
-  if (!data?.project || !shownTask()) return;
+  if (!data?.project) return;
   historyBox.append(el('h3', 'tst-section-title', 'History'));
   const runs = taskRuns();
   const stages = suite()?.stages ?? [];
@@ -480,7 +518,7 @@ function drawSide(): void {
       },
     }));
   } else {
-    historyBox.append(el('p', 'tst-muted', 'No runs for this task yet. Your runs of its suite and the tests Claude runs while it holds the task show here.'));
+    historyBox.append(el('p', 'tst-muted', 'No runs in this checkout yet. Your runs of the suite and the tests Claude runs here show up here.'));
   }
   stackBox.append(el('h3', 'tst-section-title', 'What this repo tests with'), stackList(data.stack, insertSkill));
 }
@@ -494,6 +532,7 @@ const agents = createAgents({
   prd: () => shownPrd(),
   scenarios: () => taskCriteria()?.scenarios ?? [],
   suite: () => suite(),
+  home: () => home(),
   stack: () => data?.stack ?? [],
   names: () => data?.agentNames ?? {},
   taskRuns: () => taskRuns(),
@@ -531,12 +570,12 @@ function drawLoop(): void {
   const { distill, distillKey } = loopDistillation();
   const stages = suite()?.stages ?? [];
   const names = data?.agentNames ?? {};
-  const why = !stages.length ? 'Add stages to this task’s suite first. The loop runs them each round.'
+  const why = !stages.length ? 'Add stages to the repo’s suite first. The loop runs them each round.'
     : record && !record.stoppedAt && record.fixer && !record.tester ? `Start starts ${agentName(names, 'tester')} in its lane below. ${agentName(names, 'fixer')} keeps fixing what you sent it. Neither commits.`
     : `Start starts two agents, each in its lane below. ${agentName(names, 'tester')} writes and runs tests and files the bugs it finds; ${agentName(names, 'fixer')} fixes them at the same time. Neither commits.`;
   loopPanel.update({
-    status, progress, criteria: taskCriteria(), why,
-    canStart: Boolean(stages.length) && !isActive(status) && draft === null,
+    status, progress, criteria: filteredCriteria(), why,
+    canStart: Boolean(stages.length && shownTask()) && !isActive(status) && draft === null,
     stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
     stopping,
     note: loopNote,
@@ -567,9 +606,11 @@ function drawAll(): void {
   drawChange();
   drawNote();
   drawConfirm();
+  drawFilters();
   drawLoop();
   drawStrip();
   drawEditor();
+  drawCriteria();
   drawResults();
   drawSide();
 }
@@ -601,17 +642,17 @@ function insertSkill(item: StackItem): void {
   composer.insertCommand(item.insert);
 }
 
-// Ask Claude to draw one up: starts this task's testing agent in a new tab, shown, on the testing-suite skill. Only it may write the suite.
+// Ask Claude to draw one up: starts a testing agent for the session's task in a new tab, shown, on the testing-suite skill.
 // Main puts the skill's slash command in front, or its bundled instructions after, depending on the installed copy.
 async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
   if (!id) return;
   const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task)) ?? null;
-  const prompt = draftRequest(task, prd);
+  const prompt = draftRequest(task, prd, home());
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
   const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note
-    : reply.reused ? `${updated}Sent the request to this task’s testing agent. Its suite shows here when it writes one.` : `${updated}Started this task’s testing agent. Its suite shows here when it writes one.`;
+    : reply.reused ? `${updated}Sent the request to the testing agent. The repo’s suite shows here when it writes one.` : `${updated}Started a testing agent. The repo’s suite shows here when it writes one.`;
   drawNote();
   await refresh(); // its lane shows now
 }
@@ -626,25 +667,36 @@ async function askAgain(task: Task): Promise<void> {
 
 async function run(stageId: string | null, confirmed: boolean): Promise<void> {
   const id = tabId();
-  const forTaskId = taskId();
-  if (!id || !forTaskId) return;
-  const reply = await window.pastel.testing.run({ tabId: id, root: picked(), taskId: forTaskId, stageId, confirmed });
+  if (!id) return;
+  const reply = await window.pastel.testing.run({ tabId: id, root: picked(), taskId: taskId(), stageId, confirmed, ...filter() });
+  await started(reply, () => run(stageId, true));
+}
+
+// One scenario's tests, or the picked ticket's tested scenarios; staging ones only while the Staging chip is on.
+async function runScenarios(which: { scenario: string } | { ticket: string }, confirmed = false): Promise<void> {
+  const id = tabId();
+  if (!id) return;
+  const reply = await window.pastel.testing.runScenarios({ tabId: id, root: picked(), taskId: taskId(), ...which, staging: levels.has('staging'), confirmed });
+  await started(reply, () => runScenarios(which, true));
+}
+
+// A run's reply: the confirm to show, a note, or the run started.
+async function started(reply: Awaited<ReturnType<typeof window.pastel.testing.run>>, again: () => Promise<void>): Promise<void> {
   if (isIpcError(reply)) { message = `Couldn’t start the run: ${reply.error}`; drawAll(); return; }
-  if ('confirm' in reply) { confirming = { stageId, commands: reply.confirm.commands }; message = ''; drawAll(); return; }
+  if ('confirm' in reply) { confirming = { again, commands: reply.confirm.commands }; message = ''; drawAll(); return; }
   if ('note' in reply) { message = reply.note; drawAll(); return; }
   message = '';
   selectedRun = null;
   await refresh();
 }
 
-type SuiteCall = (request: { tabId: string; root: string | null; taskId: string }) => Promise<{ ok: true } | { note: string } | { error: string }>;
+type SuiteCall = (request: { tabId: string; root: string | null }) => Promise<{ ok: true } | { note: string } | { error: string }>;
 
-// Save, seed or undo for the shown task, then reload; false when main said no.
+// Save, seed or undo for the repo, then reload; false when main said no.
 async function suiteCall(call: SuiteCall, done: string): Promise<boolean> {
   const id = tabId();
-  const forTaskId = taskId();
-  if (!id || !forTaskId) return false;
-  const reply = await call({ tabId: id, root: picked(), taskId: forTaskId });
+  if (!id) return false;
+  const reply = await call({ tabId: id, root: picked() });
   if (isIpcError(reply) || 'note' in reply) { message = isIpcError(reply) ? reply.error : reply.note; drawNote(); return false; }
   message = done;
   selectedStage = null;
@@ -652,12 +704,12 @@ async function suiteCall(call: SuiteCall, done: string): Promise<boolean> {
   return true;
 }
 
-const writeSuite = (next: TaskSuite, done: string): Promise<boolean> =>
+const writeSuite = (next: RepoSuite, done: string): Promise<boolean> =>
   suiteCall((request) => window.pastel.testing.saveSuite({ ...request, suite: next }), done);
 
 async function saveSuite(): Promise<void> {
   if (!draft) return;
-  const clean: TaskSuite = { ...draft, stages: draft.stages.map((s) => ({ ...s, name: s.name.trim(), command: s.command.trim() })) };
+  const clean: RepoSuite = { ...draft, stages: draft.stages.map((s) => ({ ...s, name: s.name.trim(), command: s.command.trim() })) };
   const saving = draft;
   draft = null;
   if (await writeSuite(clean, clean.stages.length ? 'Suite saved.' : 'Suite removed.')) editButton.focus();
@@ -668,14 +720,15 @@ async function saveSuite(): Promise<void> {
 async function addCoreStage(command: string): Promise<void> {
   const p = suite();
   if (!p || draft) return;
-  await writeSuite({ ...p, stages: withCoreStage(p.stages, command) }, 'Core stage added first. It asks before its first run.');
+  const kept = new Map(p.stages.map((s) => [s.id, s]));
+  await writeSuite({ ...p, stages: withCoreStage(p.stages, command).map((s) => kept.get(s.id) ?? { ...asSuiteStage(s), level: 'smoke' }) }, 'Core stage added first. It asks before its first run.');
 }
 
 async function toggleLock(on: boolean): Promise<void> {
   const id = tabId();
   if (!id) return;
   const reply = await window.pastel.testing.setLock({ tabId: id, root: picked(), on });
-  message = isIpcError(reply) ? reply.error : 'note' in reply ? reply.note : on ? 'Tests are locked to the testing agent.' : 'Test lock is off.';
+  message = isIpcError(reply) ? reply.error : 'note' in reply ? reply.note : on ? 'Tests are locked: no session may delete, skip or weaken one.' : 'Test lock is off.';
   await load();
 }
 
@@ -684,8 +737,15 @@ const resolveLock = (path: string, keep: boolean): Promise<boolean> =>
   suiteCall((request) => window.pastel.testing.resolveLock({ ...request, path, keep }), keep ? 'Kept your change. It is the locked copy now.' : 'Put the locked copy back.');
 
 const seedSuite = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.seedSuite(request), 'Suite started from the project’s commands. Each one still asks before its first run.');
-const settleOutside = (use: boolean): Promise<boolean> =>
-  suiteCall((request) => window.pastel.testing.settleOutside({ ...request, use }), use ? 'Using this file. Undo puts the old suite back.' : 'Kept the old suite.');
+
+// Her tick on a manual case, written into the criteria file; the panel shows it on the next refresh.
+async function saveManual(name: string, status: ManualStatus, result: string): Promise<void> {
+  const id = tabId();
+  if (!id) return;
+  const reply = await window.pastel.testing.manualResult({ tabId: id, root: picked(), name, status, result });
+  message = isIpcError(reply) ? `Couldn’t save it: ${reply.error}` : 'note' in reply ? reply.note : `Marked ${name}: ${status}.`;
+  await refresh();
+}
 const undoChange = (): Promise<boolean> => suiteCall((request) => window.pastel.testing.undoSuite(request), 'Change undone.');
 
 async function load(): Promise<void> {
@@ -706,13 +766,12 @@ async function refresh(): Promise<void> {
   const root = picked();
   const result = await window.pastel.testing.history(id, root);
   if (isIpcError(result) || !data || picked() !== root) return; // a session picked or let go meanwhile: this answer is another repo's
-  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, seed: result.seed, suites: result.suites, lock: result.lock, agentNames: result.agentNames, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
+  data = { ...data, runs: result.runs, running: result.running, sessionTab: result.sessionTab ?? data.sessionTab, seed: result.seed, suite: result.suite, lock: result.lock, agentNames: result.agentNames, tasks: result.tasks, prds: result.prds, sessionTaskId: result.sessionTaskId };
   followSessionTask();
   criteria = result.criteria;
   distillation = result.distillation;
   if (data.project) agents.adoptAll(data.project.root, result.loops); // lanes rebuild from the saved loops
-  const shownId = taskId();
-  void agents.checkDraft(shownId ? result.suites[shownId]?.problem ?? null : null);
+  void agents.checkDraft(result.suite.problem);
   void agents.refreshLogs().then(() => { if (isOpen()) agents.draw(); }); // logs and tokens follow; the view doesn't wait
   if (draft) { drawHead(); drawPicker(); drawNote(); drawLoop(); drawResults(); drawSide(); return; } // the editor keeps her typing
   drawAll();
@@ -752,7 +811,7 @@ export function setFolderAllowed(allowed: boolean): void {
   if (isOpen()) void load();
 }
 
-editButton.addEventListener('click', () => { if (shownTask()) startDraft(suite() ?? { stages: [], keepGoing: false, autoRun: false }); });
+editButton.addEventListener('click', () => { if (data?.project) startDraft(suite() ?? { stages: [], keepGoing: false, autoRun: false }); });
 runButton.addEventListener('click', () => void run(null, false));
 
 window.pastel.testing.onRunUpdate(({ run: updated }) => {
@@ -784,4 +843,4 @@ export function resetLeftovers(): void {
 }
 
 // For the snapshot harness.
-export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(taskId() && data?.suites[taskId() as string]?.change), suiteProblem: (taskId() && data?.suites[taskId() as string]?.problem) || null, elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: agents.testerHost(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(data?.suite.change), suiteProblem: data?.suite.problem ?? null, levels: [...levels], ticket, optedIn: [...optedIn], elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: agents.testerHost(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

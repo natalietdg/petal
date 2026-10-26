@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // Petal's test lock: a Claude Code PreToolUse hook. Petal copies it to <repo>/.petal/test-lock.mjs when the lock is on.
-// Reads <repo>/.petal/lock.json and refuses edits to a task's tests and suite from any session but that task's testing agent.
+// Reads <repo>/.petal/lock.json. Any session may add to or fix a locked test; deleting, skipping or weakening one is refused.
 // No network. A missing or broken manifest lets everything through (fail open) and notes why in .petal/lock.log.
 // Each refusal is a line in .petal/lock-refusals.jsonl (last 200 kept): agents' show in their lane, others in the lock bar.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
-const DEFAULT_NAMES = { tester: 'Testing agent', fixer: 'Bug fix agent' };
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
 
 // Test-looking paths: test folders, *.test.* / *.spec.* files, Go and Python test files, Maestro flows, Petal's own folder.
 const TEST_PATH = /(^|\/)(tests?|__tests__|e2e|spec|\.maestro)\/|\.(test|spec)\.[a-z0-9]+$|_test\.(go|py)$|(^|\/)test_[^/]+\.py$|^\.petal\//;
@@ -22,11 +21,6 @@ export const isTestConfig = (rel) => TEST_CONFIG.test(rel);
 
 const REFUSALS_KEPT = 200;
 
-const nameOf = (manifest, role) => {
-  const name = manifest?.names?.[role];
-  return typeof name === 'string' && name.trim() ? name.trim() : DEFAULT_NAMES[role];
-};
-
 // Repo-relative with forward slashes; null when outside the repo.
 // Links resolved (macOS /var is /private/var), so the repo and a path into it compare alike; a missing tail is kept as written.
 function real(p) {
@@ -39,11 +33,34 @@ export function relPath(file, root, cwd = root) {
   return rel.startsWith('..') || path.isAbsolute(rel) ? null : rel;
 }
 
-const SUITE = /^\.petal\/suites\/([\w-]+)\.json$/;
-const isLocked = (manifest, rel) => rel.startsWith('.petal/suites/') || (manifest.lockedPaths ?? []).includes(rel);
+const isLocked = (manifest, rel) => (manifest.lockedPaths ?? []).includes(rel);
 
-// The task a locked file belongs to: a suite file's name, else the manifest's owner; null for a file no task owns yet.
-const ownerOf = (manifest, rel) => SUITE.exec(rel)?.[1] ?? manifest.owners?.[rel] ?? null;
+// Weakening, the same rules as src/shared/test-lock.ts: a skip marker added, or fewer tests or assertions than before.
+const SKIP = /\b(?:it|test|describe|context)\.(?:skip|todo)\b|\b(?:xit|xtest|xdescribe|xcontext)\s*\(|@pytest\.mark\.(?:skip|xfail)\b|\bpytest\.skip\s*\(|\bt\.Skip(?:Now|f)?\s*\(|@(?:Disabled|Ignore)\b|\bskip\s*:\s*true\b/g;
+const TESTS = /(?<![.\w$])(?:it|test|describe)(?:\.(?:only|each\([^)]*\)))?\s*\(|\bdef\s+test_\w*|\bfunc\s+Test\w*|@Test\b|-\s+(?:tapOn|assertVisible|launchApp)\b/g;
+const ASSERTS = /\bexpect\s*\(|\bassert(?:\w*\s*\(|\.\w+\s*\(|\s)|\.should\b|\bt\.(?:Error|Fatal)f?\s*\(|\brequire\.\w+\s*\(|\bXCTAssert\w*|-\s+assert\w+\b/g;
+const count = (text, pattern) => text.match(pattern)?.length ?? 0;
+
+export function weakens(before, after) {
+  if (after === null) return 'deleted';
+  if (count(after, SKIP) > count(before, SKIP)) return 'skipped';
+  if (count(after, TESTS) < count(before, TESTS)) return 'removed a test';
+  if (count(after, ASSERTS) < count(before, ASSERTS)) return 'removed an assertion';
+  return null;
+}
+
+// The file's text after this edit; null when it can't be worked out (the edit is then let through for the integrity check).
+export function textAfter(tool, toolInput, before) {
+  if (tool === 'Write') return typeof toolInput.content === 'string' ? toolInput.content : null;
+  const edits = tool === 'MultiEdit' ? toolInput.edits : [toolInput];
+  if (!Array.isArray(edits)) return null;
+  let text = before;
+  for (const e of edits) {
+    if (typeof e?.old_string !== 'string' || typeof e?.new_string !== 'string' || !text.includes(e.old_string)) return null;
+    text = e.replace_all ? text.split(e.old_string).join(e.new_string) : text.replace(e.old_string, () => e.new_string);
+  }
+  return text;
+}
 
 // Shell steps, split on && || ; | and newlines.
 const steps = (command) => command.split(/&&|\|\||;|\||\n/).map((s) => s.trim()).filter(Boolean);
@@ -65,45 +82,33 @@ export function bashWrites(command, target, root) {
   return false;
 }
 
-// The decision for one PreToolUse call: null lets it through, a string is the reason it is refused.
-// A testing agent edits unowned tests and its own task's; another task's are refused.
+// The decision for one PreToolUse call: null lets it through, a string is the reason it is refused. The same rule for
+// every session: a locked test may change, never be deleted, skipped or weakened.
 export function decide(input, manifest, root) {
   if (!manifest || typeof manifest !== 'object' || !input || typeof input !== 'object') return null;
-  const session = manifest.sessions?.[input.session_id];
-  const role = session?.role ?? null;
-  const tester = nameOf(manifest, 'tester');
-  const fixer = nameOf(manifest, 'fixer');
-  const testsBelong = `Tests belong to ${tester}. Ask it to change them.`;
-  const otherTask = (rel) => `${rel} belongs to another task's ${tester}. Ask that one to change it.`;
-  const othersFile = (rel) => role === 'tester' && ownerOf(manifest, rel) !== null && ownerOf(manifest, rel) !== session.taskId;
   const tool = input.tool_name;
   const toolInput = input.tool_input ?? {};
+  const refuse = (rel, why) => `${rel} is a locked test: this change ${why === 'deleted' ? 'deletes it' : why === 'skipped' ? 'skips it' : `weakens it (${why})`}. Ask the user before deleting, skipping or weakening a test.`;
   if (EDIT_TOOLS.has(tool)) {
-    const rel = relPath(toolInput.file_path ?? toolInput.notebook_path, root, input.cwd ?? root);
-    if (rel === null) return null;
-    const locked = isLocked(manifest, rel);
-    if (role === 'tester') {
-      if (othersFile(rel)) return otherTask(rel);
-      return locked || isTestPath(rel) || isTestConfig(rel) ? null : `${tester} only changes tests and the suite. App code belongs to ${fixer}.`;
-    }
-    if (role === 'fixer') return locked || isTestPath(rel) ? testsBelong : null;
-    return locked ? testsBelong : null;
+    const rel = relPath(toolInput.file_path, root, input.cwd ?? root);
+    if (rel === null || !isLocked(manifest, rel)) return null;
+    let before;
+    try { before = fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; } // a new file weakens nothing
+    const after = textAfter(tool, toolInput, before);
+    const why = after === null ? null : weakens(before, after);
+    return why ? refuse(rel, why) : null;
   }
   if (tool === 'Bash' && typeof toolInput.command === 'string') {
-    const targets = [...(manifest.lockedPaths ?? [])];
-    if (toolInput.command.includes('.petal/suites/')) targets.push(...[...toolInput.command.matchAll(/\.petal\/suites\/[\w-]+\.json/g)].map((m) => m[0]));
-    const guarded = role === 'tester' ? targets.filter(othersFile) : targets;
-    const hit = guarded.find((t) => bashWrites(toolInput.command, t, root));
-    if (hit) return role === 'tester' ? otherTask(hit) : testsBelong;
+    const hit = (manifest.lockedPaths ?? []).find((t) => bashWrites(toolInput.command, t, root));
+    if (hit) return `${hit} is a locked test. Change it with the Edit tool so the lock can check it; deleting or overwriting it from the shell isn't allowed.`;
   }
   return null;
 }
 
-// A test-config edit by a session that isn't a testing agent: let through, worth a line in the lock log.
+// A test-config edit: let through, worth a line in the lock log.
 export function configNote(input, manifest, root) {
   if (!manifest || typeof manifest !== 'object' || !input || !EDIT_TOOLS.has(input.tool_name)) return null;
-  if (manifest.sessions?.[input.session_id]?.role === 'tester') return null;
-  const rel = relPath(input.tool_input?.file_path ?? input.tool_input?.notebook_path, root, input.cwd ?? root);
+  const rel = relPath(input.tool_input?.file_path, root, input.cwd ?? root);
   return rel !== null && isTestConfig(rel) ? `${input.session_id ?? 'a session'} edited test config ${rel}` : null;
 }
 

@@ -1,9 +1,8 @@
 // Tidies a project's Testing records at most once an hour: see shared/testing-prune.ts for the rule.
-import fs from 'node:fs';
 import * as store from './testing-store';
 import * as coord from './coord';
 import { loadTasks, updateTasks } from './tasks-store';
-import { suiteFile, testingData } from './task-suites';
+import { testingData } from './task-suites';
 import { prunePlan } from '../shared/testing-prune';
 import { removeTask } from '../shared/tasks';
 
@@ -23,7 +22,6 @@ export function pruneProject(root: string, openSessions: ReadonlySet<string>, no
   const hasOpenAgent = (loop: { testerSessionId: string | null; fixerSessionId: string | null }) => [loop.testerSessionId, loop.fixerSessionId].some((id) => id !== null && openSessions.has(id));
   const plan = prunePlan({
     tasks, autoTasks: data.autoTasks ?? [], recordTasks: [...Object.keys(data.agents ?? {}), ...Object.keys(data.loops ?? {})],
-    suiteTasks: new Set(tasks.map((t) => t.id).filter((id) => data.suites?.[id] || fs.existsSync(suiteFile(root, id)))),
     runTasks: new Set(data.runs.flatMap((r) => (r.taskId ? [r.taskId] : []))),
     liveTasks: new Set(Object.entries(data.loops ?? {}).filter(([, loop]) => loop.stoppedAt === null && hasOpenAgent(loop)).map(([id]) => id)), openSessions, now,
   });

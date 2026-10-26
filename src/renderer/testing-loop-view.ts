@@ -24,8 +24,8 @@ export interface LoopHandlers { start: (focus: string, rounds: number) => void; 
 
 const STATUS_WORD: Record<LoopStatus, string> = { idle: 'Not started', starting: 'Starting', running: 'Running', done: 'Done', stopped: 'Stopped' };
 const STEPS: LoopPhase[] = ['scenarios', 'testing', 'fixing', 'verifying'];
-const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed', todo: 'no test yet' };
-const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed', todo: 'waiting' };
+const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed', todo: 'no test yet', blocked: 'blocked', open: 'open' };
+const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed', todo: 'waiting', blocked: 'waiting', open: 'failed' };
 export const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const; // a scenario's from: part as its tag reads
 
 export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement; update: (model: LoopModel) => void; focusInput: HTMLInputElement } {
@@ -41,7 +41,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   stop.addEventListener('click', () => handlers.stop());
   top.append(heading, pill, stop);
   const about = el('p', 'tst-muted tst-loop-about',
-    'Claude writes new tests for what you name, runs this task’s suite, and turns every bug it finds into a test before fixing it. Then it runs again, until everything passes or the rounds run out. It never commits.');
+    'Claude writes new tests for what you name, runs the repo’s suite, and turns every bug it finds into a test before fixing it. Then it runs again, until everything passes or the rounds run out. It never commits.');
 
   // Built once, so the 4s refresh never wipes what she is typing.
   const form = el('form', 'tst-loop-start');
@@ -125,7 +125,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
   function criteriaBlock(criteria: Criteria | null): HTMLElement {
     const box = el('div', 'tst-criteria');
     if (!criteria || (!criteria.scenarios.length && !criteria.bugs.length)) {
-      box.append(el('p', 'tst-muted', 'No scenarios or bugs in this task’s criteria file yet. Claude adds them as the loop runs.'));
+      box.append(el('p', 'tst-muted', 'No scenarios or bugs in the repo’s criteria file yet. Claude adds them as the loop runs.'));
       return box;
     }
     const column = (title: string, items: CriteriaItem[], tally: string, empty: string) => {

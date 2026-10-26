@@ -34,27 +34,27 @@ describe('the scenario line', () => {
     expect(parsed.malformed).toBe(1);
   });
 
-  it('parses the skill’s own scenario examples: one waiting for tests, one passing with two', () => {
-    const lines = BUNDLED.split('\n').filter((l) => /^- \[(todo|pass)\] /.test(l));
+  it('parses the skill’s own scenario examples: one waiting for tests, one passing, each with its ticket and level', () => {
+    const lines = BUNDLED.split('\n').filter((l) => /^- \[(todo|pass)\] .*level: (smoke|regression|staging)/.test(l));
     expect(lines).toHaveLength(2);
-    const criteria = parseCriteria(`${CRITERIA_SKELETON.replace('## Bugs', `${lines.join('\n')}\n\n## Bugs`)}`);
+    const criteria = parseCriteria(`${CRITERIA_SKELETON.replace('## Manual', `${lines.join('\n')}\n\n## Manual`)}`);
     expect(criteria.malformed).toBe(0);
-    expect(criteria.scenarios.map((s) => [s.status, s.source, s.tests.length, s.taskId])).toEqual([['todo', 'prd', 0, 't-1a2b'], ['pass', 'prd', 2, 't-1a2b']]);
+    expect(criteria.scenarios.map((s) => [s.status, s.source, s.tests.length, s.ticket, s.level])).toEqual([['todo', 'prd', 0, 'AB#10427', 'regression'], ['pass', null, 1, 'AB#10427', 'regression']]);
   });
 });
 
 describe('the skill', () => {
   it('writes scenarios after Inspect and stops for review before any test', () => {
     const headings = BUNDLED.split('\n').filter((l) => /^## \d\./.test(l));
-    expect(headings).toEqual(['## 0. Which task, and whether you may change its suite', '## 1. Inspect first', '## 2. Write the scenarios, then stop', '## 3. Propose, then build', '## 4. Run it', '## 5. Hand Petal the suite', '## 6. Report']);
-    expect(BUNDLED).toContain('Then stop. Don\'t write any test, config or suite file yet.');
-    expect(BUNDLED).toContain('Only after the go-ahead.');
+    expect(headings).toEqual(['## 0. Find the repo\'s files', '## 1. Inspect first', '## 2. Write new scenarios, then stop', '## 3. Add the tests', '## 4. Run it, record bugs', '## 5. Hand Petal the suite', '## 6. Report']);
+    expect(BUNDLED).toContain('**Stop only when you added new scenarios.**');
+    expect(BUNDLED).toContain('then write their tests. No new scenarios: carry straight on.');
     expect(BUNDLED).not.toMatch(/[—–]/);
   });
 
   it('reaches an edited copy too: the inline brief carries the scenarios step', () => {
     const inline = draftBrief(true, 'for task t-1: "Refunds".', BUNDLED);
-    expect(inline).toContain('## 2. Write the scenarios, then stop');
+    expect(inline).toContain('## 2. Write new scenarios, then stop');
     expect(inline).toContain('ready for review in Petal');
   });
 });
@@ -81,7 +81,7 @@ describe('where scenarios come from', () => {
   it('the draft request names the task, its files, then its notes and PRD as the source', () => {
     const request = draftRequest({ id: 't-1', title: 'Refunds', notes: 'Refunds cap at the amount paid.' }, { title: 'Payments', notes: 'Every refund emails the payer.' });
     expect(request.split('\n')).toEqual([
-      'for task t-1: "Refunds". You are this task\'s testing agent, so you may write .petal/suites/t-1.json. Write its scenarios and record its bugs in .petal/criteria/t-1.md.',
+      'for task t-1: "Refunds". Set up or extend this repo\'s suite in .petal/suite.json, and write its scenarios and bugs in .petal/criteria.md.',
       expect.stringMatching(/^Source of scenarios: /),
       'Task notes:', 'Refunds cap at the amount paid.',
       'PRD "Payments":', 'Every refund emails the payer.',
@@ -144,8 +144,8 @@ describe('her review', () => {
   });
 
   it('the go-ahead names the file, says she may have edited it, and asks for linked tests', () => {
-    const text = scenariosApprovedText('t-1');
-    expect(text).toContain('.petal/criteria/t-1.md');
+    const text = scenariosApprovedText('/repo');
+    expect(text).toContain('/repo/.petal/criteria.md');
     expect(text).toContain('look right');
     expect(text).toContain('Read the file again first');
     expect(text).toContain('"test: path::test name"');

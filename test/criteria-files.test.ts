@@ -1,118 +1,211 @@
-// One criteria file per task: the path rule, moving the old shared file's tagged lines once, and reading every file back.
+// The repo's criteria file: Scenarios, Manual and Bugs parsed and written back, her manual ticks, ticket and level filters,
+// the coverage count, bugs in ADO shape, and the one-time import of older per-task files.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CRITERIA_SKELETON, LEGACY_CRITERIA_PATH, addCriteriaLines, buildLoopBrief, criteriaPath, parseCriteria, splitLegacyCriteria } from '../src/shared/test-loop';
-import { migrateCriteria, prepareLoop, readCriteria } from '../src/main/criteria-store';
+import { afterEach, describe, expect, it } from 'vitest';
+import { removeTempDirs, tempDir, useTempUserData } from './helpers';
+import {
+  CRITERIA_SKELETON, adoBugText, addCriteriaItems, buildLoopBrief, criteriaText, filterCriteria, parseCriteria, setManualResult, setScenarioStatuses, ticketInText, ticketsOf, untested,
+} from '../src/shared/test-loop';
+import { criteriaFile, prepareCriteria, readCriteria, saveManualResult, saveScenarioStatuses } from '../src/main/criteria-store';
 import type { Task } from '../src/shared/tasks';
 
-const OLD = [
+afterEach(removeTempDirs);
+
+const FILE = [
   '# Test criteria',
   '',
+  'Her notes stay as written.',
+  '',
   '## Scenarios',
-  '- [pass] cart rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart',
-  '- [pass] an old scenario · round 1',
+  '- [pass] refund over the amount paid is refused · test: src/refund.test.ts::refuses over-refund · test: e2e/refund.spec.ts::shows the limit · ticket: AB#10427 · level: regression · from: prd',
+  '- [todo] partial refund emails the payer · ticket: AB#10427 · level: smoke',
+  '- [fail] staging webhook retries · test: e2e/hook.spec.ts::retries · ticket: AB#10500 · level: staging',
+  '- [pass] old line · test: src/old.test.ts · round 2',
+  '',
+  '## Manual',
+  '- [todo] receipt email arrives on a real phone · ticket: AB#10427 · level: manual',
+  '  - Prereq: staging account with a verified email',
+  '  - Steps: pay RM10, open the inbox',
+  '  - Expected: receipt within 1 minute',
+  '- [blocked] SMS on a Celcom SIM · ticket: AB#10500 · level: manual',
+  '  - Steps: request an OTP',
+  '  - Expected: SMS within 30 s',
+  '  - Result: no Celcom SIM in the office',
   '',
   '## Bugs',
-  '- [fail] coupon 500s · round 1 · task: t-coupon',
-  '- [fixed] cent off · round 1 · task: t-cart',
-  '- a stray note',
+  '- [open] coupon can take the total below zero · test: src/coupon.test.ts::caps at the total · ticket: AB#10427',
+  '  - Steps: add a RM5 item, apply SAVE10',
+  '  - Expected: total RM0.00',
+  '  - Actual: total -RM5.00',
+  '  - Env: local, node 22',
+  '  - Evidence: expected 0, received -5',
+  '- [fixed] cent off · ticket: AB#10500',
   '',
 ].join('\n');
 
-const task = (id: string): Task => ({ id, title: id, notes: '', status: 'open', owner: null, createdAt: 0, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null }) as Task;
+const task = (id: string, title: string): Task => ({ id, title, notes: '', status: 'open', owner: null, createdAt: 0, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null }) as Task;
+const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
+const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { stdio: 'ignore' });
 
-describe('the criteria path', () => {
-  it('names one file per task, and the old shared file for no task or an id that cannot name a file', () => {
-    expect(criteriaPath('t-cart')).toBe('.petal/criteria/t-cart.md');
-    expect(criteriaPath(null)).toBe(LEGACY_CRITERIA_PATH);
-    expect(criteriaPath('../etc')).toBe(LEGACY_CRITERIA_PATH);
+describe('the three sections', () => {
+  const parsed = parseCriteria(FILE);
+
+  it('reads scenarios with every test, ticket, level and source; manual cases and bugs with their sub-bullets', () => {
+    expect(parsed.malformed).toBe(0);
+    expect(parsed.scenarios.map((s) => [s.status, s.tests.length, s.ticket, s.level, s.source])).toEqual([
+      ['pass', 2, 'AB#10427', 'regression', 'prd'], ['todo', 0, 'AB#10427', 'smoke', null], ['fail', 1, 'AB#10500', 'staging', null], ['pass', 1, null, null, null],
+    ]);
+    expect(parsed.manual[0]).toMatchObject({ status: 'todo', name: 'receipt email arrives on a real phone', ticket: 'AB#10427', level: 'manual', details: { Prereq: 'staging account with a verified email', Steps: 'pay RM10, open the inbox', Expected: 'receipt within 1 minute' } });
+    expect(parsed.manual[1].details.Result).toBe('no Celcom SIM in the office');
+    expect(parsed.bugs[0]).toMatchObject({ status: 'open', regression: true, ticket: 'AB#10427', details: { Steps: 'add a RM5 item, apply SAVE10', Actual: 'total -RM5.00', Env: 'local, node 22' } });
   });
 
-  it('the testing agent’s brief points at its task’s own file', () => {
-    expect(buildLoopBrief({ focus: '', rounds: 2, stages: [], stack: [], taskId: 't-cart', agent: true })).toContain('Criteria file: .petal/criteria/t-cart.md');
-    expect(buildLoopBrief({ focus: '', rounds: 2, stages: [], stack: [] })).toContain(`Criteria file: ${LEGACY_CRITERIA_PATH}`);
-  });
-});
-
-describe('splitting the old shared file', () => {
-  it('moves tagged lines by section and keeps everything else as written', () => {
-    const { keep, moved } = splitLegacyCriteria(OLD);
-    expect(moved).toEqual({
-      't-cart': { scenarios: ['- [pass] cart rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart'], bugs: ['- [fixed] cent off · round 1 · task: t-cart'] },
-      't-coupon': { scenarios: [], bugs: ['- [fail] coupon 500s · round 1 · task: t-coupon'] },
-    });
-    expect(keep).toContain('- [pass] an old scenario · round 1');
-    expect(keep).toContain('- a stray note');
-    expect(keep).not.toContain('task:');
-    expect(splitLegacyCriteria(keep).moved).toEqual({}); // a second pass moves nothing
+  it('round-trips all three sections, sub-bullets included', () => {
+    const text = criteriaText(parsed);
+    expect(parseCriteria(text)).toEqual({ ...parsed, truncated: false });
+    expect(criteriaText(parseCriteria(text))).toBe(text);
+    expect(text).toContain('## Manual\n- [todo] receipt email arrives on a real phone · ticket: AB#10427 · level: manual\n  - Prereq: staging account with a verified email\n  - Steps: pay RM10, open the inbox\n  - Expected: receipt within 1 minute\n');
   });
 
-  it('adds lines at the end of their sections, from the skeleton, never twice', () => {
-    const text = addCriteriaLines(null, { scenarios: ['- [pass] a · round 1'], bugs: ['- [fail] b · round 1'] });
-    expect(text).toBe('# Test criteria\n\nKept by Claude during Petal’s test loop.\n\n## Scenarios\n- [pass] a · round 1\n\n## Bugs\n- [fail] b · round 1\n');
-    expect(addCriteriaLines(text, { scenarios: ['- [pass] a · round 1'], bugs: [] })).toBe(text);
-    const more = addCriteriaLines(text, { scenarios: ['- [flaky] c · round 2'], bugs: [] });
-    expect(parseCriteria(more).scenarios.map((s) => s.name)).toEqual(['a', 'c']);
-    expect(addCriteriaLines('# Notes only\n', { scenarios: [], bugs: ['- [fail] d · round 1'] })).toContain('## Bugs\n- [fail] d · round 1');
+  it('a sub-bullet with no item above it, or an unknown part, counts as malformed', () => {
+    expect(parseCriteria('## Manual\n  - Steps: orphan\n- [todo] x · weird: y\n').malformed).toBe(2);
+    expect(parseCriteria('## Scenarios\n- [pass] x · level: nightly\n').malformed).toBe(1);
   });
 });
 
-describe('the criteria files on disk', () => {
-  let root: string;
-  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-criteria-')); });
-  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
-  const legacy = () => path.join(root, '.petal', 'test-criteria.md');
-  const own = (id: string) => path.join(root, '.petal', 'criteria', `${id}.md`);
-  const writeOld = (text = OLD) => { fs.mkdirSync(path.join(root, '.petal'), { recursive: true }); fs.writeFileSync(legacy(), text); };
-
-  it('a loop start makes its task’s own file and keeps .petal/ out of git', () => {
-    prepareLoop(root, 't-cart');
-    expect(fs.readFileSync(own('t-cart'), 'utf8')).toBe(CRITERIA_SKELETON);
-    expect(fs.readFileSync(path.join(root, '.petal', '.gitignore'), 'utf8')).toBe('*\n');
-    expect(fs.existsSync(legacy())).toBe(false);
+describe('her manual ticks', () => {
+  it('sets the status and the Result note, keeping every other line as written', () => {
+    const ticked = setManualResult(FILE, 'receipt email arrives on a real phone', 'pass', 'arrived in 20 s');
+    expect(ticked).not.toBeNull();
+    const parsed = parseCriteria(ticked as string);
+    expect(parsed.manual[0]).toMatchObject({ status: 'pass', details: { Result: 'arrived in 20 s', Steps: 'pay RM10, open the inbox' } });
+    expect((ticked as string).split('\n').filter((l) => !FILE.split('\n').includes(l))).toEqual(['- [pass] receipt email arrives on a real phone · ticket: AB#10427 · level: manual', '  - Result: arrived in 20 s']);
   });
 
-  it('moves tagged lines into each task’s file once, keeping the rest in the old file', () => {
-    writeOld();
-    migrateCriteria(root);
-    expect(parseCriteria(fs.readFileSync(own('t-cart'), 'utf8')).bugs.map((b) => b.name)).toEqual(['cent off']);
-    expect(parseCriteria(fs.readFileSync(own('t-coupon'), 'utf8')).bugs.map((b) => b.name)).toEqual(['coupon 500s']);
-    const left = fs.readFileSync(legacy(), 'utf8');
-    expect(left).not.toContain('task:');
-    expect(left).toContain('an old scenario');
-    const cart = fs.readFileSync(own('t-cart'), 'utf8');
-    migrateCriteria(root);
-    expect(fs.readFileSync(own('t-cart'), 'utf8')).toBe(cart); // once
+  it('replaces an existing Result, removes it when empty, and is null for a case that’s gone', () => {
+    const fail = setManualResult(FILE, 'SMS on a Celcom SIM', 'fail', 'no SMS after 5 min') as string;
+    expect(parseCriteria(fail).manual[1]).toMatchObject({ status: 'fail', details: { Result: 'no SMS after 5 min' } });
+    expect(parseCriteria(setManualResult(FILE, 'SMS on a Celcom SIM', 'todo', '') as string).manual[1].details.Result).toBeUndefined();
+    expect(setManualResult(FILE, 'not a case', 'pass', '')).toBeNull();
+    expect(setManualResult(FILE, 'refund over the amount paid is refused', 'pass', '')).toBeNull(); // a scenario, not a manual case
   });
 
-  it('reads every file as one list, each item filed under its task; untagged old lines go to the only task', () => {
-    writeOld();
-    const many = readCriteria(root, [task('t-cart'), task('t-coupon')]);
-    const taskOf = (name: string) => [...(many?.scenarios ?? []), ...(many?.bugs ?? [])].find((i) => i.name === name)?.taskId;
-    expect([taskOf('coupon 500s'), taskOf('cent off'), taskOf('cart rounds'), taskOf('an old scenario')]).toEqual(['t-coupon', 't-cart', 't-cart', null]);
-    expect(many?.malformed).toBe(1); // the stray note still counts
-    const only = readCriteria(root, [task('t-cart')]);
-    expect(only?.scenarios.find((s) => s.name === 'an old scenario')?.taskId).toBe('t-cart');
-    expect(only?.bugs.find((b) => b.name === 'coupon 500s')?.taskId).toBe('t-coupon'); // a task file's lines stay its own
+  it('a scenario run sets each named scenario’s status only', () => {
+    const next = setScenarioStatuses(FILE, { 'partial refund emails the payer': 'fail', 'staging webhook retries': 'pass', toString: 'pass' as const });
+    expect(parseCriteria(next).scenarios.map((s) => s.status)).toEqual(['pass', 'fail', 'pass', 'pass']);
+    expect(next.split('\n').length).toBe(FILE.split('\n').length);
+  });
+});
+
+describe('filters and coverage', () => {
+  const parsed = parseCriteria(FILE);
+
+  it('ticket chips list every ticket once; a ticket filters every section', () => {
+    expect(ticketsOf(parsed)).toEqual(['AB#10427', 'AB#10500']);
+    const one = filterCriteria(parsed, { ticket: 'AB#10500', levels: [] });
+    expect([one.scenarios.length, one.manual.length, one.bugs.length]).toEqual([1, 1, 1]);
   });
 
-  it('a line in a task’s file belongs to it even untagged; no file at all reads as none', () => {
-    expect(readCriteria(root, [])).toBeNull();
-    fs.mkdirSync(path.join(root, '.petal', 'criteria'), { recursive: true });
-    fs.writeFileSync(own('t-cart'), '## Bugs\n- [fail] total off · round 1\n');
-    fs.writeFileSync(path.join(root, '.petal', 'criteria', 'bad name!.md'), '## Bugs\n- [fail] ignored · round 1\n');
-    expect(readCriteria(root, [])?.bugs.map((b) => [b.name, b.taskId])).toEqual([['total off', 't-cart']]);
+  it('level chips filter scenarios; manual cases and bugs stay', () => {
+    const smoke = filterCriteria(parsed, { ticket: null, levels: ['smoke'] });
+    expect(smoke.scenarios.map((s) => s.name)).toEqual(['partial refund emails the payer']);
+    expect(smoke.manual).toHaveLength(2);
+    expect(filterCriteria(parsed, { ticket: null, levels: ['regression', 'staging'] }).scenarios).toHaveLength(2);
+    expect(filterCriteria(parsed, { ticket: null, levels: [] }).scenarios).toHaveLength(4);
   });
 
-  it('a linked old file is left alone', () => {
-    fs.mkdirSync(path.join(root, '.petal'), { recursive: true });
-    const outside = path.join(root, 'elsewhere.md');
-    fs.writeFileSync(outside, OLD);
-    fs.symlinkSync(outside, legacy());
-    migrateCriteria(root);
-    expect(fs.existsSync(path.join(root, '.petal', 'criteria'))).toBe(false);
-    expect(fs.readFileSync(outside, 'utf8')).toBe(OLD);
+  it('counts scenarios with no test', () => {
+    expect(untested(parsed).map((s) => s.name)).toEqual(['partial refund emails the payer']);
+  });
+
+  it('takes a task’s AB# id from its name', () => {
+    expect(ticketInText('AB#10427 refund caps')).toBe('AB#10427');
+    expect(ticketInText('Refunds')).toBeNull();
+  });
+});
+
+describe('a bug for Azure DevOps', () => {
+  it('is plain text in the repro-steps shape, with its failing test', () => {
+    const text = adoBugText(parseCriteria(FILE).bugs[0]);
+    expect(text).toBe([
+      'Title: coupon can take the total below zero', 'Related: AB#10427', '',
+      'Steps to reproduce:', 'add a RM5 item, apply SAVE10', '',
+      'Expected result:', 'total RM0.00', '',
+      'Actual result:', 'total -RM5.00', '',
+      'Environment: local, node 22', 'Failing test: src/coupon.test.ts::caps at the total', 'Evidence: expected 0, received -5',
+    ].join('\n'));
+    expect(adoBugText(parseCriteria(FILE).bugs[1])).toContain('Steps to reproduce:\n(not recorded)');
+  });
+});
+
+describe('adding items', () => {
+  it('appends to the right section by name, never twice, and adds a missing section', () => {
+    const [item] = parseCriteria('## Manual\n- [todo] new case · level: manual\n  - Steps: tap\n').manual;
+    const once = addCriteriaItems(CRITERIA_SKELETON, { manual: [item] });
+    expect(once).toContain('## Manual\n- [todo] new case · level: manual\n  - Steps: tap\n');
+    expect(addCriteriaItems(once, { manual: [item] })).toBe(once);
+    expect(addCriteriaItems('# Notes only\n', { manual: [item] })).toContain('## Manual\n- [todo] new case');
+  });
+});
+
+describe('the repo file on disk', () => {
+  it('lives in the main checkout: a worktree prepares, reads and writes the same one', () => {
+    useTempUserData();
+    const dir = fs.realpathSync(tempDir('petal-git-'));
+    const main = path.join(dir, 'main');
+    fs.mkdirSync(main);
+    git(main, 'init', '-q');
+    put(path.join(main, 'a.txt'), 'a');
+    git(main, 'add', 'a.txt');
+    git(main, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i');
+    const wt = path.join(dir, 'wt');
+    git(main, 'worktree', 'add', '-q', wt, '-b', 'x');
+    prepareCriteria(wt);
+    expect(criteriaFile(wt)).toBe(path.join(main, '.petal', 'criteria.md'));
+    expect(fs.readFileSync(path.join(main, '.petal', 'criteria.md'), 'utf8')).toBe(CRITERIA_SKELETON);
+    put(path.join(main, '.petal', 'criteria.md'), FILE);
+    expect(readCriteria(wt, [])?.manual).toHaveLength(2);
+    expect(saveManualResult(wt, 'SMS on a Celcom SIM', 'pass', 'ok')).toBeNull();
+    expect(readCriteria(main, [])?.manual[1]).toMatchObject({ status: 'pass', details: { Result: 'ok' } });
+    expect(saveManualResult(wt, 'gone', 'pass', '')).toMatch(/gone/);
+    saveScenarioStatuses(wt, { 'partial refund emails the payer': 'pass' });
+    expect(readCriteria(main, [])?.scenarios[1].status).toBe('pass');
+  });
+
+  it('imports older per-task files once: lines merged by text, tagged with the task’s AB# id, old files untouched', () => {
+    useTempUserData();
+    const root = tempDir('petal-repo-');
+    const cart = '## Scenarios\n- [pass] cart rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n## Bugs\n- [fail] cent off · test: src/cart.test.ts::cent · task: t-cart\n';
+    const coupon = '## Scenarios\n- [pass] cart rounds · test: src/other.test.ts · task: t-coupon\n- [todo] coupon caps · ticket: AB#9\n';
+    const shared = '## Scenarios\n- [pass] an old scenario · round 1\n';
+    put(path.join(root, '.petal', 'criteria', 't-cart.md'), cart);
+    put(path.join(root, '.petal', 'criteria', 't-coupon.md'), coupon);
+    put(path.join(root, '.petal', 'test-criteria.md'), shared);
+    const tasks = [task('t-cart', 'AB#10427 Fix the cart total'), task('t-coupon', 'Coupons')];
+    const read = readCriteria(root, tasks);
+    expect(read?.scenarios.map((s) => [s.name, s.ticket, s.taskId])).toEqual([['an old scenario', null, null], ['cart rounds', 'AB#10427', null], ['coupon caps', 'AB#9', null]]);
+    expect(read?.bugs.map((b) => [b.name, b.status, b.ticket])).toEqual([['cent off', 'fail', 'AB#10427']]);
+    expect(fs.readFileSync(path.join(root, '.petal', 'criteria', 't-cart.md'), 'utf8')).toBe(cart);
+    expect(fs.readFileSync(path.join(root, '.petal', 'test-criteria.md'), 'utf8')).toBe(shared);
+    const text = fs.readFileSync(criteriaFile(root), 'utf8');
+    fs.writeFileSync(criteriaFile(root), text.replace(/^- \[pass\] cart rounds.*\n/m, '')); // she removes a line
+    expect(readCriteria(root, tasks)?.scenarios.map((s) => s.name)).toEqual(['an old scenario', 'coupon caps']); // not imported again
+  });
+
+  it('no file at all reads as none', () => {
+    useTempUserData();
+    expect(readCriteria(tempDir('petal-repo-'), [])).toBeNull();
+  });
+});
+
+describe('the loop brief', () => {
+  it('names the repo’s criteria file in the main checkout and the three sections', () => {
+    const brief = buildLoopBrief({ focus: '', rounds: 2, stages: [], stack: [], taskId: 't-1', agent: true, home: '/code/app' });
+    expect(brief).toContain('Criteria file: /code/app/.petal/criteria.md');
+    expect(brief).toContain('The suite lives in /code/app/.petal/suite.json');
+    expect(brief).toContain('"## Scenarios", "## Manual" and "## Bugs"');
+    expect(brief).not.toMatch(/[—–]/);
   });
 });

@@ -5,13 +5,13 @@ import * as agentTerms from './agent-terms';
 import { isIpcError } from './dom';
 import { agentsPanel, keepTurnsScroll, type AgentsModel, type LaneModel } from './testing-agents-view';
 import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
-import { IDLE_GIVE_UP_MS, buildFixerBrief, buildLoopBrief, isActive, loopStatus, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
+import { IDLE_GIVE_UP_MS, buildFixerBrief, buildLoopBrief, isActive, loopStatus, ticketInText, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { queueDone, type SentBug } from '../shared/bug-queue';
 import { laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
 import { ROLES, agentOf, finishedRounds, isRunning, noEvents, roundLabel, roundTokens } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
-import { OUTSIDE_AGENT, type TaskSuite } from '../shared/task-suite';
+import type { RepoSuite } from '../shared/repo-suite';
 import { askAgainText, awaitingReview, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
 import { canMessage, chatPlaceholder, chatTurns, isAnswered, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, withPending, type ChatTurn, type LaneTerminal, type PendingMessage } from '../shared/agent-chat';
@@ -35,8 +35,9 @@ export interface AgentContext {
   tabId: () => string | null; // the tab Testing was opened from
   task: () => Task | null;
   prd: () => Prd | null; // the shown task's
-  scenarios: () => CriteriaItem[]; // the shown task's
-  suite: () => TaskSuite | null;
+  scenarios: () => CriteriaItem[]; // the repo's
+  suite: () => RepoSuite | null;
+  home: () => string | null; // the main checkout holding the repo's suite and criteria
   stack: () => StackItem[];
   names: () => AgentNames;
   taskRuns: () => PipelineRun[];
@@ -120,12 +121,11 @@ export function createAgents(ctx: AgentContext) {
     ctx.redraw();
   }
 
-  // Edit scenarios: the task's criteria file in her editor; Petal reads it again on its next refresh.
+  // Edit scenarios: the repo's criteria file in her editor; Petal reads it again on its next refresh.
   async function editScenarios(): Promise<void> {
     const from = ctx.tabId();
-    const task = ctx.task();
-    if (!from || !task) return;
-    const reply = await window.pastel.testing.openCriteria({ tabId: from, root: ctx.picked(), taskId: task.id });
+    if (!from) return;
+    const reply = await window.pastel.testing.openCriteria({ tabId: from, root: ctx.picked() });
     notes.tester = isIpcError(reply) ? `Couldn’t open the file: ${reply.error}` : 'note' in reply ? reply.note : 'Opened in your editor. Save it, then come back here.';
     draw();
   }
@@ -144,18 +144,18 @@ export function createAgents(ctx: AgentContext) {
     const r = drafting();
     const task = ctx.task();
     if (!r || !task || !r.tester || r.tester.state === 'closed') return 'start';
-    return (await sendToTester(r, askAgainText(task.id), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
+    return (await sendToTester(r, askAgainText(ctx.home()), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
   }
 
   // After each refresh: a suite file the drafting agent wrote but Petal couldn't use goes back to it once, with a fix request.
   async function checkDraft(problem: string | null): Promise<void> {
     const r = drafting();
     const task = ctx.task();
-    if (!r?.tester || !task || !problem || problem === OUTSIDE_AGENT || r.tester.state === 'closed' || r.tester.state === 'working') return;
+    if (!r?.tester || !task || !problem || r.tester.state === 'closed' || r.tester.state === 'working') return;
     const k = `${keyOf(r.root, r.taskId)}:${problem}`;
     if (pastedProblems.has(k)) return;
     pastedProblems.add(k);
-    if (!(await sendToTester(r, suiteProblemText(task.id, problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
+    if (!(await sendToTester(r, suiteProblemText(ctx.home(), problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
     else ctx.redraw();
   }
 
@@ -323,7 +323,7 @@ export function createAgents(ctx: AgentContext) {
     const names = { tester: nameOf('tester'), fixer: nameOf('fixer') };
     const review = !approvedSoFar()?.length; // none approved yet: round 1 stops for her review
     return {
-      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() }, review }),
+      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() }, review, home: ctx.home(), ticket: ticketInText(task.title) }),
       fixer: buildFixerBrief({ taskId: task.id, taskTitle: task.title, stages: suite.stages, names }),
     };
   }
