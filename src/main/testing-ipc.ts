@@ -1,4 +1,4 @@
-// IPC for the Testing tab: what the active tab's project tests with, each task's suite and run history, and running it.
+// IPC for the Testing tab: what the active tab's project tests with, the repo's suite and run history, and running it.
 // A run is a script Petal writes under userData and types into a NEW tab after her click (never a tab with claude in it);
 // main watches each stage's exit-code file and report. Reading the project and her skills waits for the folder gate.
 import fs from 'node:fs';
@@ -13,15 +13,16 @@ import { harnessLine } from './snapshot-shell';
 import { slashCatalog } from './slash-catalog';
 import { detectStack, proposeStages, scriptsOf, testingSkills } from './testing-detect';
 import { parseReport, parseText, keepOutput, shortenPaths, shortenText } from './testing-parse';
-import { pipelineScript, readLogTail, runLine, stageFiles, trimmedNote, withReporter, type StagePlan } from './testing-runner';
-import { claudeRun, scanLog, type ClaudeCall, type FileTouch, type SuiteWrite } from './testing-claude';
+import { pipelineScript, readLogTail, resolveRunner, runLine, stageFiles, trimmedNote, withReporter, type StagePlan } from './testing-runner';
+import { claudeRun, scanLog, type ClaudeCall, type FileTouch } from './testing-claude';
 import { projectRootOf, ranIn, repoRoot, runProject } from './testing-project';
 import * as history from './history';
 import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { load as loadConfig } from './config-store';
-import { agentOf, allAgents, loopsOf, saveLoop, settleOutsideChange, suiteFile, syncSuites, testAgentsOf, undoSuiteChange, writeSuite } from './task-suites';
+import { agentOf, allAgents, loopsOf, saveLoop, testAgentsOf } from './task-suites';
+import { suiteFile, suiteHome, syncSuite, undoSuiteChange, writeSuite } from './repo-suite-store';
 import { setAgentTitle } from './agent-titles';
 import { draftWithSkill } from './testing-skill';
 import { readAgentLog } from './agent-log';
@@ -31,20 +32,22 @@ import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRol
 import { agentView, claimAgent, closeTaskAgents, findAgent, herEvent, listedLoops, loopView, openAgentTerminal, repliesOf, sendToAgent, startTestAgents, stopTaskLoop, watchRoot, windowReady, type Claim } from './test-agents';
 import { cleanSentBug, isRunning, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
 import { addSent } from '../shared/bug-queue';
-import { buildSentFixerBrief, ITEMS_CAP, NAME_CAP } from '../shared/test-loop';
+import { buildSentFixerBrief, ITEMS_CAP, MANUAL_STATUSES, NAME_CAP, type ManualStatus } from '../shared/test-loop';
 import { scenariosApprovedText } from '../shared/suite-draft';
 import type { LoopNotice } from '../shared/loop-signals';
 import type { LockManifest } from '../shared/test-lock';
-import { checkSuite, emptySuite, isTaskId, suiteFor, type SuiteViews } from '../shared/task-suite';
+import { NO_SUITE, autoRunStages, checkSuite, emptySuite, isLevel, isTaskId, stagesToRun, type RepoSuiteView } from '../shared/repo-suite';
 import { foldAgents, listedSession, listedSessions, needsOwnTask, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
 import { lastRunAt, latest } from '../shared/task-activity';
 import { panelSessions } from './agents-ipc';
 import { giveSessionTask } from './tasks-ipc';
 import { pruneProject } from './testing-prune';
 import * as store from './testing-store';
-import { criteriaFile, prepareLoop, readCriteria } from './criteria-store';
+import { criteriaFile, prepareCriteria, readCriteria, saveManualResult, saveScenarioStatuses } from './criteria-store';
+import { envPrefix, planScenario, planTicket, scenarioOutcome, ticketScenarios, type ScenarioPlan } from '../shared/scenario-run';
+import type { CriteriaItem } from '../shared/test-loop';
 import {
-  normalizeCommand, runGoing, runStateOf, unconfirmed, addCounts, emptyCounts,
+  normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
   type Elsewhere, type LoopFacts, type LoopView, type StoredLoop, type TestAgent, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
@@ -67,14 +70,15 @@ const NAMES_CAP = 200; // scenario names approved in one go
 const NOTICE_MAX = 200;
 const EVENT_MAX = 200; // a lane line Petal writes for a follow-up
 
-interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval> }
+// scenarios: a scenario run's scenarios, whose [pass]/[fail] are written back when it ends.
+interface ScenarioWatch { items: { name: string; tests: CriteriaItem['tests'] }[]; files: ScenarioPlan['files'] }
+interface Watched { root: string; run: PipelineRun; stages: { config: StageConfig; plan: StagePlan; files: ReturnType<typeof stageFiles> }[]; done: string; started: number; timer: ReturnType<typeof setInterval>; scenarios?: ScenarioWatch }
 const watching = new Map<string, Watched>(); // run id -> its watch
 const editsSeen = new Map<string, number>(); // transcript -> edits counted at the last auto check
 const runTabs = new Map<string, string>(); // `${contentsId}:${tabId}` of a tab a run opened -> its project root
 const notices = new Set<Notification>(); // held until clicked or closed, so the click still lands
 
-// The repo's runs still going, and whether one blocks this task: one run at a time per task.
-const runsGoing = (): { root: string; taskId: string | null }[] => [...watching.values()].map((w) => ({ root: w.root, taskId: w.run.taskId ?? null }));
+// The checkout's runs still going: one run at a time per checkout, since it runs the one repo suite.
 const runningIn = (root: string): string[] => [...watching.values()].filter((w) => w.root === root).map((w) => w.run.id);
 
 // ---- Which project: the tab's claude folder, else its shell's, walked up to the repo root.
@@ -127,7 +131,7 @@ export function projectSeed(root: string): SuiteSeed | null {
   return claude ? { problem: claude.problem } : null;
 }
 
-// What a Claude run on a task with no suite is matched against: the project's commands, else what detection suggests.
+// What a Claude run is matched against when the repo has no suite: the project's commands, else what detection suggests.
 const fallbackStages = (root: string): StageConfig[] => {
   const seed = projectSeed(root);
   return seed && 'stages' in seed ? seed.stages : proposeStages(root, detectStack(root));
@@ -143,15 +147,14 @@ function rememberConfirmed(root: string, stages: StageConfig[]): void {
 // One session's log; cwd is Claude's folder, for a call without its own.
 export interface SessionLog { transcript: string; sessionId: string; cwd: string | null }
 
-interface LogFinds { found: { call: ClaudeCall; project: string | null }[]; writes: SuiteWrite[]; touches: FileTouch[] }
+interface LogFinds { found: { call: ClaudeCall; project: string | null }[]; touches: FileTouch[] }
 
-// Claude's calls in these logs, each with the project it ran in (its "cd", else Claude's folder then), and its suite file writes.
+// Claude's calls in these logs, each with the project it ran in (its "cd", else Claude's folder then), and the files it touched.
 async function logCalls(logs: readonly SessionLog[]): Promise<LogFinds> {
-  const finds: LogFinds = { found: [], writes: [], touches: [] };
+  const finds: LogFinds = { found: [], touches: [] };
   for (const log of logs) {
     const scan = await scanLog(log.transcript, log.sessionId);
     for (const call of scan.calls) finds.found.push({ call, project: projectRootOf(ranIn(call.command, call.cwd ?? log.cwd)) });
-    finds.writes.push(...scan.suiteWrites);
     finds.touches.push(...scan.touches);
   }
   return finds;
@@ -205,7 +208,7 @@ function recordRun(root: string, run: PipelineRun): void {
   });
 }
 
-// The logs of this project's agents whose tabs are closed: their suite writes and file touches still count.
+// The logs of this project's agents whose tabs are closed: their file touches still count.
 async function closedAgentFinds(root: string, open: readonly SessionLog[]): Promise<LogFinds> {
   const seen = new Set(open.map((log) => log.sessionId));
   const logs = allAgents(root).map((a) => a.sessionId).filter((id) => !seen.has(id))
@@ -213,33 +216,33 @@ async function closedAgentFinds(root: string, open: readonly SessionLog[]): Prom
   return logCalls(logs);
 }
 
-export interface ProjectChecks { suites: SuiteViews; lock: LockView }
+export interface ProjectChecks { suite: RepoSuiteView; lock: LockView }
 
 // Claude's runs that ran in this project, from every open session and the old home-folder history, added once each.
-// Then the tasks' suite files, so a change the testing agent just made shows, and the test lock's integrity check.
+// Then the repo's suite file, so any session's change shows with Undo, and the test lock's integrity check.
 async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<ProjectChecks> {
   const { tasks } = loadTasks(root);
-  if (!claudeFolderAllowed()) return { suites: syncSuites(root, tasks), lock: lockView(root, loadManifest(root)) };
-  const { found, writes, manifest } = await lockFromLogs(root, sessions, tasks);
-  const suites = syncSuites(root, tasks, writes);
+  if (!claudeFolderAllowed()) return { suite: syncSuite(root), lock: lockView(root, loadManifest(root)) };
+  const { found, manifest } = await lockFromLogs(root, sessions, tasks);
+  const suite = syncSuite(root);
   const names = store.load(root).agentNames;
   for (const agent of allAgents(root)) {
     const task = tasks.find((t) => t.id === agent.taskId);
     if (task) setAgentTitle(agent.sessionId, agentTabTitle(names, agent.role, task.title));
   }
-  await saveClaudeRuns(root, found, tasks, suites, sessions);
-  return { suites, lock: lockView(root, manifest) };
+  await saveClaudeRuns(root, found, tasks, suite, sessions);
+  return { suite, lock: lockView(root, manifest) };
 }
 
 const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored, refusals: lockRefusals(root, manifest) });
 
 // Every open and closed agent log read, then the lock's integrity check with what they touched.
-async function lockFromLogs(root: string, sessions: TabSessions, tasks: readonly Task[]): Promise<{ found: LogFinds['found']; writes: SuiteWrite[]; manifest: LockManifest }> {
+async function lockFromLogs(root: string, sessions: TabSessions, tasks: readonly Task[]): Promise<{ found: LogFinds['found']; manifest: LockManifest }> {
   const logs = openLogs(sessions);
-  const { found, writes, touches } = await logCalls(logs);
+  const { found, touches } = await logCalls(logs);
   const closed = await closedAgentFinds(root, logs);
-  const inputs = { suiteTasks: tasks.map((t) => t.id).filter((id) => fs.existsSync(suiteFile(root, id))), criteria: readCriteria(root, tasks), agents: allAgents(root), touches: [...touches, ...closed.touches] };
-  return { found, writes: [...writes, ...closed.writes], manifest: refreshLock(root, inputs, store.load(root).agentNames ?? {}) };
+  const inputs = { criteria: readCriteria(root, tasks), touches: [...touches, ...closed.touches] };
+  return { found, manifest: refreshLock(root, inputs, allAgents(root), store.load(root).agentNames ?? {}) };
 }
 
 // ---- The lock keeps up with Testing closed: on a timer and after each Claude turn, for repos with the lock on.
@@ -284,23 +287,23 @@ export async function refreshLockAfterTurn(session: TabSession): Promise<void> {
 export async function mergeLogRuns(root: string, logs: readonly SessionLog[]): Promise<void> {
   if (!claudeFolderAllowed()) return;
   const { tasks } = loadTasks(root);
-  const { found, writes } = await logCalls(logs);
-  await saveClaudeRuns(root, found, tasks, syncSuites(root, tasks, writes), new Map());
+  const { found } = await logCalls(logs);
+  await saveClaudeRuns(root, found, tasks, syncSuite(root), new Map());
 }
 
 // The store is loaded after the logs are read, so a run saved meanwhile is never lost.
-// A call lands on a stage of its task's suite; with no task or no suite, on the project's commands.
-async function saveClaudeRuns(root: string, found: LogFinds['found'], tasks: Task[], suites: SuiteViews, sessions: TabSessions): Promise<void> {
+// A call lands on a stage of the repo's suite; with no suite, on the project's commands.
+async function saveClaudeRuns(root: string, found: LogFinds['found'], tasks: Task[], suite: RepoSuiteView, sessions: TabSessions): Promise<void> {
   const calls = found.filter((c) => c.project === root).map((c) => c.call);
   const moved = root === os.homedir() ? [] : homeRuns().filter((run) => runProject(run) === root);
   const data = store.load(root);
   const known = new Set(data.runs.map((r) => r.id));
   const scripts = scriptsOf(root);
   let fallback: StageConfig[] | null = null;
-  const stagesOf = (taskId: string | null): StageConfig[] => suiteFor(tasks, suites, taskId)?.suite.stages ?? (fallback ??= fallbackStages(root));
+  const stages = (): StageConfig[] => suite.suite?.stages ?? (fallback ??= fallbackStages(root));
   const fresh = calls.filter((call) => !known.has(`claude-${call.id}`)).map((call) => {
     const taskId = taskIdAt(root, call.sessionId, call.at, tasks);
-    return withTask(claudeRun(call, stagesOf(taskId), scripts, root), taskId);
+    return withTask(claudeRun(call, stages(), scripts, root), taskId);
   });
   fresh.forEach((run) => known.add(run.id));
   const copied: PipelineRun[] = [];
@@ -363,7 +366,7 @@ async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere 
   if (!cwd) return null;
   const rows = sessionPicks().map((s): PickSession => ({
     sessionId: s.sessionId, name: sessionTitleFor(s.sessionId, { cwd: s.cwd }), root: s.root, project: path.basename(s.root), status: s.status,
-    suite: Boolean(s.taskId && fs.existsSync(suiteFile(s.root, s.taskId))), agents: s.agents,
+    suite: fs.existsSync(suiteFile(suiteHome(s.root))), agents: s.agents,
   }));
   return { reason: path.resolve(cwd) === os.homedir() ? 'home' : 'no-repo', sessions: rows };
 }
@@ -447,12 +450,12 @@ const openSessionIds = (sessions: TabSessions): Set<string> =>
 
 async function stateFor(root: string, sessions: TabSessions, onProject: TabSession | null): Promise<TestingState> {
   const stack = [...detectStack(root), ...skillsFor(root)];
-  const { suites, lock } = await mergeClaudeRuns(root, sessions);
+  const { suite, lock } = await mergeClaudeRuns(root, sessions);
   const data = store.load(root);
   const running = runningIn(root);
   return {
-    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, runs: named(data.runs), running,
-    sessionTab: onProject?.tabId ?? null, changed: await recentlyChanged(root), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+    allowed: true, project: { root, name: path.basename(root) }, elsewhere: null, stack, proposed: proposeStages(root, stack), seed: projectSeed(root), suite, lock, agentNames: data.agentNames ?? {}, runs: named(data.runs), running,
+    sessionTab: onProject?.tabId ?? null, changed: await recentlyChanged(root), runners: [...scenarioEnv(root).runners], ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
   };
 }
 
@@ -506,14 +509,33 @@ function tick(w: Watched): void {
     w.run.finishedAt = Date.now();
     clearInterval(w.timer);
     watching.delete(w.run.id);
+    if (w.scenarios) writeScenarioResults(w.root, w.scenarios, stages);
   }
   store.putRun(w.root, w.run);
   recordRun(w.root, w.run);
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'testing:run-update', { root: w.root, run: w.run });
 }
 
+// Each scenario of a finished scenario run gets [pass] or [fail] in the criteria file; one whose files didn't run keeps its status.
+function writeScenarioResults(root: string, watch: ScenarioWatch, stages: StageResult[]): void {
+  const statuses: Record<string, 'pass' | 'fail'> = {};
+  for (const item of watch.items) {
+    const outcome = scenarioOutcome(item, stages, watch.files);
+    if (outcome) statuses[item.name] = outcome;
+  }
+  try { saveScenarioStatuses(root, statuses); } catch (error) { console.warn('[petal] scenario results not written:', (error as Error).message); }
+}
+
+// The runners the suite's stages call (through package.json scripts too), and the environment prefix they share.
+function scenarioEnv(root: string): { runners: Set<string>; prefix: string } {
+  const stages = syncSuite(root).suite?.stages ?? fallbackStages(root);
+  const scripts = scriptsOf(root);
+  const runners = new Set(stages.map((s) => resolveRunner(s.command, scripts).runner).filter((r): r is string => r !== null));
+  return { runners, prefix: envPrefix(stages.map((s) => s.command)) };
+}
+
 // Writes the script, opens a new tab that runs it, and starts watching. Snapshot runs record the line instead.
-function startRun(root: string, stages: StageConfig[], keepGoing: boolean, contents: WebContents, openTab: OpenTab, trigger: PipelineRun['trigger'], taskId: string | null): { started: string; typed: string } {
+function startRun(root: string, stages: StageConfig[], keepGoing: boolean, contents: WebContents, openTab: OpenTab, trigger: PipelineRun['trigger'], taskId: string | null, scenarios?: ScenarioWatch): { started: string; typed: string } {
   const id = `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const dir = path.join(store.runsDir(root), id);
   fs.mkdirSync(dir, { recursive: true });
@@ -532,7 +554,7 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
   }, taskId);
   store.putRun(root, run);
   recordRun(root, run);
-  const w: Watched = { root, run, stages: planned, done, started: Date.now(), timer: setInterval(() => tick(w), POLL_MS) };
+  const w: Watched = { root, run, stages: planned, done, started: Date.now(), timer: setInterval(() => tick(w), POLL_MS), ...(scenarios ? { scenarios } : {}) };
   watching.set(id, w);
   if (isSnapshotRun()) {
     testingFixture.runs.push({ runId: id, dir, typed, script, stages: planned.map(({ config, plan, files }) => ({ name: config.name, command: config.command, exec: plan.exec, report: plan.report?.file ?? null, exit: files.exit, log: files.log })) });
@@ -561,7 +583,13 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const task = tasks.find((t) => t.id === taskId);
     return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
   };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], tasks: [], prds: [], sessionTaskId: null });
+  // The project, for the calls that act on the repo's suite and criteria.
+  const projectTarget = async (contentsId: number, tabId: unknown, picked: unknown): Promise<{ root: string; tasks: Task[] } | { note: string }> => {
+    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
+    const root = await rootFor(sessionFor(sessions, contentsId, tabId), picked);
+    return root ? { root, tasks: loadTasks(root).tasks } : { note: 'No project in this tab. Open one first.' };
+  };
+  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], runners: [], tasks: [], prds: [], sessionTaskId: null });
 
   // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
   handle('testing:detect', async (event, { tabId, root: picked, session }) => {
@@ -580,18 +608,18 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
   handle('testing:history', async (event, { tabId, root: picked }) => {
-    const none = { runs: [], running: [], sessionTab: null, criteria: null, seed: null, suites: {}, lock: NO_LOCK, agentNames: {}, distillation: [], loops: {}, tasks: [], prds: [], sessionTaskId: null };
+    const none = { runs: [], running: [], sessionTab: null, criteria: null, seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, distillation: [], loops: {}, tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;
     const asking = sessionFor(sessions, event.sender.id, tabId);
     const root = await rootFor(asking, picked);
     if (!root) return none;
-    const { suites, lock } = await mergeClaudeRuns(root, sessions);
+    const { suite, lock } = await mergeClaudeRuns(root, sessions);
     await captureOpenDistillations(root, sessions);
     const data = store.load(root);
     const onProject = await sessionOnProject(root, sessions, asking);
     return {
       runs: named(data.runs), running: runningIn(root), sessionTab: onProject?.tabId ?? null,
-      criteria: readCriteria(root), seed: projectSeed(root), suites, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopViews(root, event.sender.id), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
+      criteria: readCriteria(root), seed: projectSeed(root), suite, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopViews(root, event.sender.id), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
 
@@ -617,7 +645,7 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const names = store.load(root).agentNames ?? {};
     if (!fixerBrief && !running?.fixerSessionId) return { note: 'Start the loop to start its testing agent.' };
     if (fixerBrief && running) return { note: `${agentName(names, 'fixer')} is already running for this task, maybe in another window.` };
-    prepareLoop(root, task.id);
+    prepareCriteria(root);
     const tester = typeof testerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'tester', testerBrief) : null;
     if (tester && 'note' in tester) return tester;
     const fixer = typeof fixerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'fixer', fixerBrief) : null;
@@ -646,7 +674,7 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     if (prior?.stoppedAt === null && prior.kind === 'loop') return { note: 'The test loop is running for this task. Stop it first.' };
     if (prior?.stoppedAt === null && tester && prior.testerSessionId === tester.sessionId) return { note: 'This task’s testing agent is already drawing up its suite.' };
     const skill = draftWithSkill(isSnapshotRun() ? testingFixture.claudeDir : allowedClaudeHome(), prompt.trim());
-    prepareLoop(root, task.id); // bugs it finds go in the criteria file as [fail] lines
+    prepareCriteria(root); // its scenarios and the bugs it finds go in the repo's criteria file
     const claim = await briefRole(event.sender.id, root, task, 'tester', skill.brief);
     if ('note' in claim) return claim;
     const name = agentName(store.load(root).agentNames ?? {}, 'tester');
@@ -659,12 +687,12 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     return { agent: agentView(root, claim.agent, event.sender.id), reused: !claim.created, updatedSkill: skill.updated };
   });
 
-  // Edit scenarios: only the task's own criteria file, made first if missing, in her default editor.
-  handle('testing:open-criteria', async (event, { tabId, root: picked, taskId }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  // Edit scenarios: the repo's criteria file, made first if missing, in her default editor.
+  handle('testing:open-criteria', async (event, { tabId, root: picked }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
-    prepareLoop(target.root, target.task.id);
-    const file = criteriaFile(target.root, target.task.id);
+    prepareCriteria(target.root);
+    const file = criteriaFile(target.root);
     if (isSnapshotRun()) { testingFixture.opened.push(file); return { ok: true as const }; }
     const failure = await shell.openPath(file); // '' means it opened
     return failure ? { note: `Couldn’t open the scenarios file: ${failure}` } : { ok: true as const };
@@ -747,7 +775,7 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const approved = (Array.isArray(names) ? names : []).filter((n): n is string => typeof n === 'string' && n.length > 0).map((n) => n.slice(0, NAME_CAP)).slice(0, NAMES_CAP);
     if (!approved.length) return { note: 'There are no scenarios to approve.' };
     const name = agentName(store.load(found.root).agentNames ?? {}, 'tester');
-    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(taskId), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
+    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(suiteHome(found.root)), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
     if ('note' in sent) return sent;
     const latest = loopsOf(found.root)[taskId] ?? loop;
     saveLoop(found.root, taskId, { ...latest, approvedScenarios: [...(latest.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
@@ -785,24 +813,33 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     return closeTaskAgents(target.root, target.task.id);
   });
 
-  // The task's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.
-  handle('testing:save-suite', async (event, { tabId, root: picked, taskId, suite }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  // The repo's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.
+  handle('testing:save-suite', async (event, { tabId, root: picked, suite }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
     const check = checkSuite(suite);
-    if (!check.ok) return { note: 'Each stage needs a name and a one-line command.' };
-    writeSuite(target.root, target.task.id, check.suite);
+    if (!check.ok) return { note: 'Each stage needs a name, a one-line command and a level.' };
+    writeSuite(target.root, check.suite);
     return { ok: true };
   });
 
   // Start from the project's commands: re-read here, never the renderer's copy. New commands still ask before their first run.
-  handle('testing:seed-suite', async (event, { tabId, root: picked, taskId }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  handle('testing:seed-suite', async (event, { tabId, root: picked }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
     const seed = projectSeed(target.root);
     if (!seed || !('stages' in seed)) return { note: 'The project has no commands to start from.' };
-    writeSuite(target.root, target.task.id, emptySuite(seed.stages));
+    writeSuite(target.root, emptySuite(seed.stages));
     return { ok: true };
+  });
+
+  // Her pass, fail or blocked on a manual case, with her Result note, written back into the criteria file.
+  handle('testing:manual-result', async (event, { tabId, root: picked, name, status, result }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
+    if ('note' in target) return target;
+    if (typeof name !== 'string' || !name || !(MANUAL_STATUSES as readonly string[]).includes(status) || typeof result !== 'string') return { note: 'That result can’t be saved.' };
+    const problem = saveManualResult(target.root, name, status as ManualStatus, result);
+    return problem ? { note: problem } : { ok: true };
   });
 
   // The test lock, per project: the hook entry in its .claude/settings.local.json and the manifest.
@@ -814,16 +851,16 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     return problem ? { note: problem } : { ok: true };
   });
 
-  handle('testing:lock-dismiss', async (event, { tabId, root: picked, taskId }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  handle('testing:lock-dismiss', async (event, { tabId, root: picked }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
-    dismissRestored(target.root, target.task.id);
+    dismissRestored(target.root);
     return { ok: true };
   });
 
   // Her Keep or Restore for a locked test changed outside Claude.
-  handle('testing:lock-resolve', async (event, { tabId, root: picked, taskId, path: rel, keep }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  handle('testing:lock-resolve', async (event, { tabId, root: picked, path: rel, keep }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
     const problem = resolveUnconfirmed(target.root, String(rel), keep === true);
     return problem ? { note: problem } : { ok: true };
@@ -843,34 +880,50 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     return { ok: true };
   });
 
-  // Her Use this file or Keep the old suite, for a suite file changed outside the testing agent.
-  handle('testing:suite-outside', async (event, { tabId, root: picked, taskId, use }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  handle('testing:undo-suite', async (event, { tabId, root: picked }) => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
-    const problem = settleOutsideChange(target.root, target.task.id, use === true);
-    return problem ? { note: problem } : { ok: true };
+    return undoSuiteChange(target.root) ? { ok: true } : { note: 'There is no change to undo.' };
   });
 
-  handle('testing:undo-suite', async (event, { tabId, root: picked, taskId }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
+  // Runs the repo's suite in this checkout: the stages her filter shows, opt-in ones only when she turned them on. Tagged
+  // with the task when one is given.
+  handle('testing:run', async (event, { tabId, root: picked, taskId = null, stageId = null, levels = [], optedIn = [], confirmed = false }): Promise<RunReply> => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
     if ('note' in target) return target;
-    return undoSuiteChange(target.root, target.task.id) ? { ok: true } : { note: 'There is no change to undo.' };
-  });
-
-  // Runs the task's suite (a subtask without one runs its parent's), tagged with that task.
-  handle('testing:run', async (event, { tabId, root: picked, taskId, stageId = null, confirmed = false }): Promise<RunReply> => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
-    if ('note' in target) return target;
-    const { root, task } = target;
-    if (runGoing(runsGoing(), root, task.id)) return { note: 'A run is still going for this task.' };
-    const suite = suiteFor(target.tasks, syncSuites(root, target.tasks), task.id)?.suite;
-    if (!suite) return { note: 'This task has no suite yet.' };
-    const stages = stageId ? suite.stages.filter((s) => s.id === stageId) : suite.stages;
-    if (!stages.length) return { note: 'There are no stages to run.' };
+    const { root } = target;
+    if (runningIn(root).length) return { note: 'A run is still going in this checkout.' };
+    const suite = syncSuite(root).suite;
+    if (!suite) return { note: 'This repo has no suite yet.' };
+    const filter = { levels: (Array.isArray(levels) ? levels : []).filter(isLevel), optedIn: (Array.isArray(optedIn) ? optedIn : []).filter((id): id is string => typeof id === 'string') };
+    const stages = stagesToRun(suite.stages, filter, typeof stageId === 'string' ? stageId : null);
+    if (!stages.length) return { note: 'There are no stages to run. Opt-in stages run only when turned on.' };
     const fresh = unconfirmed(confirmedOf(root), stages);
     if (fresh.length && !confirmed) return { confirm: { commands: stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
     rememberConfirmed(root, stages);
-    return startRun(root, stages, suite.keepGoing, event.sender, openTab, 'click', task.id);
+    const tag = isTaskId(taskId) && target.tasks.some((t) => t.id === taskId) ? taskId : null;
+    return startRun(root, stages, suite.keepGoing, event.sender, openTab, 'click', tag);
+  });
+
+  // Runs one scenario's tests, or every tested scenario of a ticket (staging ones only with staging on), one command per
+  // test file. Its results set each scenario's [pass] or [fail]; the run shows in history like a stage run.
+  handle('testing:run-scenarios', async (event, { tabId, root: picked, taskId = null, scenario = null, ticket = null, staging = false, confirmed = false }): Promise<RunReply> => {
+    const target = await projectTarget(event.sender.id, tabId, picked);
+    if ('note' in target) return target;
+    const { root } = target;
+    if (runningIn(root).length) return { note: 'A run is still going in this checkout.' };
+    const scenarios = readCriteria(root, target.tasks)?.scenarios ?? [];
+    const items = typeof scenario === 'string' ? scenarios.filter((s) => s.name === scenario && s.tests.length)
+      : typeof ticket === 'string' ? ticketScenarios(scenarios, ticket, staging === true) : [];
+    if (!items.length) return { note: typeof scenario === 'string' ? 'That scenario names no test.' : 'No scenario of this ticket names a test.' };
+    const { runners, prefix } = scenarioEnv(root);
+    const plan = typeof scenario === 'string' ? planScenario(items[0], runners, prefix) : planTicket(items, runners, prefix);
+    if (!plan.stages.length) return { note: `No known runner for ${plan.skipped[0] ?? 'these tests'}.` };
+    const fresh = unconfirmed(confirmedOf(root), plan.stages);
+    if (fresh.length && !confirmed) return { confirm: { commands: plan.stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
+    rememberConfirmed(root, plan.stages);
+    const tag = isTaskId(taskId) && target.tasks.some((t) => t.id === taskId) ? taskId : null;
+    return startRun(root, plan.stages, true, event.sender, openTab, 'click', tag, { items: items.map(({ name, tests }) => ({ name, tests })), files: plan.files });
   });
 
   // Stop watching a run whose tab was closed or interrupted; the run keeps what finished.
@@ -911,8 +964,8 @@ function showNotice({ title, body, tabId }: LoopNotice, contentsId: number | nul
   return true;
 }
 
-// After a Claude turn: run its task's suite if she turned auto-run on for it, the turn edited files, every command was
-// confirmed before, nothing is running, and no claude on this project is mid-turn. Still a visible new tab.
+// After a Claude turn: run the repo's suite if she turned auto-run on, the turn edited files, every command was confirmed
+// before, nothing is running, and no claude on this project is mid-turn. Never an opt-in stage. Still a visible new tab.
 export async function onTurnFinished(session: TabSession): Promise<void> {
   if (!deps || !claudeFolderAllowed()) return;
   const s = session.feed.session;
@@ -924,13 +977,14 @@ export async function onTurnFinished(session: TabSession): Promise<void> {
   editsSeen.set(s.transcript, edits);
   const { tasks } = loadTasks(root);
   const taskId = taskIdAt(root, s.sessionId, Date.now(), tasks);
-  const suite = suiteFor(tasks, syncSuites(root, tasks), taskId)?.suite; // the session's task's suite, if it asked to run after edits
-  if (!suite?.autoRun || edits <= before || !suite.stages.length || unconfirmed(confirmedOf(root), suite.stages).length) return;
-  if (runGoing(runsGoing(), root, taskId)) return;
+  const suite = syncSuite(root).suite;
+  const stages = suite ? autoRunStages(suite.stages) : [];
+  if (!suite?.autoRun || edits <= before || !stages.length || unconfirmed(confirmedOf(root), stages).length) return;
+  if (runningIn(root).length) return;
   for (const other of deps.sessions.values()) {
     const o = other.feed.session;
     if (o?.status === 'busy' && o.cwd && repoRoot(o.cwd) === root) return;
   }
   const contents = webContents.fromId(session.contentsId);
-  if (contents && !contents.isDestroyed()) startRun(root, suite.stages, suite.keepGoing, contents, deps.openTab, 'auto', taskId);
+  if (contents && !contents.isDestroyed()) startRun(root, stages, suite.keepGoing, contents, deps.openTab, 'auto', taskId);
 }

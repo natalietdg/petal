@@ -14,17 +14,14 @@ export interface ClaudeCall { id: string; command: string; at: number; endAt: nu
 
 interface Pending { command: string; at: number; prompt: string; cwd: string | null }
 // A tool call that names .petal/suites/<taskId>.json, read as a write to that task's suite.
-export interface SuiteWrite { taskId: string; at: number; sessionId: string }
 // Every file edit and shell line, so the test lock can tell who changed a locked file.
 export interface FileTouch { target: string; at: number; sessionId: string; kind: 'edit' | 'bash'; cwd: string | null }
-interface LogState { offset: number; rest: string; pending: Map<string, Pending>; calls: ClaudeCall[]; seen: Set<string>; edits: number; prompt: string; suiteWrites: SuiteWrite[]; touches: FileTouch[] }
+interface LogState { offset: number; rest: string; pending: Map<string, Pending>; calls: ClaudeCall[]; seen: Set<string>; edits: number; prompt: string; touches: FileTouch[] }
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const CHECK_SCRIPT = /\b(npm|pnpm|yarn|bun)\s+(?:run\s+)?(typecheck|type-check|lint|check)\b/;
 const MAX_CALLS = 400; // per log, newest kept
-const MAX_SUITE_WRITES = 100;
 const MAX_TOUCHES = 400;
-const SUITE_FILE = /\.petal\/suites\/([\w-]{1,64})\.json/g;
 const PROMPT_KEEP = 200;
 const CHUNK = 1 << 20;
 
@@ -53,7 +50,6 @@ function readLine(state: LogState, line: string, sessionId: string): void {
   for (const item of itemsOf(entry.message?.content)) {
     if (item.type === 'tool_use' && item.name && EDIT_TOOLS.has(item.name)) state.edits += 1;
     if (item.type === 'tool_use' && item.input && (EDIT_TOOLS.has(item.name ?? '') || item.name === 'Bash')) { // a Read names the file but changes nothing
-      for (const match of JSON.stringify(item.input).matchAll(SUITE_FILE)) state.suiteWrites.push({ taskId: match[1] as string, at, sessionId });
       const target = item.name === 'Bash' ? item.input.command : item.input.file_path ?? item.input.notebook_path;
       if (typeof target === 'string') state.touches.push({ target, at, sessionId, kind: item.name === 'Bash' ? 'bash' : 'edit', cwd });
     }
@@ -69,7 +65,7 @@ function readLine(state: LogState, line: string, sessionId: string): void {
   }
 }
 
-export interface LogScan { calls: ClaudeCall[]; edits: number; suiteWrites: SuiteWrite[]; touches: FileTouch[] }
+export interface LogScan { calls: ClaudeCall[]; edits: number; touches: FileTouch[] }
 
 const scanning = new Map<string, Promise<unknown>>(); // one scan per log at a time, so offsets never race
 
@@ -86,9 +82,9 @@ export function scanLog(file: string, sessionId: string): Promise<LogScan> {
 async function readAppended(file: string, sessionId: string): Promise<LogScan> {
   let state = states.get(file);
   let size: number;
-  try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0, suiteWrites: state?.suiteWrites ?? [], touches: state?.touches ?? [] }; }
+  try { size = (await fs.promises.stat(file)).size; } catch { return { calls: state?.calls ?? [], edits: state?.edits ?? 0, touches: state?.touches ?? [] }; }
   if (!state || size < state.offset) {
-    state = { offset: 0, rest: '', pending: new Map(), calls: [], seen: new Set(), edits: 0, prompt: '', suiteWrites: [], touches: [] };
+    state = { offset: 0, rest: '', pending: new Map(), calls: [], seen: new Set(), edits: 0, prompt: '', touches: [] };
     states.set(file, state);
   }
   if (size > state.offset) {
@@ -107,10 +103,9 @@ async function readAppended(file: string, sessionId: string): Promise<LogScan> {
       await handle.close();
     }
     if (state.calls.length > MAX_CALLS) state.calls = state.calls.slice(-MAX_CALLS);
-    if (state.suiteWrites.length > MAX_SUITE_WRITES) state.suiteWrites = state.suiteWrites.slice(-MAX_SUITE_WRITES);
     if (state.touches.length > MAX_TOUCHES) state.touches = state.touches.slice(-MAX_TOUCHES);
   }
-  return { calls: state.calls, edits: state.edits, suiteWrites: state.suiteWrites, touches: state.touches };
+  return { calls: state.calls, edits: state.edits, touches: state.touches };
 }
 
 export const forgetLogs = (): void => states.clear();

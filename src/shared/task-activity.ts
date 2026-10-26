@@ -1,6 +1,5 @@
 // Recent activity for the Testing tab's pickers: newest first, ties keep their old order, no timestamp sorts last. Pure.
 import type { TaskGroup, TaskTree } from './task-groups';
-import type { SuiteViews } from './task-suite';
 import type { Task } from './tasks';
 import type { PipelineRun } from './testing';
 
@@ -27,10 +26,10 @@ export function lastRunAt(runs: readonly PipelineRun[]): Map<string, number> {
   return out;
 }
 
-// A task's own activity: made, given, finished, its latest run, its suite file's last change.
-export function taskActivity(runs: readonly PipelineRun[], suites: SuiteViews): (task: Task) => number | null {
+// A task's own activity: made, given, finished, its latest run.
+export function taskActivity(runs: readonly PipelineRun[]): (task: Task) => number | null {
   const runAt = lastRunAt(runs);
-  return (task) => latest(task.createdAt, task.claimedAt, task.doneAt, runAt.get(task.id), suites[task.id]?.at);
+  return (task) => latest(task.createdAt, task.claimedAt, task.doneAt, runAt.get(task.id));
 }
 
 const treeActivity = (tree: TaskTree, at: (task: Task) => number | null): number | null => latest(at(tree.task), ...tree.subtasks.map(at));

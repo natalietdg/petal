@@ -10,12 +10,12 @@ import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { extraTabFixtures, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { writeSuite } from '../main/task-suites';
+import { writeSuite } from '../main/repo-suite-store';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { closeExtraTabs, hostOf } from './snapshot-testing';
 import { scenariosApprovedText } from '../shared/suite-draft';
-import { emptySuite } from '../shared/task-suite';
+import { emptySuite } from '../shared/repo-suite';
 
 const MAIN_SESSION = 'snapshot-fixture'; // the first tab's fixture session holds t-scen
 const DRAFTER = '5c3e0000-0000-4000-8000-0000000000d1';
@@ -84,7 +84,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     put(logOf(DRAFTER), say(DRAFTER, 's0', 'for task t-scen', 'Reading the refunds code.'));
     put(logOf(TESTER), say(TESTER, 'l0', 'You are Testing agent.', 'Reading the portal code.'));
     put(logOf(FIXER), say(FIXER, 'f0', 'You are Bug fix agent.', 'Ready.'));
-    writeSuite(repo, 't-loop', emptySuite([{ id: 'unit', name: 'Unit', command: 'npm test' }])); // her suite, no criteria file yet
+    writeSuite(repo, emptySuite([{ id: 'unit', name: 'Unit', command: 'npm test' }])); // her suite, no criteria file yet
     testingFixture.project = repo;
     testingFixture.claudeDir = path.join(dir, 'claude'); // no skill there: the brief carries the bundled instructions
     testingFixture.opened.length = 0;

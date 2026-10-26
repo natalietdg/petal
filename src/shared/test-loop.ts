@@ -2,26 +2,31 @@
 // Petal only sends the brief, reads the criteria file and the Loop lines, and can stop it. Pure helpers both sides share.
 import { isTerminal, type LoopProgress } from './loop-line';
 import type { StackItem, StageConfig } from './testing';
-import { isTaskId, suitePath } from './task-suite';
+import { CRITERIA_PATH, SUITE_PATH, inHome, isLevel, type Level } from './repo-suite';
 import { DEFAULT_AGENT_NAMES, type AgentRole } from './agent-names';
 
 export const LEGACY_CRITERIA_PATH = '.petal/test-criteria.md'; // the one shared file from before criteria were per task
-export const CRITERIA_DIR = '.petal/criteria';
+export const CRITERIA_DIR = '.petal/criteria'; // one file per task, before criteria were per repo
 export const CRITERIA_CAP = 64 * 1024; // bytes read; a bigger file shows its first part
 export const ITEMS_CAP = 200; // per section
 export const NAME_CAP = 300; // characters of an item's name
+export const DETAIL_CAP = 2000; // characters of a sub-bullet's value
 export const DEFAULT_ROUNDS = 5;
 export const MAX_ROUNDS = 10;
 export const FOCUS_CAP = 200;
 
 export const STOP_MESSAGE = 'Stop the test loop now. Leave the code as it is and summarise: round reached, bugs fixed, bugs still open, files changed.';
 
-// ---- The criteria file: "## Scenarios" and "## Bugs", one "- [status] name · test: path::name · round n" per item,
-// with "· task: <id>" when the loop runs for a task. A scenario written before its tests is [todo] (or "[ ]"), may say
-// "· from: prd" or "· from: notes", and may name several tests, one "test:" each.
-export const CRITERIA_STATUSES = ['pass', 'fail', 'flaky', 'fixed', 'todo'] as const;
+// ---- The repo's criteria file: "## Scenarios", "## Manual" and "## Bugs", one "- [status] name · part · part" line per
+// item, parts split by " · ". Scenarios: test: path::name (repeatable), ticket: AB#1, level:, from: prd|notes.
+// Manual cases and bugs carry indented "  - Key: value" sub-bullets (Prereq/Steps/Expected/Result; Steps/Expected/
+// Actual/Env/Evidence). Older files' "round n" and "task: <id>" parts still read.
+export const CRITERIA_STATUSES = ['pass', 'fail', 'flaky', 'fixed', 'todo', 'blocked', 'open'] as const;
 export type CriteriaStatus = typeof CRITERIA_STATUSES[number];
 export type ScenarioSource = 'prd' | 'notes';
+export type CriteriaSection = 'scenarios' | 'manual' | 'bugs';
+export const SECTIONS: readonly CriteriaSection[] = ['scenarios', 'manual', 'bugs'];
+export type ItemLevel = Level | 'manual';
 
 interface CriteriaTest { path: string; name: string | null }
 
@@ -34,124 +39,219 @@ export interface CriteriaItem {
   round: number | null;
   regression: boolean; // a bug with a test that reproduces it
   taskId: string | null;
+  ticket: string | null; // AB#10427
+  level: ItemLevel | null;
+  details: Record<string, string>; // sub-bullets by their key as written: Steps, Expected...
 }
 
-export interface Criteria { scenarios: CriteriaItem[]; bugs: CriteriaItem[]; malformed: number; truncated: boolean }
+export interface Criteria { scenarios: CriteriaItem[]; manual: CriteriaItem[]; bugs: CriteriaItem[]; malformed: number; truncated: boolean }
 
-const HEADING = /^\s*#{1,6}\s+(scenarios|bugs)\b/i;
+export const emptyCriteria = (): Criteria => ({ scenarios: [], manual: [], bugs: [], malformed: 0, truncated: false });
+
+const HEADING = /^\s*#{1,6}\s+(scenarios|manual|bugs)\b/i;
 const OTHER_HEADING = /^\s*#{1,6}\s/;
 const ITEM = /^\s*[-*]\s+\[([^\]]*)\]\s*(.*)$/;
+const DETAIL = /^\s{2,}[-*]\s+([A-Za-z][\w ]{0,30}):\s*(.*)$/;
 const SEP = /\s+[·•]\s+/;
+const TICKET = /^[\w#.-]{1,40}$/;
 
-function parseItem(line: string, section: 'scenarios' | 'bugs'): CriteriaItem | null {
+export const sectionOf = (line: string): CriteriaSection | null => (HEADING.exec(line)?.[1]?.toLowerCase() as CriteriaSection | undefined) ?? null;
+
+function parseItem(line: string, section: CriteriaSection): CriteriaItem | null {
   const match = ITEM.exec(line);
   if (!match) return null;
   const status = ((match[1] ?? '').trim().toLowerCase() || 'todo') as CriteriaStatus; // "[ ]" is a scenario not tested yet
   if (!CRITERIA_STATUSES.includes(status)) return null;
   const [name = '', ...parts] = (match[2] ?? '').split(SEP).map((p) => p.trim());
   if (!name || /^([·•]|test:)/i.test(name)) return null; // a name is required
-  const tests: CriteriaTest[] = [];
-  let source: ScenarioSource | null = null;
-  let round: number | null = null;
-  let taskId: string | null = null;
+  const item: CriteriaItem = { status, name: name.slice(0, NAME_CAP), test: null, tests: [], source: null, round: null, regression: false, taskId: null, ticket: null, level: null, details: {} };
   for (const part of parts) {
-    const testPart = /^test:\s*(.+)$/i.exec(part);
+    const [, key = '', value = ''] = /^(\w+):\s*(.+)$/.exec(part) ?? [];
     const roundPart = /^round\s+(\d{1,3})$/i.exec(part);
-    const taskPart = /^task:\s*([\w-]{1,64})$/i.exec(part);
-    const fromPart = /^from:\s*(prd|notes)$/i.exec(part);
-    if (taskPart?.[1]) {
-      taskId = taskPart[1];
-    } else if (testPart?.[1]) {
-      const [file, ...rest] = testPart[1].split('::');
-      tests.push({ path: file.trim(), name: rest.length ? rest.join('::').trim() || null : null });
-    } else if (roundPart?.[1]) {
-      round = Number(roundPart[1]);
-    } else if (fromPart?.[1]) {
-      source = fromPart[1].toLowerCase() as ScenarioSource;
-    } else {
-      return null;
-    }
+    if (key.toLowerCase() === 'task' && /^[\w-]{1,64}$/.test(value)) item.taskId = value;
+    else if (key.toLowerCase() === 'test') {
+      const [file, ...rest] = value.split('::');
+      item.tests.push({ path: file.trim(), name: rest.length ? rest.join('::').trim() || null : null });
+    } else if (key.toLowerCase() === 'ticket' && TICKET.test(value)) item.ticket = value;
+    else if (key.toLowerCase() === 'level' && (isLevel(value.toLowerCase()) || value.toLowerCase() === 'manual')) item.level = value.toLowerCase() as ItemLevel;
+    else if (key.toLowerCase() === 'from' && /^(prd|notes)$/i.test(value)) item.source = value.toLowerCase() as ScenarioSource;
+    else if (roundPart?.[1]) item.round = Number(roundPart[1]);
+    else return null;
   }
-  const test = tests[0] ?? null;
-  return { status, name: name.slice(0, NAME_CAP), test, tests, source, round, regression: section === 'bugs' && test !== null, taskId };
+  item.test = item.tests[0] ?? null;
+  item.regression = section === 'bugs' && item.test !== null;
+  return item;
 }
 
-// Lines outside the two sections are ignored; a list line inside one that doesn't fit the format counts as malformed.
+// Lines outside the three sections are ignored; a list line inside one that doesn't fit the format counts as malformed.
+// An indented "- Key: value" right under an item is that item's detail.
 export function parseCriteria(text: string, truncated = false): Criteria {
-  const out: Criteria = { scenarios: [], bugs: [], malformed: 0, truncated };
-  let section: 'scenarios' | 'bugs' | null = null;
+  const out: Criteria = { ...emptyCriteria(), truncated };
+  let section: CriteriaSection | null = null;
+  let last: CriteriaItem | null = null;
   for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
-    const heading = HEADING.exec(line);
-    if (heading?.[1]) { section = heading[1].toLowerCase() as 'scenarios' | 'bugs'; continue; }
-    if (OTHER_HEADING.test(line)) { section = null; continue; }
+    const heading = sectionOf(line);
+    if (heading) { section = heading; last = null; continue; }
+    if (OTHER_HEADING.test(line)) { section = null; last = null; continue; }
     if (!section || !/^\s*[-*]\s/.test(line)) continue;
+    const detail = ITEM.test(line) ? null : DETAIL.exec(line);
+    if (detail && last) { last.details[detail[1].trim()] = detail[2].trim().slice(0, DETAIL_CAP); continue; }
     const item = parseItem(line, section);
+    last = item;
     if (!item) { out.malformed += 1; continue; }
     if (out[section].length < ITEMS_CAP) out[section].push(item);
   }
   return out;
 }
 
-// Each task's own criteria file, so parallel loops never edit one file; with no task, the old shared one.
-export const criteriaPath = (taskId: string | null): string => (taskId && isTaskId(taskId) ? `${CRITERIA_DIR}/${taskId}.md` : LEGACY_CRITERIA_PATH);
-
-// Every item in a task's own file belongs to that task, tagged or not; untaggedOnly gives it the untagged ones alone.
-export const ownedBy = (criteria: Criteria, taskId: string, { untaggedOnly = false } = {}): Criteria => {
-  const own = (items: CriteriaItem[]) => items.map((item) => (item.taskId === taskId || (untaggedOnly && item.taskId) ? item : { ...item, taskId }));
-  return { ...criteria, scenarios: own(criteria.scenarios), bugs: own(criteria.bugs) };
+// ---- Writing items back, in the format the parser reads.
+const DETAIL_ORDER: Record<CriteriaSection, string[]> = {
+  scenarios: [],
+  manual: ['Prereq', 'Steps', 'Expected', 'Result'],
+  bugs: ['Steps', 'Expected', 'Actual', 'Env', 'Evidence'],
 };
 
-export const mergeCriteria = (list: readonly Criteria[]): Criteria => list.reduce((all, c) => ({
-  scenarios: [...all.scenarios, ...c.scenarios], bugs: [...all.bugs, ...c.bugs], malformed: all.malformed + c.malformed, truncated: all.truncated || c.truncated,
-}), { scenarios: [], bugs: [], malformed: 0, truncated: false } as Criteria);
+// The known keys first in their order, then any others as written.
+const orderedDetails = (item: CriteriaItem, section: CriteriaSection): [string, string][] => {
+  const order = DETAIL_ORDER[section];
+  const entries = Object.entries(item.details);
+  return [...order.flatMap((key) => entries.filter(([k]) => k === key)), ...entries.filter(([k]) => !order.includes(k))];
+};
 
-// ---- Moving the old shared file's tagged lines into each task's own file, once.
-export interface CriteriaLines { scenarios: string[]; bugs: string[] }
-export interface CriteriaSplit { keep: string; moved: Record<string, CriteriaLines> }
-
-// Lines tagged "task: <id>" leave the old file, by section; everything else stays as written.
-export function splitLegacyCriteria(text: string): CriteriaSplit {
-  const moved: Record<string, CriteriaLines> = {};
-  const keep: string[] = [];
-  let section: 'scenarios' | 'bugs' | null = null;
-  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
-    const heading = HEADING.exec(line);
-    if (heading?.[1]) section = heading[1].toLowerCase() as 'scenarios' | 'bugs';
-    else if (OTHER_HEADING.test(line)) section = null;
-    const item = section && !heading ? parseItem(line, section) : null;
-    if (section && item?.taskId && isTaskId(item.taskId)) {
-      (moved[item.taskId] ??= { scenarios: [], bugs: [] })[section].push(line.trim());
-      continue;
-    }
-    keep.push(line);
-  }
-  return { keep: keep.join('\n'), moved };
+// The item's line and its sub-bullets.
+export function itemLines(item: CriteriaItem, section: CriteriaSection): string[] {
+  const parts = [
+    item.name,
+    ...item.tests.map((t) => `test: ${t.path}${t.name ? `::${t.name}` : ''}`),
+    ...(item.ticket ? [`ticket: ${item.ticket}`] : []),
+    ...(item.level ? [`level: ${item.level}`] : []),
+    ...(item.source ? [`from: ${item.source}`] : []),
+    ...(item.round !== null ? [`round ${item.round}`] : []),
+    ...(item.taskId ? [`task: ${item.taskId}`] : []),
+  ];
+  return [`- [${item.status}] ${parts.join(' · ')}`, ...orderedDetails(item, section).map(([key, value]) => `  - ${key}: ${value}`)];
 }
 
-// A task's file with these lines at the end of their sections; a missing file starts from the skeleton. A line already there is skipped.
-export function addCriteriaLines(existing: string | null, add: CriteriaLines): string {
+export const CRITERIA_SKELETON = '# Test criteria\n\nThe repo’s scenarios, manual checks and bugs. Any Claude session may add to it.\n\n## Scenarios\n\n## Manual\n\n## Bugs\n';
+
+export function criteriaText(criteria: Criteria): string {
+  const title = { scenarios: 'Scenarios', manual: 'Manual', bugs: 'Bugs' } as const;
+  const blocks = SECTIONS.map((s) => [`## ${title[s]}`, ...criteria[s].flatMap((item) => itemLines(item, s))].join('\n'));
+  return `# Test criteria\n\n${blocks.join('\n\n')}\n`;
+}
+
+// Each item at the end of its section; one whose name is already there is skipped, and a missing section is added.
+export function addCriteriaItems(existing: string | null, add: Partial<Record<CriteriaSection, CriteriaItem[]>>): string {
   const lines = (existing ?? CRITERIA_SKELETON).replace(/\r\n?/g, '\n').split('\n');
-  for (const section of ['scenarios', 'bugs'] as const) {
-    const fresh = add[section].filter((line) => !lines.some((l) => l.trim() === line));
+  const have = parseCriteria(existing ?? '');
+  for (const section of SECTIONS) {
+    const names = new Set(have[section].map((i) => i.name));
+    const fresh = (add[section] ?? []).filter((item) => !names.has(item.name) && names.add(item.name));
     if (!fresh.length) continue;
-    const start = lines.findIndex((l) => HEADING.exec(l)?.[1]?.toLowerCase() === section);
-    if (start < 0) { lines.push('', `## ${section === 'bugs' ? 'Bugs' : 'Scenarios'}`, ...fresh); continue; }
+    const block = fresh.flatMap((item) => itemLines(item, section));
+    const start = lines.findIndex((l) => sectionOf(l) === section);
+    if (start < 0) { lines.push('', `## ${section[0].toUpperCase()}${section.slice(1)}`, ...block); continue; }
     let end = lines.findIndex((l, i) => i > start && OTHER_HEADING.test(l));
     if (end < 0) end = lines.length;
     while (end > start + 1 && !lines[end - 1].trim()) end -= 1; // before the blank lines ending the section
-    lines.splice(end, 0, ...fresh);
+    lines.splice(end, 0, ...block);
   }
   const text = lines.join('\n');
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
-export const openBugs = (criteria: Criteria): number => criteria.bugs.filter((b) => b.status === 'fail').length;
+export const MANUAL_STATUSES = ['pass', 'fail', 'todo', 'blocked'] as const;
+export type ManualStatus = typeof MANUAL_STATUSES[number];
 
-export const CRITERIA_SKELETON = '# Test criteria\n\nKept by Claude during Petal’s test loop.\n\n## Scenarios\n\n## Bugs\n';
+// Her tick on a manual case: its status, and its Result sub-bullet set (or removed when empty). The rest of the file stays
+// as written. Null when the case isn't there.
+export function setManualResult(text: string, name: string, status: ManualStatus, result: string): string | null {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  let section: CriteriaSection | null = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const heading = sectionOf(lines[i]);
+    if (heading || OTHER_HEADING.test(lines[i])) { section = heading; continue; }
+    if (section !== 'manual' || DETAIL.test(lines[i])) continue;
+    const item = parseItem(lines[i], 'manual');
+    if (item?.name !== name) continue;
+    lines[i] = lines[i].replace(/\[[^\]]*\]/, `[${status}]`);
+    let end = i + 1;
+    while (end < lines.length && DETAIL.test(lines[end]) && !ITEM.test(lines[end])) end += 1;
+    const at = lines.slice(i + 1, end).findIndex((l) => DETAIL.exec(l)?.[1].trim().toLowerCase() === 'result');
+    const clean = result.replace(/\s+/g, ' ').trim().slice(0, DETAIL_CAP);
+    if (at >= 0) lines.splice(i + 1 + at, 1, ...(clean ? [`  - Result: ${clean}`] : []));
+    else if (clean) lines.splice(end, 0, `  - Result: ${clean}`);
+    return lines.join('\n');
+  }
+  return null;
+}
+
+// A scenario run's results: each named scenario's status set to pass or fail, the rest of the file as written.
+export function setScenarioStatuses(text: string, statuses: Readonly<Record<string, 'pass' | 'fail'>>): string {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  let section: CriteriaSection | null = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const heading = sectionOf(lines[i]);
+    if (heading || OTHER_HEADING.test(lines[i])) { section = heading; continue; }
+    if (section !== 'scenarios' || DETAIL.test(lines[i])) continue;
+    const item = parseItem(lines[i], 'scenarios');
+    const next = item && Object.hasOwn(statuses, item.name) ? statuses[item.name] : undefined;
+    if (next) lines[i] = lines[i].replace(/\[[^\]]*\]/, `[${next}]`);
+  }
+  return lines.join('\n');
+}
+
+export const mergeCriteria = (list: readonly Criteria[]): Criteria => list.reduce((all, c) => ({
+  scenarios: [...all.scenarios, ...c.scenarios], manual: [...all.manual, ...c.manual], bugs: [...all.bugs, ...c.bugs], malformed: all.malformed + c.malformed, truncated: all.truncated || c.truncated,
+}), emptyCriteria());
+
+// An open bug: [open], or [fail] as older files wrote it.
+export const isOpenBug = (item: CriteriaItem): boolean => item.status === 'open' || item.status === 'fail';
+export const openBugs = (criteria: Criteria): number => criteria.bugs.filter(isOpenBug).length;
+
+// ---- Filters: by ticket, and by level for scenarios. No ticket, or no levels picked, keeps everything.
+export interface CriteriaFilter { ticket: string | null; levels: readonly Level[] }
+
+export function filterCriteria(criteria: Criteria, { ticket, levels }: CriteriaFilter): Criteria {
+  const byTicket = (item: CriteriaItem) => !ticket || item.ticket === ticket;
+  const byLevel = (item: CriteriaItem) => !levels.length || (item.level !== null && item.level !== 'manual' && levels.includes(item.level));
+  return { ...criteria, scenarios: criteria.scenarios.filter((s) => byTicket(s) && byLevel(s)), manual: criteria.manual.filter(byTicket), bugs: criteria.bugs.filter(byTicket) };
+}
+
+// Every ticket named in the file, in first-seen order.
+export const ticketsOf = (criteria: Criteria): string[] =>
+  [...new Set([...criteria.scenarios, ...criteria.manual, ...criteria.bugs].flatMap((i) => (i.ticket ? [i.ticket] : [])))];
+
+// The coverage line's count: scenarios that name no test.
+export const untested = (criteria: Criteria): CriteriaItem[] => criteria.scenarios.filter((s) => !s.tests.length);
+
+// The AB# id in a task's name, for its imported lines' ticket.
+export const ticketInText = (text: string): string | null => /\bAB#\d{1,9}\b/.exec(text)?.[0] ?? null;
+
+// A bug as plain text in Azure DevOps' repro-steps shape, for pasting into a new Bug.
+export function adoBugText(bug: CriteriaItem): string {
+  const d = (key: string) => bug.details[key]?.trim() || '(not recorded)';
+  const test = bug.test ? `${bug.test.path}${bug.test.name ? `::${bug.test.name}` : ''}` : '(none)';
+  return [
+    `Title: ${bug.name}`,
+    ...(bug.ticket ? [`Related: ${bug.ticket}`] : []),
+    '',
+    'Steps to reproduce:', d('Steps'),
+    '',
+    'Expected result:', d('Expected'),
+    '',
+    'Actual result:', d('Actual'),
+    '',
+    `Environment: ${d('Env')}`,
+    `Failing test: ${test}`,
+    `Evidence: ${d('Evidence')}`,
+  ].join('\n');
+}
+
 
 // ---- The brief Petal sends once; Claude runs the loop.
 // agent: the task's testing agent, which owns the tests and suite and works beside the bug fix agent.
-export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput; review?: boolean }
+export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput; review?: boolean; home?: string | null; ticket?: string | null }
 
 export const clampRounds = (n: unknown): number => {
   const value = Math.round(Number(n));
@@ -207,7 +307,7 @@ export const DISTILL_BRIEF = [
   '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
 ];
 
-export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources, review = false }: BriefInput): string {
+export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources, review = false, home = null, ticket = null }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
   const tools = stack.filter((s) => !s.insert && s.kind !== 'ci');
@@ -221,10 +321,10 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, ag
     `Focus: ${what || 'the whole project; start with the riskiest untested paths'}.`,
     ...(sources ? scenarioSources(sources) : []),
     ...(tools.length ? [`Stack: ${tools.map((t) => `${t.label} (${t.foundIn})`).join(', ')}.`] : []),
-    `${taskId ? 'This task’s suite' : 'Pipeline'}, in this order:`,
+    `${taskId ? 'The repo’s suite' : 'Pipeline'}, in this order:`,
     ...stages.map((s, i) => `${i + 1}. ${s.name}: \`${s.command}\``),
-    ...(tester && taskId ? [`The suite lives in ${suitePath(taskId)}. You own it and the tests: you may change it during the loop (add, fix or remove stages), keeping its shape: {"stages": [{"name": "Unit", "command": "npm test"}]}. Petal takes the change and shows it with an Undo.`] : []),
-    `Criteria file: ${criteriaPath(taskId)}`,
+    ...(tester && taskId ? [`The suite lives in ${inHome(home, SUITE_PATH)}, shared by every session in this repo. You may add or fix stages during the loop, keeping its shape: {"stages": [{"name": "Unit", "command": "npm test", "level": "regression"}]}. Petal shows the change with an Undo. Never remove a stage or weaken a test.`] : []),
+    `Criteria file: ${inHome(home, CRITERIA_PATH)}`,
     ...(tester ? ['', ...reviewBrief(review)] : []),
     '',
     'Each round:',
@@ -234,14 +334,14 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, ag
     `2. Testing: run the ${taskId ? 'suite' : 'pipeline'} commands above, in order.`,
     '3. Before calling a failure a bug, run that test once more. If it passes, record it as flaky, not a bug.',
     tester
-      ? `4. For each real bug: write or keep a regression test that reproduces it and fails, and add it under Bugs as [fail] with that test. Never edit app code: Petal hands each bug to ${names.fixer}, then asks you to verify its fix. Keep going; never wait for the fixes.`
+      ? `4. For each real bug: write or keep a regression test that reproduces it and fails, and add it under Bugs as [open] with that test and its Steps, Expected, Actual, Env and Evidence sub-bullets. Never edit app code: Petal hands each bug to ${names.fixer}, then asks you to verify its fix. Keep going; never wait for the fixes.`
       : '4. For each real bug: add it under Bugs, write or keep a regression test that reproduces it and fails first, fix the code, then run the pipeline again.',
     '5. A stage that fails for an environment reason (missing dependency, wrong command, port in use) is not a product bug: diagnose it, repair the environment or command, and say what you changed. Never weaken, skip or delete a test to get green. Never edit snapshot baselines without saying why.',
     ...(tester ? DISTILL_BRIEF.map((line) => line.replace('or fix the bug in the next step', `or file the bug for ${names.fixer}`)) : DISTILL_BRIEF),
     '',
-    'Criteria file format: a "## Scenarios" section and a "## Bugs" section, one line per item:',
-    `- [status] name · test: path::test name · round n${taskId ? ` · task: ${taskId}` : ''}`,
-    `where status is pass, fail, flaky or fixed, or todo for a scenario with no test yet. A scenario covered by more than one test lists each, one "test:" part per test; it passes only when all of them do.${taskId ? ` Keep "task: ${taskId}" on every line you add, so Petal files it under this task.` : ''}`,
+    'Criteria file format: "## Scenarios", "## Manual" and "## Bugs" sections, one line per item. Keep lines you didn’t write as they are:',
+    `- [status] name · test: path::test name · ticket: ${ticket ?? 'AB#1234'} · level: regression`,
+    `where status is pass or fail, or todo for a scenario with no test yet, and level is smoke, regression or staging. A scenario covered by more than one test lists each, one "test:" part per test; it passes only when all of them do. A bug line is - [open] name · test: path::test name · ticket: …, then indented "  - Steps:", "  - Expected:", "  - Actual:", "  - Env:", "  - Evidence:" lines; [fixed] once its test passes.${ticket ? ` Tag every line you add with "ticket: ${ticket}".` : ''}`,
     '',
     `End each round, and every reply during the loop, with this line: **Loop:** round 1/${n} · scenarios · 0 open`,
     tester ? 'The phase is one of scenarios, testing, verifying, done, stopped. Open is the number of bugs not yet fixed.' : 'The phase is one of scenarios, testing, fixing, verifying, done, stopped. Open is the number of bugs not yet fixed.',
@@ -264,7 +364,7 @@ export function buildFixerBrief({ taskId, taskTitle, stages, names = DEFAULT_AGE
     '',
     'Petal sends you one bug at a time: its name, the failing test and the failure output. For each:',
     '1. Read the failing test and find the cause in the app code.',
-    `2. Fix the app code only. Never edit tests, test data, snapshot baselines or ${suitePath(taskId)}: they belong to ${names.tester}.`,
+    `2. Fix the app code only. Never edit tests, test data, snapshot baselines or ${SUITE_PATH}: they belong to ${names.tester}.`,
     '3. Run that one test to confirm, plus a quick check of the code around it.',
     '4. End your reply with this line: **Fix:** the bug name · done',
     '   If you can’t fix it, end with **Fix:** the bug name · blocked, and say why in one line.',
@@ -285,7 +385,7 @@ export function buildSentFixerBrief({ taskId, taskTitle, bugName, prompt, names 
     '',
     prompt,
     '',
-    `Fix the app code only. Never edit tests, test data, snapshot baselines or ${suitePath(taskId)}: only ${names.tester} changes those.`,
+    `Fix the app code only. Never edit tests, test data, snapshot baselines or ${SUITE_PATH}: only ${names.tester} changes those.`,
     'Run the failing tests to confirm, plus a quick check of the code around them.',
     `End your reply with this line: **Fix:** ${bugName} · done`,
     `If you can’t fix it, end with **Fix:** ${bugName} · blocked, and say why in one line.`,

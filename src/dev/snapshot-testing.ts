@@ -14,7 +14,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import * as store from '../main/testing-store';
-import { writeSuite } from '../main/task-suites';
+import { writeSuite } from '../main/repo-suite-store';
 import { sessions } from '../main/tabs';
 import { agentView, findAgent } from '../main/test-agents';
 import vitestOutput from '../../test/fixtures/testing/vitest-output.txt?raw';
@@ -111,7 +111,7 @@ function seedTask(repo: string, id: string, title: string, stages: [string, stri
   const task = { id, title, notes: '', status: 'working', owner, createdAt: Date.now() - 4 * 86_400_000, claimedAt: Date.now() - 3 * 86_400_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
   put(path.join(repo, '.petal', '.gitignore'), '*\n');
   put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task] }, null, 2));
-  if (stages) put(path.join(repo, '.petal', 'suites', `${id}.json`), JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command })), keepGoing: false, autoRun: false }, null, 2));
+  if (stages) put(path.join(repo, '.petal', 'suite.json'), JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command, level: 'regression' })), keepGoing: false, autoRun: false }, null, 2));
 }
 
 const VITEST_PASS = (n: number) => ` ✓ src/theme.test.ts (${n} tests) 4ms\n\n Test Files  1 passed (1)\n      Tests  ${n} passed (${n})\n`;
@@ -295,8 +295,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await js("(() => { const rows = document.querySelectorAll('#testing .tst-edit-row'); const last = rows[rows.length - 1]; const [n, c] = last.querySelectorAll('input'); n.value = 'Lint'; n.dispatchEvent(new Event('input')); c.value = 'npm run lint'; c.dispatchEvent(new Event('input')); })()");
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save suite').click()");
     const saved = await settle((p) => !p.state.editing && p.state.stages.length === 4);
-    const suiteJson = fs.readFileSync(path.join(project, '.petal', 'suites', `${FIXTURE_TASK}.json`), 'utf8');
-    check(saved && saved.state.stages[3] === 'Lint' && suiteJson.includes('"npm run lint"'), `saved with a fourth stage, in the task's suite file: ${JSON.stringify(saved?.state.stages)}`);
+    const suiteJson = fs.readFileSync(path.join(project, '.petal', 'suite.json'), 'utf8');
+    check(saved && saved.state.stages[3] === 'Lint' && suiteJson.includes('"npm run lint"'), `saved with a fourth stage, in the repo's suite file: ${JSON.stringify(saved?.state.stages)}`);
     await click('#testing .tst-head .tst-button:not(.tst-primary)');
     await settle((p) => p.state.editing);
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Use detected stages').click()");
@@ -384,8 +384,8 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     const notesTask = { id: 't-notes-sort', title: 'Sort by date', notes: '', status: 'working', owner: { sessionId: PICK_NOTES, name: 'Notes sorting', branch: 'main' }, createdAt: Date.now() - 7_200_000, claimedAt: Date.now() - 3_600_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
     const notesData = JSON.parse(before.notes) as { tasks: unknown[] };
     put(tasksJson(bare), JSON.stringify({ ...notesData, tasks: [...notesData.tasks, notesTask] }, null, 2));
-    // Written as a suite Petal already took: a bare file on a task with a testing agent waits for that agent's log.
-    writeSuite(bare, 't-notes-sort', { stages: [{ id: 'unit', name: 'Unit', command: 'npx jest' }], keepGoing: false, autoRun: false });
+    // Written as a suite Petal already took.
+    writeSuite(bare, { stages: [{ id: 'unit', name: 'Unit', command: 'npx jest', level: 'regression' }], keepGoing: false, autoRun: false });
     panelFixture.sessions = [
       { pid: 0, sessionId: PICK_NEW, cwd: path.join(project, 'src'), kind: 'interactive', status: 'busy', name: 'acme', updatedAt: Date.now() - 3_600_000 },
       { pid: 0, sessionId: PICK_LOOSE, cwd: os.homedir(), kind: 'interactive', status: 'idle', name: 'home', updatedAt: Date.now() },
@@ -429,10 +429,10 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     } finally {
       panelFixture.sessions = before.panel;
       historyFixture.records = before.records;
-      store.save({ ...store.load(bare), agents: before.notesStore.agents, suites: before.notesStore.suites });
+      store.save({ ...store.load(bare), agents: before.notesStore.agents, repoSuite: before.notesStore.repoSuite });
       put(tasksJson(project), before.acme);
       put(tasksJson(bare), before.notes);
-      fs.rmSync(path.join(bare, '.petal', 'suites', 't-notes-sort.json'), { force: true });
+      fs.rmSync(path.join(bare, '.petal', 'suite.json'), { force: true });
       testingFixture.project = project;
     }
 
@@ -457,7 +457,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       const startsBefore = testingFixture.loopStarts.length;
       await click('#testing .tst-ask-suite');
       const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
-      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `.petal/suites/<task id>.json`') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
+      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `.petal/suite.json`') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
       const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
         const box = document.querySelector('#testing .tst-agentsbox');
         const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];

@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 // The test lock on disk: the hook script and its entry in the project's .claude/settings.local.json (never ~/.claude),
-// the manifest the hook reads, and the integrity check that restores a locked file another Claude session changed.
+// the manifest the hook reads, and the integrity check that restores a locked test a Claude session deleted or weakened.
 // Approved copies are kept in <userData>/testing/locked/<project-hash>/, never in the repo.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -11,10 +11,10 @@ import { ensureSelfIgnore } from './factory-store';
 import { projectHash, testingDir } from './testing-store';
 import { LOCK_SCRIPT, hasLockHook, lockHookStale, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
 import {
-  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, SUITE_PREFIX, emptyManifest, integrityStep, isLockable, lastToucher, lockedFiles, mainRefusals, readManifest,
+  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, emptyManifest, integrityStep, isLockable, lastToucher, lockedFiles, mainRefusals, readManifest, weakens,
   type LockInputs, type LockManifest, type LockRefusal, type RestoredFlag,
 } from '../shared/test-lock';
-import type { AgentNames } from '../shared/agent-names';
+import type { AgentNames, AgentRole } from '../shared/agent-names';
 
 const RESTORED_KEPT = 30;
 
@@ -202,30 +202,34 @@ function dropUnlockable(root: string, manifest: LockManifest): LockManifest {
   return { ...manifest, approved, restored: manifest.restored.filter((f) => isLockable(f.path)) };
 }
 
-// With the lock on: refreshes what is locked and who the agents are, then checks every locked test file against its
-// approved copy. Suite files are checked by the suite reader instead. Returns the manifest as it now stands.
-export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, names: AgentNames): LockManifest {
+const textOf = (file: string): string | null => plainFile(file)?.toString('utf8') ?? null;
+
+// With the lock on: refreshes what is locked and who Petal's agents are, then checks every locked test against its
+// approved copy. Returns the manifest as it now stands.
+export function refreshLock(root: string, inputs: Omit<LockInputs, 'root'>, agents: readonly { sessionId: string; role: AgentRole; taskId: string }[], names: AgentNames): LockManifest {
   const before = loadManifest(root);
   migrateLegacyCopies(root, before.approved);
   if (!before.enabled) return before;
   const current = dropUnlockable(root, before);
-  const owners = lockedFiles({ root, ...inputs });
-  const sessions = Object.fromEntries(inputs.agents.map((a) => [a.sessionId, { role: a.role, taskId: a.taskId }]));
+  const locked = lockedFiles({ root, ...inputs });
+  const sessions = Object.fromEntries(agents.map((a) => [a.sessionId, { role: a.role, taskId: a.taskId }]));
   const approved = { ...current.approved };
   const restored: RestoredFlag[] = current.restored.filter((f) => !isUnconfirmed(f));
   const waiting = new Map(current.restored.filter(isUnconfirmed).map((f) => [f.path, f]));
   const unconfirmed: RestoredFlag[] = [];
-  for (const rel of Object.keys(owners)) {
-    if (rel.startsWith(SUITE_PREFIX)) continue;
-    const step = integrityStep(rel, hashOf(at(root, rel)), approved[rel], lastToucher(inputs.touches, rel, root, changedAt(root, rel)), sessions, owners[rel] ?? null);
+  for (const rel of locked) {
+    const now = textOf(at(root, rel));
+    const copy = textOf(copyOf(root, rel));
+    const file = { hash: hashOf(at(root, rel)), weakened: copy === null ? null : weakens(copy, now) };
+    const step = integrityStep(rel, file, approved[rel], lastToucher(inputs.touches, rel, root, changedAt(root, rel)), sessions);
     const kept = step.kind === 'approve' ? keepCopy(root, rel) : null;
     if (kept) approved[rel] = kept;
-    if (step.kind === 'restore' && restoreCopy(root, rel)) restored.push({ path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: step.by });
-    if (step.kind === 'unconfirmed') unconfirmed.push(waiting.get(rel) ?? { path: rel, at: Date.now(), taskId: owners[rel] ?? null, by: 'unconfirmed' });
+    if (step.kind === 'restore' && restoreCopy(root, rel)) restored.push({ path: rel, at: Date.now(), taskId: null, by: step.by, why: step.why });
+    if (step.kind === 'unconfirmed') unconfirmed.push(waiting.get(rel) ?? { path: rel, at: Date.now(), taskId: null, by: 'unconfirmed', why: step.why });
   }
   // A question drops once the file is back to its approved copy or a session's touch settled it.
   const flags = [...restored.slice(-RESTORED_KEPT), ...unconfirmed];
-  const next: LockManifest = { ...before, lockedPaths: Object.keys(owners).sort(), owners, sessions, names, approved, restored: flags };
+  const next: LockManifest = { ...before, lockedPaths: locked, sessions, names, approved, restored: flags };
   if (JSON.stringify(next) !== JSON.stringify(before)) saveManifest(root, next);
   return next;
 }
@@ -251,8 +255,8 @@ export function resolveUnconfirmed(root: string, rel: string, keep: boolean): st
   return null;
 }
 
-// Clears the task's "Restored" lines and the main session's refusals; questions still waiting for Keep or Restore stay.
-export function dismissRestored(root: string, taskId: string, now = Date.now()): void {
+// Clears the "Restored" lines and the refusals; questions still waiting for Keep or Restore stay.
+export function dismissRestored(root: string, now = Date.now()): void {
   const manifest = loadManifest(root);
-  saveManifest(root, { ...manifest, restored: manifest.restored.filter((f) => f.taskId !== taskId || isUnconfirmed(f)), refusalsSeen: now });
+  saveManifest(root, { ...manifest, restored: manifest.restored.filter(isUnconfirmed), refusalsSeen: now });
 }

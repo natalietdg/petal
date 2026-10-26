@@ -413,3 +413,29 @@
   background: var(--term-bg);
 }
 .tst-agent-term > .term-host { inset: 8px 10px; }
+
+/* ---- The repo suite's filters, opt-in stages and criteria. */
+.tst-filters { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.tst-chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tst-chip-label { min-width: 4em; color: var(--muted); font: 700 12.5px var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
+.tst-chip { padding: 3px 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--reader-bg); color: var(--reader-fg); font: 600 13px var(--ui-font); cursor: pointer; }
+.tst-chip.is-on { border-color: var(--next-ink); background: var(--next-pill); color: var(--next-ink); }
+.tst-chip:disabled { opacity: 0.6; cursor: default; }
+.tst-optins { display: flex; flex-direction: column; gap: 2px; margin: 0 0 8px; }
+.tst-optin { margin-top: 4px; }
+.tst-criteria-panel { margin: 8px 0 14px; }
+.tst-coverage { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+.tst-coverage.is-gap { color: var(--decide-ink); font-weight: 600; }
+.tst-crit-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tst-crit-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 10px; }
+.tst-crit-name { flex: 1 1 16em; min-width: 0; overflow-wrap: anywhere; }
+.tst-crit-meta { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.tst-crit-status { padding: 0 8px; border-radius: 999px; background: var(--reader-bg); color: var(--reader-fg); font: 700 12px var(--ui-font); text-transform: uppercase; }
+.tst-crit-status.is-pass, .tst-crit-status.is-fixed { background: var(--done-pill); color: var(--done-ink); }
+.tst-crit-status.is-fail, .tst-crit-status.is-open { background: var(--decide-pill); color: var(--decide-ink); }
+.tst-crit-status.is-blocked, .tst-crit-status.is-flaky { background: var(--watch-pill); color: var(--watch-ink); }
+.tst-crit-details { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; flex: 1 1 100%; margin: 4px 0 0; font-size: 13px; }
+.tst-crit-details dt { color: var(--muted); font-weight: 700; }
+.tst-crit-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tst-manual .tst-chip-row { flex: 0 0 auto; }
+.tst-manual-result { flex: 1 1 14em; }

@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { removeTempDirs, tempDir } from './helpers';
 import { ENDED_WORD, finishNotice, fixesLanded, fixNotice, laneWord, NEEDS_YOU, SCENARIOS_READY, needsNotice, newlyWaiting, type LaneFacts } from '../src/shared/loop-signals';
 import { cleanSentBug } from '../src/shared/agent-loop';
-import { runGoing } from '../src/shared/testing';
 import { readLogTail, trimmedNote } from '../src/main/testing-runner';
 import type { QueuedBug } from '../src/shared/bug-queue';
 
@@ -69,21 +68,6 @@ describe('notification edges', () => {
   it('words the needs-you and finished notices', () => {
     expect(needsNotice('Quinn', 'tab-t')).toEqual({ title: 'Quinn needs you', body: 'It is waiting on a prompt in its terminal.', tabId: 'tab-t' });
     expect(finishNotice([bug('a', 'verified'), bug('b', 'verified')], null)).toEqual({ title: 'Test loop finished', body: '2 verified · 0 still open', tabId: null });
-  });
-});
-
-describe('one run per task', () => {
-  const going = [{ root: '/r', taskId: 't1' }];
-
-  it('blocks a second run of the same task only', () => {
-    expect(runGoing(going, '/r', 't1')).toBe(true);
-    expect(runGoing(going, '/r', 't2')).toBe(false);
-    expect(runGoing(going, '/other', 't1')).toBe(false);
-  });
-
-  it('treats a run with no task as its own', () => {
-    expect(runGoing([{ root: '/r', taskId: null }], '/r', null)).toBe(true);
-    expect(runGoing([{ root: '/r', taskId: null }], '/r', 't1')).toBe(false);
   });
 });
 

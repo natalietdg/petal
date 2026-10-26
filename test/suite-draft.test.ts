@@ -1,12 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { askAgainText, draftBrief, draftEnded, skillBody, skillUse, suiteProblemText, suiteWriters, TESTING_SKILL, type DraftFacts } from '../src/shared/suite-draft';
+import { askAgainText, draftBrief, draftEnded, skillBody, skillUse, suiteProblemText, TESTING_SKILL, type DraftFacts } from '../src/shared/suite-draft';
 import { installPetalSkills, petalSkills, updatePetalSkill, type PetalSkillPaths } from '../src/main/petal-skills';
-import { parseCriteria, CRITERIA_SKELETON } from '../src/shared/test-loop';
-import { forTask } from '../src/shared/task-suite';
-import { noEvents } from '../src/shared/agent-loop';
-import type { StoredLoop } from '../src/shared/testing';
+import { openBugs, parseCriteria, CRITERIA_SKELETON } from '../src/shared/test-loop';
 import { removeTempDirs, tempDir } from './helpers';
 
 const BUNDLED = fs.readFileSync(path.join(__dirname, '..', 'resources', 'skills', TESTING_SKILL, 'SKILL.md'), 'utf8');
@@ -24,13 +21,13 @@ describe('skill state decision', () => {
   });
 
   it('the slash brief names the skill; the inline brief carries the bundled instructions, frontmatter dropped', () => {
-    const request = 'for task t-1a2b: "Checkout". You are this task\'s testing agent, so you may write .petal/suites/t-1a2b.json.';
+    const request = 'for task t-1a2b: "Checkout". Set up or extend this repo\'s suite in .petal/suite.json.';
     expect(draftBrief(false, request, BUNDLED)).toBe(`/petal-testing-suite ${request}`);
     const inline = draftBrief(true, request, BUNDLED);
     expect(inline.startsWith(request)).toBe(true);
     expect(inline).not.toContain('/petal-testing-suite for');
     expect(inline).not.toMatch(/^name: petal-testing-suite$/m);
-    expect(inline).toContain('Write `.petal/suites/<task id>.json`');
+    expect(inline).toContain('Write `.petal/suite.json` in the main checkout');
     expect(inline).not.toContain('Write `.petal/pipeline.json`');
     expect(skillBody(BUNDLED).startsWith('# Testing suite')).toBe(true);
     expect(inline).not.toMatch(/[—–]/);
@@ -87,37 +84,21 @@ describe('draft finished rule', () => {
     expect(draftEnded({ ...base, suite: true })).toBe(false);
     expect(draftEnded({ ...base, state: 'ended', suite: true })).toBe(false);
   });
-  it('follow-ups name the task’s suite file', () => {
-    expect(askAgainText('t-1a2b')).toContain('.petal/suites/t-1a2b.json');
-    expect(suiteProblemText('t-1a2b', 'stage 1 has no command.')).toMatch(/^Petal couldn't use \.petal\/suites\/t-1a2b\.json: stage 1 has no command\. Fix the file/);
-  });
-});
-
-describe('suite write rights', () => {
-  const loop = (kind: StoredLoop['kind'], tester: string | null): StoredLoop => ({
-    kind, testerSessionId: tester, fixerSessionId: kind === 'loop' ? 'fixer' : null,
-    startedAt: 1, stoppedAt: null, queue: [], events: noEvents(),
-  });
-  const agents = [{ sessionId: 'old-tester', role: 'tester' as const }, { sessionId: 'drafter', role: 'tester' as const }, { sessionId: 'fixer', role: 'fixer' as const }];
-
-  it('only the current loop’s or draft’s testing agent may write; older testers lose the right', () => {
-    expect(suiteWriters(loop('loop', 'drafter'), agents)).toEqual(['drafter']);
-    expect(suiteWriters(loop('draft', 'drafter'), agents)).toEqual(['drafter']);
-    expect(suiteWriters(loop('loop', 'old-tester'), agents)).toEqual(['old-tester']);
-  });
-  it('a loop with no testing agent falls back to the newest one; none at all, nobody', () => {
-    expect(suiteWriters(loop('loop', null), agents)).toEqual(['drafter']);
-    expect(suiteWriters(null, [{ sessionId: 'fixer', role: 'fixer' }])).toEqual([]);
+  it('follow-ups name the repo’s suite file in the main checkout', () => {
+    expect(askAgainText('/main')).toContain('/main/.petal/suite.json');
+    expect(suiteProblemText(null, 'stage 1 has no command.')).toMatch(/^Petal couldn't use \.petal\/suite\.json: stage 1 has no command\. Fix the file/);
   });
 });
 
 describe('the skill’s bug line', () => {
-  it('parses as a [fail] bug filed under the task, with its test, as the bug queue reads it', () => {
-    const line = /^- \[fail\] .*$/m.exec(BUNDLED)?.[0] ?? '';
-    expect(line).toContain('· task: t-1a2b');
-    const criteria = parseCriteria(`${CRITERIA_SKELETON}${line}\n`);
+  it('parses as an [open] bug with its test, ticket and ADO fields, as the bug queue reads it', () => {
+    const at = BUNDLED.split('\n').findIndex((l) => /^- \[open\] /.test(l));
+    const block = BUNDLED.split('\n').slice(at, at + 6).join('\n');
+    const criteria = parseCriteria(`${CRITERIA_SKELETON}${block}\n`);
     expect(criteria.malformed).toBe(0);
-    expect(criteria.bugs).toEqual([{ status: 'fail', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, tests: [{ path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }], source: null, round: null, regression: true, taskId: 't-1a2b' }]);
-    expect(forTask(criteria.bugs, 't-1a2b')).toHaveLength(1);
+    expect(criteria.bugs).toHaveLength(1);
+    expect(criteria.bugs[0]).toMatchObject({ status: 'open', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, ticket: 'AB#10427', regression: true });
+    expect(Object.keys(criteria.bugs[0].details)).toEqual(['Steps', 'Expected', 'Actual', 'Env', 'Evidence']);
+    expect(openBugs(criteria)).toBe(1);
   });
 });

@@ -210,7 +210,7 @@ function scenarioReview(lane: LaneModel, scenarios: CriteriaItem[], on: AgentsHa
   const actions = el('div', 'tst-actions');
   const edit = el('button', 'tst-button tst-edit-scenarios', 'Edit scenarios');
   edit.type = 'button';
-  edit.title = 'Opens this task’s criteria file in your editor';
+  edit.title = 'Opens the repo’s criteria file in your editor';
   edit.addEventListener('click', () => on.editScenarios());
   const approve = el('button', 'tst-button tst-primary tst-approve-scenarios', 'Looks right · write the tests');
   approve.type = 'button';

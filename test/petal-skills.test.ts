@@ -106,7 +106,7 @@ describe('the bundled skills', () => {
   });
 
   it('their descriptions carry the trigger phrases', () => {
-    expect(frontmatter(text('petal-testing-suite')).description).toMatch(/"testing suite".*"update the testing suite".*"set up tests".*"test suite for this task".*\/petal-testing-suite/);
+    expect(frontmatter(text('petal-testing-suite')).description).toMatch(/"testing suite".*"update the testing suite".*"set up tests".*"add tests to this repo".*\/petal-testing-suite/);
     expect(frontmatter(text('petal-library')).description).toMatch(/"library".*"check the library".*"what do we know about X".*\/petal-library/);
     expect(frontmatter(text('petal-conclude')).description).toMatch(/"conclude".*\/petal-conclude/);
   });
@@ -116,9 +116,11 @@ describe('the bundled skills', () => {
     expect(text('petal-testing-suite')).not.toContain(LIBRARY_DIR_TOKEN);
   });
 
-  it('the testing skill writes its task’s suite file, never the old project pipeline, and never commits', () => {
-    expect(text('petal-testing-suite')).toContain('Write `.petal/suites/<task id>.json`');
-    expect(text('petal-testing-suite')).toContain("Don't edit `.petal/tasks.json` or `.petal/pipeline.json`");
+  it('the testing skill writes the repo’s suite in the main checkout, never weakens tests, and never commits', () => {
+    expect(text('petal-testing-suite')).toContain('Write `.petal/suite.json` in the main checkout');
+    expect(text('petal-testing-suite')).toContain('git rev-parse --path-format=absolute --git-common-dir');
+    expect(text('petal-testing-suite')).toContain('Never delete, skip or weaken a test');
+    expect(text('petal-testing-suite')).not.toContain('testing agent may');
     expect(text('petal-testing-suite')).toMatch(/Never commit/);
   });
 

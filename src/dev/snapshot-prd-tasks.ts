@@ -254,7 +254,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await pickTarget('task:t-docs');
     const docs = await waitTesting((s) => s.task === 'Document the cart API');
     const noSuite: string = await js("document.querySelector('#testing .tst-no-suite-title')?.textContent ?? ''");
-    check(docs && docs.stages.length === 0 && noSuite === 'No suite for this task yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
+    check(docs && docs.stages.length === 0 && noSuite === 'No suite for this repo yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
     const startsBefore = testingFixture.loopStarts.length;
     await js("document.querySelector('#testing .tst-ask-suite').click()");
     const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
@@ -275,7 +275,7 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     await capture('testing-suite-change');
     await js("document.querySelector('#testing .tst-undo-suite').click()");
     const undone = await waitTesting((s) => s.stages.length === 0 && !s.suiteChange);
-    check(undone && !fs.existsSync(docsFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this task yet', 'Undo puts back what was there: no suite');
+    check(undone && !fs.existsSync(docsFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this repo yet', 'Undo puts back what was there: no suite');
     // 10 The loop as two agents: rename both, start them, both busy at once with a bug queue between them, chat with each.
     await pickTarget('task:t-cart');
     await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2);

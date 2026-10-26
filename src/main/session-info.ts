@@ -11,7 +11,7 @@ import { isReadingSession, onSessionChange } from './library-extract';
 import { mergeLogRuns } from './testing-ipc';
 import { readCriteria } from './criteria-store';
 import { taskIdAt } from './testing-tasks';
-import { forTask } from '../shared/task-suite';
+import { forTask } from '../shared/repo-suite';
 import { projectRootOf } from './testing-project';
 import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
