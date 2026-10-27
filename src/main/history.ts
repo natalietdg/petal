@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readHead, readTail, type JsonlSlice } from './jsonl-window';
-import { promptText, commandText, trimTo } from './prompts';
+import { promptText, commandText, queuedPromptText, trimTo } from './prompts';
 import { liveSessions } from './sessions-monitor';
 import { SESSION_ID } from './session-id';
 import type { TranscriptEntry } from './transcript-entry';
@@ -29,6 +29,7 @@ export interface SessionRecord {
   lastAt: number;
   messages: number;
   messagesExact: boolean; // big logs are only sampled, so the count is a lower bound
+  prompts?: number; // her own prompts, a lower bound on big logs; fixtures leave it out
 }
 
 export interface ListedSession extends SessionRecord {
@@ -75,6 +76,10 @@ function readUntilMessage(read: typeof readHead, file: string, bytes: number): J
   return slice;
 }
 
+// Her typed prompts only (no tool results, wrappers, reminders or slash commands); a line both windows read counts once.
+const promptCount = (entries: TranscriptEntry[]): number =>
+  new Set(entries.filter((e) => promptText(e) || queuedPromptText(e)).map((e) => e.uuid ?? JSON.stringify(e))).size;
+
 const trimOrNull = (text: string | undefined): string | null => (text ? trimTo(text, 80) : null);
 
 function buildRecord(file: string, stat: fs.Stats): SessionRecord {
@@ -96,6 +101,7 @@ function buildRecord(file: string, stat: fs.Stats): SessionRecord {
     lastAt: stat.mtimeMs,
     messages,
     messagesExact: head.covered,
+    prompts: promptCount(head.covered ? head.entries : [...head.entries, ...tail.entries]),
   };
 }
 

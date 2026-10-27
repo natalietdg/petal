@@ -1,4 +1,4 @@
-// Main's side of the session naming rule: a session is named once from context, then the name sticks (session-names.ts).
+// Main's side of the session naming rule: named once, after enough of her prompts, then the name sticks (session-names.ts).
 import * as history from './history';
 import * as organizer from './session-organizer';
 import * as names from './session-names';
@@ -6,7 +6,7 @@ import * as configStore from './config-store';
 import { contextTitle, sessionTitle } from '../shared/session-label';
 import { agentTitle } from './agent-titles';
 
-type NamedRecord = Pick<history.SessionRecord, 'title' | 'firstAiTitle' | 'customTitle' | 'firstPrompt' | 'lastAt'>;
+type NamedRecord = Pick<history.SessionRecord, 'title' | 'firstAiTitle' | 'customTitle' | 'firstPrompt' | 'lastAt' | 'prompts'>;
 
 // A transcript not on disk yet is looked up again after this; findRecord scans every project folder.
 const MISS_RETRY_MS = 5000;
@@ -20,10 +20,10 @@ function recordOf(sessionId: string): history.SessionRecord | null {
   return record;
 }
 
-// Claude Code's first and latest ai-title; a fixture without firstAiTitle counts a title that isn't its prompt.
-function aiTitles(record: NamedRecord): { first: string | null; latest: string | null } {
+// Claude Code's latest ai-title; a fixture without firstAiTitle counts a title that isn't its prompt.
+function latestAiTitle(record: NamedRecord): string | null {
   const has = record.firstAiTitle !== undefined ? Boolean(record.firstAiTitle) : Boolean(record.title) && record.title !== record.firstPrompt;
-  return { first: record.firstAiTitle ?? (has ? record.title : null), latest: has ? record.title : null };
+  return has ? record.title : null;
 }
 
 // First read after upgrade: pin what every listed session shows now (organizer, else latest ai-title).
@@ -31,7 +31,7 @@ function ensureStore(): void {
   if (names.exists()) return;
   const labels = organizer.loadCached();
   const listed = history.listSessions(new Set(configStore.load().history.favorites));
-  names.create(Object.fromEntries(listed.map((s) => [s.sessionId, contextTitle(labels[s.sessionId]?.title, aiTitles(s).latest)])));
+  names.create(Object.fromEntries(listed.map((s) => [s.sessionId, contextTitle(labels[s.sessionId]?.title, latestAiTitle(s))])));
 }
 
 interface NameInputs {
@@ -41,19 +41,21 @@ interface NameInputs {
   cwd?: string | null;
 }
 
-// Her /rename, else the pinned name, else pin the first context title that landed, else her first prompt as a placeholder.
+// Her /rename, else the pinned name, else a placeholder until she has sent enough prompts, then pin the best title once.
 export function nameFor(sessionId: string, { organizerTitle = null, record = null, firstPrompt = null, cwd = null }: NameInputs): string {
   ensureStore();
   const own = contextTitle(record?.customTitle);
   if (own) names.pin(sessionId, own, 'manual');
   const pinned = names.pinned(sessionId)?.title;
   if (pinned) return sessionTitle({ pinned, cwd });
+  const placeholder = sessionTitle({ firstPrompt: record?.firstPrompt || firstPrompt, cwd });
   const knewIt = Boolean(record && record.lastAt <= names.since()); // last written before the upgrade: she knew its latest title
+  if (!knewIt && !names.readyToName(record)) return placeholder; // no interim titles: each would be another rename
   const fromOrganizer = contextTitle(organizerTitle);
-  const fromClaude = record ? contextTitle(knewIt ? aiTitles(record).latest : aiTitles(record).first) : '';
-  const context = fromOrganizer || fromClaude;
-  if (context) names.pin(sessionId, context, knewIt ? 'known' : fromOrganizer ? 'organizer' : 'claude');
-  return sessionTitle({ pinned: context, firstPrompt: record?.firstPrompt || firstPrompt, cwd });
+  const context = fromOrganizer || (record ? contextTitle(latestAiTitle(record)) : '');
+  if (!context) return placeholder;
+  names.pin(sessionId, context, knewIt ? 'known' : fromOrganizer ? 'organizer' : 'claude');
+  return sessionTitle({ pinned: context, cwd });
 }
 
 // A session History or the Board already listed, with the organizer labels it read.

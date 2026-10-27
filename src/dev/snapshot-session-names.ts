@@ -1,6 +1,6 @@
 // Session names (PASTEL_SNAPSHOT_MODE=session-names): one session is called the same thing in the Sessions panel,
-// its terminal tab, History and the reader header; the first title that lands names all of them, and later titles never
-// rename them again; never "<folder>-<id>".
+// its terminal tab, History and the reader header; a session too young to name keeps its placeholder, the title it has
+// once she has sent enough prompts names all of them, and later titles never rename them again; never "<folder>-<id>".
 import fs from 'node:fs';
 import path from 'node:path';
 import { nativeImage, type BrowserWindow, type NativeImage } from 'electron';
@@ -10,6 +10,7 @@ import { extraTabFixtures, historyFixture, panelFixture, userDataDir } from '../
 import { resizeOffscreen } from '../main/snapshot-window';
 import { READING_CHOICES } from '../main/menu';
 import { sessionLabelText, sessionTitle } from '../shared/session-label';
+import { PROMPTS_BEFORE_NAMING } from '../main/session-names';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import type { SessionFile } from '../main/claude-session';
 
@@ -20,16 +21,17 @@ interface Fixture {
   organizer: string | null;
   aiTitle: string | null;
   prompt: string;
+  prompts: number; // her prompts so far; below PROMPTS_BEFORE_NAMING the session keeps its placeholder
 }
 
 // Titled by the organizer, by Claude Code (long, so it is cut), by her first prompt only, and not at all yet.
-const ORGANIZED: Fixture = { id: '5e5e5e01-0000-4000-8000-0000000000e1', folder: 'widget-service', claudeName: 'widget-service-59', organizer: 'Send locale to the welcome email template', aiTitle: 'Email template locale', prompt: 'the welcome email template needs the locale' };
-const AI_TITLED: Fixture = { id: '5e5e5e02-0000-4000-8000-0000000000e2', folder: 'billing-service', claudeName: 'billing-service-02', organizer: null, aiTitle: 'Traced stale prices spec to the nightly job that still reads the old price table every night', prompt: 'why are the prices stale?' };
-const PROMPT_ONLY: Fixture = { id: '5e5e5e03-0000-4000-8000-0000000000e3', folder: 'widget-service', claudeName: 'widget-service-99', organizer: null, aiTitle: null, prompt: 'Product name translations update to test' };
-const UNTITLED: Fixture = { id: '5e5e5e04-0000-4000-8000-0000000000e4', folder: 'acme', claudeName: 'acme-a7', organizer: null, aiTitle: null, prompt: '' };
+const ORGANIZED: Fixture = { id: '5e5e5e01-0000-4000-8000-0000000000e1', folder: 'widget-service', claudeName: 'widget-service-59', organizer: 'Send locale to the welcome email template', aiTitle: 'Email template locale', prompt: 'the welcome email template needs the locale', prompts: PROMPTS_BEFORE_NAMING };
+const AI_TITLED: Fixture = { id: '5e5e5e02-0000-4000-8000-0000000000e2', folder: 'billing-service', claudeName: 'billing-service-02', organizer: null, aiTitle: 'Traced stale prices spec to the nightly job that still reads the old price table every night', prompt: 'why are the prices stale?', prompts: PROMPTS_BEFORE_NAMING };
+const PROMPT_ONLY: Fixture = { id: '5e5e5e03-0000-4000-8000-0000000000e3', folder: 'widget-service', claudeName: 'widget-service-99', organizer: null, aiTitle: null, prompt: 'Product name translations update to test', prompts: 1 };
+const UNTITLED: Fixture = { id: '5e5e5e04-0000-4000-8000-0000000000e4', folder: 'acme', claudeName: 'acme-a7', organizer: null, aiTitle: null, prompt: '', prompts: 0 };
 const OPEN = [ORGANIZED, AI_TITLED, PROMPT_ONLY, UNTITLED];
 // Closed from the panel under the old rule's folder name; listed again it gets its real title.
-const CLOSED: Fixture = { id: '5e5e5e05-0000-4000-8000-0000000000e5', folder: 'Patch-Script', claudeName: 'patch-script-3c', organizer: null, aiTitle: 'Fix invoice dates and currency symbols in the monthly PDF', prompt: 'invoice dates are off' };
+const CLOSED: Fixture = { id: '5e5e5e05-0000-4000-8000-0000000000e5', folder: 'Patch-Script', claudeName: 'patch-script-3c', organizer: null, aiTitle: 'Fix invoice dates and currency symbols in the monthly PDF', prompt: 'invoice dates are off', prompts: PROMPTS_BEFORE_NAMING };
 const LATE_TITLE = 'Monthly statement job trigger';
 const HOST_ID = /^[\w.]+-[0-9a-f]{2,4}$/; // "acme-a7"
 
@@ -142,7 +144,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     historyFixture.records = [...OPEN, CLOSED].map((f, i) => {
       const file = path.join(dir, `${f.id}.jsonl`);
       writeLog(file, f.prompt, f.aiTitle);
-      return { sessionId: f.id, file, cwd: path.join(dir, f.folder), title: f.aiTitle ?? f.prompt, firstPrompt: f.prompt, lastAt: now + 60_000 - i * 1000, messages: f.prompt ? 2 : 0, messagesExact: true };
+      return { sessionId: f.id, file, cwd: path.join(dir, f.folder), title: f.aiTitle ?? f.prompt, firstPrompt: f.prompt, lastAt: now + 60_000 - i * 1000, messages: f.prompt ? 2 : 0, messagesExact: true, prompts: f.prompts };
     });
     historyFixture.live = [];
     panelFixture.subagentsRoot = path.join(dir, 'agents');
@@ -203,27 +205,40 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     check(every.length >= 10 && hostIds.length === 0, `no host-id labels in ${every.length} labels: ${JSON.stringify(hostIds)}`);
     await capture('session-names-1280');
 
-    // 3 The first title that lands names the tab, the panel row, the History row and the reader header together.
+    // 3 Too young to name: titles that land before her PROMPTS_BEFORE_NAMING-th prompt rename nothing and pin nothing.
     await js('PastelTerm.history.close()');
     await js(`PastelTerm.tabs.activate(${JSON.stringify(await tabOf(UNTITLED.id))})`);
     await js('PastelTerm.sessionsPanel.setOpen(true)');
     const before = await surfacesAgree(UNTITLED, null, ['tab', 'panel']);
     check(before, `before: still "${expected(UNTITLED).text}"`);
-    writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE });
+    const PROMPT_ONLY_TITLE = 'Product name translations on test';
+    writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE, [PROMPT_ONLY.id]: PROMPT_ONLY_TITLE });
+    await wait(5000); // two relabel ticks
+    const pinnedIds = () => Object.keys((JSON.parse(fs.existsSync(namesFile) ? fs.readFileSync(namesFile, 'utf8') : '{}') as { names?: object }).names ?? {});
+    for (const f of [UNTITLED, PROMPT_ONLY]) {
+      const got = await surfacesAgree(f, null, ['tab', 'panel']);
+      check(got && !pinnedIds().includes(f.id), `${f.claudeName} (${f.prompts} prompts) keeps "${expected(f, null).text}" and no pin while a title waits: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
+    }
+    const youngHead = await readerHead();
+    check(youngHead.text === expected(UNTITLED, null).text, `reader header keeps the placeholder too: ${JSON.stringify(youngHead)}`);
+
+    // 3a At the threshold the title it has then names the tab, the panel row, the History row and the reader header together.
+    const reachThreshold = (f: Fixture) => { const r = historyFixture.records.find((x) => x.sessionId === f.id); if (r) r.prompts = PROMPTS_BEFORE_NAMING; };
+    reachThreshold(UNTITLED);
     const lateWant = expected(UNTITLED, LATE_TITLE);
     const renamed = await waitFor(async () => {
       const got = await surfacesAgree(UNTITLED, LATE_TITLE, ['tab', 'panel']);
       const head = await readerHead();
       return got && head.text === lateWant.text ? { ...got, reader: head } : null;
     }, 8000);
-    check(renamed, `late title reaches the tab, panel and reader header: ${JSON.stringify(renamed ?? { ...(await js(SURFACES)).out[UNTITLED.id], reader: await readerHead() })}`);
+    check(renamed, `at ${PROMPTS_BEFORE_NAMING} prompts the title reaches the tab, panel and reader header: ${JSON.stringify(renamed ?? { ...(await js(SURFACES)).out[UNTITLED.id], reader: await readerHead() })}`);
     await js('PastelTerm.history.open()');
     const inHistory = await waitFor(() => surfacesAgree(UNTITLED, LATE_TITLE, ['history']), 5000);
     check(inHistory, `and History: ${JSON.stringify(inHistory ?? (await js(SURFACES)).out[UNTITLED.id])}`);
-    // History already open when it lands: it re-lists on its own.
-    writeOrganizer({ [ORGANIZED.id]: ORGANIZED.organizer ?? '', [UNTITLED.id]: LATE_TITLE, [PROMPT_ONLY.id]: 'Product name translations on test' });
-    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, 'Product name translations on test'), 8000);
-    check(live, `a title landing while History is open renames its row, tab and panel row: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
+    // History already open when a session reaches the threshold: it re-lists on its own.
+    reachThreshold(PROMPT_ONLY); // its tab relabels, which tells History to re-list
+    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, PROMPT_ONLY_TITLE), 8000);
+    check(live, `a session reaching the threshold while History is open renames its row, tab and panel row: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
 
     // 3b Named once: a later organizer pass or ai-title renames nothing that already has a name, on any surface.
     writeOrganizer({ [ORGANIZED.id]: 'Organizer second pass', [AI_TITLED.id]: 'Organizer late title', [UNTITLED.id]: 'Untitled retitled', [PROMPT_ONLY.id]: 'Product names, retitled' });
@@ -233,7 +248,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     await js('PastelTerm.history.close()');
     await js('PastelTerm.history.open()'); // a fresh list, read after the later titles
     await wait(800);
-    const kept: [Fixture, string | null][] = [[ORGANIZED, ORGANIZED.organizer], [AI_TITLED, null], [UNTITLED, LATE_TITLE], [PROMPT_ONLY, 'Product name translations on test']];
+    const kept: [Fixture, string | null][] = [[ORGANIZED, ORGANIZED.organizer], [AI_TITLED, null], [UNTITLED, LATE_TITLE], [PROMPT_ONLY, PROMPT_ONLY_TITLE]];
     for (const [f, organizer] of kept) {
       const got = await surfacesAgree(f, organizer);
       check(got, `${f.claudeName} keeps "${expected(f, organizer).text}" after later titles: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
