@@ -1,19 +1,19 @@
-// PRDs and per-task suites (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2,
-// a PRD made through the task store grouping two tasks, one task split into subtasks, then Testing opened from the session that
-// holds a task: that task's own suite, another task's different stages a pick away, a subtask running its task's suite,
-// the PRD's overview of both, the coding session's suite write refused, the test lock (absolute hook path, the main session's
-// refusals, her own suite edits: Use this file or Keep the old suite), and a task with no suite starting its testing
-// agent, whose write is taken with Undo. Never runs a command.
+// PRDs and the repo's one suite (PASTEL_SNAPSHOT_MODE=prd-tasks): a version 1 tasks.json read and written back as 2, in
+// Petal's folder for the repo and never in the repo; a PRD made through the task store grouping two tasks, one task split
+// into subtasks. Then Testing opened from the session that holds a task: the repo's one suite, runs and criteria whichever
+// task is picked, and where it is saved; a session's suite change taken with Undo; the test lock (its one hook in the
+// user-level settings, its script in Petal's folder, a session's skip restored, refusals); and a repo with no suite
+// starting its testing agent, whose write is taken with Undo. Never runs a command.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit, TabsDeps } from './snapshot';
-import { extraTabFixtures, folderFixture, historyFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
+import { extraTabFixtures, fakeHomeDir, folderFixture, historyFixture, panelFixture, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import * as store from '../main/testing-store';
 import { lockedCopiesDir } from '../main/test-lock';
 import { assertFixtureOutsideClaude } from './snapshot-views';
-import { closeExtraTabs, hostOf } from './snapshot-testing';
+import { closeExtraTabs, hostOf, petalDirOf, petalFileOf, repoUntouched } from './snapshot-testing';
 import type { PipelineRun, RunState } from '../shared/testing';
 
 const SESSION = '7a5c0000-0000-4000-8000-0000000000d1';
@@ -28,20 +28,19 @@ function writeTranscript(file: string, cwd: string, sessionId = SESSION): void {
   put(file, `${entry({ type: 'user', uuid: 'prd-u0', timestamp: at(10), message: { role: 'user', content: 'fix the cart total rounding' } })}\n${entry({ type: 'assistant', uuid: 'prd-a0', timestamp: at(9), message: { role: 'assistant', content: [{ type: 'text', text: '**Looking at the cart.**' }] } })}\n`);
 }
 
-// A version 1 file: the fixture session holds "Fix the cart total".
+// A version 1 file in Petal's folder for the repo: the fixture session holds "Fix the cart total".
 function writeTasksV1(repo: string): void {
   const owner = { sessionId: SESSION, name: 'Cart work', branch: 'main' };
   const task = (id: string, title: string, held = false) => ({ id, title, notes: '', status: held ? 'claimed' : 'open', owner: held ? owner : null, createdAt: Date.now() - 3 * HOUR, claimedAt: held ? Date.now() - 2 * HOUR : null, doneAt: null, doneBy: null });
-  put(path.join(repo, '.petal', '.gitignore'), '*\n');
-  put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 1, tasks: [task('t-cart', 'Fix the cart total', true), task('t-coupon', 'Coupons'), task('t-docs', 'Document the cart API')] }, null, 2));
+  put(petalFileOf(repo, 'tasks.json'), JSON.stringify({ version: 1, tasks: [task('t-cart', 'Fix the cart total', true), task('t-coupon', 'Coupons'), task('t-docs', 'Document the cart API')] }, null, 2));
 }
 
-// Each PRD task's own suite, as Petal writes the file.
-function writeSuite(repo: string, taskId: string, stages: [string, string][]): void {
-  put(path.join(repo, '.petal', 'suites', `${taskId}.json`), `${JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command })), keepGoing: false, autoRun: false }, null, 2)}\n`);
+// The repo's one suite, as a session writes the file in Petal's folder.
+function writeRepoSuite(repo: string, stages: [string, string][]): void {
+  put(petalFileOf(repo, 'suite.json'), `${JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command, level: 'regression' })), keepGoing: false, autoRun: false }, null, 2)}\n`);
 }
 
-// A session writing a file (a task's suite, a test), as its log records it.
+// A session writing a file (the suite, a test), as its log records it.
 function appendSuiteWrite(file: string, sessionId: string, uuid: string, cwd: string, target: string): void {
   assertFixtureOutsideClaude(file);
   const at = new Date().toISOString();
@@ -64,7 +63,10 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} prd tasks: ${what}`);
   const dir = path.join(outDir, 'prd-tasks');
   const repo = path.join(dir, 'repos', 'shop');
-  const tasksJson = path.join(repo, '.petal', 'tasks.json');
+  const tasksJson = petalFileOf(repo, 'tasks.json');
+  const suiteFile = petalFileOf(repo, 'suite.json');
+  const criteriaFile = petalFileOf(repo, 'criteria.md');
+  const claudeDir = path.join(dir, 'claude'); // stand-in ~/.claude: the lock's user-level settings.json goes here
   const transcript = path.join(dir, 'tabs', `${SESSION}.jsonl`);
   const saved = { panel: panelFixture.sessions, home: folderFixture.home, project: testingFixture.project, claudeDir: testingFixture.claudeDir, historyRecords: [...historyFixture.records] };
   const [startWidth, startHeight] = win.getContentSize();
@@ -81,11 +83,14 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     value: s.value,
   } : { groups: [], options: [], value: '' }; })()`);
   const waitTesting = (want: (s: TestingState) => boolean, ms = 6000) => waitFor(async () => { const s = await testing(); return s && want(s) ? s : null; }, ms);
+  const suiteNames = (): string[] => (fs.existsSync(suiteFile) ? (JSON.parse(fs.readFileSync(suiteFile, 'utf8')) as { stages: { name: string }[] }).stages.map((s) => s.name) : []);
+  const changeLine = (): Promise<string> => js("document.querySelector('#testing .tst-suite-change')?.textContent ?? ''");
 
   try {
     applyTheme('paleSky', { persist: false });
     resizeOffscreen(win, 1280, 900);
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(petalDirOf(repo), { recursive: true, force: true });
     put(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
     put(path.join(repo, 'package.json'), JSON.stringify({ name: 'shop', scripts: { test: 'vitest run' }, devDependencies: { vitest: '^5.0.0' } }, null, 2));
     writeTasksV1(repo);
@@ -116,69 +121,60 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     const stored = JSON.parse(fs.readFileSync(tasksJson, 'utf8')) as { version: number; prds: { id: string }[]; tasks: { id: string; title: string; prdId: string | null; parentId: string | null }[] };
     const subtask = stored.tasks.find((t) => t.title === 'Coupon API');
     check(stored.version === 2 && stored.prds.length === 1 && subtask?.parentId === 't-coupon' && subtask.prdId === prdId, `written back as version 2 with the PRD and subtasks: ${JSON.stringify(stored.tasks.map((t) => [t.title, t.prdId, t.parentId]))}`);
+    check(repoUntouched(repo), `the tasks file is in Petal's folder for the repo, nothing in the repo: ${tasksJson}`);
 
-    // 4 Testing from the session holding "Fix the cart total": its own suite, runs and criteria. Coupons has different stages.
+    // 4 Testing from the session holding "Fix the cart total": the repo's one suite, every run in this checkout, the whole
+    // criteria file, and where the suite is saved.
     testingFixture.project = repo;
-    testingFixture.claudeDir = path.join(dir, 'claude');
-    fs.mkdirSync(testingFixture.claudeDir, { recursive: true });
-    writeSuite(repo, 't-cart', [['Unit', 'npm test'], ['Lint', 'npm run lint']]);
-    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test']]);
-    const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000);
-    fs.utimesSync(path.join(repo, '.petal', 'suites', 't-cart.json'), ago(5), ago(5)); // fixture suite times, so the picker order is fixed
-    fs.utimesSync(path.join(repo, '.petal', 'suites', 't-coupon.json'), ago(120), ago(120));
+    testingFixture.claudeDir = claudeDir;
+    fs.mkdirSync(claudeDir, { recursive: true });
+    writeRepoSuite(repo, [['Unit', 'npm test'], ['Lint', 'npm run lint']]);
     for (const r of [run('prd-run-old', 300, 'passed', null), run('prd-run-sub', 90, 'failed', subtask?.id ?? null), run('prd-run-c', 80, 'passed', 't-coupon'), run('prd-run-a1', 60, 'failed', 't-cart'), run('prd-run-a2', 20, 'passed', 't-cart')]) store.putRun(repo, r);
-    put(path.join(repo, '.petal', 'test-criteria.md'), `# Test criteria\n\n## Scenarios\n- [pass] cart total rounds to the cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] two coupons stack · round 1 · task: ${subtask?.id ?? 'none'}\n- [pass] an old scenario · round 1\n\n## Bugs\n- [fixed] total off by a cent · test: src/cart.test.ts::cent · round 1 · task: t-cart\n- [fail] coupon API 500s · round 1 · task: ${subtask?.id ?? 'none'}\n`);
+    put(criteriaFile, `# Test criteria\n\n## Scenarios\n- [pass] cart total rounds to the cent · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n- [fail] two coupons stack · round 1 · task: ${subtask?.id ?? 'none'}\n- [pass] an old scenario · round 1\n\n## Bugs\n- [fixed] total off by a cent · test: src/cart.test.ts::cent · round 1 · task: t-cart\n- [fail] coupon API 500s · round 1 · task: ${subtask?.id ?? 'none'}\n`);
     await js('document.getElementById("testing-button").click()');
-    const cart = await waitTesting((s) => s.task === 'Fix the cart total' && s.taskRuns === 2, 8000);
-    check(cart && JSON.stringify(cart.stages) === JSON.stringify(['Unit', 'Lint']), `opens on the session's task with its own 2 stages and 2 runs: ${JSON.stringify(cart ?? await testing())}`);
-    check(cart?.head === 'Fix the cart total · PRD Checkout · 2 stages' && !/shop/.test(cart.head), `the header names the task and its PRD, never the project: ${cart?.head}`);
+    const cart = await waitTesting((s) => s.task === 'Fix the cart total' && s.taskRuns === 5, 8000);
+    check(cart && JSON.stringify(cart.stages) === JSON.stringify(['Unit', 'Lint']), `opens on the session's task with the repo's 2 stages and all 5 runs: ${JSON.stringify(cart ?? await testing())}`);
+    check(cart?.head === 'shop · 2 stages', `the header names the repo and its suite, not a task: ${cart?.head}`);
+    const savedIn: string = await js("document.querySelector('#testing .tst-saved-in')?.textContent ?? ''");
+    check(savedIn === `Saved in Petal · ~/.petal/repos/${path.basename(petalDirOf(repo))}` && repoUntouched(repo), `it says the suite is saved in Petal, outside the repo: ${savedIn}`);
     const listed = await picker();
-    // Coupons' subtasks were made seconds ago, newer than the cart suite's 5 min; Document the cart API dates from 3 h ago.
-    check(JSON.stringify(listed.groups) === JSON.stringify(['PRD · Checkout', 'No PRD']) && JSON.stringify(listed.options) === JSON.stringify(['All tasks in Checkout', 'Coupons', '↳ Coupon API', '↳ Coupon UI', 'Fix the cart total', 'Document the cart API']), `the picker groups tasks by PRD, newest activity first, subtasks nested: ${JSON.stringify(listed)}`);
-    const crit: string[] = await js("[...document.querySelectorAll('#testing .tst-crit-name')].map((n) => n.textContent)");
-    check(JSON.stringify(crit) === JSON.stringify(['cart total rounds to the cent', 'total off by a cent']), `criteria show this task's scenario and bug only: ${JSON.stringify(crit)}`);
-    const projectWords: string = await js("[...document.querySelectorAll('#testing .tst-head, #testing .tst-pickerbox, #testing .tst-editor')].map((n) => n.textContent).join(' ')");
+    // Coupons' subtasks were made seconds ago, newer than the cart task's last run 20 min ago; Document the cart API dates from 3 h ago.
+    check(JSON.stringify(listed.groups) === JSON.stringify(['PRD · Checkout', 'No PRD']) && JSON.stringify(listed.options) === JSON.stringify(['Coupons', '↳ Coupon API', '↳ Coupon UI', 'Fix the cart total', 'Document the cart API']) && listed.value === 'task:t-cart', `the picker groups tasks by PRD, newest activity first, subtasks nested, no PRD-wide entry: ${JSON.stringify(listed)}`);
+    const crit: string[] = await js("[...document.querySelectorAll('#testing .tst-criteria-panel .tst-crit-name')].map((n) => n.textContent)");
+    const allItems = ['cart total rounds to the cent', 'two coupons stack', 'an old scenario', 'total off by a cent', 'coupon API 500s'];
+    check(JSON.stringify([...crit].sort()) === JSON.stringify([...allItems].sort()), `the criteria show the whole repo file, not one task's lines: ${JSON.stringify(crit)}`);
+    const projectWords: string = await js("[...document.querySelectorAll('#testing .tst-summary, #testing .tst-pickerbox, #testing .tst-editor')].map((n) => n.textContent).join(' ')");
     check(!/Whole project|project’s commands|pipeline/i.test(projectWords) && !(await js("document.querySelector('#testing .tst-scope-option')")), `no Whole project switch and no project pipeline wording: ${projectWords.slice(0, 120)}`);
-    await capture('testing-task-suite');
+    await capture('testing-repo-suite');
 
-    // 5 Another task: its own stages and runs. A subtask without a suite runs its task's.
+    // 5 Another task, or a subtask: the same suite and runs; only the task the agents work for changes.
     await pickTarget('task:t-coupon');
     const coupon = await waitTesting((s) => s.task === 'Coupons');
-    check(coupon && JSON.stringify(coupon.stages) === JSON.stringify(['Typecheck', 'E2E']) && coupon.taskRuns === 1 && coupon.head === 'Coupons · PRD Checkout · 2 stages', `switching tasks switches the stages and runs: ${JSON.stringify(coupon ?? await testing())}`);
     const chips: string[] = await js("[...document.querySelectorAll('#testing .tst-stage-name')].map((n) => n.textContent)");
-    check(JSON.stringify(chips) === JSON.stringify(['Typecheck', 'E2E']), `the strip shows Coupons' stages: ${JSON.stringify(chips)}`);
-    await capture('testing-other-task');
+    check(coupon && JSON.stringify(coupon.stages) === JSON.stringify(['Unit', 'Lint']) && coupon.taskRuns === 5 && coupon.head === 'shop · 2 stages' && JSON.stringify(chips) === JSON.stringify(['Unit', 'Lint']), `switching tasks keeps the repo's suite and runs: ${JSON.stringify({ coupon: coupon ?? await testing(), chips })}`);
     await pickTarget(`task:${subtask?.id ?? ''}`);
     const sub = await waitTesting((s) => s.task === 'Coupon API');
-    check(sub && JSON.stringify(sub.stages) === JSON.stringify(['Typecheck', 'E2E']) && sub.taskRuns === 1 && /from Coupons/.test(sub.head), `a subtask without a suite runs its task's: ${JSON.stringify(sub ?? await testing())}`);
+    check(sub && JSON.stringify(sub.stages) === JSON.stringify(['Unit', 'Lint']) && sub.taskRuns === 5, `a subtask runs the same repo suite: ${JSON.stringify(sub ?? await testing())}`);
+    await pickTarget('task:t-cart');
+    check(await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2), 'back on the cart task');
 
-    // 6 The PRD: an overview of each task's suite, last result, pass rate and open bugs; a row opens that task.
-    await pickTarget(`prd:${prdId ?? ''}`);
-    const overview = await waitFor<string[][] | null>(async () => {
-      const rows: string[][] = await js("[...document.querySelectorAll('#testing .tst-overview-row')].map((r) => [r.querySelector('.tst-overview-name').textContent, r.querySelector('.tst-overview-meta').textContent])");
-      return rows.length === 4 ? rows : null;
-    }, 4000);
-    check(overview?.[0]?.[0] === 'Fix the cart total' && /^2 stages · Last run passed · .+ · 50% passed · 0 open bugs$/.test(overview[0][1] ?? '') && overview[1]?.[0] === 'Coupons' && /^2 stages · Last run passed · .+ · 100% passed · 0 open bugs$/.test(overview[1][1] ?? ''), `the overview lists both tasks with their suites: ${JSON.stringify(overview)}`);
-    check(overview?.[2]?.[0] === 'Coupon API' && /^2 stages, its task’s suite · Last run failed · .+ · 0% passed · 1 open bug$/.test(overview[2][1] ?? ''), `subtasks show under their task with their own results: ${JSON.stringify(overview?.slice(2))}`);
-    check((await testing())?.head === 'PRD · Checkout' && (await js("document.querySelector('#testing .tst-tools-bar').hidden")), 'the header names the PRD; Edit and Run are for a task');
-    await capture('testing-prd-overview');
-    await js(`document.querySelector('#testing .tst-overview-row[data-task="t-cart"]').click()`);
-    check(await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2), 'a row opens that task');
+    // 6 The coding session rewrites the suite file: taken, with Undo, which puts the stages and the file back.
+    appendSuiteWrite(transcript, SESSION, 'prd-a-suite', repo, suiteFile);
+    put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }] }));
+    const taken = await waitTesting((s) => s.suiteChange && s.stages.length === 1, 8000);
+    const takenLine = await changeLine();
+    check(taken && /^Suite changed · (just now|\d+ min ago) · Undo$/.test(takenLine), `any session's change is taken, with Undo: ${takenLine} ${JSON.stringify(taken ?? await testing())}`);
+    await capture('testing-suite-change');
+    await js("document.querySelector('#testing .tst-undo-suite').click()");
+    const putBack = await waitTesting((s) => !s.suiteChange && s.stages.length === 2, 8000);
+    check(putBack && JSON.stringify(suiteNames()) === JSON.stringify(['Unit', 'Lint']), `Undo puts the old stages back, in the file too: ${JSON.stringify(suiteNames())}`);
 
-    // 7 The coding session holding the task rewrites its suite file: not applied, flagged, the stages stay.
-    const cartFile = path.join(repo, '.petal', 'suites', 't-cart.json');
-    const before = fs.readFileSync(cartFile, 'utf8');
-    appendSuiteWrite(transcript, SESSION, 'prd-a-suite', repo, cartFile);
-    put(cartFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test' }] }));
-    const outside = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent, not applied.', 8000);
-    check(outside && JSON.stringify(outside.stages) === JSON.stringify(['Unit', 'Lint']) && !outside.suiteChange, `the coding session's write is not applied and is flagged: ${JSON.stringify(outside ?? await testing())}`);
-    put(cartFile, before);
-    check(await waitTesting((s) => s.suiteProblem === null && s.stages.length === 2, 10000), 'putting the file back clears the flag');
-
-    // 7b The test lock: on, the hook entry lands in the repo's settings.local.json; a main-session edit to a locked test is put back.
+    // 7 The test lock: on, its one hook entry lands in the user-level settings.json and runs the script in Petal's folder;
+    // nothing is written in the repo. A session's skip of a locked test is put back.
     const cartTest = path.join(repo, 'src', 'cart.test.ts');
-    const settingsFile = path.join(repo, '.claude', 'settings.local.json');
-    const lockFile = path.join(repo, '.petal', 'lock.json');
+    const settingsFile = path.join(claudeDir, 'settings.json');
+    const lockFile = petalFileOf(repo, 'lock.json');
+    const lockScript = path.join(fakeHomeDir(), '.petal', 'test-lock.mjs');
     put(cartTest, 'it("rounds to the cent", () => {});\n');
     await js("document.querySelector('#testing .tst-lock-toggle input').click()");
     const approved = await waitFor(() => {
@@ -187,95 +183,60 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     }, 10000);
     const settings = fs.existsSync(settingsFile) ? fs.readFileSync(settingsFile, 'utf8') : '';
     const copy = path.join(lockedCopiesDir(repo), 'src', 'cart.test.ts');
-    check(fs.existsSync(copy) && copy.startsWith(store.testingDir()) && !fs.existsSync(path.join(repo, '.petal', 'locked')), `the approved copy is kept in Petal's storage, not the repo where test runners look: ${copy}`);
-    check(approved && settings.includes('.petal/test-lock.mjs') && settings.includes('PreToolUse') && fs.existsSync(path.join(repo, '.petal', 'test-lock.mjs')), `the lock's hook lands in the repo's settings.local.json and the test is approved: ${settings.slice(0, 160)}`);
+    check(fs.existsSync(copy) && copy.startsWith(store.testingDir()), `the approved copy is kept in Petal's storage, not the repo where test runners look: ${copy}`);
+    check(approved && settings.includes(`node '${lockScript}'`) && settings.includes('PreToolUse') && !settings.includes('CLAUDE_PROJECT_DIR') && fs.existsSync(lockScript), `the lock's hook lands in the user-level settings.json and runs ~/.petal/test-lock.mjs by its absolute path: ${settings.slice(0, 200)}`);
+    check(repoUntouched(repo), 'nothing of the lock is written in the repo: no .petal/, no .claude/settings.local.json');
     appendSuiteWrite(transcript, SESSION, 'prd-a-edit-test', repo, cartTest);
     put(cartTest, 'it.skip("rounds to the cent", () => {});\n');
     const flag = await waitFor<string | null>(async () => {
       const text: string = await js("document.querySelector('#testing .tst-lock-flag')?.textContent ?? ''");
       return text && fs.readFileSync(cartTest, 'utf8') === 'it("rounds to the cent", () => {});\n' ? text : null;
     }, 10000);
-    check(flag && /^Main session changed a test\. Restored\. · src\/cart\.test\.ts · (just now|\d+ min ago)$/.test(flag), `a main-session change to a locked test is restored and flagged: ${flag ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
+    check(flag && /^A Claude session skipped a test\. Restored\. · src\/cart\.test\.ts · (just now|\d+ min ago)$/.test(flag), `a session's skip of a locked test is restored and flagged: ${flag ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
     const red: string = await js("(() => { const probe = document.createElement('span'); probe.style.color = 'var(--decide-ink)'; document.getElementById('testing').append(probe); const c = getComputedStyle(probe).color; probe.remove(); return c === getComputedStyle(document.querySelector('#testing .tst-lock-flag')).color ? c : ''; })()");
     check(red, `the flag shows in the warning colour: ${red}`);
     await capture('testing-lock');
-    check(settings.includes(`node '${repo}/.petal/test-lock.mjs'`) && !settings.includes('CLAUDE_PROJECT_DIR'), `the hook names this repo's script by its absolute path, so a subfolder session finds it: ${settings.slice(0, 200)}`);
 
-    // 7c The main session's refusals, never shown before, show in the lock bar; Dismiss clears them.
-    put(path.join(repo, '.petal', 'lock-refusals.jsonl'), `${JSON.stringify({ at: Date.now(), session: SESSION, tool: 'Edit', target: cartTest, reason: 'Tests belong to Testing agent. Ask it to change them.' })}\n`);
+    // 7b A session's refusals, never shown before, show in the lock bar; Dismiss clears them.
+    put(petalFileOf(repo, 'lock-refusals.jsonl'), `${JSON.stringify({ at: Date.now(), session: SESSION, tool: 'Edit', target: cartTest, reason: 'Tests belong to Testing agent. Ask it to change them.' })}\n`);
     const refusal = await waitFor<string | null>(async () => {
       const lines: string[] = await js("[...document.querySelectorAll('#testing .tst-lock-flag')].map((n) => n.textContent)");
-      return lines.find((l) => l.startsWith('Main session tried to edit')) ?? null;
+      return lines.find((l) => l.startsWith('A Claude session tried to edit')) ?? null;
     }, 8000);
-    check(refusal && /^Main session tried to edit src\/cart\.test\.ts\. Refused\. · (just now|\d+ min ago)$/.test(refusal), `the main session's refusal shows in the lock bar: ${refusal ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
+    check(refusal && /^A Claude session tried to edit src\/cart\.test\.ts\. Refused\. · (just now|\d+ min ago)$/.test(refusal), `the session's refusal shows in the lock bar: ${refusal ?? await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")}`);
     await capture('testing-lock-refusal');
     await js("document.querySelector('#testing .tst-lock-dismiss').click()");
     check(await waitFor(async () => ((await js("document.querySelector('#testing .tst-lock')?.textContent ?? ''")).includes('tried to edit') ? null : true), 6000), 'Dismiss clears the refusal line');
 
-    // 7d Her hand edit of a suite with the lock on: still refused, but Use this file is hers; Keep the old suite isn't offered.
-    const couponFile = path.join(repo, '.petal', 'suites', 't-coupon.json');
-    const couponBefore = fs.readFileSync(couponFile, 'utf8');
-    await pickTarget('task:t-coupon');
-    await waitTesting((s) => s.task === 'Coupons');
-    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test'], ['Hers', 'npm run hers']]);
-    const lockedOutside = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent, not applied.', 8000);
-    const lockedButtons: string[] = await js("[...document.querySelectorAll('#testing .tst-suite-change button')].map((b) => b.textContent)");
-    check(lockedOutside && JSON.stringify(lockedButtons) === JSON.stringify(['Use this file']) && lockedOutside.stages.length === 2, `with the lock on her edit is refused and only Use this file is offered: ${JSON.stringify(lockedButtons)} ${JSON.stringify(lockedOutside ?? await testing())}`);
-    put(couponFile, couponBefore);
-    await waitTesting((s) => s.suiteProblem === null, 8000);
-    await pickTarget('task:t-cart');
-    await waitTesting((s) => s.task === 'Fix the cart total');
-
     await js("document.querySelector('#testing .tst-lock-toggle input').click()");
     check(await waitFor(() => (fs.readFileSync(settingsFile, 'utf8').includes('test-lock') ? null : true), 6000), `turning it off removes only the lock's entry: ${fs.readFileSync(settingsFile, 'utf8').trim()}`);
 
-    // 7e Lock off: her hand edit says so plainly, with Use this file and Keep the old suite. Use it, then Undo; then Keep.
-    await pickTarget('task:t-coupon');
-    await waitTesting((s) => s.task === 'Coupons');
-    writeSuite(repo, 't-coupon', [['Typecheck', 'npx tsc --noEmit'], ['E2E', 'npx playwright test'], ['Hers', 'npm run hers']]);
-    const plain = await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent.', 8000);
-    const plainButtons: string[] = await js("[...document.querySelectorAll('#testing .tst-suite-change button')].map((b) => b.textContent)");
-    check(plain && JSON.stringify(plainButtons) === JSON.stringify(['Use this file', 'Keep the old suite']), `lock off: her edit is flagged plainly with both answers: ${JSON.stringify(plainButtons)} ${JSON.stringify(plain ?? await testing())}`);
-    await capture('testing-suite-outside');
-    await js("document.querySelector('#testing .tst-use-file').click()");
-    const used = await waitTesting((s) => s.stages.length === 3 && s.suiteProblem === null && s.suiteChange, 8000);
-    const usedLine: string = await js("document.querySelector('#testing .tst-suite-change')?.textContent ?? ''");
-    check(used && /^You took this file · (just now|\d+ min ago) · Undo$/.test(usedLine), `Use this file takes her stages, with Undo: ${usedLine} ${JSON.stringify(used ?? await testing())}`);
-    await js("document.querySelector('#testing .tst-undo-suite').click()");
-    check(await waitTesting((s) => s.stages.length === 2 && !s.suiteChange, 8000), 'Undo puts the old suite back');
-    writeSuite(repo, 't-coupon', [['Oops', 'npm run oops']]);
-    await waitTesting((s) => s.suiteProblem === 'Changed outside the testing agent.', 8000);
-    await js("document.querySelector('#testing .tst-keep-suite').click()");
-    const kept = await waitTesting((s) => s.suiteProblem === null && s.stages.length === 2, 8000);
-    check(kept && fs.readFileSync(couponFile, 'utf8') === couponBefore, `Keep the old suite writes the suite in use back over her file: ${fs.readFileSync(couponFile, 'utf8').slice(0, 120)}`);
-    fs.utimesSync(couponFile, new Date(Date.now() - 120 * 60_000), new Date(Date.now() - 120 * 60_000)); // fixture time back, so later order holds
-
-    // 8 A task with no suite: Ask Claude starts its testing agent under a session id Petal remembers.
+    // 8 A repo with no suite: Ask Claude starts the task's testing agent under a session id Petal remembers.
+    fs.rmSync(suiteFile, { force: true }); // another session removed the repo's suite
     await pickTarget('task:t-docs');
-    const docs = await waitTesting((s) => s.task === 'Document the cart API');
+    const docs = await waitTesting((s) => s.task === 'Document the cart API' && s.stages.length === 0, 8000);
     const noSuite: string = await js("document.querySelector('#testing .tst-no-suite-title')?.textContent ?? ''");
-    check(docs && docs.stages.length === 0 && noSuite === 'No suite for this repo yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
+    check(docs && noSuite === 'No suite for this repo yet' && !(await js("document.querySelector('#testing .tst-seed-suite')")), `no suite yet, and no seed offered without project commands: ${noSuite}`);
     const startsBefore = testingFixture.loopStarts.length;
     await js("document.querySelector('#testing .tst-ask-suite').click()");
     const started = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
     const agent = store.load(repo).agents?.['t-docs']?.[0]?.sessionId ?? '';
     check(started && agent && started.command.includes(`--session-id ${agent} --`) && started.command.includes('for task t-docs:') && started.command.includes('testing agent') && !/[—–]/.test(started.command), `the testing agent starts in a new tab with its own session id: ${JSON.stringify(started?.command.slice(0, 160))}`);
 
-    // 9 The testing agent writes the suite: taken, "Testing agent updated this suite", and Undo restores.
+    // 9 The testing agent writes the suite: taken, with Undo, and Undo removes it again.
     const agentLog = path.join(dir, 'tabs', `${agent}.jsonl`);
-    const docsFile = path.join(repo, '.petal', 'suites', 't-docs.json');
     writeTranscript(agentLog, repo, agent);
-    appendSuiteWrite(agentLog, agent, 'prd-agent-suite', repo, docsFile);
+    appendSuiteWrite(agentLog, agent, 'prd-agent-suite', repo, suiteFile);
     extraTabFixtures.push({ sessionId: agent, transcript: agentLog, status: 'idle', cwd: repo });
     openTab(win.webContents);
-    put(docsFile, JSON.stringify({ stages: [{ name: 'Docs build', command: 'npm run docs' }, { name: 'Links', command: 'npm run check-links' }] }));
+    put(suiteFile, JSON.stringify({ stages: [{ name: 'Docs build', command: 'npm run docs' }, { name: 'Links', command: 'npm run check-links' }] }));
     const updated = await waitTesting((s) => s.stages.length === 2 && s.suiteChange, 10000);
-    const line: string = await js("document.querySelector('#testing .tst-suite-change')?.textContent ?? ''");
-    check(updated && /^Testing agent updated this suite · (just now|\d+ min ago) · Undo$/.test(line), `the agent's write shows its stages and says so: ${line} ${JSON.stringify(updated?.stages ?? await testing())}`);
-    await capture('testing-suite-change');
+    const line = await changeLine();
+    check(updated && /^Suite changed · (just now|\d+ min ago) · Undo$/.test(line), `the agent's write shows its stages and says so: ${line} ${JSON.stringify(updated?.stages ?? await testing())}`);
     await js("document.querySelector('#testing .tst-undo-suite').click()");
     const undone = await waitTesting((s) => s.stages.length === 0 && !s.suiteChange);
-    check(undone && !fs.existsSync(docsFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this repo yet', 'Undo puts back what was there: no suite');
+    check(undone && !fs.existsSync(suiteFile) && (await js("document.querySelector('#testing .tst-no-suite-title')?.textContent")) === 'No suite for this repo yet', 'Undo puts back what was there: no suite');
+    writeRepoSuite(repo, [['Unit', 'npm test'], ['Lint', 'npm run lint']]); // her suite again, for the loop
     // 10 The loop as two agents: rename both, start them, both busy at once with a bug queue between them, chat with each.
     await pickTarget('task:t-cart');
     await waitTesting((s) => s.task === 'Fix the cart total' && s.stages.length === 2);
@@ -320,7 +281,6 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
     check(titles && titles[0] === 'Quinn · Fix the cart total' && titles[1] === 'Fixie · Fix the cart total', `each agent's terminal is titled with its name and the task: ${JSON.stringify(titles ?? await js(`[${JSON.stringify(testerTab)}, ${JSON.stringify(fixerTab)}].map((id) => PastelTerm.tabs.get(id)?.element.title ?? '')`))}`);
 
     // Quinn files a bug; the idle Fixie gets it. Then both work at once, and a failure seen mid-edit waits for a recheck.
-    const criteriaFile = path.join(repo, '.petal', 'test-criteria.md');
     const criteriaBase = fs.readFileSync(criteriaFile, 'utf8');
     fs.appendFileSync(testerLog, tool(TESTER, 'h-t1', 'Write', { file_path: path.join(repo, 'src', 'cart.test.ts'), content: 'it("drops no cent")\n' }, 'ok')
       + tool(TESTER, 'h-t2', 'Bash', { command: 'npm test' }, 'Exit code 1\n1 failed', true)

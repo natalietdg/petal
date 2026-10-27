@@ -1,14 +1,15 @@
-// Test loop: Start pastes the brief into the fixture's Claude tab (never a real claude) and makes .petal/ kept out of git;
+// Test loop: Start pastes the brief into the fixture's Claude tab (never a real claude) and makes the repo's criteria file in
+// Petal, never in the repo;
 // fixture Loop lines drive the round progress here and in the reader's strip; a criteria fixture renders grouped;
 // Start stays off while the loop runs; with Testing closed main still steps the queue and saves it, and the lanes come
 // back from main on the next open; the last round's tokens show next to the estimate; Stop records one Esc, then the stop message once idle;
-// tagged lines in the old shared criteria file move to the task's own file; Close agents closes both without a signal.
+// the criteria agents write go in that one file; Close agents closes both without a signal.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { setFixtureStatus } from './snapshot';
-import { FIXER_SESSION, FIXTURE_TASK, agentTerminals, endLoop, hostOf, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXER_SESSION, FIXTURE_TASK, agentTerminals, endLoop, hostOf, petalDirOf, repoUntouched, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { agentCloses, fixtureFile, pasteWrites, stopWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -125,10 +126,9 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(brief.includes('Never commit, push, or change git history.') && brief.includes('Never weaken, skip or delete a test') && brief.includes('plus Maestro flows') && brief.includes('Never edit app code') && !brief.includes('\u2014'), 'the brief has the no-commit, no-weakening and tests-only rules, Maestro, and no em dash');
     check(/You are Bug fix agent, the bug fix agent/.test(starts?.[1]?.brief ?? '') && !/[\u2014\u2013]/.test(starts?.[1]?.brief ?? ''), `the bug fix agent's brief: ${JSON.stringify(starts?.[1]?.brief?.slice(0, 100))}`);
     check(!pasteWrites.slice(pastesBefore).some((w) => w.data.includes('Run a test loop')), 'nothing is pasted into the coding session');
-    const ignore = path.join(project, '.petal', '.gitignore');
-    const ownCriteria = path.join(project, '.petal', 'criteria', `${FIXTURE_TASK}.md`);
-    check(fs.existsSync(ignore) && fs.readFileSync(ignore, 'utf8') === '*\n' && fs.existsSync(ownCriteria), 'Start makes .petal/ with a self-ignoring .gitignore and the task’s own criteria file');
-    check(brief.includes(`Criteria file: .petal/criteria/${FIXTURE_TASK}.md`), 'the testing agent’s brief names its task’s own criteria file');
+    const criteriaFile = path.join(petalDirOf(project), 'criteria.md');
+    check(fs.existsSync(criteriaFile) && repoUntouched(project), `Start makes the repo's criteria file in Petal and nothing in the repo: ${criteriaFile}`);
+    check(brief.includes(`Criteria file: ${criteriaFile}`), 'the testing agent’s brief names that file by its absolute path');
     const starting = await settle((p) => p.state.loop === 'starting');
     check(starting && starting.formHidden && starting.startDisabled && starting.stopShown, `while starting, Start is off and Stop shows: ${JSON.stringify(starting?.state.loop)}`);
     await js("document.querySelector('#testing .tst-loop-start').requestSubmit()");
@@ -147,10 +147,8 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(bar && bar.now === '2' && bar.max === '5' && bar.segs === 5 && bar.done === 1 && running?.step === 'Fixing', `five round segments, one done, Fixing current: ${JSON.stringify({ bar, step: running?.step })}`);
     check(running && running.startDisabled && running.formHidden, 'Start stays off while the loop runs');
 
-    // The criteria, grouped, with the bug that became a regression test marked. Written to the old shared file, so its
-    // tagged lines move to the task's own file on the next read; the stray line stays behind.
-    const sharedCriteria = path.join(project, '.petal', 'test-criteria.md');
-    fs.writeFileSync(sharedCriteria, CRITERIA_FIXTURE);
+    // The criteria, grouped, with the bug that became a regression test marked, as the testing agent writes the repo's file.
+    fs.writeFileSync(criteriaFile, CRITERIA_FIXTURE);
     // Claude's own unit run lands as the live pipeline result.
     if (transcript) {
       const at = new Date().toISOString();
@@ -162,8 +160,8 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(columns[0]?.[0] === 'Scenarios' && columns[0][1] === 5 && columns[1]?.[0] === 'Bugs' && columns[1][1] === 3, `criteria grouped Scenarios / Bugs: ${JSON.stringify(columns)}`);
     check(JSON.stringify(grouped?.regressions) === JSON.stringify(['tax rounds per order, not per line', 'coupon can take the total below zero']), `bugs with a test are marked regression: ${JSON.stringify(grouped?.regressions)}`);
     check(['pass', 'fail', 'flaky', 'fixed'].every((t) => (grouped?.tags as string[] ?? []).includes(t)) && /1 line not in the item format/.test(String(grouped?.notes)), `every status shows and the stray line is counted: ${JSON.stringify(grouped?.notes)}`);
-    const shared = fs.readFileSync(sharedCriteria, 'utf8');
-    check(fs.readFileSync(ownCriteria, 'utf8').includes('coupon can take the total below zero') && !shared.includes('task:') && shared.includes('a stray note'), `tagged lines moved to the task’s own file once, the stray line kept: ${JSON.stringify(shared.slice(0, 120))}`);
+    const kept = fs.readFileSync(criteriaFile, 'utf8');
+    check(kept.includes('coupon can take the total below zero') && kept.includes('a stray note') && repoUntouched(project), `the file keeps every line, and still nothing lands in the repo: ${JSON.stringify(kept.slice(0, 120))}`);
     check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows as the live result: ${JSON.stringify(grouped?.live)}`);
     // The open bugs join the queue; the idle bug fix agent gets the oldest one.
     const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, FIXER_SESSION), 8000);

@@ -1,9 +1,9 @@
 // Scenarios first (PASTEL_SNAPSHOT_MODE=scenarios-first), against a stand-in ~/.claude, userData and repo: Ask Claude
 // sends the task's notes and its PRD as the source of scenarios; once the drafting agent writes [todo] scenarios and goes
-// idle, its lane reads Scenarios ready with the list, not "stopped without a suite"; Edit scenarios opens the task's own
-// criteria file; Looks right sends the go-ahead into its terminal once and saves the approved names. Then a task that already
-// has a suite and no criteria file: Start test loop stops round 1 for the same review, and after approval only a scenario
-// added later shows again. Fixture sessions only, never a real claude.
+// idle, its lane reads Scenarios ready with the list, not "stopped without a suite"; Edit scenarios opens the repo's one
+// criteria file, in Petal's folder for the repo; Looks right sends the go-ahead into its terminal once and saves the
+// approved names. Then another task, with the repo's suite and none approved yet: Start test loop stops round 1 for the
+// same review, and after approval only a scenario added later shows again. Fixture sessions only, never a real claude.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -13,7 +13,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 import { writeSuite } from '../main/repo-suite-store';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
-import { closeExtraTabs, hostOf } from './snapshot-testing';
+import { closeExtraTabs, hostOf, petalDirOf, petalFileOf, repoUntouched } from './snapshot-testing';
 import { scenariosApprovedText } from '../shared/suite-draft';
 import { emptySuite } from '../shared/repo-suite';
 
@@ -33,7 +33,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
   const dir = path.join(outDir, 'scenarios-first');
   const repo = path.join(dir, 'refunds');
   const logOf = (sessionId: string) => path.join(dir, 'tabs', `${sessionId}.jsonl`);
-  const criteriaOf = (taskId: string) => path.join(repo, '.petal', 'criteria', `${taskId}.md`);
+  const criteriaFile = petalFileOf(repo, 'criteria.md'); // the repo's one file; each step writes it as that step's agent would
   const saved = { project: testingFixture.project, claudeDir: testingFixture.claudeDir };
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
@@ -61,7 +61,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
   const approve = async (taskId: string, tabId: string | null, names: string[]) => {
     const before = pasteWrites.length;
     await js("document.querySelector('#testing .tst-approve-scenarios').click()");
-    const go = await waitFor(() => pasteWrites.slice(before).find((w) => w.data.includes(scenariosApprovedText(taskId).slice(0, 60))) ?? null, 5000);
+    const go = await waitFor(() => pasteWrites.slice(before).find((w) => w.data.includes(scenariosApprovedText(petalDirOf(repo)))) ?? null, 5000);
     const approved = await waitFor(() => { const a = store.load(repo).loops?.[taskId]?.approvedScenarios; return a && names.every((n) => a.includes(n)) ? a : null; }, 5000);
     const sends = pasteWrites.slice(before).filter((w) => w.data.includes('they look right')).length;
     return { go: go?.tabId === tabId && sends === 1, approved, gone: await waitScreen((s) => !s.approve, 6000) };
@@ -70,12 +70,12 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
   try {
     resizeOffscreen(win, 1280, 900);
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(petalDirOf(repo), { recursive: true, force: true });
     put(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
     put(path.join(repo, 'package.json'), JSON.stringify({ name: 'refunds', scripts: { test: 'vitest run' }, devDependencies: { vitest: '^5.0.0' } }, null, 2));
     const owner = { sessionId: MAIN_SESSION, name: 'Refunds', branch: 'main' };
     const task = (id: string, title: string, notes: string, held: boolean) => ({ id, title, notes, status: held ? 'working' : 'open', owner: held ? owner : null, createdAt: Date.now() - 3_600_000, claimedAt: held ? Date.now() - 1_800_000 : null, doneAt: null, doneBy: null, prdId: 'p-pay', parentId: null });
-    put(path.join(repo, '.petal', '.gitignore'), '*\n');
-    put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({
+    put(petalFileOf(repo, 'tasks.json'), JSON.stringify({
       version: 2,
       prds: [{ id: 'p-pay', title: 'Payments', notes: PRD_NOTES, createdAt: Date.now() - 7_200_000 }],
       tasks: [task('t-scen', 'Refunds', NOTES, true), task('t-loop', 'Employer portal', 'Admins approve each refund.', false)],
@@ -84,7 +84,6 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     put(logOf(DRAFTER), say(DRAFTER, 's0', 'for task t-scen', 'Reading the refunds code.'));
     put(logOf(TESTER), say(TESTER, 'l0', 'You are Testing agent.', 'Reading the portal code.'));
     put(logOf(FIXER), say(FIXER, 'f0', 'You are Bug fix agent.', 'Ready.'));
-    writeSuite(repo, emptySuite([{ id: 'unit', name: 'Unit', command: 'npm test' }])); // her suite, no criteria file yet
     testingFixture.project = repo;
     testingFixture.claudeDir = path.join(dir, 'claude'); // no skill there: the brief carries the bundled instructions
     testingFixture.opened.length = 0;
@@ -101,12 +100,12 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     const started = await waitFor(() => testingFixture.loopStarts[startsBefore] ?? null, 5000);
     const brief = started?.brief ?? '';
     check(brief.includes('Source of scenarios:') && brief.includes(`Task notes:\n${NOTES}`) && brief.includes(`PRD "Payments":\n${PRD_NOTES}`), `the brief labels the notes and PRD as the source: ${JSON.stringify(brief.slice(0, 200))}`);
-    check(brief.includes('## 2. Write the scenarios, then stop') && !/[—–]/.test(brief), 'the brief carries the scenarios-first step, no long dashes');
+    check(brief.includes('## 2. Write new scenarios, then stop') && !/[—–]/.test(brief), 'the brief carries the scenarios-first step, no long dashes');
 
     // 2 It writes [todo] scenarios and stops: Scenarios ready on its lane, with the list, not "stopped without a suite".
     const drafterTab = await tabOf(DRAFTER);
     await reopen();
-    put(criteriaOf('t-scen'), criteriaText([
+    put(criteriaFile, criteriaText([
       '- [todo] a refund over the amount paid is refused · from: notes · task: t-scen',
       '- [todo] the payer gets an email for each refund · from: prd · task: t-scen',
       '- [todo] a refund on a cancelled order is refused · task: t-scen',
@@ -117,20 +116,22 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     check(ready?.sources.join('|') === 'from the task notes|from the PRD' && ready.drawing === 'Scenarios ready for your review above', `sources are tagged and the strip points at the review: ${JSON.stringify(ready && { sources: ready.sources, drawing: ready.drawing })}`);
     await capture('scenarios-first-ready');
 
-    // 3 Edit scenarios opens only the task's own criteria file.
+    // 3 Edit scenarios opens only the repo's criteria file, in Petal.
     await js("document.querySelector('#testing .tst-edit-scenarios').click()");
     const opened = await waitFor(() => testingFixture.opened[0] ?? null, 4000);
-    check(opened === criteriaOf('t-scen') && testingFixture.opened.length === 1, `Edit scenarios opens the task's criteria file: ${JSON.stringify(testingFixture.opened)}`);
+    check(opened === criteriaFile && testingFixture.opened.length === 1 && repoUntouched(repo), `Edit scenarios opens the repo's criteria file in Petal: ${JSON.stringify(testingFixture.opened)}`);
 
     // 4 Looks right: the go-ahead goes into its terminal once, the names are saved, and the review leaves the lane.
     const draftOk = await approve('t-scen', drafterTab, ready?.scenarios ?? []);
     check(draftOk.go && draftOk.approved?.length === 3 && draftOk.gone, `the draft's go-ahead is pasted once and the approval saved: ${JSON.stringify(draftOk)}`);
 
-    // 5 A task with a suite and no criteria file: Start test loop stops round 1 for the same review.
+    // 5 Another task, once the repo has her suite and none of this task's scenarios are approved: Start test loop stops
+    // round 1 for the same review.
+    writeSuite(repo, emptySuite([{ id: 'unit', name: 'Unit', command: 'npm test' }]));
     testingFixture.agentIds.splice(0, Infinity, TESTER, FIXER);
     extraTabFixtures.push({ sessionId: TESTER, transcript: logOf(TESTER), status: 'idle', cwd: repo }, { sessionId: FIXER, transcript: logOf(FIXER), status: 'idle', cwd: repo });
     await pickTask('t-loop');
-    await waitFor(async () => ((await js('PastelTerm.testing.state().task')) === 'Employer portal' ? true : null), 8000);
+    await waitFor(async () => ((await js('PastelTerm.testing.state().task')) === 'Employer portal' && (await js('PastelTerm.testing.state().stages.length')) === 1 ? true : null), 8000);
     const loopStarts = testingFixture.loopStarts.length;
     await js("document.querySelector('#testing .tst-loop-go').click()");
     const loopBrief = (await waitFor(() => testingFixture.loopStarts[loopStarts] ?? null, 6000))?.brief ?? '';
@@ -138,7 +139,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     const testerTab = await tabOf(TESTER);
     await reopen();
     await pickTask('t-loop');
-    put(criteriaOf('t-loop'), criteriaText([
+    put(criteriaFile, criteriaText([
       '- [todo] an admin approves a refund before it is paid · from: notes · task: t-loop',
       '- [todo] a refund without approval is not paid · task: t-loop',
     ]));
@@ -149,7 +150,7 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     check(loopOk.go && loopOk.approved?.length === 2 && loopOk.gone, `the loop's go-ahead is pasted once and the approval saved: ${JSON.stringify(loopOk)}`);
 
     // 6 Approved ones stay quiet, even still [todo]; a scenario added in a later round shows alone.
-    put(criteriaOf('t-loop'), criteriaText([
+    put(criteriaFile, criteriaText([
       '- [pass] an admin approves a refund before it is paid · test: src/refund.test.ts::needs approval · from: notes · task: t-loop',
       '- [todo] a refund without approval is not paid · task: t-loop',
       '- [todo] an approval expires after 7 days · task: t-loop',

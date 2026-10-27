@@ -1,13 +1,13 @@
 // Distillation (PASTEL_SNAPSHOT_MODE=distillation): fixture loop replies for two rounds render as one collapsible section
 // with Q/A pairs and each round's Open threads as cards (round 1 leaves two; round 2 settles one, carries one and adds a
 // needs-you thread); a card asks through the reply box's paste path; the needs-you thread shows "Claude needs you" in the
-// reader and on the Board, and the answer is pasted; .petal/distillation.jsonl and Activity keep the rounds; Suite health
-// shows flaky and core from a fixture history, and Add core stage puts it first, still asking before its first run.
+// reader and on the Board, and the answer is pasted; distillation.jsonl in Petal's folder for the repo (never the repo)
+// and Activity keep the rounds; Suite health shows flaky and core from a fixture history, and Add core stage puts it
+// first, still asking before its first run.
 import fs from 'node:fs';
-import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXTURE_TASK, endLoop, petalFileOf, repoUntouched, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { fixtureFile, pasteWrites, testingFixture } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
@@ -209,9 +209,9 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     await capture('distillation');
 
     // Stored per loop, and each course is in Activity.
-    const jsonl = path.join(project, '.petal', 'distillation.jsonl');
+    const jsonl = petalFileOf(project, 'distillation.jsonl');
     const stored = fs.existsSync(jsonl) ? fs.readFileSync(jsonl, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { course: string; threads: unknown[] }) : [];
-    check(stored.length === 2 && stored[0].course === 'fix-bug' && stored[1].threads.length === 2 && fs.readFileSync(path.join(project, '.petal', '.gitignore'), 'utf8') === '*\n', `.petal/distillation.jsonl keeps both rounds, threads included: ${stored.length}`);
+    check(stored.length === 2 && stored[0].course === 'fix-bug' && stored[1].threads.length === 2 && repoUntouched(project), `distillation.jsonl in Petal keeps both rounds, threads included, and nothing is written in the repo: ${stored.length}`);
     const activity = listActivity().filter((e) => e.id.startsWith('distill:'));
     check(activity.length === 2 && activity.every((e) => e.kind === 'test') && activity.some((e) => /round 2 in acme: retest/.test(e.text)) && activity.some((e) => e.detail?.includes(`Needs you: ${NEEDS_YOU}`)),
       `Activity records each course: ${JSON.stringify(activity.map((e) => e.text))}`);

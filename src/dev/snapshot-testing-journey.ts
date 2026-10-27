@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { BrowserWindow, Menu, type MenuItem } from 'electron';
 import type { Kit } from './snapshot';
-import { agentTerminals, closeExtraTabs, hostOf, seedTestingProject } from './snapshot-testing';
+import { agentTerminals, closeExtraTabs, hostOf, petalFileOf, seedTestingProject } from './snapshot-testing';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { extraTabFixtures, historyFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
@@ -25,9 +25,10 @@ const BUG_TWO = 'save button stays disabled';
 
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
-// A task with no suite in the fixture repo, for the drafting agent.
+// A task in the fixture repo, and no repo suite yet, for the drafting agent. Both kept in Petal's folder for the repo.
 function seedJourneyTask(project: string): void {
-  const file = path.join(project, '.petal', 'tasks.json');
+  fs.rmSync(petalFileOf(project, 'suite.json'), { force: true });
+  const file = petalFileOf(project, 'tasks.json');
   const data = JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: unknown[] };
   const task = { id: TASK, title: 'Account email', notes: 'Emails keep their plus signs.', status: 'working', owner: null, createdAt: Date.now() - 86_400_000, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null };
   put(file, JSON.stringify({ ...data, tasks: [...data.tasks, task] }, null, 2));
@@ -94,7 +95,7 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     await waitFor(() => (firstHost && agentTerminals().includes(firstHost) ? true : null), 10000); // main counts it once its shell starts
     check(started?.command.includes(`--session-id ${TESTER} --`) && firstHost && agentTerminals().includes(firstHost) && (await stripCount()) === stripBefore, `the drafting agent starts in an agent terminal, no tab-bar entry: ${JSON.stringify({ host: firstHost, strip: [stripBefore, await stripCount()], started: started?.command.match(/&& .{0,80}/)?.[0] ?? null, starts: testingFixture.loopStarts.length - startsBefore, terminals: agentTerminals() })}`);
     fs.appendFileSync(logOf(TESTER), say(TESTER, 'j1', 'draw up the suite', 'Wrote the first scenario for **Account email**. It waits for your review.'));
-    put(path.join(project, '.petal', 'criteria', `${TASK}.md`), ['# Test criteria', '', '## Scenarios', `- [todo] ${SCENARIO} · task: ${TASK}`, '', '## Bugs', ''].join('\n'));
+    put(petalFileOf(project, 'criteria.md'), ['# Test criteria', '', '## Scenarios', `- [todo] ${SCENARIO} · task: ${TASK}`, '', '## Bugs', ''].join('\n'));
     const ready = await waitLane('tester', (l) => l.status === 'Scenarios ready' && l.turns > 0);
     check(ready && await js("Boolean(document.querySelector('#testing .tst-approve-scenarios'))"), `its lane shows the conversation and the scenario review: ${JSON.stringify(ready)}`);
     await js("document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-terminal')?.click()");

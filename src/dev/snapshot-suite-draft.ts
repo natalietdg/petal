@@ -1,4 +1,5 @@
-// Drawing up a task's suite (PASTEL_SNAPSHOT_MODE=suite-draft), against a stand-in ~/.claude, userData and repo:
+// Drawing up the repo's suite (PASTEL_SNAPSHOT_MODE=suite-draft), against a stand-in ~/.claude, userData and repo, the
+// suite and criteria files in Petal's folder for the repo, never in the repo:
 // Ask Claude updates Petal's unedited old testing skill first and says so; an edited copy is left alone and the brief
 // carries the bundled instructions instead; a draft that goes idle or loses its terminal says it stopped without a suite
 // and offers Ask again (a follow-up to the same agent, resumed if no claude runs it); a suite file Petal can't use goes back to it once;
@@ -15,7 +16,7 @@ import { hash } from '../main/petal-styles';
 import { rememberAgent } from '../main/task-suites';
 import * as store from '../main/testing-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
-import { closeExtraTabs, hostOf } from './snapshot-testing';
+import { closeExtraTabs, hostOf, petalDirOf, petalFileOf, repoUntouched } from './snapshot-testing';
 import { TESTING_SKILL } from '../shared/suite-draft';
 
 const MAIN_SESSION = 'snapshot-fixture'; // the first tab's fixture session holds t-draft
@@ -29,8 +30,7 @@ const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), {
 function writeTasks(repo: string): void {
   const owner = { sessionId: MAIN_SESSION, name: 'Refunds', branch: 'main' };
   const task = (id: string, title: string, held: boolean) => ({ id, title, notes: '', status: held ? 'working' : 'open', owner: held ? owner : null, createdAt: Date.now() - 3_600_000, claimedAt: held ? Date.now() - 1_800_000 : null, doneAt: null, doneBy: null, prdId: null, parentId: null });
-  put(path.join(repo, '.petal', '.gitignore'), '*\n');
-  put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task('t-draft', 'Refunds', true), task('t-edit', 'Receipts', false)] }, null, 2));
+  put(petalFileOf(repo, 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task('t-draft', 'Refunds', true), task('t-edit', 'Receipts', false)] }, null, 2));
 }
 
 export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -43,11 +43,11 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
   const recordFile = path.join(app.getPath('userData'), 'petal-skills.json');
   const recordBefore = fs.existsSync(recordFile) ? fs.readFileSync(recordFile, 'utf8') : null;
   const bundled = fs.readFileSync(path.join(skillsBundleDir(), TESTING_SKILL, 'SKILL.md'), 'utf8');
-  const oldSkill = bundled.replace('Write `.petal/suite.json`', 'Write `.petal/pipeline.json`');
+  const oldSkill = bundled.replace('Write `suite.json` in the suite folder', 'Write `.petal/suite.json` in the main checkout'); // an older version's line
   const drafterLog = path.join(dir, 'tabs', `${DRAFTER}.jsonl`);
   const fixerLog = path.join(dir, 'tabs', `${FIXER}.jsonl`);
-  const suiteFile = path.join(repo, '.petal', 'suite.json');
-  const criteriaFile = path.join(repo, '.petal', 'criteria.md');
+  const suiteFile = petalFileOf(repo, 'suite.json');
+  const criteriaFile = petalFileOf(repo, 'criteria.md');
   const saved = { project: testingFixture.project, claudeDir: testingFixture.claudeDir };
   const [startWidth, startHeight] = win.getContentSize();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
@@ -70,6 +70,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
   try {
     resizeOffscreen(win, 1280, 900);
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(petalDirOf(repo), { recursive: true, force: true });
     put(path.join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
     put(path.join(repo, 'package.json'), JSON.stringify({ name: 'refunds', scripts: { test: 'vitest run' }, devDependencies: { vitest: '^5.0.0' } }, null, 2));
     writeTasks(repo);
@@ -96,8 +97,9 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     check(started?.brief?.startsWith('/petal-testing-suite for task t-draft: "Refunds".') && started.command.includes(`--session-id ${DRAFTER} --`), `the brief runs the skill: ${JSON.stringify(started?.brief?.slice(0, 80))}`);
     check(note.startsWith('Updated Petal’s testing skill. Started a testing agent'), `the note says the skill was updated: ${note}`);
     check(fs.readFileSync(skillFile, 'utf8') === bundled, 'the stand-in skill now matches the bundled one');
-    check(fs.existsSync(criteriaFile), 'the task’s own criteria file exists for the bugs it records');
-    check(Boolean(started?.brief?.includes('Write its scenarios and record its bugs in .petal/criteria/t-draft.md.')), 'the brief names the task’s own criteria file');
+    check(oldSkill !== bundled, 'the stand-in skill really is an older version');
+    check(fs.existsSync(criteriaFile) && repoUntouched(repo), `the repo's criteria file exists in Petal for the bugs it records, nothing in the repo: ${criteriaFile}`);
+    check(Boolean(started?.brief?.includes(`suite in ${suiteFile}, and write its scenarios and bugs in ${criteriaFile}. Never write either file inside the repo.`)), 'the brief names both files in Petal and keeps them out of the repo');
 
     // 2 It works, then sits idle with no suite: "stopped without a suite", Ask again and Show terminal.
     const drafterTab = await waitFor(() => hostOf(win.webContents.id, repo, DRAFTER), 10000);
@@ -108,7 +110,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await capture('suite-draft-ended');
     const pastesBefore = pasteWrites.length;
     await js("document.querySelector('#testing .tst-ask-again')?.click()");
-    const again = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes('.petal/suite.json. Finish drawing up')) ?? null, 5000);
+    const again = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.data.includes(`${suiteFile}. Finish drawing up`)) ?? null, 5000);
     check(again && again.tabId === drafterTab && testingFixture.loopStarts.length === startsBefore + 1, `Ask again pastes a follow-up into its terminal, no new agent: ${JSON.stringify(again?.data.slice(0, 80))}`);
     check(await waitFor(async () => { const s = await screen(); return s.drawing && !s.ended ? true : null; }, 5000), 'it reads as drawing again after the follow-up');
 
@@ -116,9 +118,10 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     fs.appendFileSync(drafterLog, writes(DRAFTER, 'd2', suiteFile));
     put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test\nrm -rf build' }] }));
     const bad = await waitView((v) => Boolean(v.suiteProblem?.startsWith('The suite file can’t be used')), 10000);
-    const fix = await waitFor(() => pasteWrites.find((w) => w.data.includes('Petal couldn\'t use ') && w.data.includes('.petal/suite.json')) ?? null, 8000);
+    const fixAsk = `Petal couldn't use ${suiteFile}`;
+    const fix = await waitFor(() => pasteWrites.find((w) => w.data.includes(fixAsk)) ?? null, 8000);
     await wait(3000);
-    const fixes = pasteWrites.filter((w) => w.data.includes('Petal couldn\'t use ') && w.data.includes('.petal/suite.json')).length;
+    const fixes = pasteWrites.filter((w) => w.data.includes(fixAsk)).length;
     check(bad && fix?.tabId === drafterTab && fixes === 1, `the problem is pasted back once: ${JSON.stringify({ problem: bad?.suiteProblem, fixes })}`);
 
     // 4 It records a code bug as a [fail] line, then writes a good suite.
@@ -151,14 +154,16 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await waitFor(async () => ((await js('PastelTerm.testing.state().loop')) === 'stopped' ? true : null), 15000);
 
     // 8 An edited skill is left alone; the brief carries the bundled instructions, the [fail] line format included.
+    // The repo's suite is removed first (one suite per repo), so Receipts can ask for one.
+    fs.rmSync(suiteFile, { force: true });
     fs.appendFileSync(skillFile, '\nMy own line.\n');
     const edited = fs.readFileSync(skillFile, 'utf8');
     await pickTask('t-edit');
-    await waitView((v) => v.task === 'Receipts' && v.stages.length === 0);
+    await waitView((v) => v.task === 'Receipts' && v.stages.length === 0, 10000);
     await js("document.querySelector('#testing .tst-ask-suite').click()");
     const inline = await waitFor(() => testingFixture.loopStarts[startsBefore + 2] ?? null, 5000);
     const inlineNote = (await waitFor(async () => { const s = await screen(); return /Started a testing agent/.test(s.note) ? s.note : null; }, 4000)) ?? '';
-    check(inline?.brief?.startsWith('for task t-edit: "Receipts".') && inline.brief.includes('Write `.petal/suite.json`') && /^- \[open\] .* · test: .*::.* · ticket: /m.test(inline.brief) && !/[—–]/.test(inline.brief), `the brief carries the bundled instructions: ${JSON.stringify(inline?.brief?.slice(0, 80))}`);
+    check(inline?.brief?.startsWith('for task t-edit: "Receipts".') && inline.brief.includes('Write `suite.json` in the suite folder') && /^- \[open\] .* · test: .*::.* · ticket: /m.test(inline.brief) && !/[—–]/.test(inline.brief), `the brief carries the bundled instructions: ${JSON.stringify(inline?.brief?.slice(0, 80))}`);
     check(fs.readFileSync(skillFile, 'utf8') === edited && !inlineNote.startsWith('Updated'), `her edited copy is untouched: ${inlineNote}`);
 
     // 9 Its terminal closes with no suite: stopped, and Ask again resumes the same agent; no second agent starts.

@@ -1,8 +1,9 @@
 // Petal skills (PASTEL_SNAPSHOT_MODE=petal-skills), against a stand-in ~/.claude and a stand-in project:
 // Customize › Formatting lists both skills as not installed; Install copies them into skills/<name>/SKILL.md with the
-// Library path filled in, leaves her own skills alone, and an edit shows as Edited. Testing offers the old
-// .petal/pipeline.json as a seed for a task with no suite, the seed writes the task's suite file, new commands still
-// ask first, and a suite change from outside the testing agent is not taken, with its reason. Text contrast in every theme.
+// Library path filled in, leaves her own skills alone, and an edit shows as Edited. Testing copies the repo's old in-repo
+// .petal/ into Petal's folder once and offers its pipeline.json as a seed for a repo with no suite; the seed writes the
+// repo's suite file in Petal, never in the repo; new commands still ask first, and a suite file that can't be used is not
+// taken, with its reason. Text contrast in every theme.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -13,6 +14,7 @@ import { libraryDir } from '../main/library-store';
 import { LIBRARY_DIR_TOKEN } from '../main/petal-skills';
 import * as store from '../main/testing-store';
 import { resizeOffscreen } from '../main/snapshot-window';
+import { petalDirOf, petalFileOf } from './snapshot-testing';
 
 const MIN_RATIO = 4.5;
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
@@ -76,14 +78,17 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   const claudeDir = path.join(root, 'claude');
   const project = path.join(root, 'shop');
   fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(petalDirOf(project), { recursive: true, force: true });
   put(path.join(claudeDir, 'skills', 'prove-it', 'SKILL.md'), '---\nname: prove-it\ndescription: Hers.\n---\n');
   fs.mkdirSync(path.join(project, '.git'), { recursive: true });
   put(path.join(project, 'package.json'), JSON.stringify({ name: 'shop', scripts: { typecheck: 'tsc --noEmit', test: 'vitest run' }, devDependencies: { vitest: '^5.0.0', typescript: '^5.9.0' } }, null, 2));
+  // An older build's in-repo folder: Petal copies it into its own folder once and never changes it.
   put(path.join(project, '.petal', '.gitignore'), '*\n');
   const pipelineFile = path.join(project, '.petal', 'pipeline.json');
   put(pipelineFile, `${JSON.stringify(CLAUDE_STAGES, null, 2)}\n`);
   put(path.join(project, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [{ id: 't-shop', title: 'Checkout', notes: '', status: 'open', owner: null, createdAt: Date.now(), claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null }] }));
-  const suiteFile = path.join(project, '.petal', 'suites', 't-shop.json');
+  const inRepo = () => fs.readdirSync(path.join(project, '.petal')).sort().join();
+  const suiteFile = petalFileOf(project, 'suite.json');
   stylesFixture.claudeDir = claudeDir;
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
@@ -141,7 +146,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     applyTheme('paleSky', { persist: false });
     await js('PastelTerm.customize.close()');
 
-    // ---- Testing: the project's old .petal/pipeline.json is only a seed for a task with no suite.
+    // ---- Testing: the repo's old .petal/pipeline.json, copied into Petal, is only a seed for a repo with no suite.
     store.savePipeline(project, { stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], keepGoing: true, autoRun: false, confirmed: ['npm test'], savedAt: Date.now() - 60_000 });
     const names = CLAUDE_STAGES.map((s) => s.name);
     const empty: Page = await openTesting((p) => p.state.task === 'Checkout' && p.seed);
@@ -152,9 +157,9 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
 
     await js("document.querySelector('#testing .tst-seed-suite').click()");
     const seeded: Page = await waitFor(async () => { const p: Page = await js(TESTING); return p && p.state.stages.length === names.length ? p : null; }, 5000);
-    const written = JSON.parse(fs.readFileSync(suiteFile, 'utf8')) as { stages: { name: string; command: string }[] };
-    check(seeded && JSON.stringify(seeded.state.stages) === JSON.stringify(names) && JSON.stringify(written.stages) === JSON.stringify(CLAUDE_STAGES), `Start from the project's commands writes the task's suite file: ${JSON.stringify(seeded?.state.stages)}`);
-    check(fs.readFileSync(pipelineFile, 'utf8') === `${JSON.stringify(CLAUDE_STAGES, null, 2)}\n`, 'the old pipeline file is left as it was');
+    const written = (fs.existsSync(suiteFile) ? JSON.parse(fs.readFileSync(suiteFile, 'utf8')) : { stages: [] }) as { stages: { name: string; command: string }[] };
+    check(seeded && JSON.stringify(seeded.state.stages) === JSON.stringify(names) && JSON.stringify(written.stages.map(({ name, command }) => ({ name, command }))) === JSON.stringify(CLAUDE_STAGES), `Start from the project's commands writes the repo's suite file in Petal: ${JSON.stringify(seeded?.state.stages)}`);
+    check(fs.existsSync(petalFileOf(project, 'pipeline.json')) && fs.readFileSync(pipelineFile, 'utf8') === `${JSON.stringify(CLAUDE_STAGES, null, 2)}\n` && inRepo() === '.gitignore,pipeline.json,tasks.json', `the old folder was copied into Petal and is left as it was, nothing added in the repo: ${inRepo()}`);
 
     // New commands still ask before their first run; the one she confirmed before is not new. Nothing runs here.
     const runsBefore = testingFixture.runs.length;
@@ -164,11 +169,10 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(asked && JSON.stringify(asked.confirm) === JSON.stringify(expected) && testingFixture.runs.length === runsBefore, `the confirm names every command, new ones marked: ${JSON.stringify(asked?.confirm)}`);
     await js("[...document.querySelectorAll('#testing .tst-confirm .tst-button')].find((b) => b.textContent === 'Cancel').click()");
 
-    // A change to the suite file from outside the task's testing agent is not taken: the stages stay and the reason shows.
-    // Lock off and no session seen writing it, so it reads as her own edit: hers to use or keep the old suite.
+    // Any session's change is taken with Undo, but a suite file Petal can't use is not: the stages stay and the reason shows.
     put(suiteFile, JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test\nrm -rf ~' }] }));
-    const refused: Page = await openTesting((p) => /^Changed outside the testing agent\./.test(p.change));
-    check(refused && refused.change === 'Changed outside the testing agent. Use this file · Keep the old suite' && refused.state.stages.length === names.length, `an outside change is not taken and the suite stays: ${refused?.change}`);
+    const refused: Page = await openTesting((p) => /^The suite file can’t be used/.test(p.change));
+    check(refused && refused.change === 'The suite file can’t be used: stage 1 needs a one-line command.' && refused.state.stages.length === names.length, `a file that can't be used is not taken and the suite stays: ${refused?.change}`);
   } finally {
     stylesFixture.claudeDir = null;
     testingFixture.project = null;

@@ -11,6 +11,7 @@ import { READING_CHOICES } from '../main/menu';
 import { recordActivity, flush as flushActivity } from '../main/activity-feed';
 import { assertFixtureOutsideClaude } from './snapshot-views';
 import { keepActivity } from './snapshot-activity';
+import { petalDirOf, petalFileOf, repoUntouched } from './snapshot-testing';
 
 interface Fixture {
   id: string;
@@ -123,6 +124,7 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
 
     // Fixture: two sessions in repo "shop" (both edit src/cart.ts) and one in repo "api" (its own src/cart.ts), all tabs here.
     fs.rmSync(dir, { recursive: true, force: true });
+    for (const f of ALL) fs.rmSync(petalDirOf(repoOf(f)), { recursive: true, force: true }); // Petal's folder for each repo
     folderFixture.home = path.join(dir, 'claude-home');
     panelFixture.sessions = null; // only these tabs are live
     for (const f of ALL) {
@@ -151,7 +153,7 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     check(!(await js("document.querySelector('#board .board-tasks, #board .board-give, #board .task-row')")), 'no task list or Give task on the Board');
 
     // 2 A task given to the login session through the store (as Testing does) shows on its card; Task lines move it.
-    const file = path.join(repoOf(LOGIN), '.petal', 'tasks.json');
+    const file = petalFileOf(repoOf(LOGIN), 'tasks.json');
     const added = await taskOp(loginTab, { kind: 'add', title: 'Fix the cart total', notes: 'Rounding is off by a cent' });
     const cartTask: string = added?.tasks?.[0]?.id ?? '';
     const brief = 'Task: Fix the cart total. Rounding is off by a cent. When you start, end your replies with **Task:** Fix the cart total · working|blocked|done.';
@@ -166,7 +168,7 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     const done = await waitFor(async () => { const c = await extras(LOGIN); return c?.task === 'Fix the cart total · Done' ? c : null; }, 8000);
     check(done, `the done line moves it to Done: ${JSON.stringify(done ?? await extras(LOGIN))}`);
     const doneFile = (JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: { id: string; status: string; doneBy: { sessionId: string } | null }[] }).tasks.find((t) => t.id === cartTask);
-    check(doneFile?.status === 'done' && doneFile.doneBy?.sessionId === LOGIN.id, `and the file records who finished it: ${JSON.stringify(doneFile)}`);
+    check(doneFile?.status === 'done' && doneFile.doneBy?.sessionId === LOGIN.id && repoUntouched(repoOf(LOGIN)), `and the file in Petal records who finished it, nothing in the repo: ${JSON.stringify(doneFile)}`);
     await capture('board-task-line');
 
     // 3 Clash: the two shop sessions both edited src/cart.ts; the api session's src/cart.ts is another repo.

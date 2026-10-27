@@ -10,6 +10,7 @@ import * as testingStore from '../main/testing-store';
 import * as librarySessions from '../main/library-sessions';
 import { mergeTopics } from '../main/library-store';
 import { assertFixtureOutsideClaude } from './snapshot-views';
+import { petalDirOf, petalFileOf } from './snapshot-testing';
 import type { PipelineRun, StageResult } from '../shared/testing';
 
 const STAGES = [{ id: 'typecheck', name: 'Typecheck', command: 'npm run typecheck' }, { id: 'unit', name: 'Unit', command: 'npx vitest run' }];
@@ -73,12 +74,14 @@ export interface SessionLineFixture {
   cleanUp: () => void;
 }
 
-// Before the first conclude: the project, its runs and criteria, a note to update, the switch on, and the gated stub.
+// Before the first conclude: the project, its runs and criteria (in Petal's folder for it), a note to update, the switch on,
+// and the gated stub.
 export function setUpSessionLine({ outDir }: Kit, fixture: string, historySessionId: string): SessionLineFixture {
   const repo = path.join(outDir, 'conclusion-repo');
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
-  fs.mkdirSync(path.join(repo, '.petal'), { recursive: true });
-  fs.writeFileSync(path.join(repo, '.petal', 'test-criteria.md'), '# Test criteria\n\n## Scenarios\n- [pass] pin shows the line\n\n## Bugs\n- [fixed] line overflowed at 800px · round 1\n- [fixed] links lost focus ring · round 2\n- [fixed] stale line after re-conclude · round 2\n- [fail] reading never cleared · round 3\n');
+  fs.rmSync(petalDirOf(repo), { recursive: true, force: true });
+  fs.mkdirSync(petalDirOf(repo), { recursive: true });
+  fs.writeFileSync(petalFileOf(repo, 'criteria.md'), '# Test criteria\n\n## Scenarios\n- [pass] pin shows the line\n\n## Bugs\n- [fixed] line overflowed at 800px · round 1\n- [fixed] links lost focus ring · round 2\n- [fixed] stale line after re-conclude · round 2\n- [fail] reading never cleared · round 3\n');
   const previousProject = testingFixture.project;
   testingFixture.project = repo;
   testingStore.savePipeline(repo, { stages: STAGES, keepGoing: false, autoRun: false, confirmed: [] });

@@ -4,13 +4,14 @@
 //    next saves, and no new agent starts for it.
 // 3. A prompt on the bug fix agent's screen: Needs you on its lane with Show terminal (its terminal mounts in the lane),
 //    a dot on the dock's Testing button, a recorded notification (never shown); a fix landing records one too.
-// 4. Two tasks in one repo run at once; the same task stays one at a time.
+// 4. One run at a time per checkout, since it runs the repo's one suite: a second run waits, for any task; the other
+//    task's run starts once the first is done.
 // 5. A stage log over 2 MB is read from its tail and says so.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { FIXER_SESSION, FIXTURE_TASK, endLoop, seedTestingProject, useAgentFixtures } from './snapshot-testing';
+import { FIXER_SESSION, FIXTURE_TASK, endLoop, petalFileOf, seedTestingProject, useAgentFixtures } from './snapshot-testing';
 import { CRITERIA_FIXTURE } from './snapshot-test-loop';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { pasteWrites, testingFixture } from '../main/snapshot-mode';
@@ -25,13 +26,13 @@ const OTHER_TASK = 't-checkout';
 const ASK_SCREEN = ['─'.repeat(40), ' Bash command', '', '   npm test', '', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', '', ' Esc to cancel · Tab to amend'];
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
-// A second task in the fixture repo; the repo has one one-stage suite.
+// A second task in the fixture repo; the repo has one one-stage suite. Both in Petal's folder for the repo.
 function seedOtherTask(project: string): void {
-  const file = path.join(project, '.petal', 'tasks.json');
+  const file = petalFileOf(project, 'tasks.json');
   const data = JSON.parse(fs.readFileSync(file, 'utf8')) as { tasks: unknown[] };
   const task = { id: OTHER_TASK, title: 'Checkout totals', notes: '', status: 'working', owner: null, createdAt: Date.now() - 86_400_000, claimedAt: null, doneAt: null, doneBy: null, prdId: null, parentId: null };
   put(file, JSON.stringify({ ...data, tasks: [...data.tasks, task] }, null, 2));
-  put(path.join(project, '.petal', 'suite.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test', level: 'regression' }], keepGoing: false, autoRun: false }, null, 2));
+  put(petalFileOf(project, 'suite.json'), JSON.stringify({ stages: [{ name: 'Unit', command: 'npm test', level: 'regression' }], keepGoing: false, autoRun: false }, null, 2));
 }
 
 export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -62,7 +63,7 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(fixerTab && started.tester?.hostTabId && testingFixture.loopStarts.length === 2, `both agents start in fixture tabs: ${JSON.stringify(started)}`);
     check(await waitFor(async () => (await js(`PastelTerm.tabs.get(${JSON.stringify(fixerTab)})?.update?.sessionId`)) === FIXER_SESSION || null, 10000), 'the bug fix agent tab follows its fixture session');
     const pastesBefore = pasteWrites.length;
-    put(path.join(project, '.petal', 'test-criteria.md'), CRITERIA_FIXTURE);
+    put(petalFileOf(project, 'criteria.md'), CRITERIA_FIXTURE); // the repo's criteria file, as the testing agent writes it
     const handed = await waitFor(() => pasteWrites.slice(pastesBefore).find((w) => w.tabId === fixerTab && w.data.includes('Bug: ')) ?? null, 25000);
     check(handed, `main hands a bug to the bug fix agent with Testing closed: ${JSON.stringify(handed?.data.slice(0, 80))}`);
     const fixing = await waitFor(() => savedLoop()?.queue.find((b) => b.state === 'fixing') ?? null, 6000);
@@ -111,28 +112,32 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(name && fixed && fixed.body === `${name} · awaiting verify`, `a fix landing records a notification: ${JSON.stringify(fixed)}`);
     await js('PastelTerm.overlays.hideCurrent()');
 
-    // 4. Two tasks in one repo run at once; the same task stays one at a time.
+    // 4. One run at a time per checkout: a second waits, for this task or another; the other task's starts after.
     const run = (taskId: string) => js(`window.pastel.testing.run({ tabId: ${JSON.stringify(fixtureTab)}, root: null, taskId: ${JSON.stringify(taskId)}, confirmed: true })`) as Promise<{ started?: string; note?: string }>;
+    const waits = 'A run is still going in this checkout.';
     const first = await run(FIXTURE_TASK);
     const twice = await run(FIXTURE_TASK);
     const beside = await run(OTHER_TASK);
-    check(first.started && twice.note === 'A run is still going for this task.' && beside.started, `another task runs beside it, the same task waits: ${JSON.stringify({ first, twice, beside })}`);
+    check(first.started && twice.note === waits && beside.note === waits, `a second run waits, whatever its task: ${JSON.stringify({ first, twice, beside })}`);
     const history = await js(`window.pastel.testing.history(${JSON.stringify(fixtureTab)})`) as { running?: string[] };
-    check(JSON.stringify([...(history.running ?? [])].sort()) === JSON.stringify([first.started, beside.started].sort()), `both runs show as going: ${JSON.stringify(history.running)}`);
+    check(JSON.stringify(history.running ?? []) === JSON.stringify([first.started]), `only the first run shows as going: ${JSON.stringify(history.running)}`);
+    const mine = testingFixture.runs.find((r) => r.runId === first.started);
+    if (mine) { for (const s of mine.stages) put(s.exit, '0\n'); put(path.join(mine.dir, 'done'), '0\n'); }
+    await waitFor(() => store.load(project).runs.find((r) => r.id === first.started && r.state !== 'running') ?? null, 8000);
+    const after = await waitFor(async () => { const r = await run(OTHER_TASK); return r.started ? r : null; }, 8000);
+    check(after?.started, `once it is done, the other task's run starts: ${JSON.stringify(after)}`);
 
     // 5. The other task's Unit stage writes over 2 MB and fails: only the tail is read, and the output says so.
-    const big = testingFixture.runs.find((r) => r.runId === beside.started);
-    const mine = testingFixture.runs.find((r) => r.runId === first.started);
+    const big = testingFixture.runs.find((r) => r.runId === after?.started);
     if (big) {
       const filler = `${'x'.repeat(99)}\n`.repeat(Math.ceil((LOG_TAIL_BYTES * 1.25) / 100));
       put(big.stages[0].log, `${filler} FAIL src/cart.test.ts > totals > rounds per line\n Test Files  1 failed (1)\n      Tests  1 failed | 3 passed (4)\n`);
       put(big.stages[0].exit, '1\n');
       put(path.join(big.dir, 'done'), '1\n');
     }
-    if (mine) { for (const s of mine.stages) put(s.exit, '0\n'); put(path.join(mine.dir, 'done'), '0\n'); }
-    const trimmed = await waitFor(() => store.load(project).runs.find((r) => r.id === beside.started && r.state !== 'running') ?? null, 8000);
+    const trimmed = await waitFor(() => store.load(project).runs.find((r) => r.id === after?.started && r.state !== 'running') ?? null, 8000);
     const unit = trimmed?.stages[0];
-    check(unit?.status === 'failed' && unit.output.startsWith(trimmedNote()) && unit.output.length < 6000, `a huge log is read from its last 2 MB: ${JSON.stringify(unit && { status: unit.status, head: unit.output.slice(0, 60), length: unit.output.length })}`);
+    check(trimmed?.taskId === OTHER_TASK && unit?.status === 'failed' && unit.output.startsWith(trimmedNote()) && unit.output.length < 6000, `a huge log is read from its last 2 MB: ${JSON.stringify(unit && { status: unit.status, head: unit.output.slice(0, 60), length: unit.output.length })}`);
 
     // The Notifications switch in Customize › Sessions: on by default; off, testing:notify records nothing.
     await js("PastelTerm.customize.open('sessions')");

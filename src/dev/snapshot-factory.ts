@@ -1,8 +1,8 @@
 // Customize › Factory (PASTEL_SNAPSHOT_MODE=factory), against a stand-in ~/.claude and a fixture repo in the snapshot folder:
 // the seven default stations in order; an edit, an add, a remove, a button move and a drag each land in SKILL.md;
-// removing asks inline, never with a browser dialog; the project override goes to the fixture repo's .petal and the
-// scope line switches; Use global takes it away again; nothing spills sideways at 800px. The Test badge reads Claude,
-// the Add button shows its word, and every folder Petal writes in the repo carries a self-ignoring .gitignore.
+// removing asks inline, never with a browser dialog; the project override goes to Petal's folder for the fixture repo,
+// never the repo, and the scope line switches; Use global takes it away again; nothing spills sideways at 800px. The Test
+// badge reads Claude and the Add button shows its word.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -10,6 +10,7 @@ import type { Kit } from './snapshot';
 import { factoryFixture } from '../main/snapshot-mode';
 import { resizeOffscreen } from '../main/snapshot-window';
 import { DEFAULT_STATIONS, GENERATED_MARKER } from '../shared/factory';
+import { petalDirOf, petalFileOf, repoUntouched } from './snapshot-testing';
 
 const WIDTH = 800;
 const HEIGHT = 900;
@@ -51,12 +52,13 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
   const repo = path.join(kit.outDir, 'factory-repo');
   fs.rmSync(claudeDir, { recursive: true, force: true });
   fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(petalDirOf(repo), { recursive: true, force: true });
   fs.mkdirSync(claudeDir, { recursive: true });
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
   Object.assign(factoryFixture, { claudeDir, repo });
   const skill = path.join(claudeDir, 'skills', 'factory', 'SKILL.md');
-  const projectMd = path.join(repo, '.petal', 'factory.md');
-  const projectSkill = path.join(repo, '.claude', 'skills', 'factory', 'SKILL.md');
+  const projectMd = petalFileOf(repo, 'factory.md');
+  const projectJson = petalFileOf(repo, 'factory.json');
 
   const run = (code: string) => js(`Promise.resolve(${code}).then(() => 0)`); // statements only: executeJavaScript can't return functions or elements
   const nodeCount = (n: number) => waitFor(async () => (await js(NAMES)).length === n, 5000);
@@ -118,13 +120,12 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(await waitFor(() => headings(skill)[0] === '## 1. Learn', 5000), `drag reorders SKILL.md: ${JSON.stringify(headings(skill))}`);
     check((await js(NAMES))[0] === 'Learn', 'the chart shows the dragged order');
 
-    // Project override: copied from global into the fixture repo's .petal, and the scope line switches.
+    // Project override: copied from global into Petal's folder for the fixture repo, and the scope line switches.
     await run(click('.fx-scope [data-scope="project"]'));
     check(new RegExp(`This project \\(${path.basename(repo)}\\)`).test(await js("document.querySelector('#customize .fx-scope [data-scope=\"project\"]').textContent")), 'scope switch names the fixture repo');
     await run(click('.fx-customise'));
-    check(await waitFor(() => fs.existsSync(projectMd) && fs.existsSync(path.join(repo, '.petal', 'factory.json')), 5000), 'Customise for this project writes .petal/factory.json and factory.md');
-    const ignores = [path.join(repo, '.petal', '.gitignore'), path.join(path.dirname(projectSkill), '.gitignore')].map((f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null));
-    check(fs.existsSync(projectSkill) && ignores.every((t) => t === '*\n'), `project skill written, both folders self-ignored: ${JSON.stringify(ignores)}`);
+    check(await waitFor(() => fs.existsSync(projectMd) && fs.existsSync(projectJson), 5000), `Customise for this project writes factory.json and factory.md in Petal: ${petalDirOf(repo)}`);
+    check(repoUntouched(repo), 'nothing is written in the repo: no .petal/, no project skill in .claude/');
     check(await waitFor(async () => /this project’s factory/.test(await js(FOLLOWS)), 3000), `scope line follows the project: ${await js(FOLLOWS)}`);
     const globalBefore = fs.readFileSync(skill, 'utf8');
     await run(click('[data-station="intake"] .fx-card'));
@@ -140,7 +141,7 @@ export async function factoryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     // Use global: inline confirm, the override goes, the line switches back.
     await run(click('.fx-use-global'));
     await run(click('.fx-confirm-yes'));
-    check(await waitFor(() => !fs.existsSync(path.join(repo, '.petal')) && !fs.existsSync(path.join(repo, '.claude')), 5000), 'Use global deletes the override and the project skill');
+    check(await waitFor(() => !fs.existsSync(projectMd) && !fs.existsSync(projectJson), 5000) && repoUntouched(repo), 'Use global deletes the override from Petal, and the repo stays untouched');
     check(await waitFor(async () => /Claude follows the global factory/.test(await js(FOLLOWS)), 3000), `scope line back on global: ${await js(FOLLOWS)}`);
 
     // A factory skill she wrote herself stops the save with one line and stays byte for byte.

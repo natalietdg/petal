@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
-// Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and its one task's suite;
+// Testing: a fixture project (vitest, .maestro flows, a prove-it skill) shows its stack and the repo's one suite, kept in Petal;
 // Run suite confirms the exact commands, then records the line a new tab would run (never executed);
 // fixture exit codes and a real vitest JSON report finish it; results group with failures first; Send to bug fix agent
 // starts the task's bug fix agent on the failure (Ask in this session instead records the paste); Claude's runs in the fixture log land in history as rows that say what ran, why, what changed and
-// how long it took; a tab in ~ picks a Claude session instead; a task with no suite starts one from Claude's checks;
+// how long it took; a tab in ~ picks a Claude session instead; a repo with no suite starts one from Claude's checks;
 // a repo with no tasks gives the tab's session one, and its drafting agent a lane; editing saves; every theme, style and width fits.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { resizeOffscreen } from '../main/snapshot-window';
-import { extraTabFixtures, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
+import { extraTabFixtures, fakeHomeDir, fixtureFile, historyFixture, panelFixture, pasteWrites, testingFixture, type FixtureSession } from '../main/snapshot-mode';
 import { READING_CHOICES } from '../main/menu';
 import * as store from '../main/testing-store';
 import { writeSuite } from '../main/repo-suite-store';
@@ -31,12 +31,19 @@ const fixtureOutput = (name: string): string => {
 };
 const put = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
 
+// A fixture repo's folder in Petal, from the rule rather than Petal's code: <fake home>/.petal/repos/<path, non-alphanumerics as "-">.
+export const petalDirOf = (repo: string): string => path.join(fakeHomeDir(), '.petal', 'repos', path.resolve(repo).replace(/[^A-Za-z0-9]/g, '-'));
+export const petalFileOf = (repo: string, ...parts: string[]): string => path.join(petalDirOf(repo), ...parts);
+// Petal wrote nothing of its own into the repo: no .petal/ and no .claude/.
+export const repoUntouched = (repo: string): boolean => !fs.existsSync(path.join(repo, '.petal')) && !fs.existsSync(path.join(repo, '.claude'));
+
 // A fake project and Claude folder under the snapshot folder; nothing of hers.
 export function seedTestingProject(outDir: string): { project: string; claudeDir: string; bare: string } {
   const project = path.join(outDir, 'testing-fixture', 'acme');
   const bare = path.join(outDir, 'testing-fixture', 'notes-app'); // a repo with nothing to detect: no stages
   const claudeDir = path.join(outDir, 'testing-fixture', 'claude');
   fs.rmSync(path.dirname(project), { recursive: true, force: true });
+  for (const name of ['acme', 'notes-app', 'empty-app', 'empty-shell']) fs.rmSync(petalDirOf(path.join(path.dirname(project), name)), { recursive: true, force: true }); // an earlier step's
   fs.mkdirSync(path.join(project, '.git'), { recursive: true });
   fs.mkdirSync(path.join(bare, '.git'), { recursive: true });
   put(path.join(project, 'package.json'), JSON.stringify({
@@ -59,7 +66,7 @@ const PICK_NEW = '5e550000-0000-4000-8000-0000000000a1'; // the session picker's
 const PICK_LOOSE = '5e550000-0000-4000-8000-0000000000a2';
 const PICK_NOTES = '5e550000-0000-4000-8000-0000000000a3';
 const PICK_AGENT = '5e550000-0000-4000-8000-0000000000a4'; // the notes task's testing agent
-const tasksJson = (repo: string): string => path.join(repo, '.petal', 'tasks.json');
+const tasksJson = (repo: string): string => petalFileOf(repo, 'tasks.json');
 export const FIXER_SESSION = '7e570000-0000-4000-8000-0000000000f1';
 
 // The terminal main says runs an agent in a window: the one following its session, else the one it is starting in.
@@ -105,13 +112,13 @@ export function useAgentFixtures(outDir: string, testerId = 'snapshot-fixture'):
   return { fixer, fixerLog };
 }
 
-// One task held by the fixture session since before its first logged run, so Claude's runs file under it; its suite if given.
+// One task held by the fixture session since before its first logged run, so Claude's runs file under it; the repo's suite if given.
+// Both in Petal's folder for the repo, never in the repo.
 function seedTask(repo: string, id: string, title: string, stages: [string, string][] | null): void {
   const owner = { sessionId: 'snapshot-fixture', name: 'Fixture', branch: 'main' };
   const task = { id, title, notes: '', status: 'working', owner, createdAt: Date.now() - 4 * 86_400_000, claimedAt: Date.now() - 3 * 86_400_000, doneAt: null, doneBy: null, prdId: null, parentId: null };
-  put(path.join(repo, '.petal', '.gitignore'), '*\n');
-  put(path.join(repo, '.petal', 'tasks.json'), JSON.stringify({ version: 2, prds: [], tasks: [task] }, null, 2));
-  if (stages) put(path.join(repo, '.petal', 'suite.json'), JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command, level: 'regression' })), keepGoing: false, autoRun: false }, null, 2));
+  put(tasksJson(repo), JSON.stringify({ version: 2, prds: [], tasks: [task] }, null, 2));
+  if (stages) put(petalFileOf(repo, 'suite.json'), JSON.stringify({ stages: stages.map(([name, command]) => ({ name, command, level: 'regression' })), keepGoing: false, autoRun: false }, null, 2));
 }
 
 const VITEST_PASS = (n: number) => ` ✓ src/theme.test.ts (${n} tests) 4ms\n\n Test Files  1 passed (1)\n      Tests  ${n} passed (${n})\n`;
@@ -225,7 +232,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(found('prove-it')?.[1] === 'found in user skills' && !found('deploy'), `prove-it skill listed, deploy not: ${JSON.stringify(found('prove-it'))}`);
     check(found('qa-runner') && found('CI'), 'the qa-runner agent and the CI workflow are listed');
     check(JSON.stringify(opened?.state.stages) === JSON.stringify(['Typecheck', 'Unit', 'Mobile flows']), `the task's stages: ${JSON.stringify(opened?.state.stages)}`);
-    check(opened && opened.head === 'Settings screen · No PRD · 3 stages' && !/acme/.test(opened.head as string), `the header names the task, not the project: ${opened?.head}`);
+    check(opened && opened.head === 'acme · 3 stages', `the header names the repo and its one suite: ${opened?.head}`);
 
     // Claude's run from the fixture log, mapped onto the Unit stage, labelled by Claude.
     const claude = await settle((p) => (p.runs as string[]).some((r) => /by Claude/.test(r)));
@@ -286,7 +293,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(doneRun && (doneRun.bars as number) >= 2 && /^Suite · 3 stages.*by you.*Run suite/.test(doneRun.history[1] ?? ''), `her run is the newest row, titled by what ran: ${JSON.stringify(doneRun?.history.slice(0, 2))}`);
     await capture('testing-pipeline');
 
-    // Edit suite: add a stage, save, and it is kept in the task's file; then back to the three.
+    // Edit suite: add a stage, save, and it is kept in the repo's suite file in Petal; then back to the three.
     await click('#testing .tst-head .tst-button:not(.tst-primary)');
     const editing = await settle((p) => p.state.editing);
     check(editing && await js("document.querySelectorAll('#testing .tst-edit-row').length") === 3, 'the editor lists the three stages');
@@ -295,8 +302,10 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await js("(() => { const rows = document.querySelectorAll('#testing .tst-edit-row'); const last = rows[rows.length - 1]; const [n, c] = last.querySelectorAll('input'); n.value = 'Lint'; n.dispatchEvent(new Event('input')); c.value = 'npm run lint'; c.dispatchEvent(new Event('input')); })()");
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Save suite').click()");
     const saved = await settle((p) => !p.state.editing && p.state.stages.length === 4);
-    const suiteJson = fs.readFileSync(path.join(project, '.petal', 'suite.json'), 'utf8');
-    check(saved && saved.state.stages[3] === 'Lint' && suiteJson.includes('"npm run lint"'), `saved with a fourth stage, in the repo's suite file: ${JSON.stringify(saved?.state.stages)}`);
+    const suiteFile = petalFileOf(project, 'suite.json');
+    const suiteJson = fs.existsSync(suiteFile) ? fs.readFileSync(suiteFile, 'utf8') : '';
+    check(saved && saved.state.stages[3] === 'Lint' && suiteJson.includes('"npm run lint"'), `saved with a fourth stage, in the repo's suite file in Petal: ${JSON.stringify(saved?.state.stages)}`);
+    check(repoUntouched(project), 'nothing is written inside the repo');
     await click('#testing .tst-head .tst-button:not(.tst-primary)');
     await settle((p) => p.state.editing);
     await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Use detected stages').click()");
@@ -397,15 +406,17 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       await js('PastelTerm.overlays.hideCurrent()');
       await click('#testing-button');
       const home = await settle((p) => p.state.elsewhere?.reason === 'home');
-      const wantRows = [['Notes sorting', 'notes-app · closed has a suite', 'Testing agent · busy'], ['Polish the settings copy', 'acme · busy', null]];
+      const wantRows = [['Notes sorting', 'notes-app · closed has a suite', 'Testing agent · busy'], ['Polish the settings copy', 'acme · busy has a suite', null]];
       check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, newest first, ~ and the agent session left out, the agent's status on its owner: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
       check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');
       await capture('testing-picker');
 
-      // A session holding a task lands on that task's suite; the task select still switches within its repo.
+      // A session holding a task lands on that task with the repo's suite; the task select still switches within its repo.
       await click(`#testing .tst-pick[data-session="${PICK_NOTES}"]`);
       const held = await settle((p) => p.state.project === 'notes-app' && JSON.stringify(p.state.target) === JSON.stringify({ kind: 'task', id: 't-notes-sort' }));
-      check(held && held.state.task === 'Sort by date' && JSON.stringify(held.state.stages) === JSON.stringify(['Unit']), `a session with a task opens that task's suite: ${JSON.stringify(held?.state.target)} ${JSON.stringify(held?.state.stages)}`);
+      check(held && held.state.task === 'Sort by date' && JSON.stringify(held.state.stages) === JSON.stringify(['Unit']), `a session with a task opens on it, with the repo's suite: ${JSON.stringify(held?.state.target)} ${JSON.stringify(held?.state.stages)}`);
+      fs.rmSync(petalFileOf(bare, 'suite.json'), { force: true }); // another session removed the repo's suite
+      await settle((p) => p.state.stages.length === 0);
       await js("(() => { const s = document.querySelector('#testing .tst-task-select'); s.value = 'task:t-notes'; s.dispatchEvent(new Event('change')); })()");
       const notes = await settle((p) => p.state.task === 'Sort notes by date' && Boolean(p.makePipeline));
       check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
@@ -418,12 +429,12 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       await click('#testing .tst-change-session');
       check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change session goes back to the picker');
 
-      // A session with no task gets exactly one, titled with its name and given to it, and lands on its no-suite screen.
+      // A session with no task gets exactly one, titled with its name and given to it, and lands on it with the repo's suite.
       await click(`#testing .tst-pick[data-session="${PICK_NEW}"]`);
-      const fresh = await settle((p) => p.state.project === 'acme' && p.state.task === 'Polish the settings copy' && Boolean(p.noSuite));
+      const fresh = await settle((p) => p.state.project === 'acme' && p.state.task === 'Polish the settings copy' && p.state.stages.length === 3);
       const owned = (JSON.parse(fs.readFileSync(tasksJson(project), 'utf8')) as { tasks: { id: string; title: string; owner: { sessionId: string } | null }[] }).tasks.filter((t) => t.owner?.sessionId === PICK_NEW);
       check(owned.length === 1 && owned[0]?.title === 'Polish the settings copy', `one task made for the session, owned by it: ${JSON.stringify(owned)}`);
-      check(fresh && JSON.stringify(fresh.state.target) === JSON.stringify({ kind: 'task', id: owned[0]?.id }) && fresh.state.stages.length === 0, `it opens on that task's no-suite screen: ${JSON.stringify(fresh?.state.target)}`);
+      check(fresh && JSON.stringify(fresh.state.target) === JSON.stringify({ kind: 'task', id: owned[0]?.id }) && !fresh.noSuite, `it opens on that task, the repo's suite shown: ${JSON.stringify(fresh?.state.target)}`);
       await click('#testing .tst-change-session');
       check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change session goes back to the picker again');
     } finally {
@@ -432,7 +443,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       store.save({ ...store.load(bare), agents: before.notesStore.agents, repoSuite: before.notesStore.repoSuite });
       put(tasksJson(project), before.acme);
       put(tasksJson(bare), before.notes);
-      fs.rmSync(path.join(bare, '.petal', 'suite.json'), { force: true });
+      fs.rmSync(petalFileOf(bare, 'suite.json'), { force: true });
       testingFixture.project = project;
     }
 
@@ -457,7 +468,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       const startsBefore = testingFixture.loopStarts.length;
       await click('#testing .tst-ask-suite');
       const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
-      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `.petal/suite.json`') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
+      check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `suite.json` in the suite folder') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
       const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
         const box = document.querySelector('#testing .tst-agentsbox');
         const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];
