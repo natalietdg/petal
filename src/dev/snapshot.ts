@@ -38,6 +38,7 @@ import { reposCheck } from './snapshot-repos';
 import { latencyCheck } from './snapshot-latency';
 import { replyLatencyCheck } from './snapshot-reply-latency';
 import { pasteCheck } from './snapshot-paste';
+import { readerDropCheck } from './snapshot-reader-drop';
 import { tarotCheck } from './snapshot-tarot';
 import { shortcutsCheck } from './snapshot-shortcuts';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
@@ -412,6 +413,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['tabs', () => views.tabsCheck(kit, { win, feed, ...tabs })], // before the flow steps, which can hang on their own
     ['composer', () => views.composerCheck(kit, { win, ...tabs })],
     ['paste', () => pasteCheck(kit, { win, ...tabs })],
+    ['reader drop', () => readerDropCheck(kit, { win, ...tabs })],
     ['prompts', () => promptsCheck(kit, { win, ...tabs })],
     ['builtin menus', () => builtinMenusCheck(kit, { win, ...tabs })],
     ['sessions close', () => views.sessionsCloseCheck(kit)],
@@ -639,6 +641,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     await wait(2500); // the stand-in shell's rc files
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await petOnboardingCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'reader-drop') {
+    await wait(2500); // the stand-in shell's rc files
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await readerDropCheck(kit, { win, activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
