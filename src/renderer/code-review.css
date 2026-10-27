@@ -47,10 +47,19 @@
 }
 .cr-line { display: block; padding: 0 10px; white-space: pre; }
 .cr-sign { display: inline-block; width: 1.4em; color: var(--muted); user-select: none; }
-.cr-add { background: var(--done-wash); color: var(--done-ink); }
-.cr-add .cr-sign { color: var(--done-ink); }
-.cr-del { background: var(--decide-wash); color: var(--decide-ink); }
-.cr-del .cr-sign { color: var(--decide-ink); }
+.cr-add { background: var(--done-wash); }
+.cr-add .cr-sign { color: var(--done-ink); font-weight: 700; }
+.cr-del { background: var(--decide-wash); }
+.cr-del .cr-sign { color: var(--decide-ink); font-weight: 700; }
+/* Syntax tokens sit on the line tint; colours come from theme.ts. */
+.cr-code { color: var(--reader-fg); }
+.cr-code .hljs-keyword, .cr-code .hljs-built_in, .cr-code .hljs-literal, .cr-code .hljs-meta { color: var(--syn-keyword); }
+.cr-code .hljs-string, .cr-code .hljs-regexp, .cr-code .hljs-template-tag { color: var(--syn-string); }
+.cr-code .hljs-number, .cr-code .hljs-symbol, .cr-code .hljs-bullet { color: var(--syn-number); }
+.cr-code .hljs-title, .cr-code .hljs-title.class_, .cr-code .hljs-type, .cr-code .hljs-name, .cr-code .hljs-selector-tag, .cr-code .hljs-selector-class { color: var(--syn-type); }
+.cr-code .hljs-title.function_ { color: var(--syn-function); }
+.cr-code .hljs-attr, .cr-code .hljs-attribute, .cr-code .hljs-property, .cr-code .hljs-variable.language_ { color: var(--syn-attr); }
+.cr-code .hljs-comment, .cr-code .hljs-quote, .cr-code .hljs-doctag { color: var(--syn-comment); font-style: italic; }
 .cr-gap { color: var(--muted); font-style: italic; font-family: var(--ui-font); font-size: 12px; }
 
 .cr-why { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--why-wash); font-size: 14px; line-height: 1.5; }

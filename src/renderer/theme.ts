@@ -22,6 +22,12 @@ export function toXterm({ terminal }: Theme): ITheme {
   return xtermTheme;
 }
 
+// Code review syntax colours: one hue per token kind; worst case 4.86:1 on any theme's added, removed or context line.
+const SYNTAX_LIGHT = { keyword: '#AD0057', string: '#145A22', number: '#0A4F96', function: '#5B2BA3', type: '#065C64', attr: '#853A00', comment: '#4F5761' };
+const SYNTAX_DARK = { keyword: '#FF9088', string: '#8EE59A', number: '#7CC4FF', function: '#D7AEFF', type: '#5FD8E0', attr: '#FFB066', comment: '#A3ACB7' };
+const syntaxVars = (dark: boolean): Record<string, string> =>
+  Object.fromEntries(Object.entries(dark ? SYNTAX_DARK : SYNTAX_LIGHT).map(([kind, colour]) => [`--syn-${kind}`, colour]));
+
 export function applyCssVars({ terminal, reader, dark }: Theme): void {
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; // scrollbars and form controls
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'; // lets CSS adjust the pixel art at night
@@ -35,6 +41,7 @@ export function applyCssVars({ terminal, reader, dark }: Theme): void {
     '--highlight': reader.highlight,
     '--highlight-ink': reader.highlightInk,
     '--rule': reader.rule,
+    ...syntaxVars(dark),
   };
   for (const [name, label] of Object.entries(reader.labels)) {
     vars[`--${name}-pill`] = label.pill;
