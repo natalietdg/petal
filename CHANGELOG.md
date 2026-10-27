@@ -2,6 +2,17 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.4] · 2026-10-27
+- Code review: each reply that changed code gets a Code review (N) tab, its changes split into functions and explained by a reviewer Claude, including what its subagents wrote. The Board rolls it up per task.
+- PRs (N) in the reader: every PR a session made or named, with its services, an "Is main safe for prod?" check, a deploy order and a flow diagram.
+- Copy on every reply: the whole reply as one styled section, diagrams included.
+- Find in the reader with ⌘F, and History search reads the conversations too. The reader redraws only the reply that changed.
+- Sessions are named once from context and keep that name. Your /rename still wins.
+- The Agents chip lists every subagent in the session, not just today's.
+- One testing suite per repo, shared by every worktree, kept in Petal (~/.petal/repos) and never in the repo. Testing follows the repo a session worked in.
+- Suites have levels (smoke, regression, staging), opt-in stages, per-scenario Run and Run ticket, Manual checks you tick in Petal, and bugs you can copy for Azure DevOps.
+- The test lock holds only tests and suites, never app code, and lane chat shows your message at once.
+
 ## [1.1.3] · 2026-10-18
 - Library token cost: Read past sessions, Add to Library and Build my Library say about how many tokens they will use before any call, and the Library shows what the last build used.
 - Tidier screens: one Help › Get started, a simpler Get started list, the Board titled Board, "No sessions yet" in the pill, and the setup guide says when Claude starts by itself.
