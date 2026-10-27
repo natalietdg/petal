@@ -712,9 +712,9 @@ async function runScenarios(which: { scenario: string } | { ticket: string }, co
 
 // A run's reply: the confirm to show, a note, or the run started.
 async function started(reply: Awaited<ReturnType<typeof window.pastel.testing.run>>, again: () => Promise<void>): Promise<void> {
-  if (isIpcError(reply)) { message = `Couldn’t start the run: ${reply.error}`; drawAll(); return; }
+  if (isIpcError(reply)) { message = `Couldn’t start the run: ${reply.error}`; drawAll(); note.scrollIntoView({ block: 'nearest' }); return; }
   if ('confirm' in reply) { confirming = { again, commands: reply.confirm.commands }; message = ''; drawAll(); return; }
-  if ('note' in reply) { message = reply.note; drawAll(); return; }
+  if ('note' in reply) { message = reply.note; drawAll(); note.scrollIntoView({ block: 'nearest' }); return; } // the note sits above the suite; a scrolled view hid it
   message = '';
   selectedRun = null;
   await refresh();
