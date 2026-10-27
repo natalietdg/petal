@@ -81,7 +81,7 @@ describe('where scenarios come from', () => {
   it('the draft request names the task, its files, then its notes and PRD as the source', () => {
     const request = draftRequest({ id: 't-1', title: 'Refunds', notes: 'Refunds cap at the amount paid.' }, { title: 'Payments', notes: 'Every refund emails the payer.' });
     expect(request.split('\n')).toEqual([
-      'for task t-1: "Refunds". Set up or extend this repo\'s suite in .petal/suite.json, and write its scenarios and bugs in .petal/criteria.md.',
+      'for task t-1: "Refunds". Set up or extend this repo\'s suite in ~/.petal/repos/<repoKey>/suite.json, and write its scenarios and bugs in ~/.petal/repos/<repoKey>/criteria.md. Never write either file inside the repo.',
       expect.stringMatching(/^Source of scenarios: /),
       'Task notes:', 'Refunds cap at the amount paid.',
       'PRD "Payments":', 'Every refund emails the payer.',
@@ -144,8 +144,8 @@ describe('her review', () => {
   });
 
   it('the go-ahead names the file, says she may have edited it, and asks for linked tests', () => {
-    const text = scenariosApprovedText('/repo');
-    expect(text).toContain('/repo/.petal/criteria.md');
+    const text = scenariosApprovedText('/h/.petal/repos/-repo');
+    expect(text).toContain('/h/.petal/repos/-repo/criteria.md');
     expect(text).toContain('look right');
     expect(text).toContain('Read the file again first');
     expect(text).toContain('"test: path::test name"');

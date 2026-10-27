@@ -1,6 +1,6 @@
 // Distillation: each test-loop round, Claude asks itself a few pointed questions, answers them from evidence,
 // leaves what it could not settle as "## Open threads", and picks a course. Petal reads all three from replies.
-// Pure, so vitest covers it; main stores records in <repo>/.petal/distillation.jsonl, the renderer draws them.
+// Pure, so vitest covers it; main stores records in ~/.petal/repos/<repoKey>/distillation.jsonl, the renderer draws them.
 import { codeFenceTracker } from './status-lines';
 import { parseLoop } from './loop-line';
 import { parseThreads, sameThread, threadNeedsYou, type Thread } from './reply-threads';
@@ -9,7 +9,7 @@ export const COURSES = ['add-scenarios', 'retest', 'fix-bug', 'hand-to-you'] as 
 export type Course = typeof COURSES[number];
 export const COURSE_WORDS: Record<Course, string> = { 'add-scenarios': 'Add scenarios', retest: 'Retest', 'fix-bug': 'Fix bug', 'hand-to-you': 'Hand to you' };
 
-export const DISTILL_PATH = '.petal/distillation.jsonl';
+export const DISTILL_NAME = 'distillation.jsonl';
 export const DISTILL_FILE_CAP = 1024 * 1024; // bytes read
 export const RECORDS_CAP = 400; // per project, newest kept
 export const QUESTIONS_CAP = 8;

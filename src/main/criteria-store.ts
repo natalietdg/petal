@@ -1,13 +1,14 @@
-// The repo's criteria file, <main checkout>/.petal/criteria.md: scenarios, manual cases and bugs, written by any Claude
-// session and read by Petal. Older per-task files (.petal/criteria/<taskId>.md, .petal/test-criteria.md) are imported
-// once, each line tagged with its task's AB# ticket, and left as they are.
+// The repo's criteria file, ~/.petal/repos/<repoKey>/criteria.md beside its suite: scenarios, manual cases and bugs,
+// written by any Claude session and read by Petal. Older files among the copies of a checkout's old .petal/ (per-task
+// criteria/<taskId>.md, test-criteria.md, a worktree's own criteria.md) are merged in once, tagged with their AB# ticket.
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
 import { loadTasks } from './tasks-store';
 import * as store from './testing-store';
-import { preparePetalDir, suiteHome } from './repo-suite-store';
-import { CRITERIA_PATH, isTaskId } from '../shared/repo-suite';
+import { repoDir } from './petal-home';
+import { prepareSuiteDir, suiteDir, suiteHome, wasImported, type LegacyFile } from './repo-suite-store';
+import { CRITERIA_NAME, isTaskId } from '../shared/repo-suite';
 import {
   CRITERIA_CAP, CRITERIA_DIR, CRITERIA_SKELETON, LEGACY_CRITERIA_PATH, SECTIONS, addCriteriaItems, parseCriteria, setManualResult, setScenarioStatuses, ticketInText,
   type Criteria, type CriteriaItem, type CriteriaSection, type ManualStatus,
@@ -16,14 +17,13 @@ import type { Task } from '../shared/tasks';
 
 const FILES_CAP = 500; // older task files read at most
 
-export const criteriaFile = (root: string): string => path.join(suiteHome(root), ...CRITERIA_PATH.split('/'));
+export const criteriaFile = (root: string): string => path.join(suiteDir(suiteHome(root)), CRITERIA_NAME);
 
-// The repo's file, made with the skeleton (and .petal/ kept out of git) when missing.
+// The repo's file, made with the skeleton when missing.
 export function prepareCriteria(root: string): void {
-  const home = suiteHome(root);
-  preparePetalDir(home);
+  const dir = prepareSuiteDir(suiteHome(root));
   const file = criteriaFile(root);
-  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON, undefined, { within: home });
+  if (!fs.existsSync(file)) writeFileDurable(file, CRITERIA_SKELETON, undefined, { within: dir });
 }
 
 // A test loop or suite draft was started here at some point: the repo has a criteria file, or an older one.
@@ -48,16 +48,25 @@ function readCapped(file: string): { text: string; truncated: boolean } | null {
   }
 }
 
-// Each older criteria file, in the main checkout and this checkout, with the task its name gives (null for the shared one).
-export function legacyCriteriaFiles(root: string): { file: string; taskId: string | null }[] {
-  return [...new Set([suiteHome(root), root])].flatMap((dir) => {
-    const shared = path.join(dir, ...LEGACY_CRITERIA_PATH.split('/'));
-    const own = path.join(dir, ...CRITERIA_DIR.split('/'));
+const inPetal = (rel: string): string[] => rel.split('/').slice(1); // ".petal/x/y" as it sits in the repo's Petal folder
+
+// Each older criteria file, with the task its name gives (null for a shared one): a worktree's own criteria.md, then
+// test-criteria.md and per-task files copied from the main checkout and this checkout.
+export function legacyCriteriaFiles(root: string): LegacyFile[] {
+  const home = suiteHome(root);
+  const ownFile = path.join(repoDir(root), CRITERIA_NAME);
+  const own = root !== home && fs.existsSync(ownFile) ? [{ file: ownFile, original: path.join(root, '.petal', CRITERIA_NAME), taskId: null }] : [];
+  return [...own, ...[...new Set([home, root])].flatMap((checkout) => {
+    const dir = repoDir(checkout);
+    const shared = path.join(dir, ...inPetal(LEGACY_CRITERIA_PATH));
+    const sharedFrom = path.join(checkout, ...LEGACY_CRITERIA_PATH.split('/'));
+    const ownDir = path.join(dir, ...inPetal(CRITERIA_DIR));
     let names: string[] = [];
-    try { names = fs.readdirSync(own); } catch { /* no task files */ }
-    const files = names.filter((n) => n.endsWith('.md') && isTaskId(n.slice(0, -3))).sort().slice(0, FILES_CAP).map((n) => ({ file: path.join(own, n), taskId: n.slice(0, -3) }));
-    return [...(fs.existsSync(shared) ? [{ file: shared, taskId: null }] : []), ...files];
-  });
+    try { names = fs.readdirSync(ownDir); } catch { /* no task files */ }
+    const files = names.filter((n) => n.endsWith('.md') && isTaskId(n.slice(0, -3))).sort().slice(0, FILES_CAP)
+      .map((n) => ({ file: path.join(ownDir, n), original: path.join(checkout, ...CRITERIA_DIR.split('/'), n), taskId: n.slice(0, -3) }));
+    return [...(fs.existsSync(shared) ? [{ file: shared, original: sharedFrom, taskId: null }] : []), ...files];
+  })];
 }
 
 // An older line as the repo file keeps it: its task's AB# id as its ticket, no task part.
@@ -71,7 +80,7 @@ export function importedItem(item: CriteriaItem, taskId: string | null, tasks: r
 export function importLegacyCriteria(root: string, tasks: readonly Task[]): void {
   const home = suiteHome(root);
   const done = new Set(store.load(home).imported ?? []);
-  const fresh = legacyCriteriaFiles(root).filter(({ file }) => !done.has(file));
+  const fresh = legacyCriteriaFiles(root).filter((f) => !wasImported(done, f));
   if (!fresh.length) return;
   const add: Record<CriteriaSection, CriteriaItem[]> = { scenarios: [], manual: [], bugs: [] };
   for (const { file, taskId } of fresh) {
@@ -87,9 +96,9 @@ export function importLegacyCriteria(root: string, tasks: readonly Task[]): void
   const existing = readCapped(target);
   if (existing?.truncated) return;
   if (SECTIONS.some((s) => add[s].length)) {
-    preparePetalDir(home);
+    const dir = prepareSuiteDir(home);
     const next = addCriteriaItems(existing?.text ?? null, add);
-    if (next !== existing?.text) writeFileDurable(target, next, undefined, { within: home });
+    if (next !== existing?.text) writeFileDurable(target, next, undefined, { within: dir });
   }
   store.save({ ...store.load(home), imported: [...done] });
 }
@@ -108,7 +117,7 @@ export function saveManualResult(root: string, name: string, status: ManualStatu
   if (file.truncated) return 'The criteria file is too long for Petal to write back safely.';
   const next = setManualResult(file.text, name, status, result);
   if (next === null) return 'That manual case is gone. It may have been edited in another session.';
-  writeFileDurable(criteriaFile(root), next, undefined, { within: suiteHome(root) });
+  writeFileDurable(criteriaFile(root), next, undefined, { within: suiteDir(suiteHome(root)) });
   return null;
 }
 
@@ -117,5 +126,5 @@ export function saveScenarioStatuses(root: string, statuses: Readonly<Record<str
   const file = readCapped(criteriaFile(root));
   if (!file || file.truncated || !Object.keys(statuses).length) return;
   const next = setScenarioStatuses(file.text, statuses);
-  if (next !== file.text) writeFileDurable(criteriaFile(root), next, undefined, { within: suiteHome(root) });
+  if (next !== file.text) writeFileDurable(criteriaFile(root), next, undefined, { within: suiteDir(suiteHome(root)) });
 }

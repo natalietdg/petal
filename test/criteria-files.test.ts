@@ -8,6 +8,7 @@ import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 import {
   CRITERIA_SKELETON, adoBugText, addCriteriaItems, buildLoopBrief, criteriaText, filterCriteria, parseCriteria, setManualResult, setScenarioStatuses, ticketInText, ticketsOf, untested,
 } from '../src/shared/test-loop';
+import { repoKey } from '../src/main/petal-repos';
 import { criteriaFile, prepareCriteria, readCriteria, saveManualResult, saveScenarioStatuses } from '../src/main/criteria-store';
 import type { Task } from '../src/shared/tasks';
 
@@ -151,8 +152,8 @@ describe('adding items', () => {
 });
 
 describe('the repo file on disk', () => {
-  it('lives in the main checkout: a worktree prepares, reads and writes the same one', () => {
-    useTempUserData();
+  it('lives in Petal’s suite folder for the main checkout: a worktree prepares, reads and writes the same one, and no .petal is made in the repo', () => {
+    const petalHome = useTempUserData(); // the electron mock's app.getPath('home')
     const dir = fs.realpathSync(tempDir('petal-git-'));
     const main = path.join(dir, 'main');
     fs.mkdirSync(main);
@@ -163,15 +164,18 @@ describe('the repo file on disk', () => {
     const wt = path.join(dir, 'wt');
     git(main, 'worktree', 'add', '-q', wt, '-b', 'x');
     prepareCriteria(wt);
-    expect(criteriaFile(wt)).toBe(path.join(main, '.petal', 'criteria.md'));
-    expect(fs.readFileSync(path.join(main, '.petal', 'criteria.md'), 'utf8')).toBe(CRITERIA_SKELETON);
-    put(path.join(main, '.petal', 'criteria.md'), FILE);
+    const file = path.join(petalHome, '.petal', 'repos', repoKey(main), 'criteria.md');
+    expect(criteriaFile(wt)).toBe(file);
+    expect(fs.readFileSync(file, 'utf8')).toBe(CRITERIA_SKELETON);
+    put(file, FILE);
     expect(readCriteria(wt, [])?.manual).toHaveLength(2);
     expect(saveManualResult(wt, 'SMS on a Celcom SIM', 'pass', 'ok')).toBeNull();
     expect(readCriteria(main, [])?.manual[1]).toMatchObject({ status: 'pass', details: { Result: 'ok' } });
     expect(saveManualResult(wt, 'gone', 'pass', '')).toMatch(/gone/);
     saveScenarioStatuses(wt, { 'partial refund emails the payer': 'pass' });
     expect(readCriteria(main, [])?.scenarios[1].status).toBe('pass');
+    expect(fs.existsSync(path.join(main, '.petal'))).toBe(false);
+    expect(fs.existsSync(path.join(wt, '.petal'))).toBe(false);
   });
 
   it('imports older per-task files once: lines merged by text, tagged with the task’s AB# id, old files untouched', () => {
@@ -194,6 +198,20 @@ describe('the repo file on disk', () => {
     expect(readCriteria(root, tasks)?.scenarios.map((s) => s.name)).toEqual(['an old scenario', 'coupon caps']); // not imported again
   });
 
+  it('imports the main checkout’s .petal/criteria.md once and never changes it', () => {
+    const petalHome = useTempUserData();
+    const root = fs.realpathSync(tempDir('petal-repo-'));
+    const inRepo = '## Scenarios\n- [pass] refund capped · test: src/refund.test.ts::caps · ticket: AB#1\n';
+    put(path.join(root, '.petal', 'criteria.md'), inRepo);
+    expect(readCriteria(root, [])?.scenarios.map((s) => [s.name, s.ticket])).toEqual([['refund capped', 'AB#1']]);
+    expect(criteriaFile(root)).toBe(path.join(petalHome, '.petal', 'repos', repoKey(root), 'criteria.md'));
+    saveScenarioStatuses(root, { 'refund capped': 'fail' }); // writes go to Petal's copy only
+    expect(fs.readFileSync(path.join(root, '.petal', 'criteria.md'), 'utf8')).toBe(inRepo);
+    put(path.join(root, '.petal', 'criteria.md'), `${inRepo}- [todo] a later line\n`); // an old-skill session edits the repo copy
+    expect(readCriteria(root, [])?.scenarios.map((s) => [s.name, s.status])).toEqual([['refund capped', 'fail']]); // not imported again
+    expect(fs.readdirSync(path.join(root, '.petal'))).toEqual(['criteria.md']);
+  });
+
   it('no file at all reads as none', () => {
     useTempUserData();
     expect(readCriteria(tempDir('petal-repo-'), [])).toBeNull();
@@ -201,10 +219,10 @@ describe('the repo file on disk', () => {
 });
 
 describe('the loop brief', () => {
-  it('names the repo’s criteria file in the main checkout and the three sections', () => {
-    const brief = buildLoopBrief({ focus: '', rounds: 2, stages: [], stack: [], taskId: 't-1', agent: true, home: '/code/app' });
-    expect(brief).toContain('Criteria file: /code/app/.petal/criteria.md');
-    expect(brief).toContain('The suite lives in /code/app/.petal/suite.json');
+  it('names the repo’s criteria file in Petal’s suite folder and the three sections', () => {
+    const brief = buildLoopBrief({ focus: '', rounds: 2, stages: [], stack: [], taskId: 't-1', agent: true, suiteDir: '/h/.petal/repos/-code-app' });
+    expect(brief).toContain('Criteria file: /h/.petal/repos/-code-app/criteria.md');
+    expect(brief).toContain('The suite lives in /h/.petal/repos/-code-app/suite.json');
     expect(brief).toContain('"## Scenarios", "## Manual" and "## Bugs"');
     expect(brief).not.toMatch(/[—–]/);
   });

@@ -11,6 +11,8 @@ export const isSnapshotRun = (): boolean => process.env.PASTEL_SNAPSHOT === '1';
 export const freshInstallRun = (): boolean => isSnapshotRun() && process.env.PASTEL_SNAPSHOT_MODE === 'pet-onboarding';
 export const snapshotOutDir = (): string => process.env.PASTEL_SNAPSHOT_DIR || path.join(os.tmpdir(), 'pastel-snapshot');
 export const userDataDir = (): string => path.join(snapshotOutDir(), 'userData');
+// The scratch home snapshot runs use in place of hers: the repo index scans it, testing suites live in it.
+export const fakeHomeDir = (): string => path.join(snapshotOutDir(), 'fake-home');
 
 // PASTEL_SNAPSHOT_FAKE_JSONL=<path>: the first tab replays this fixture instead of following a real claude.
 export const fixtureFile = (): string | null => (isSnapshotRun() && process.env.PASTEL_SNAPSHOT_FAKE_JSONL) || null;

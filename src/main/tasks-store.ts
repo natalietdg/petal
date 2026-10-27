@@ -1,13 +1,14 @@
-// A repo's PRDs and tasks at <repo>/.petal/tasks.json; a version 1 file reads as having no PRDs and is written back as 2. The folder ignores itself in git; writes are atomic and stay inside the repo.
+// A repo's PRDs and tasks at ~/.petal/repos/<repoKey>/tasks.json, keyed by the checkout as before; never in the repo.
+// A version 1 file reads as having no PRDs and is written back as 2. Writes are atomic and stay inside that folder.
 // A file that doesn't parse is hers to fix: it is reported and never saved over.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
-import { ensureSelfIgnore } from './factory-store';
+import { prepareRepoDir, repoDir } from './petal-home';
 import { validateTaskFile, type Prd, type Task, type TaskData, type TaskFile } from '../shared/tasks';
 
-export const tasksFile = (repo: string): string => path.join(repo, '.petal', 'tasks.json');
+export const tasksFile = (repo: string): string => path.join(repoDir(repo), 'tasks.json');
 
 export interface TaskList extends TaskData {
   problem: string | null;
@@ -33,10 +34,8 @@ export function loadTasks(repo: string): TaskList {
 }
 
 function saveTasks(repo: string, { tasks, prds }: TaskData): void {
-  const file = tasksFile(repo);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  ensureSelfIgnore(path.dirname(file), repo);
-  writeFileDurable(file, `${JSON.stringify({ version: 2, prds, tasks } satisfies TaskFile, null, 2)}\n`, undefined, { within: repo });
+  const dir = prepareRepoDir(repo);
+  writeFileDurable(tasksFile(repo), `${JSON.stringify({ version: 2, prds, tasks } satisfies TaskFile, null, 2)}\n`, undefined, { within: dir });
 }
 
 // Reads, applies `change`, writes. `change` returns null to leave the file alone; PRDs it doesn't return are kept.

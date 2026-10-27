@@ -67,7 +67,7 @@ export interface ProjectTesting {
   root: string;
   pipeline: PipelineConfig | null; // the commands she confirmed; its stages are the old project pipeline, now only a seed
   runs: PipelineRun[]; // newest first
-  repoSuite?: SuiteRecord; // kept in the main checkout's store: what Petal last took from .petal/suite.json
+  repoSuite?: SuiteRecord; // kept in the main checkout's store: what Petal last took from the suite file in ~/.petal/repos
   imported?: string[]; // older per-task suite and criteria files already imported into the repo's files
   agents?: Record<string, AgentRecord[]>; // per task: every session Petal launched as its agent; the lock reads it
   testAgents?: TestAgent[]; // the Testing screen's agents; absent until the old records were migrated

@@ -1,10 +1,12 @@
 // Factory storage in temp dirs only: global vs project, the skill Claude reads, files Petal must never replace, consent.
+// A project's files live in ~/.petal/repos/<repoKey>/ (the electron mock's home is the temp userData), never in the repo.
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOLDER_OFF, globalJson, loadFactoryState, projectJson, projectMd, projectSkillFile, saveFactory, skillFile, useGlobal, type FactoryPaths } from '../src/main/factory-store';
 import { GENERATED_MARKER, defaultFactory, renderSkill, type Factory } from '../src/shared/factory';
 import { repoRoot } from '../src/main/repo-label';
+import { repoKey } from '../src/main/petal-repos';
 import { removeTempDirs, tempDir, useTempUserData } from './helpers';
 
 const edited = (name: string): Factory => {
@@ -18,8 +20,10 @@ const listAll = (dir: string): string[] => fs.readdirSync(dir, { recursive: true
 let claudeDir: string;
 let repo: string;
 let paths: FactoryPaths;
+let petalHome: string;
 
 beforeEach(() => {
+  petalHome = useTempUserData();
   claudeDir = tempDir('petal-factory-claude-');
   repo = tempDir('petal-factory-repo-');
   fs.mkdirSync(path.join(repo, '.git'));
@@ -43,7 +47,7 @@ describe('loading', () => {
 
   it('reports a broken file in one line and leaves it as it is', () => {
     fs.writeFileSync(globalJson(claudeDir), '{ not json');
-    fs.mkdirSync(path.join(repo, '.petal'));
+    fs.mkdirSync(path.dirname(projectJson(repo)), { recursive: true });
     fs.writeFileSync(projectJson(repo), JSON.stringify({ stations: [] }));
     const state = loadFactoryState(paths);
     expect(state.global.factory).toBeNull();
@@ -119,43 +123,34 @@ describe('global save', () => {
 });
 
 describe('project override', () => {
-  it('writes .petal/factory.json, factory.md and a project skill; Claude follows the project and nothing turns on globally', () => {
+  it('writes factory.json and factory.md in Petal’s folder for the repo, nothing in the repo, nothing global', () => {
     const state = saveFactory(paths, 'project', edited('Project intake'));
+    expect(path.dirname(projectJson(repo))).toBe(path.join(petalHome, '.petal', 'repos', repoKey(repo)));
     expect(JSON.parse(read(projectJson(repo)))).toEqual(edited('Project intake'));
     const md = read(projectMd(repo));
     expect(md.split('\n')[0]).toBe(GENERATED_MARKER);
     expect(md).toContain(`# Software factory for ${path.basename(repo)}`);
     expect(md).toContain('## 1. Project intake');
-    expect(read(projectSkillFile(repo))).toBe(renderSkill(edited('Project intake'), 'project-skill', path.basename(repo)));
+    expect(listAll(repo)).toEqual(['.git']); // no .petal, no .claude, no .gitignore
     expect(listAll(claudeDir)).toEqual([]); // no global skill, no global JSON: other repos stay untouched
-    expect(state).toMatchObject({ follows: 'project', skill: { state: 'missing' }, project: { factory: edited('Project intake') } });
-    expect(loadFactoryState({ claudeDir, repo: tempDir('petal-factory-other-') }).follows).toBe('none');
+    expect(state).toMatchObject({ follows: 'none', skill: { state: 'missing' }, project: { factory: edited('Project intake') } });
   });
 
-  it('keeps every file it writes in the repo out of git, without touching her own .gitignore', () => {
-    fs.writeFileSync(path.join(repo, '.gitignore'), 'node_modules\n');
-    saveFactory(paths, 'project', edited('P'));
-    expect(read(path.join(repo, '.petal', '.gitignore'))).toBe('*\n');
-    expect(read(path.join(path.dirname(projectSkillFile(repo)), '.gitignore'))).toBe('*\n');
-    expect(read(path.join(repo, '.gitignore'))).toBe('node_modules\n');
+  it('the global skill points Claude at the repo’s factory.md in ~/.petal by the repoKey rule', () => {
+    const text = renderSkill(edited('G'), 'global');
+    expect(text).toContain('`~/.petal/repos/<repoKey>/factory.md`');
+    expect(text).toContain('`git rev-parse --show-toplevel`');
+    expect(text).not.toContain('`.petal/factory.md` at its root');
   });
 
-  it('leaves a .gitignore she put in .petal as it is, on save and on Use global', () => {
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), 'factory.json\n');
-    saveFactory(paths, 'project', edited('P'));
-    expect(read(path.join(repo, '.petal', '.gitignore'))).toBe('factory.json\n');
-    useGlobal(paths);
-    expect(fs.readdirSync(path.join(repo, '.petal'))).toEqual(['.gitignore']);
-  });
-
-  it('never overwrites a project factory skill she wrote, and writes nothing else either', () => {
+  it('an older build’s project skill in the repo is read for what Claude follows and never changed', () => {
     fs.mkdirSync(path.dirname(projectSkillFile(repo)), { recursive: true });
-    fs.writeFileSync(projectSkillFile(repo), '---\nname: factory\n---\nTeam steps.\n');
-    expect(() => saveFactory(paths, 'project', edited('P'))).toThrow(/A factory skill you wrote already exists/);
-    expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
+    const old = renderSkill(edited('Old'), 'project-skill', path.basename(repo));
+    fs.writeFileSync(projectSkillFile(repo), old);
+    expect(saveFactory(paths, 'project', edited('P')).follows).toBe('project');
     useGlobal(paths);
-    expect(read(projectSkillFile(repo))).toBe('---\nname: factory\n---\nTeam steps.\n');
+    expect(read(projectSkillFile(repo))).toBe(old);
+    expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
   });
 
   it('resolves global vs project: the global save leaves the override in charge for its repo', () => {
@@ -167,32 +162,32 @@ describe('project override', () => {
     expect(loadFactoryState({ claudeDir, repo: other }).follows).toBe('global');
   });
 
-  it('Use global deletes the override, its .gitignore files, and the folders when nothing else is in them', () => {
+  it('Use global deletes the override from Petal’s folder and leaves the repo as it was', () => {
     saveFactory(paths, 'global', edited('G'));
     saveFactory(paths, 'project', edited('P'));
     expect(useGlobal(paths)).toMatchObject({ follows: 'global', project: { factory: null } });
-    expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
-    expect(fs.existsSync(path.join(repo, '.claude'))).toBe(false);
-
-    fs.mkdirSync(path.join(repo, '.claude'));
-    fs.writeFileSync(path.join(repo, '.claude', 'settings.json'), '{}');
-    saveFactory(paths, 'project', edited('P'));
-    useGlobal(paths);
-    expect(listAll(path.join(repo, '.claude'))).toEqual(['settings.json']);
-
-    saveFactory(paths, 'project', edited('P'));
-    fs.writeFileSync(path.join(repo, '.petal', 'notes.txt'), 'mine');
-    useGlobal(paths);
-    expect(fs.readdirSync(path.join(repo, '.petal'))).toEqual(['notes.txt']);
+    expect(fs.existsSync(projectJson(repo))).toBe(false);
+    expect(fs.existsSync(projectMd(repo))).toBe(false);
+    expect(listAll(repo)).toEqual(['.git']);
   });
 
   it('never overwrites or deletes a factory.md she wrote', () => {
-    fs.mkdirSync(path.join(repo, '.petal'));
+    fs.mkdirSync(path.dirname(projectMd(repo)), { recursive: true });
     fs.writeFileSync(projectMd(repo), '# My project steps\n');
     expect(() => saveFactory(paths, 'project', edited('P'))).toThrow(/wasn’t written by Petal/);
     expect(() => useGlobal(paths)).toThrow(/wasn’t written by Petal/);
     expect(read(projectMd(repo))).toBe('# My project steps\n');
     expect(fs.existsSync(projectJson(repo))).toBe(false);
+  });
+
+  it('a repo’s old .petal/factory.json is copied into Petal once and left in the repo as it was', () => {
+    fs.mkdirSync(path.join(repo, '.petal'));
+    const old = `${JSON.stringify(edited('From repo'), null, 2)}\n`;
+    fs.writeFileSync(path.join(repo, '.petal', 'factory.json'), old);
+    expect(loadFactoryState(paths).project?.factory).toEqual(edited('From repo'));
+    saveFactory(paths, 'project', edited('Edited'));
+    expect(read(path.join(repo, '.petal', 'factory.json'))).toBe(old);
+    expect(fs.readdirSync(path.join(repo, '.petal'))).toEqual(['factory.json']);
   });
 
   it('works without the Claude folder but installs no skill anywhere', () => {
@@ -229,6 +224,7 @@ describe('the IPC asks the folder gate', () => {
     vi.resetModules();
     handlers.clear();
     process.env.PASTEL_SNAPSHOT = '1'; // only the stand-in folders below are used
+    process.env.PASTEL_SNAPSHOT_DIR = tempDir('petal-factory-snap-'); // its fake home holds ~/.petal
     const userData = useTempUserData();
     fs.writeFileSync(path.join(userData, 'config.json'), JSON.stringify({ claudeFolder: { choice } }));
     vi.doMock('../src/main/ipc', () => ({ handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => handlers.set(channel, handler) }));
@@ -242,6 +238,7 @@ describe('the IPC asks the folder gate', () => {
 
   afterEach(() => {
     delete process.env.PASTEL_SNAPSHOT;
+    delete process.env.PASTEL_SNAPSHOT_DIR;
     vi.doUnmock('../src/main/ipc');
   });
 
@@ -263,11 +260,10 @@ describe('the IPC asks the folder gate', () => {
   });
 });
 
-describe('symlinks in a repo', () => {
-  it('a cloned repo whose .petal/factory.json links outside it is refused, and nothing lands outside', () => {
+describe('symlinks', () => {
+  it('a factory.json in Petal’s folder that links outside it is refused, and nothing lands outside', () => {
     const outsideDir = tempDir('petal-factory-outside-');
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), '*\n');
+    fs.mkdirSync(path.dirname(projectJson(repo)), { recursive: true });
     fs.symlinkSync(path.join(outsideDir, 'planted.json'), projectJson(repo)); // dangling, so it isn't refused as broken JSON
     expect(() => saveFactory(paths, 'project', edited('P'))).toThrow(/^Petal didn’t write .*factory\.json: it leads to .*planted\.json, outside /);
     expect(fs.readdirSync(outsideDir)).toEqual([]);

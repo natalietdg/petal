@@ -1,14 +1,16 @@
-// The repo's one suite on disk: <main checkout>/.petal/suite.json, so every worktree shares it. Read with a size cap and
-// no symlinks, written atomically. Any session's change is taken on the next read, with Undo; what Petal took is kept in
-// the main checkout's testing store, outside the repo. Older per-task suite files are imported once and left as they are.
+// The repo's one suite on disk: ~/.petal/repos/<repoKey of the main checkout>/suite.json, in Petal and never in the repo,
+// so every worktree shares it. Read with a size cap and no symlinks, written atomically. Any session's change is taken on
+// the next read, with Undo; what Petal took is kept in the main checkout's testing store. A checkout's old .petal/ is
+// copied across once (petal-home.ts); older per-task and worktree suites among those copies are merged in once.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
-import { ensureSelfIgnore } from './factory-store';
+import { prepareRepoDir, repoDir } from './petal-home';
+import { repoDirShown } from './petal-repos';
 import * as store from './testing-store';
 import {
-  LEGACY_SUITES_DIR, PETAL_DIR, SUITE_FILE_BYTES, SUITE_PATH, isTaskId, mergeSuites, parseSuiteText, suiteText, takeSuiteFile, writtenRecord,
+  LEGACY_SUITES_DIR, SUITE_FILE_BYTES, SUITE_NAME, isTaskId, mergeSuites, parseSuiteText, suiteText, takeSuiteFile, writtenRecord,
   type RepoSuite, type RepoSuiteView, type SuiteFileNow,
 } from '../shared/repo-suite';
 
@@ -31,13 +33,10 @@ export function suiteHome(root: string): string {
   return home;
 }
 
-export const suiteFile = (home: string): string => path.join(home, ...SUITE_PATH.split('/'));
-
-// Makes .petal/ in the main checkout, kept out of git by its own .gitignore.
-export function preparePetalDir(home: string): void {
-  fs.mkdirSync(path.join(home, PETAL_DIR), { recursive: true });
-  ensureSelfIgnore(path.join(home, PETAL_DIR), home);
-}
+// The repo's folder in Petal, keyed by its main checkout.
+export const suiteDir = (home: string): string => repoDir(home);
+export const suiteFile = (home: string): string => path.join(suiteDir(home), SUITE_NAME);
+export const prepareSuiteDir = (home: string): string => prepareRepoDir(home);
 
 // A plain file's text and change time; text null when there is none. Too big, or not a plain file, reads as text that won't parse.
 export function readCappedFile(file: string, cap = SUITE_FILE_BYTES): SuiteFileNow {
@@ -56,23 +55,34 @@ export function readCappedFile(file: string, cap = SUITE_FILE_BYTES): SuiteFileN
   }
 }
 
-// Each older task suite file, in the main checkout and in this checkout: { file, taskId }.
-export function legacySuiteFiles(root: string): { file: string; taskId: string }[] {
-  const dirs = [...new Set([suiteHome(root), root])].map((dir) => path.join(dir, ...LEGACY_SUITES_DIR.split('/')));
-  return dirs.flatMap((dir) => {
+// An older file among the copies Petal took of a checkout's .petal/, with the in-repo path it was copied from.
+export interface LegacyFile { file: string; original: string; taskId: string | null }
+
+// Each older suite: per-task files from the main checkout and this checkout, and a worktree's own suite.json.
+export function legacySuiteFiles(root: string): LegacyFile[] {
+  const home = suiteHome(root);
+  const perTask = [...new Set([home, root])].flatMap((checkout) => {
+    const dir = path.join(repoDir(checkout), ...LEGACY_SUITES_DIR.split('/').slice(1));
     let names: string[];
     try { names = fs.readdirSync(dir); } catch { return []; }
-    return names.filter((n) => n.endsWith('.json') && isTaskId(n.slice(0, -5))).sort().map((n) => ({ file: path.join(dir, n), taskId: n.slice(0, -5) }));
+    return names.filter((n) => n.endsWith('.json') && isTaskId(n.slice(0, -5))).sort()
+      .map((n) => ({ file: path.join(dir, n), original: path.join(checkout, ...LEGACY_SUITES_DIR.split('/'), n), taskId: n.slice(0, -5) }));
   });
+  const ownFile = path.join(repoDir(root), SUITE_NAME);
+  const own = root !== home && fs.existsSync(ownFile) ? [{ file: ownFile, original: path.join(root, '.petal', SUITE_NAME), taskId: null }] : [];
+  return [...own, ...perTask];
 }
 
-// Older task suites not imported yet join the repo's suite, stages merged by name. The old files stay untouched; each is
-// remembered so it imports once. A file that doesn't parse is skipped, and remembered too.
+// Imported before: by this path, or by its in-repo original under an older build.
+export const wasImported = (done: ReadonlySet<string>, f: LegacyFile): boolean => done.has(f.file) || done.has(f.original);
+
+// Older suites not imported yet join the repo's suite, stages merged by name. The old files are only read, never changed;
+// each is remembered so it imports once. A file that doesn't parse is skipped, and remembered too.
 export function importLegacySuites(root: string): void {
   const home = suiteHome(root);
   const data = store.load(home);
   const done = new Set(data.imported ?? []);
-  const fresh = legacySuiteFiles(root).filter(({ file }) => !done.has(file));
+  const fresh = legacySuiteFiles(root).filter((f) => !wasImported(done, f));
   if (!fresh.length) return;
   const current = readCappedFile(suiteFile(home));
   const parsed = current.text === null ? null : parseSuiteText(current.text);
@@ -85,8 +95,7 @@ export function importLegacySuites(root: string): void {
     done.add(file);
   }
   if (suite && (!parsed || suiteText(suite) !== current.text)) {
-    preparePetalDir(home);
-    writeFileDurable(suiteFile(home), suiteText(suite), undefined, { within: home });
+    writeFileDurable(suiteFile(home), suiteText(suite), undefined, { within: prepareSuiteDir(home) });
   }
   store.save({ ...store.load(home), imported: [...done] });
 }
@@ -101,7 +110,10 @@ export function syncSuite(root: string): RepoSuiteView {
   const file = readCappedFile(suiteFile(home));
   const after = takeSuiteFile(before, file);
   if (after && JSON.stringify(after) !== JSON.stringify(before)) store.save({ ...data, repoSuite: after });
-  return { suite: after?.good ?? null, change: after?.change ?? null, problem: after?.problem ?? null, home, ...(file.at ? { at: file.at } : {}) };
+  return {
+    suite: after?.good ?? null, change: after?.change ?? null, problem: after?.problem ?? null,
+    home, dir: suiteDir(home), shownDir: repoDirShown(home), ...(file.at ? { at: file.at } : {}),
+  };
 }
 
 // Her edit, a seed or an Undo: the file is written (or removed for no suite) and remembered as taken.
@@ -109,8 +121,7 @@ export function writeSuite(root: string, suite: RepoSuite | null): void {
   const home = suiteHome(root);
   const file = suiteFile(home);
   if (suite) {
-    preparePetalDir(home);
-    writeFileDurable(file, suiteText(suite), undefined, { within: home });
+    writeFileDurable(file, suiteText(suite), undefined, { within: prepareSuiteDir(home) });
   } else {
     fs.rmSync(file, { force: true });
   }

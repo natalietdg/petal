@@ -103,7 +103,7 @@ describe('buildLoopBrief', () => {
     expect(brief).toContain('**Loop:** round 1/5 · scenarios · 0 open');
     expect(brief).toContain('Stack: Vitest (package.json), Maestro (.maestro/login.yaml).');
     expect(brief).toContain('plus Maestro flows');
-    expect(brief).toContain('Criteria file: .petal/criteria.md');
+    expect(brief).toContain('Criteria file: ~/.petal/repos/<repoKey>/criteria.md');
   });
   it('carries the rules: no commits, no weakening, flaky re-run, her messages first', () => {
     expect(brief).toContain('Never commit, push, or change git history.');

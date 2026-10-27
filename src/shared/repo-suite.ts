@@ -1,4 +1,4 @@
-// The repo's one testing suite: <main checkout>/.petal/suite.json, shared by every worktree and every Claude session.
+// The repo's one testing suite: ~/.petal/repos/<repoKey>/suite.json, kept in Petal and shared by every worktree and session.
 // Pure: parsing and writing that file, taking any change with Undo, levels, and which stages a Run runs.
 import { slugId, type StageConfig } from './testing';
 
@@ -19,12 +19,13 @@ export interface RepoSuite {
 }
 
 export const PETAL_DIR = '.petal';
-export const SUITE_PATH = `${PETAL_DIR}/suite.json`;
-export const CRITERIA_PATH = `${PETAL_DIR}/criteria.md`;
+export const SUITE_NAME = 'suite.json';
+export const CRITERIA_NAME = 'criteria.md';
+export const REPOS_HOME = '~/.petal/repos'; // Petal's own folder, one per repo: never inside a repo
 export const LEGACY_SUITES_DIR = `${PETAL_DIR}/suites`; // one file per task, before suites were per repo
 
-// The file in the main checkout, as agents are told it: an absolute path when the checkout is known.
-export const inHome = (home: string | null, rel: string): string => (home ? `${home.replace(/\/+$/, '')}/${rel}` : rel);
+// A suite file as agents are told it: absolute when the repo's folder is known, else the rule for finding it.
+export const inSuiteDir = (dir: string | null, name: string): string => (dir ? `${dir.replace(/\/+$/, '')}/${name}` : `${REPOS_HOME}/<repoKey>/${name}`);
 
 export const isTaskId = (id: unknown): id is string => typeof id === 'string' && /^[\w-]{1,64}$/.test(id);
 
@@ -116,9 +117,10 @@ export function takeSuiteFile(record: SuiteRecord | null, file: SuiteFileNow): S
 // After Petal writes the file itself (her edit, a seed, an Undo).
 export const writtenRecord = (suite: RepoSuite | null): SuiteRecord => ({ text: suite ? suiteText(suite) : null, good: suite, change: null, problem: null });
 
-// home: the main checkout holding the file. at: the file's last change.
-export interface RepoSuiteView { suite: RepoSuite | null; change: SuiteChange | null; problem: string | null; home: string | null; at?: number }
-export const NO_SUITE: RepoSuiteView = { suite: null, change: null, problem: null, home: null };
+// home: the repo's main checkout. dir: the suite's folder in Petal, absolute. shownDir: the same as she reads it (~/...).
+// at: the file's last change.
+export interface RepoSuiteView { suite: RepoSuite | null; change: SuiteChange | null; problem: string | null; home: string | null; dir: string | null; shownDir: string | null; at?: number }
+export const NO_SUITE: RepoSuiteView = { suite: null, change: null, problem: null, home: null, dir: null, shownDir: null };
 
 // The suite to send for editing: every stage good, or nothing. No stages removes the suite.
 export function checkSuite(raw: unknown): { ok: true; suite: RepoSuite | null } | { ok: false } {

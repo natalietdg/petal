@@ -2,7 +2,7 @@
 // Petal only sends the brief, reads the criteria file and the Loop lines, and can stop it. Pure helpers both sides share.
 import { isTerminal, type LoopProgress } from './loop-line';
 import type { StackItem, StageConfig } from './testing';
-import { CRITERIA_PATH, SUITE_PATH, inHome, isLevel, type Level } from './repo-suite';
+import { CRITERIA_NAME, SUITE_NAME, REPOS_HOME, inSuiteDir, isLevel, type Level } from './repo-suite';
 import { DEFAULT_AGENT_NAMES, type AgentRole } from './agent-names';
 
 export const LEGACY_CRITERIA_PATH = '.petal/test-criteria.md'; // the one shared file from before criteria were per task
@@ -251,7 +251,7 @@ export function adoBugText(bug: CriteriaItem): string {
 
 // ---- The brief Petal sends once; Claude runs the loop.
 // agent: the task's testing agent, which owns the tests and suite and works beside the bug fix agent.
-export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput; review?: boolean; home?: string | null; ticket?: string | null }
+export interface BriefInput { focus: string; rounds: number; stages: StageConfig[]; stack: StackItem[]; taskId?: string | null; agent?: boolean; names?: Record<AgentRole, string>; sources?: SourceInput; review?: boolean; suiteDir?: string | null; ticket?: string | null }
 
 export const clampRounds = (n: unknown): number => {
   const value = Math.round(Number(n));
@@ -307,7 +307,7 @@ export const DISTILL_BRIEF = [
   '   The course is one of add scenarios, retest, fix bug, hand to you. Then act on it yourself: add scenarios, rerun, or fix the bug in the next step. For hand to you, stop there and wait for my answer. A needs-you thread with another course: keep going and use my answer when it arrives.',
 ];
 
-export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources, review = false, home = null, ticket = null }: BriefInput): string {
+export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, agent = false, names = DEFAULT_AGENT_NAMES, sources, review = false, suiteDir = null, ticket = null }: BriefInput): string {
   const n = clampRounds(rounds);
   const what = cleanFocus(focus);
   const tools = stack.filter((s) => !s.insert && s.kind !== 'ci');
@@ -323,8 +323,8 @@ export function buildLoopBrief({ focus, rounds, stages, stack, taskId = null, ag
     ...(tools.length ? [`Stack: ${tools.map((t) => `${t.label} (${t.foundIn})`).join(', ')}.`] : []),
     `${taskId ? 'The repo’s suite' : 'Pipeline'}, in this order:`,
     ...stages.map((s, i) => `${i + 1}. ${s.name}: \`${s.command}\``),
-    ...(tester && taskId ? [`The suite lives in ${inHome(home, SUITE_PATH)}, shared by every session in this repo. You may add or fix stages during the loop, keeping its shape: {"stages": [{"name": "Unit", "command": "npm test", "level": "regression"}]}. Petal shows the change with an Undo. Never remove a stage or weaken a test.`] : []),
-    `Criteria file: ${inHome(home, CRITERIA_PATH)}`,
+    ...(tester && taskId ? [`The suite lives in ${inSuiteDir(suiteDir, SUITE_NAME)}, in Petal and shared by every session in this repo. Never write suite or criteria files inside the repo. You may add or fix stages during the loop, keeping its shape: {"stages": [{"name": "Unit", "command": "npm test", "level": "regression"}]}. Petal shows the change with an Undo. Never remove a stage or weaken a test.`] : []),
+    `Criteria file: ${inSuiteDir(suiteDir, CRITERIA_NAME)}`,
     ...(tester ? ['', ...reviewBrief(review)] : []),
     '',
     'Each round:',
@@ -364,7 +364,7 @@ export function buildFixerBrief({ taskId, taskTitle, stages, names = DEFAULT_AGE
     '',
     'Petal sends you one bug at a time: its name, the failing test and the failure output. For each:',
     '1. Read the failing test and find the cause in the app code.',
-    `2. Fix the app code only. Never edit tests, test data, snapshot baselines or ${SUITE_PATH}: they belong to ${names.tester}.`,
+    `2. Fix the app code only. Never edit tests, test data, snapshot baselines or the suite files in ${REPOS_HOME}: they belong to ${names.tester}.`,
     '3. Run that one test to confirm, plus a quick check of the code around it.',
     '4. End your reply with this line: **Fix:** the bug name · done',
     '   If you can’t fix it, end with **Fix:** the bug name · blocked, and say why in one line.',
@@ -385,7 +385,7 @@ export function buildSentFixerBrief({ taskId, taskTitle, bugName, prompt, names 
     '',
     prompt,
     '',
-    `Fix the app code only. Never edit tests, test data, snapshot baselines or ${SUITE_PATH}: only ${names.tester} changes those.`,
+    `Fix the app code only. Never edit tests, test data, snapshot baselines or the suite files in ${REPOS_HOME}: only ${names.tester} changes those.`,
     'Run the failing tests to confirm, plus a quick check of the code around them.',
     `End your reply with this line: **Fix:** ${bugName} · done`,
     `If you can’t fix it, end with **Fix:** ${bugName} · blocked, and say why in one line.`,

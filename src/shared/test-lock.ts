@@ -4,9 +4,9 @@
 import type { AgentNames, AgentRole } from './agent-names';
 import type { Criteria } from './test-loop';
 
-export const LOCK_FILE = '.petal/lock.json';
+export const LOCK_NAME = 'lock.json'; // in ~/.petal/repos/<repoKey>/
 export const LEGACY_LOCKED_COPIES = '.petal/locked'; // older builds kept copies here, where test runners found them
-export const REFUSALS_FILE = '.petal/lock-refusals.jsonl'; // the hook keeps its newest 200 lines
+export const REFUSALS_NAME = 'lock-refusals.jsonl'; // beside it; the hook keeps its newest 200 lines
 
 export interface RestoredFlag {
   path: string;

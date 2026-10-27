@@ -1,17 +1,18 @@
 /// <reference types="vite/client" />
-// The test lock on disk: the hook script and its entry in the project's .claude/settings.local.json (never ~/.claude),
-// the manifest the hook reads, and the integrity check that restores a locked test a Claude session deleted or weakened.
-// Approved copies are kept in <userData>/testing/locked/<project-hash>/, never in the repo.
+// The test lock on disk: the manifest and refusals in ~/.petal/repos/<repoKey>/, the one hook script at
+// ~/.petal/test-lock.mjs, and its one entry in her user-level ~/.claude/settings.json, added when she turns a lock on.
+// The integrity check restores a locked test a Claude session deleted or weakened. Nothing is written in the repo except
+// that restore. Approved copies are kept in <userData>/testing/locked/<project-hash>/.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import lockScript from '../../resources/hooks/petal-test-lock.mjs?raw';
 import { writeFileDurable } from './atomic-file';
-import { ensureSelfIgnore } from './factory-store';
+import { petalDir, prepareRepoDir, repoDir, reposRoot } from './petal-home';
 import { projectHash, testingDir } from './testing-store';
-import { LOCK_SCRIPT, hasLockHook, lockHookStale, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
+import { LOCK_SCRIPT_NAME, hasLockHook, lockHookStale, mergeLockHook, unmergeLockHook } from '../shared/lock-settings';
 import {
-  LEGACY_LOCKED_COPIES, LOCK_FILE, REFUSALS_FILE, emptyManifest, integrityStep, isLockable, lastToucher, lockedFiles, mainRefusals, readManifest, weakens,
+  LEGACY_LOCKED_COPIES, LOCK_NAME, REFUSALS_NAME, emptyManifest, integrityStep, isLockable, lastToucher, lockedFiles, mainRefusals, readManifest, weakens,
   type LockInputs, type LockManifest, type LockRefusal, type RestoredFlag,
 } from '../shared/test-lock';
 import type { AgentNames, AgentRole } from '../shared/agent-names';
@@ -20,25 +21,26 @@ const RESTORED_KEPT = 30;
 
 const at = (root: string, rel: string): string => path.join(root, ...rel.split('/'));
 const changedAt = (root: string, rel: string): number => { try { return fs.statSync(at(root, rel)).mtimeMs; } catch { return 0; } };
-const settingsFile = (root: string): string => path.join(root, '.claude', 'settings.local.json');
+export const lockScriptFile = (): string => path.join(petalDir(), LOCK_SCRIPT_NAME);
+const userSettings = (claudeDir: string): string => path.join(claudeDir, 'settings.json');
 
-export function loadManifest(root: string): LockManifest {
+const readManifestFile = (file: string): LockManifest => {
   try {
-    return readManifest(JSON.parse(fs.readFileSync(at(root, LOCK_FILE), 'utf8')));
+    return readManifest(JSON.parse(fs.readFileSync(file, 'utf8')));
   } catch {
     return emptyManifest();
   }
-}
+};
+
+export const loadManifest = (root: string): LockManifest => readManifestFile(path.join(repoDir(root), LOCK_NAME));
 
 function saveManifest(root: string, manifest: LockManifest): void {
-  fs.mkdirSync(path.join(root, '.petal'), { recursive: true });
-  ensureSelfIgnore(path.join(root, '.petal'), root);
-  writeFileDurable(at(root, LOCK_FILE), `${JSON.stringify(manifest, null, 2)}\n`, undefined, { within: root });
+  const dir = prepareRepoDir(root);
+  writeFileDurable(path.join(dir, LOCK_NAME), `${JSON.stringify(manifest, null, 2)}\n`, undefined, { within: dir });
 }
 
 // Read only when it parses; a file she broke is never written over.
-function readSettings(root: string): { ok: true; value: unknown } | { ok: false } {
-  const file = settingsFile(root);
+function readSettings(file: string): { ok: true; value: unknown } | { ok: false } {
   if (!fs.existsSync(file)) return { ok: true, value: {} };
   try {
     return { ok: true, value: JSON.parse(fs.readFileSync(file, 'utf8')) };
@@ -47,42 +49,66 @@ function readSettings(root: string): { ok: true; value: unknown } | { ok: false 
   }
 }
 
-export const lockHookPresent = (root: string): boolean => { const s = readSettings(root); return s.ok && hasLockHook(s.value); };
+// The user-level entry is there. claudeDir null: her Claude folder isn't allowed, so nothing is read.
+export const lockHookPresent = (claudeDir: string | null): boolean => {
+  if (!claudeDir) return false;
+  const s = readSettings(userSettings(claudeDir));
+  return s.ok && hasLockHook(s.value);
+};
 
-// Turns the lock on or off for the project; null when done, else why not.
-export function setLock(root: string, on: boolean): string | null {
-  const settings = readSettings(root);
-  if (!settings.ok) return 'This repo’s Claude settings.local.json isn’t valid JSON. Fix it first; Petal won’t write over it.';
-  const next = on ? mergeLockHook(settings.value, root) : unmergeLockHook(settings.value);
+// Any repo with its lock on, other than this one.
+function otherLockOn(root: string): boolean {
+  let keys: string[];
+  try { keys = fs.readdirSync(reposRoot()); } catch { return false; }
+  const own = path.basename(repoDir(root));
+  return keys.some((key) => key !== own && readManifestFile(path.join(reposRoot(), key, LOCK_NAME)).enabled);
+}
+
+function writeScript(): void {
+  const file = lockScriptFile();
+  let current = '';
+  try { current = fs.readFileSync(file, 'utf8'); } catch { /* missing: written below */ }
+  if (current === lockScript) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  writeFileDurable(file, lockScript, undefined, { within: petalDir() });
+}
+
+// Turns the lock on or off for the project; null when done, else why not. On: the script goes in ~/.petal and the one
+// hook entry in her ~/.claude/settings.json. Off: the entry goes once no other repo has its lock on.
+export function setLock(root: string, on: boolean, claudeDir: string | null): string | null {
+  if (!claudeDir) return 'Petal isn’t reading your Claude folder, so it can’t add the lock’s hook. Allow it under Customize › Get started.';
+  const file = userSettings(claudeDir);
+  const settings = readSettings(file);
+  if (!settings.ok) return 'Your ~/.claude/settings.json isn’t valid JSON. Fix it first; Petal won’t write over it.';
   if (on) {
-    fs.mkdirSync(path.join(root, '.petal'), { recursive: true });
-    ensureSelfIgnore(path.join(root, '.petal'), root);
-    writeFileDurable(at(root, LOCK_SCRIPT), lockScript, undefined, { within: root });
-  }
-  if (on || fs.existsSync(settingsFile(root))) {
-    fs.mkdirSync(path.dirname(settingsFile(root)), { recursive: true });
-    writeFileDurable(settingsFile(root), `${JSON.stringify(next, null, 2)}\n`, undefined, { within: root });
+    writeScript();
+    const next = mergeLockHook(settings.value, lockScriptFile());
+    if (next !== settings.value) {
+      fs.mkdirSync(claudeDir, { recursive: true });
+      writeFileDurable(file, `${JSON.stringify(next, null, 2)}\n`);
+    }
+  } else if (!otherLockOn(root) && hasLockHook(settings.value)) {
+    writeFileDurable(file, `${JSON.stringify(unmergeLockHook(settings.value), null, 2)}\n`);
   }
   saveManifest(root, { ...loadManifest(root), enabled: on });
   return null;
 }
 
-// An install from an older build: the bundled script and the absolute hook command replace the old ones. A broken
-// settings file is left alone.
-export function upgradeLock(root: string): void {
-  if (!loadManifest(root).enabled) return;
-  const script = at(root, LOCK_SCRIPT);
-  let current = '';
-  try { current = fs.readFileSync(script, 'utf8'); } catch { /* missing: written below */ }
-  if (current !== lockScript) writeFileDurable(script, lockScript, undefined, { within: root });
-  const settings = readSettings(root);
-  if (settings.ok && lockHookStale(settings.value, root)) writeFileDurable(settingsFile(root), `${JSON.stringify(mergeLockHook(settings.value, root), null, 2)}\n`, undefined, { within: root });
+// A newer build: the bundled script replaces the one in ~/.petal, and a stale entry gets today's command. Only where
+// she already turned the lock on through the user-level entry; a lock from an older build waits for her to turn it on again.
+export function upgradeLock(root: string, claudeDir: string | null): void {
+  if (!claudeDir || !loadManifest(root).enabled) return;
+  const file = userSettings(claudeDir);
+  const settings = readSettings(file);
+  if (!settings.ok || !hasLockHook(settings.value)) return;
+  writeScript();
+  if (lockHookStale(settings.value, lockScriptFile())) writeFileDurable(file, `${JSON.stringify(mergeLockHook(settings.value, lockScriptFile()), null, 2)}\n`);
 }
 
 // Refusals of sessions that aren't agents, since she last dismissed them.
 export function lockRefusals(root: string, manifest: LockManifest): LockRefusal[] {
   try {
-    return mainRefusals(fs.readFileSync(at(root, REFUSALS_FILE), 'utf8'), manifest, root);
+    return mainRefusals(fs.readFileSync(path.join(repoDir(root), REFUSALS_NAME), 'utf8'), manifest, root);
   } catch {
     return [];
   }

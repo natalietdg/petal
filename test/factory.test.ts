@@ -116,7 +116,7 @@ describe('renderSkill', () => {
   });
 
   it('points at the project override in the global skill only', () => {
-    expect(skill).toContain('`.petal/factory.md`');
+    expect(skill).toContain('`~/.petal/repos/<repoKey>/factory.md`');
     const project = renderSkill(defaultFactory(), 'project', 'pastel-term');
     expect(project.split('\n')[0]).toBe(GENERATED_MARKER);
     expect(project).toContain('# Software factory for pastel-term');

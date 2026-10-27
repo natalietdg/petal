@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
 import { writeJsonAtomic } from './atomic-file';
-import { isSnapshotRun, snapshotOutDir } from './snapshot-mode';
+import { fakeHomeDir, isSnapshotRun } from './snapshot-mode';
 import { claudeFolderAllowed } from './claude-folder';
 import { scanRepos, type RepoEntry } from './repo-scan';
 import { shellQuote } from './resume-command';
@@ -23,7 +23,7 @@ const STALE_AFTER_MS = 10 * 60 * 1000;
 
 const indexFile = () => path.join(app.getPath('userData'), 'repos.json');
 // Snapshot runs index a scratch fake home the harness builds, never hers.
-export const scanRoot = (): string => (isSnapshotRun() ? path.join(snapshotOutDir(), 'fake-home') : os.homedir());
+export const scanRoot = (): string => (isSnapshotRun() ? fakeHomeDir() : os.homedir());
 
 let cached: RepoIndex | null = null;
 let running: Promise<RepoIndex> | null = null;

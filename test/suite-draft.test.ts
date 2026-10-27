@@ -21,13 +21,13 @@ describe('skill state decision', () => {
   });
 
   it('the slash brief names the skill; the inline brief carries the bundled instructions, frontmatter dropped', () => {
-    const request = 'for task t-1a2b: "Checkout". Set up or extend this repo\'s suite in .petal/suite.json.';
+    const request = 'for task t-1a2b: "Checkout". Set up or extend this repo\'s suite in ~/.petal/repos/<repoKey>/suite.json.';
     expect(draftBrief(false, request, BUNDLED)).toBe(`/petal-testing-suite ${request}`);
     const inline = draftBrief(true, request, BUNDLED);
     expect(inline.startsWith(request)).toBe(true);
     expect(inline).not.toContain('/petal-testing-suite for');
     expect(inline).not.toMatch(/^name: petal-testing-suite$/m);
-    expect(inline).toContain('Write `.petal/suite.json` in the main checkout');
+    expect(inline).toContain('Write `suite.json` in the suite folder from step 0, never in the repo');
     expect(inline).not.toContain('Write `.petal/pipeline.json`');
     expect(skillBody(BUNDLED).startsWith('# Testing suite')).toBe(true);
     expect(inline).not.toMatch(/[—–]/);
@@ -84,9 +84,9 @@ describe('draft finished rule', () => {
     expect(draftEnded({ ...base, suite: true })).toBe(false);
     expect(draftEnded({ ...base, state: 'ended', suite: true })).toBe(false);
   });
-  it('follow-ups name the repo’s suite file in the main checkout', () => {
-    expect(askAgainText('/main')).toContain('/main/.petal/suite.json');
-    expect(suiteProblemText(null, 'stage 1 has no command.')).toMatch(/^Petal couldn't use \.petal\/suite\.json: stage 1 has no command\. Fix the file/);
+  it('follow-ups name the repo’s suite file in Petal’s folder', () => {
+    expect(askAgainText('/h/.petal/repos/-main')).toContain('/h/.petal/repos/-main/suite.json');
+    expect(suiteProblemText(null, 'stage 1 has no command.')).toMatch(/^Petal couldn't use ~\/\.petal\/repos\/<repoKey>\/suite\.json: stage 1 has no command\. Fix the file/);
   });
 });
 

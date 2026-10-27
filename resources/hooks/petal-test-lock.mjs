@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// Petal's test lock: a Claude Code PreToolUse hook. Petal copies it to <repo>/.petal/test-lock.mjs when the lock is on.
-// Reads <repo>/.petal/lock.json. Any session may add to or fix a locked test; deleting, skipping or weakening one is refused.
-// No network. A missing or broken manifest lets everything through (fail open) and notes why in .petal/lock.log.
-// Each refusal is a line in .petal/lock-refusals.jsonl (last 200 kept): agents' show in their lane, others in the lock bar.
+// Petal's test lock: a Claude Code PreToolUse hook, one for every repo. Petal copies it to ~/.petal/test-lock.mjs and
+// registers it in ~/.claude/settings.json when she turns a lock on. A repo is locked when ~/.petal/repos/<repoKey>/lock.json
+// exists (repoKey: its path with every non-alphanumeric as "-"); nothing is read or written in the repo itself.
+// Any session may add to or fix a locked test; deleting, skipping or weakening one is refused.
+// No network. A missing or broken manifest lets everything through (fail open) and notes why in that folder's lock.log.
+// Each refusal is a line in its lock-refusals.jsonl (last 200 kept): agents' show in their lane, others in the lock bar.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +16,7 @@ const TEST_PATH = /(^|\/)(tests?|__tests__|e2e|spec|\.maestro)\/|\.(test|spec)\.
 export const isTestPath = (rel) => TEST_PATH.test(rel);
 
 // Runner setup the testing agent may add: conftest, runner configs and setup files, and the manifests holding test scripts.
-// Shared app config, so other sessions may edit them too; their edits are noted in .petal/lock.log. package.json and
+// Shared app config, so other sessions may edit them too; their edits are noted in lock.log. package.json and
 // pyproject.toml are whole files: JSON and TOML keys can't be locked one by one.
 const TEST_CONFIG = /(^|\/)(conftest\.py|pytest\.ini|tox\.ini|setup\.cfg|pyproject\.toml|package\.json|(jest|vitest|playwright|cypress|karma)\.(config|setup|workspace)\.[a-z0-9.]+|karma\.conf\.[a-z]+|setupTests\.[a-z]+|\.mocharc(\.[a-z]+)?)$/;
 export const isTestConfig = (rel) => TEST_CONFIG.test(rel);
@@ -119,20 +121,23 @@ export function logRefusal(file, entry) {
   if (lines.length > REFUSALS_KEPT) fs.writeFileSync(file, `${lines.slice(-REFUSALS_KEPT).join('\n')}\n`);
 }
 
-// The repo holding .petal/lock.json: the one this script sits in (<repo>/.petal/), else Claude Code's project folder,
-// else the call's folder walked up.
-function findRoot(input) {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  if (path.basename(here) === '.petal' && fs.existsSync(path.join(here, 'lock.json'))) return path.dirname(here);
+export const repoKey = (dir) => path.resolve(dir).replace(/[^A-Za-z0-9]/g, '-');
+
+// The locked repo the call is in: Claude Code's project folder, else the call's folder, walked up until a folder has a
+// lock.json in reposDir. { root, store }, or null when no repo up the tree is locked.
+export function findLocked(input, reposDir) {
   const start = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
   for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, '.petal', 'lock.json'))) return dir;
+    for (const candidate of new Set([dir, real(dir)])) {
+      const store = path.join(reposDir, repoKey(candidate));
+      if (fs.existsSync(path.join(store, 'lock.json'))) return { root: candidate, store };
+    }
     if (path.dirname(dir) === dir) return null;
   }
 }
 
-function note(root, text) {
-  try { fs.appendFileSync(path.join(root, '.petal', 'lock.log'), `${new Date().toISOString()} ${text}\n`); } catch { /* nowhere to note it */ }
+function note(store, text) {
+  try { fs.appendFileSync(path.join(store, 'lock.log'), `${new Date().toISOString()} ${text}\n`); } catch { /* nowhere to note it */ }
 }
 
 function main() {
@@ -142,23 +147,25 @@ function main() {
   process.stdin.on('end', () => {
     let input;
     try { input = JSON.parse(raw); } catch { process.exit(0); }
-    const root = findRoot(input);
-    if (!root) process.exit(0);
+    const found = findLocked(input, path.join(path.dirname(fileURLToPath(import.meta.url)), 'repos'));
+    if (!found) process.exit(0);
+    const { root, store } = found;
     let manifest;
     try {
-      manifest = JSON.parse(fs.readFileSync(path.join(root, '.petal', 'lock.json'), 'utf8'));
+      manifest = JSON.parse(fs.readFileSync(path.join(store, 'lock.json'), 'utf8'));
     } catch (error) {
-      note(root, `lock.json unreadable, letting the call through: ${error.message}`);
+      note(store, `lock.json unreadable, letting the call through: ${error.message}`);
       process.exit(0);
     }
+    if (manifest?.enabled !== true) process.exit(0); // one hook serves every repo: only a lock she turned on counts
     const reason = decide(input, manifest, root);
     if (!reason) {
       const noted = configNote(input, manifest, root);
-      if (noted) note(root, noted);
+      if (noted) note(store, noted);
       process.exit(0);
     }
     const target = input.tool_input?.file_path ?? input.tool_input?.notebook_path ?? input.tool_input?.command ?? '';
-    try { logRefusal(path.join(root, '.petal', 'lock-refusals.jsonl'), { at: Date.now(), session: input.session_id, tool: input.tool_name, target: String(target).slice(0, 300), reason }); } catch { /* the refusal still stands */ }
+    try { logRefusal(path.join(store, 'lock-refusals.jsonl'), { at: Date.now(), session: input.session_id, tool: input.tool_name, target: String(target).slice(0, 300), reason }); } catch { /* the refusal still stands */ }
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } }));
     process.exit(0);
   });

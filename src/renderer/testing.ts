@@ -46,7 +46,8 @@ editButton.title = 'The repo’s stages';
 const runButton = el('button', 'tst-button tst-primary', 'Run');
 runButton.type = 'button';
 tools.append(editButton, runButton);
-head.append(title, summary, tools);
+const savedIn = el('p', 'tst-saved-in'); // where the suite lives: Petal's folder, never the repo
+head.append(title, summary, tools, savedIn);
 
 const pickerBox = el('div', 'tst-pickerbox');
 const changeBox = el('div', 'tst-changebox');
@@ -108,6 +109,7 @@ const shownPrd = (): Prd | null => {
 };
 const suite = (): RepoSuite | null => data?.suite.suite ?? null;
 const home = (): string | null => data?.suite.home ?? null;
+const suiteDir = (): string | null => data?.suite.dir ?? null;
 const taskId = (): string | null => shownTask()?.id ?? null;
 const taskRuns = (): PipelineRun[] => data?.runs ?? [];
 // The checkout's run still going: one at a time, since it runs the one suite.
@@ -212,6 +214,9 @@ function drawHead(): void {
   const p = suite();
   const onTask = Boolean(data?.project);
   summary.replaceChildren(data?.project ? headLine() : '');
+  const shownDir = data?.project ? data.suite.shownDir : null;
+  savedIn.textContent = shownDir ? `Saved in Petal · ${shownDir}` : '';
+  savedIn.hidden = !shownDir;
   if (data?.project && picked()) {
     const change = el('button', 'tst-link tst-change-session', 'Change session');
     change.type = 'button';
@@ -302,7 +307,7 @@ function drawStrip(): void {
       seed: data.seed && 'stages' in data.seed ? () => void seedSuite() : null,
       edit: () => startDraft({ stages: [], keepGoing: false, autoRun: false }),
       fromRuns: fromClaude.length ? () => startDraft({ stages: fromClaude.map(asSuiteStage), keepGoing: false, autoRun: false }, 'Check the commands, then save. Each one still asks before its first run.') : null,
-      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd(), home()).length, DRAFT_TURNS)),
+      askEstimate: agentEstimateText(agentTokens(SUITE_SKILL_CHARS + draftRequest(task, shownPrd(), suiteDir()).length, DRAFT_TURNS)),
       scenariosReady: agents.awaiting().length > 0,
     }, data.seed && 'problem' in data.seed ? data.seed.problem : null, Boolean(taskRunning())));
     return;
@@ -532,7 +537,7 @@ const agents = createAgents({
   prd: () => shownPrd(),
   scenarios: () => taskCriteria()?.scenarios ?? [],
   suite: () => suite(),
-  home: () => home(),
+  suiteDir: () => suiteDir(),
   stack: () => data?.stack ?? [],
   names: () => data?.agentNames ?? {},
   taskRuns: () => taskRuns(),
@@ -648,7 +653,7 @@ async function askForSuite(task: Task): Promise<void> {
   const id = tabId();
   if (!id) return;
   const prd = data?.prds.find((p) => p.id === prdOf(data?.tasks ?? [], task)) ?? null;
-  const prompt = draftRequest(task, prd, home());
+  const prompt = draftRequest(task, prd, suiteDir());
   const reply = await window.pastel.testing.agentStart({ tabId: id, root: picked(), taskId: task.id, prompt });
   const updated = !isIpcError(reply) && 'updatedSkill' in reply && reply.updatedSkill ? 'Updated Petal’s testing skill. ' : '';
   message = isIpcError(reply) ? `Couldn’t start the testing agent: ${reply.error}` : 'note' in reply ? reply.note

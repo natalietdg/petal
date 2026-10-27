@@ -37,7 +37,7 @@ export interface AgentContext {
   prd: () => Prd | null; // the shown task's
   scenarios: () => CriteriaItem[]; // the repo's
   suite: () => RepoSuite | null;
-  home: () => string | null; // the main checkout holding the repo's suite and criteria
+  suiteDir: () => string | null; // the suite's folder in Petal, holding the repo's suite and criteria
   stack: () => StackItem[];
   names: () => AgentNames;
   taskRuns: () => PipelineRun[];
@@ -144,7 +144,7 @@ export function createAgents(ctx: AgentContext) {
     const r = drafting();
     const task = ctx.task();
     if (!r || !task || !r.tester || r.tester.state === 'closed') return 'start';
-    return (await sendToTester(r, askAgainText(ctx.home()), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
+    return (await sendToTester(r, askAgainText(ctx.suiteDir()), `You → ${nameOf('tester')} · asked again for the suite`)) ? 'pasted' : 'failed';
   }
 
   // After each refresh: a suite file the drafting agent wrote but Petal couldn't use goes back to it once, with a fix request.
@@ -155,7 +155,7 @@ export function createAgents(ctx: AgentContext) {
     const k = `${keyOf(r.root, r.taskId)}:${problem}`;
     if (pastedProblems.has(k)) return;
     pastedProblems.add(k);
-    if (!(await sendToTester(r, suiteProblemText(ctx.home(), problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
+    if (!(await sendToTester(r, suiteProblemText(ctx.suiteDir(), problem), `Petal → ${nameOf('tester')} · the suite file can’t be used`))) pastedProblems.delete(k);
     else ctx.redraw();
   }
 
@@ -323,7 +323,7 @@ export function createAgents(ctx: AgentContext) {
     const names = { tester: nameOf('tester'), fixer: nameOf('fixer') };
     const review = !approvedSoFar()?.length; // none approved yet: round 1 stops for her review
     return {
-      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() }, review, home: ctx.home(), ticket: ticketInText(task.title) }),
+      tester: buildLoopBrief({ focus, rounds, stages: suite.stages, stack: ctx.stack(), taskId: task.id, agent: true, names, sources: { notes: task.notes, prd: ctx.prd() }, review, suiteDir: ctx.suiteDir(), ticket: ticketInText(task.title) }),
       fixer: buildFixerBrief({ taskId: task.id, taskTitle: task.title, stages: suite.stages, names }),
     };
   }

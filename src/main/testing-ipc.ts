@@ -22,7 +22,7 @@ import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { load as loadConfig } from './config-store';
 import { agentOf, allAgents, loopsOf, saveLoop, testAgentsOf } from './task-suites';
-import { suiteFile, suiteHome, syncSuite, undoSuiteChange, writeSuite } from './repo-suite-store';
+import { suiteDir, suiteFile, suiteHome, syncSuite, undoSuiteChange, writeSuite } from './repo-suite-store';
 import { setAgentTitle } from './agent-titles';
 import { draftWithSkill } from './testing-skill';
 import { readAgentLog } from './agent-log';
@@ -112,6 +112,12 @@ function testingClaudeDir(): string | null {
   const home = allowedClaudeHome();
   if (!home) return null;
   return (isSnapshotRun() && (testingFixture.claudeDir || slashFixture.claudeDir)) || home;
+}
+
+// Where the lock's hook entry goes: her allowed Claude folder, or only the run's stand-in in snapshot runs.
+function lockClaudeDir(): string | null {
+  if (isSnapshotRun()) return testingFixture.claudeDir || slashFixture.claudeDir || null;
+  return allowedClaudeHome();
 }
 
 function skillsFor(root: string) {
@@ -234,7 +240,7 @@ async function mergeClaudeRuns(root: string, sessions: TabSessions): Promise<Pro
   return { suite, lock: lockView(root, manifest) };
 }
 
-const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(root), restored: manifest.restored, refusals: lockRefusals(root, manifest) });
+const lockView = (root: string, manifest: LockManifest): LockView => ({ enabled: manifest.enabled, hookPresent: lockHookPresent(lockClaudeDir()), restored: manifest.restored, refusals: lockRefusals(root, manifest) });
 
 // Every open and closed agent log read, then the lock's integrity check with what they touched.
 async function lockFromLogs(root: string, sessions: TabSessions, tasks: readonly Task[]): Promise<{ found: LogFinds['found']; manifest: LockManifest }> {
@@ -253,7 +259,7 @@ async function refreshRepoLock(root: string, sessions: TabSessions): Promise<voi
   if (lockBusy.has(root) || !claudeFolderAllowed() || !loadManifest(root).enabled) return;
   lockBusy.add(root);
   try {
-    upgradeLock(root);
+    upgradeLock(root, lockClaudeDir());
     await lockFromLogs(root, sessions, loadTasks(root).tasks);
   } catch (error) {
     console.error(`[petal] test lock refresh failed for ${root}:`, error);
@@ -775,7 +781,7 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const approved = (Array.isArray(names) ? names : []).filter((n): n is string => typeof n === 'string' && n.length > 0).map((n) => n.slice(0, NAME_CAP)).slice(0, NAMES_CAP);
     if (!approved.length) return { note: 'There are no scenarios to approve.' };
     const name = agentName(store.load(found.root).agentNames ?? {}, 'tester');
-    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(suiteHome(found.root)), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
+    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(suiteDir(suiteHome(found.root))), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
     if ('note' in sent) return sent;
     const latest = loopsOf(found.root)[taskId] ?? loop;
     saveLoop(found.root, taskId, { ...latest, approvedScenarios: [...(latest.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
@@ -842,12 +848,12 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     return problem ? { note: problem } : { ok: true };
   });
 
-  // The test lock, per project: the hook entry in its .claude/settings.local.json and the manifest.
+  // The test lock, per project: its manifest in ~/.petal, and the one hook entry in her user-level ~/.claude/settings.json.
   handle('testing:lock', async (event, { tabId, root: picked, on }) => {
     if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
     const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
     if (!root) return { note: 'No project in this tab. Open one first.' };
-    const problem = setLock(root, on === true);
+    const problem = setLock(root, on === true, lockClaudeDir());
     return problem ? { note: problem } : { ok: true };
   });
 

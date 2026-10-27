@@ -16,11 +16,10 @@ const UNGATED_PATH_USERS = ['claude-cli.ts', 'claude-session.ts', 'claude-folder
 // reply-image-ipc asks the gate per request and names the folder only to refuse pictures in it; reply-image.ts is handed that answer.
 const GATE_PASSED_IN = { file: 'reply-image.ts', field: /\bclaudeAllowed\b/ };
 
-// The allowed exceptions, both repo-level, never ~/.claude: the project skill (<repo>/.claude/skills/...) and the test
-// lock's hook entry in <repo>/.claude/settings.local.json. Only these exact strings, only in these files.
+// The allowed exception, repo-level, never ~/.claude: an older build's project skill (<repo>/.claude/skills/...), read only.
+// The test lock's entry goes in the gated Claude folder it is handed. Only this exact string, only in this file.
 const REPO_EXCEPTIONS: Record<string, string> = {
   'factory-store.ts': "'.claude/skills/factory/SKILL.md'",
-  'test-lock.ts': "path.join(root, '.claude', 'settings.local.json')",
 };
 const NAMES_CLAUDE_FOLDER = /['"`]\.claude['"`/]/;
 

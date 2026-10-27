@@ -1,5 +1,6 @@
 // The test lock, per repo: the hook's decision (any session may change a locked test, none may delete, skip or weaken
-// one), its shell write patterns, failing open, the settings.local.json entry, and the integrity check.
+// one), its shell write patterns, failing open, the user-level settings entry, and the integrity check. Lock state lives in
+// ~/.petal/repos/<repoKey>/ (the electron mock's home is the temp userData), never in the repo.
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -11,7 +12,9 @@ import { bashWrites, configNote, decide, isTestConfig, isTestPath, logRefusal, w
 import { LEGACY_LOCK_COMMAND, hasLockHook, lockCommand, lockHookStale, mergeLockHook, unmergeLockHook } from '../src/shared/lock-settings';
 import { TOUCH_SLACK_MS, emptyManifest, integrityStep, isTestConfig as sharedIsTestConfig, isTestPath as sharedIsTestPath, lastToucher, lockedFiles, mainRefusals, readManifest, repoPath, restoredText, weakens } from '../src/shared/test-lock';
 import { parseCriteria } from '../src/shared/test-loop';
-import { dismissRestored, droppedCopiesDir, loadManifest, lockRefusals, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from '../src/main/test-lock';
+import { repoDir } from '../src/main/petal-home';
+import { repoKey } from '../src/main/petal-repos';
+import { dismissRestored, droppedCopiesDir, loadManifest, lockHookPresent, lockRefusals, lockedCopiesDir, migrateLegacyCopies, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from '../src/main/test-lock';
 import { agentName, cleanAgentName } from '../src/shared/agent-names';
 
 afterEach(removeTempDirs);
@@ -119,20 +122,37 @@ describe('the hook’s decision', () => {
 
 describe('the hook script', () => {
   const script = path.resolve(__dirname, '../resources/hooks/petal-test-lock.mjs');
-  const run = (repo: string, input: object): string => execFileSync(process.execPath, [script], { input: JSON.stringify(input), env: { ...process.env, CLAUDE_PROJECT_DIR: repo }, encoding: 'utf8' });
+  // ~/.petal as the hook sees it: the script beside repos/<repoKey>/lock.json.
+  function petalWith(repo: string, lock: object | string): { hook: string; store: string } {
+    const petal = tempDir('petal-home-');
+    const store = path.join(petal, 'repos', repoKey(repo));
+    fs.mkdirSync(store, { recursive: true });
+    fs.copyFileSync(script, path.join(petal, 'test-lock.mjs'));
+    fs.writeFileSync(path.join(store, 'lock.json'), typeof lock === 'string' ? lock : JSON.stringify(lock));
+    return { hook: path.join(petal, 'test-lock.mjs'), store };
+  }
+  const run = (hook: string, dir: string, input: object): string => execFileSync(process.execPath, [hook], { input: JSON.stringify(input), env: { ...process.env, CLAUDE_PROJECT_DIR: dir }, encoding: 'utf8' });
 
-  it('denies with a reason as JSON, logs the refusal, and fails open on a corrupt manifest', () => {
+  it('denies with a reason as JSON, logs the refusal in ~/.petal, and fails open on a corrupt manifest; the repo gets no .petal', () => {
     const repo = lockedRepo();
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), JSON.stringify(manifest));
-    const denied = JSON.parse(run(repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: repo }));
+    const { hook, store } = petalWith(repo, manifest);
+    const denied = JSON.parse(run(hook, repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: repo }));
     expect(denied.hookSpecificOutput).toMatchObject({ hookEventName: 'PreToolUse', permissionDecision: 'deny' });
     expect(denied.hookSpecificOutput.permissionDecisionReason).toMatch(/this change skips it/);
-    expect(fs.readFileSync(path.join(repo, '.petal', 'lock-refusals.jsonl'), 'utf8')).toContain('"session":"main"');
-    expect(run(repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: `${BEFORE}// more\n` }), cwd: repo })).toBe('');
-    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), '{ broken');
-    expect(run(repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: repo })).toBe('');
-    expect(fs.readFileSync(path.join(repo, '.petal', 'lock.log'), 'utf8')).toMatch(/lock\.json unreadable/);
+    expect(fs.readFileSync(path.join(store, 'lock-refusals.jsonl'), 'utf8')).toContain('"session":"main"');
+    expect(run(hook, repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: `${BEFORE}// more\n` }), cwd: repo })).toBe('');
+    fs.writeFileSync(path.join(store, 'lock.json'), '{ broken');
+    expect(run(hook, repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: repo })).toBe('');
+    expect(fs.readFileSync(path.join(store, 'lock.log'), 'utf8')).toMatch(/lock\.json unreadable/);
+    expect(fs.existsSync(path.join(repo, '.petal'))).toBe(false);
+  });
+
+  it('one script serves every repo: a repo with its lock off, or none at all, lets everything through', () => {
+    const repo = lockedRepo();
+    const { hook } = petalWith(repo, { ...manifest, enabled: false });
+    expect(run(hook, repo, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: repo })).toBe('');
+    const other = lockedRepo();
+    expect(run(hook, other, { ...edit('main', 'src/cart.test.ts', 'Write', { content: SKIPPED }), cwd: other })).toBe('');
   });
 
   it('keeps only the newest 200 refusals', () => {
@@ -144,72 +164,87 @@ describe('the hook script', () => {
     expect(JSON.parse(lines[199] as string).at).toBe(204);
   });
 
-  it('a copy in <repo>/.petal finds its own repo, whatever folder the session started in', () => {
+  it('finds the locked repo from a subfolder the session started in', () => {
     const repo = lockedRepo('apps/web/a.test.ts');
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.copyFileSync(script, path.join(repo, '.petal', 'test-lock.mjs'));
-    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), JSON.stringify({ ...manifest, lockedPaths: ['apps/web/a.test.ts'] }));
+    const { hook } = petalWith(repo, { ...manifest, lockedPaths: ['apps/web/a.test.ts'] });
     const sub = path.join(repo, 'apps', 'web');
-    const out = execFileSync(process.execPath, [path.join(repo, '.petal', 'test-lock.mjs')], { input: JSON.stringify({ ...edit('main', 'a.test.ts', 'Write', { content: SKIPPED }), cwd: sub }), env: { ...process.env, CLAUDE_PROJECT_DIR: sub }, encoding: 'utf8' });
+    const out = run(hook, sub, { ...edit('main', 'a.test.ts', 'Write', { content: SKIPPED }), cwd: sub });
     expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe('deny');
   });
 });
 
-describe('settings.local.json', () => {
+describe('the user-level settings entry', () => {
+  const SCRIPT = '/h/.petal/test-lock.mjs';
   it('adds the lock once, keeps every other key and hook, and removes only its own entry', () => {
     const hers = { permissions: { allow: ['Bash(npm test)'] }, hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] }], Stop: [{ hooks: [] }] } };
-    const on = mergeLockHook(hers, ROOT);
+    const on = mergeLockHook(hers, SCRIPT);
     expect(hasLockHook(on)).toBe(true);
-    expect(mergeLockHook(on, ROOT)).toEqual(on);
+    expect(mergeLockHook(on, SCRIPT)).toEqual(on);
     expect(on.permissions).toEqual(hers.permissions);
     expect((on.hooks as { PreToolUse: unknown[] }).PreToolUse).toHaveLength(2);
-    expect(JSON.stringify(on)).toContain(`"command":"node '/r/shop/.petal/test-lock.mjs'"`);
+    expect(JSON.stringify(on)).toContain(`"command":"node '/h/.petal/test-lock.mjs'"`);
     expect(unmergeLockHook(on)).toEqual(hers);
-    expect(unmergeLockHook(mergeLockHook({}, ROOT))).toEqual({});
+    expect(unmergeLockHook(mergeLockHook({}, SCRIPT))).toEqual({});
     expect(unmergeLockHook(hers)).toBe(hers);
   });
 
-  it('the command holds the repo’s absolute path, shell-quoted; the old $CLAUDE_PROJECT_DIR entry upgrades in place', () => {
-    expect(lockCommand("/Users/n/it's mono/")).toBe(`node '/Users/n/it'\\''s mono/.petal/test-lock.mjs'`);
+  it('the command holds the script’s absolute path, shell-quoted; an older per-repo entry is replaced', () => {
+    expect(lockCommand("/Users/n/it's/.petal/test-lock.mjs")).toBe(`node '/Users/n/it'\\''s/.petal/test-lock.mjs'`);
     const old = { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine' }] }, { matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', hooks: [{ type: 'command', command: LEGACY_LOCK_COMMAND }] }] } };
     expect(hasLockHook(old)).toBe(true);
-    expect(lockHookStale(old, ROOT)).toBe(true);
-    const upgraded = mergeLockHook(old, ROOT);
+    expect(lockHookStale(old, SCRIPT)).toBe(true);
+    const upgraded = mergeLockHook(old, SCRIPT);
     const groups = (upgraded.hooks as { PreToolUse: { hooks: { command: string }[] }[] }).PreToolUse;
-    expect(groups.map((g) => g.hooks[0]?.command)).toEqual(['echo mine', lockCommand(ROOT)]);
-    expect(lockHookStale(upgraded, ROOT)).toBe(false);
-    expect(lockHookStale(upgraded, '/elsewhere')).toBe(true); // a moved repo gets its new path
+    expect(groups.map((g) => g.hooks[0]?.command)).toEqual(['echo mine', lockCommand(SCRIPT)]);
+    expect(lockHookStale(upgraded, SCRIPT)).toBe(false);
     expect(unmergeLockHook(old)).toEqual({ hooks: { PreToolUse: [old.hooks.PreToolUse[0]] } });
   });
 
-  it('an older install is upgraded: the bundled script and the absolute command replace the old ones', () => {
-    useTempUserData();
+  it('turning a lock on writes ~/.petal/test-lock.mjs and one entry in ~/.claude/settings.json, nothing in the repo', () => {
+    const home = useTempUserData();
+    const claudeDir = tempDir('petal-claude-');
     const repo = tempDir('petal-repo-');
-    expect(setLock(repo, true)).toBeNull();
-    const settingsFile = path.join(repo, '.claude', 'settings.local.json');
-    fs.writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Edit|Write|MultiEdit|NotebookEdit|Bash', hooks: [{ type: 'command', command: LEGACY_LOCK_COMMAND }] }] } }));
-    fs.writeFileSync(path.join(repo, '.petal', 'test-lock.mjs'), '// old build\n');
-    upgradeLock(repo);
-    expect(fs.readFileSync(settingsFile, 'utf8')).toContain(repo);
-    expect(fs.readFileSync(settingsFile, 'utf8')).not.toContain('CLAUDE_PROJECT_DIR');
-    expect(fs.readFileSync(path.join(repo, '.petal', 'test-lock.mjs'), 'utf8')).toContain('isTestConfig');
-    fs.writeFileSync(settingsFile, '{ broken');
-    upgradeLock(repo);
-    expect(fs.readFileSync(settingsFile, 'utf8')).toBe('{ broken');
+    const other = tempDir('petal-repo-');
+    const settings = path.join(claudeDir, 'settings.json');
+    fs.writeFileSync(settings, JSON.stringify({ model: 'opus' }));
+    expect(setLock(repo, true, null)).toMatch(/isn’t reading your Claude folder/);
+    expect(setLock(repo, true, claudeDir)).toBeNull();
+    expect(setLock(other, true, claudeDir)).toBeNull();
+    const script = path.join(home, '.petal', 'test-lock.mjs');
+    expect(fs.readFileSync(script, 'utf8')).toContain('findLocked');
+    const on = JSON.parse(fs.readFileSync(settings, 'utf8'));
+    expect(on.model).toBe('opus');
+    expect((on.hooks.PreToolUse as unknown[])).toHaveLength(1);
+    expect(on.hooks.PreToolUse[0].hooks[0].command).toBe(lockCommand(script));
+    expect(loadManifest(repo).enabled).toBe(true);
+    expect(fs.existsSync(path.join(repoDir(repo), 'lock.json'))).toBe(true);
+    expect(fs.readdirSync(repo)).toEqual([]); // no .petal, no .claude in the repo
+    expect(setLock(repo, false, claudeDir)).toBeNull();
+    expect(hasLockHook(JSON.parse(fs.readFileSync(settings, 'utf8')))).toBe(true); // the other repo still has its lock on
+    expect(setLock(other, false, claudeDir)).toBeNull();
+    expect(JSON.parse(fs.readFileSync(settings, 'utf8'))).toEqual({ model: 'opus' });
+    fs.writeFileSync(settings, '{ hers, broken');
+    expect(setLock(repo, true, claudeDir)).toMatch(/settings.json isn’t valid JSON/);
+    expect(fs.readFileSync(settings, 'utf8')).toBe('{ hers, broken');
   });
 
-  it('turning the lock on writes the script and the project’s settings; a broken settings file is left alone', () => {
-    useTempUserData();
+  it('a newer build refreshes the script only where the user-level entry is on; an older per-repo lock waits for her', () => {
+    const home = useTempUserData();
+    const claudeDir = tempDir('petal-claude-');
     const repo = tempDir('petal-repo-');
-    expect(setLock(repo, true)).toBeNull();
-    expect(fs.existsSync(path.join(repo, '.petal', 'test-lock.mjs'))).toBe(true);
-    expect(hasLockHook(JSON.parse(fs.readFileSync(path.join(repo, '.claude', 'settings.local.json'), 'utf8')))).toBe(true);
-    expect(loadManifest(repo).enabled).toBe(true);
-    expect(setLock(repo, false)).toBeNull();
-    expect(JSON.parse(fs.readFileSync(path.join(repo, '.claude', 'settings.local.json'), 'utf8'))).toEqual({});
-    fs.writeFileSync(path.join(repo, '.claude', 'settings.local.json'), '{ hers, broken');
-    expect(setLock(repo, true)).toMatch(/settings.local.json isn’t valid JSON/);
-    expect(fs.readFileSync(path.join(repo, '.claude', 'settings.local.json'), 'utf8')).toBe('{ hers, broken');
+    const inRepo = path.join(repo, '.petal', 'lock.json');
+    fs.mkdirSync(path.dirname(inRepo));
+    fs.writeFileSync(inRepo, JSON.stringify({ ...emptyManifest(), enabled: true })); // an older build's lock
+    expect(loadManifest(repo).enabled).toBe(true); // copied into ~/.petal on first read
+    upgradeLock(repo, claudeDir);
+    expect(fs.existsSync(path.join(claudeDir, 'settings.json'))).toBe(false); // never registered unasked
+    expect(lockHookPresent(claudeDir)).toBe(false);
+    expect(setLock(repo, true, claudeDir)).toBeNull();
+    fs.writeFileSync(path.join(home, '.petal', 'test-lock.mjs'), '// old build\n');
+    upgradeLock(repo, claudeDir);
+    expect(fs.readFileSync(path.join(home, '.petal', 'test-lock.mjs'), 'utf8')).toContain('findLocked');
+    expect(lockHookPresent(claudeDir)).toBe(true);
+    expect(fs.readFileSync(inRepo, 'utf8')).toBe(JSON.stringify({ ...emptyManifest(), enabled: true })); // the repo's copy untouched
   });
 });
 
@@ -242,10 +277,10 @@ describe('what is locked', () => {
       fs.mkdirSync(path.dirname(copy(rel)), { recursive: true });
       fs.writeFileSync(copy(rel), text);
     }
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     const older = loadManifest(repo);
     const flags = [{ path: app, at: 1, taskId: 't', by: 'fixer' as const }, { path: app, at: 2, taskId: 't', by: 'unconfirmed' as const }, { path: test, at: 3, taskId: 't', by: 'main' as const }];
-    fs.writeFileSync(path.join(repo, '.petal', 'lock.json'), JSON.stringify({ ...older, lockedPaths: [app, test], owners: { [app]: 't', [test]: 't' }, approved: { [app]: sha('old view\n'), [test]: sha('it("vn")\n') }, restored: flags }));
+    fs.writeFileSync(path.join(repoDir(repo), 'lock.json'), JSON.stringify({ ...older, lockedPaths: [app, test], owners: { [app]: 't', [test]: 't' }, approved: { [app]: sha('old view\n'), [test]: sha('it("vn")\n') }, restored: flags }));
     fs.writeFileSync(file(app), 'fixed view\n'); // the bug fix agent's fix
     const fixerTouch = { target: app, at: Date.now(), sessionId: 'fixer', kind: 'edit' as const, cwd: repo };
     const agents = [{ sessionId: 'tester', role: 'tester' as const, taskId: 't' }, { sessionId: 'fixer', role: 'fixer' as const, taskId: 't' }];
@@ -285,14 +320,14 @@ describe('what is locked', () => {
   it('refusals of sessions that aren’t agents show in the lock bar until dismissed', () => {
     useTempUserData();
     const repo = tempDir('petal-repo-');
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     refreshLock(repo, { criteria: null, touches: [] }, [{ sessionId: 'fixer', role: 'fixer', taskId: 't' }], {});
     const lines = [
       { at: 10, session: 'main', tool: 'Edit', target: `${repo}/src/cart.test.ts`, reason: 'x' },
       { at: 11, session: 'fixer', tool: 'Edit', target: 'src/cart.test.ts', reason: 'x' },
       { at: 12, session: 'main', tool: 'Bash', target: 'rm src/cart.test.ts', reason: 'x' },
     ];
-    fs.writeFileSync(path.join(repo, '.petal', 'lock-refusals.jsonl'), `${lines.map((l) => JSON.stringify(l)).join('\n')}\nnot json\n`);
+    fs.writeFileSync(path.join(repoDir(repo), 'lock-refusals.jsonl'), `${lines.map((l) => JSON.stringify(l)).join('\n')}\nnot json\n`);
     expect(lockRefusals(repo, loadManifest(repo))).toEqual([
       { at: 10, text: 'A Claude session tried to edit src/cart.test.ts. Refused.' },
       { at: 12, text: 'A Claude session tried to run rm src/cart.test.ts. Refused.' },
@@ -309,7 +344,7 @@ describe('what is locked', () => {
     fs.mkdirSync(path.join(repo, 'src'));
     const test = path.join(repo, 'src', 'cart.test.ts');
     fs.writeFileSync(test, BEFORE);
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     const criteria = parseCriteria('## Scenarios\n- [pass] rounds · test: src/cart.test.ts::rounds · ticket: AB#1\n');
     const agents = [{ sessionId: 'tester', role: 'tester' as const, taskId: 't-cart' }];
     const touched = (sessionId: string) => ({ criteria, touches: [{ target: 'src/cart.test.ts', at: Date.now(), sessionId, kind: 'edit' as const, cwd: repo }] });
@@ -325,7 +360,7 @@ describe('what is locked', () => {
     expect(fs.readFileSync(path.join(lockedCopiesDir(repo), 'src', 'cart.test.ts'), 'utf8')).toBe(renamed);
     expect(lockedCopiesDir(repo).startsWith(userData)).toBe(true);
     expect(fs.existsSync(path.join(repo, '.petal', 'locked'))).toBe(false); // never in the repo, where test runners look
-    expect(readManifest(JSON.parse(fs.readFileSync(path.join(repo, '.petal', 'lock.json'), 'utf8'))).sessions).toEqual({ tester: { role: 'tester', taskId: 't-cart' } });
+    expect(readManifest(JSON.parse(fs.readFileSync(path.join(repoDir(repo), 'lock.json'), 'utf8'))).sessions).toEqual({ tester: { role: 'tester', taskId: 't-cart' } });
   });
 
   it('a weakening no Claude session made is never reverted: it asks once, then Keep or Restore settles it', () => {
@@ -334,7 +369,7 @@ describe('what is locked', () => {
     fs.mkdirSync(path.join(repo, 'src'));
     const test = path.join(repo, 'src', 'cart.test.ts');
     fs.writeFileSync(test, BEFORE);
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     const criteria = parseCriteria('## Scenarios\n- [pass] rounds · test: src/cart.test.ts::rounds\n');
     const inputs = { criteria, touches: [] };
     refreshLock(repo, inputs, [], {});
@@ -377,12 +412,12 @@ describe('copies an older build kept in the repo', () => {
     put(path.join(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'it("vn")\n');
     put(legacy(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'it("vn")\n');
     put(legacy(repo, 'src', 'cart.test.ts'), 'it("rounds")\n');
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     refreshLock(repo, { criteria: null, touches: [] }, [], {});
     expect(fs.readFileSync(copy(repo, 'app', '[lang]', 'preview.vn-salary.test.tsx'), 'utf8')).toBe('it("vn")\n');
     expect(fs.readFileSync(copy(repo, 'src', 'cart.test.ts'), 'utf8')).toBe('it("rounds")\n');
     expect(fs.existsSync(legacy(repo))).toBe(false);
-    expect(fs.existsSync(path.join(repo, '.petal', 'lock.json'))).toBe(true);
+    expect(fs.existsSync(path.join(repoDir(repo), 'lock.json'))).toBe(true);
   });
 
   it('moves them with the lock off too, so a runner stops finding them', () => {
@@ -422,7 +457,7 @@ describe('copies an older build kept in the repo', () => {
     put(path.join(repo, 'real.ts'), 'x\n');
     fs.mkdirSync(path.join(repo, 'src'));
     fs.symlinkSync(path.join(repo, 'real.ts'), path.join(repo, 'src', 'cart.test.ts'));
-    setLock(repo, true);
+    setLock(repo, true, tempDir('petal-claude-'));
     const criteria = parseCriteria('## Scenarios\n- [pass] rounds · test: src/cart.test.ts::rounds · round 1 · task: t-cart\n');
     const after = refreshLock(repo, { criteria, touches: [] }, [], {});
     expect(after.approved['src/cart.test.ts']).toBeUndefined();

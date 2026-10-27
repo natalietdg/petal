@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { removeTempDirs, tempDir, tmpLeftovers } from './helpers';
+import { removeTempDirs, tempDir, tmpLeftovers, useTempUserData } from './helpers';
+import { repoKey } from '../src/main/petal-repos';
 import { parseTask, parseTaskLine } from '../src/shared/task-line';
 import {
   addTask, applyTaskLine, assignTask, editTask, moveTask, releaseTask, removeTask, taskBrief, taskForLine, validateTaskFile, type Task, type TaskOwner,
@@ -107,33 +108,34 @@ describe('task list', () => {
 });
 
 describe('tasks-store', () => {
-  it('saves in .petal/tasks.json with a self-ignoring folder, atomically', () => {
+  it('saves in ~/.petal/repos/<repoKey>/tasks.json atomically, and writes nothing in the repo', () => {
+    const home = useTempUserData();
     const repo = tempDir('petal-repo-');
     fs.mkdirSync(path.join(repo, '.git'));
     updateTasks(repo, (tasks) => ({ tasks: addTask(tasks, { title: 'One' }, 'a', 1) }));
     updateTasks(repo, (tasks) => ({ tasks: addTask(tasks, { title: 'Two' }, 'b', 2) }));
     expect(loadTasks(repo).tasks.map((t) => t.title)).toEqual(['One', 'Two']);
-    expect(fs.readFileSync(path.join(repo, '.petal', '.gitignore'), 'utf8')).toBe('*\n');
-    expect(tmpLeftovers(path.join(repo, '.petal'))).toEqual([]);
+    expect(tasksFile(repo)).toBe(path.join(home, '.petal', 'repos', repoKey(repo), 'tasks.json'));
+    expect(tmpLeftovers(path.dirname(tasksFile(repo)))).toEqual([]);
+    expect(fs.readdirSync(repo)).toEqual(['.git']);
     expect(updateTasks(repo, () => null)).toBeNull();
   });
 
-  it('keeps a .gitignore she wrote and never saves over a broken file', () => {
+  it('never saves over a broken file', () => {
+    useTempUserData();
     const repo = tempDir('petal-repo-');
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), 'tasks.json\n');
+    fs.mkdirSync(path.dirname(tasksFile(repo)), { recursive: true });
     fs.writeFileSync(tasksFile(repo), '{oops');
     expect(loadTasks(repo).problem).toMatch(/isn’t valid JSON/);
     expect(() => updateTasks(repo, (tasks) => ({ tasks: addTask(tasks, { title: 'x' }, 'a', 1) }))).toThrow(/won’t replace it/);
     expect(fs.readFileSync(tasksFile(repo), 'utf8')).toBe('{oops');
-    expect(fs.readFileSync(path.join(repo, '.petal', '.gitignore'), 'utf8')).toBe('tasks.json\n');
   });
 
-  it('refuses a write that a symlink would carry out of the repo', () => {
+  it('refuses a write that a symlink would carry out of Petal’s folder', () => {
+    useTempUserData();
     const repo = tempDir('petal-repo-');
     const outside = tempDir('petal-outside-');
-    fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), '*\n');
+    fs.mkdirSync(path.dirname(tasksFile(repo)), { recursive: true });
     fs.symlinkSync(path.join(outside, 'stolen.json'), tasksFile(repo));
     expect(() => updateTasks(repo, (tasks) => ({ tasks: addTask(tasks, { title: 'x' }, 'a', 1) }))).toThrow(/outside/);
     expect(fs.existsSync(path.join(outside, 'stolen.json'))).toBe(false);

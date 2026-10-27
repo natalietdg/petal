@@ -1,8 +1,8 @@
-// Per project: each test-loop round's distillation in <repo>/.petal/distillation.jsonl, so it survives restarts.
+// Per project: each test-loop round's distillation in ~/.petal/repos/<repoKey>/distillation.jsonl, so it survives restarts.
 // Written only where a loop was started (a criteria file exists); every new Course is also an Activity item.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureSelfIgnore } from './factory-store';
+import { prepareRepoDir, repoDir } from './petal-home';
 import { writeFileDurable } from './atomic-file';
 import { recordActivity } from './activity-feed';
 import { repoBranch } from './repo-label';
@@ -11,11 +11,11 @@ import { loopPrepared } from './criteria-store';
 import { loadTasks } from './tasks-store';
 import { taskIdAt } from './testing-tasks';
 import {
-  COURSE_WORDS, DISTILL_FILE_CAP, DISTILL_PATH, RECORDS_CAP, courseText, mergeRecords, parseJsonl, recordsFromReplies, toJsonl,
+  COURSE_WORDS, DISTILL_FILE_CAP, DISTILL_NAME, RECORDS_CAP, courseText, mergeRecords, parseJsonl, recordsFromReplies, toJsonl,
   type DistillRecord, type ReplyLike,
 } from '../shared/distillation';
 
-const fileOf = (root: string): string => path.join(root, ...DISTILL_PATH.split('/'));
+const fileOf = (root: string): string => path.join(repoDir(root), DISTILL_NAME);
 
 // Read only, capped; a link (a cloned repo's trick) or a missing file reads as none.
 export function readDistillation(root: string): DistillRecord[] {
@@ -57,9 +57,7 @@ export function saveDistillation(root: string, records: readonly DistillRecord[]
   const changed = incoming.filter((r) => known.has(r.id) && !sameRecord(known.get(r.id) as DistillRecord, r));
   if (!fresh.length && !changed.length) return [];
   const merged = mergeRecords(stored, incoming).slice(-RECORDS_CAP);
-  const dir = path.dirname(fileOf(root));
-  ensureSelfIgnore(dir, root);
-  writeFileDurable(fileOf(root), toJsonl(merged), undefined, { within: root });
+  writeFileDurable(fileOf(root), toJsonl(merged), undefined, { within: prepareRepoDir(root) });
   for (const record of fresh) recordCourse(root, record);
   return fresh;
 }

@@ -188,7 +188,7 @@ function stationLineRule(stations: readonly Station[]): string {
 }
 
 // global: SKILL.md with frontmatter (Claude Code reads it from line 1), the marker as the first body line.
-// project: <repo>/.petal/factory.md, the marker on line 1.
+// project: ~/.petal/repos/<repoKey>/factory.md, the marker on line 1.
 // project-skill: <repo>/.claude/skills/factory/SKILL.md, the project's stations with frontmatter.
 export function renderSkill(factory: Factory, scope: 'global' | 'project' | 'project-skill', projectName?: string): string {
   const body = [
@@ -199,7 +199,7 @@ export function renderSkill(factory: Factory, scope: 'global' | 'project' | 'pro
     INTRO,
     '',
     stationLineRule(factory.stations),
-    ...(scope === 'global' ? ['', 'If the project you are working in has `.petal/factory.md` at its root, follow that file instead of the stations below.'] : []),
+    ...(scope === 'global' ? ['', 'If the project you are working in has its own stations, follow them instead of the stations below. They are in `~/.petal/repos/<repoKey>/factory.md`, where `<repoKey>` is the output of `git rev-parse --show-toplevel` with every character that is not a letter or digit replaced by `-` (for example `/home/me/shop` becomes `-home-me-shop`).'] : []),
     '',
     renderStations(factory.stations),
     '',

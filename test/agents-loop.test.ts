@@ -123,7 +123,7 @@ describe('the two briefs', () => {
     expect(brief).toContain('You are Quinn, this task\'s testing agent.');
     expect(brief).toContain('while Fixie fixes the bugs you find in its own session');
     expect(brief).toContain('Never edit app code: Petal hands each bug to Fixie');
-    expect(brief).toContain('The suite lives in .petal/suite.json, shared by every session in this repo.');
+    expect(brief).toContain('The suite lives in ~/.petal/repos/<repoKey>/suite.json, in Petal and shared by every session in this repo. Never write suite or criteria files inside the repo.');
     expect(brief).toContain('or file the bug for Fixie');
     expect(brief).toContain('Never weaken, skip or delete a test');
     expect(brief).not.toMatch(/[—–]/);
@@ -132,7 +132,7 @@ describe('the two briefs', () => {
   it('the bug fix agent fixes app code only and ends each bug with a Fix line', () => {
     const brief = buildFixerBrief({ taskId: 't-1', taskTitle: 'Fix the cart total.', stages, names });
     expect(brief).toContain('You are Fixie, the bug fix agent for the task "Fix the cart total" (t-1).');
-    expect(brief).toContain('Never edit tests, test data, snapshot baselines or .petal/suite.json: they belong to Quinn.');
+    expect(brief).toContain('Never edit tests, test data, snapshot baselines or the suite files in ~/.petal/repos: they belong to Quinn.');
     expect(brief).toContain('**Fix:** the bug name · done');
     expect(brief).toContain('Never commit');
     expect(brief).not.toMatch(/[—–]/);
@@ -142,7 +142,7 @@ describe('the two briefs', () => {
     const brief = buildSentFixerBrief({ taskId: 't-1', taskTitle: 'Fix the cart total.', bugName: 'cart rounds', prompt: 'The test "cart rounds" in src/cart.test.ts fails in the Unit stage (`npm test`).', names });
     expect(brief).toContain('You are Fixie, the bug fix agent for the task "Fix the cart total" (t-1).');
     expect(brief).toContain('The test "cart rounds" in src/cart.test.ts fails in the Unit stage (`npm test`).');
-    expect(brief).toContain('Fix the app code only. Never edit tests, test data, snapshot baselines or .petal/suite.json: only Quinn changes those.');
+    expect(brief).toContain('Fix the app code only. Never edit tests, test data, snapshot baselines or the suite files in ~/.petal/repos: only Quinn changes those.');
     expect(brief).toContain('End your reply with this line: **Fix:** cart rounds · done');
     expect(brief).toContain('Never commit');
     expect(brief).not.toMatch(/[\u2014\u2013]/);

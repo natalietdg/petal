@@ -147,7 +147,7 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], names: { teste
   box2.addEventListener('change', () => handlers.toggle(box2.checked));
   label.append(box2, el('span', null, 'Lock tests'), el('span', 'tst-muted', 'Any session may add or fix tests; none may delete, skip or weaken one. Adds a hook to this repo’s .claude/settings.local.json.'));
   box.append(label);
-  if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from .claude/settings.local.json. Turn the lock off and on again.'));
+  if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from your ~/.claude/settings.json. Turn the lock off and on again.'));
   const asks = restored.filter((f) => f.by === 'unconfirmed');
   if (asks.length) {
     const list = el('ul', 'tst-lock-flags');

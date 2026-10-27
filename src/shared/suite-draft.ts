@@ -1,6 +1,6 @@
 // A testing agent drawing up the repo's suite, pure: how its brief reaches the testing-suite skill, when the draft has
 // ended with no suite, and what Petal pastes back to it.
-import { CRITERIA_PATH, SUITE_PATH, inHome } from './repo-suite';
+import { CRITERIA_NAME, SUITE_NAME, inSuiteDir } from './repo-suite';
 import { scenarioSources, ticketInText, type CriteriaItem } from './test-loop';
 import type { AgentState } from './testing';
 import type { Prd, Task } from './tasks';
@@ -25,11 +25,11 @@ export function draftBrief(inline: boolean, request: string, skillText: string):
 }
 
 // What Petal asks the testing agent to draw up: the task, the repo's two files, and the notes and PRD its scenarios come from.
-// home: the main checkout holding the files, so an agent in a worktree writes the shared ones.
-export function draftRequest(task: Pick<Task, 'id' | 'title' | 'notes'>, prd: Pick<Prd, 'title' | 'notes'> | null, home: string | null = null): string {
+// dir: the suite's folder in Petal, so every session and worktree writes the same files, outside the repo.
+export function draftRequest(task: Pick<Task, 'id' | 'title' | 'notes'>, prd: Pick<Prd, 'title' | 'notes'> | null, dir: string | null = null): string {
   const ticket = ticketInText(task.title);
   return [
-    `for task ${task.id}: "${task.title}". Set up or extend this repo's suite in ${inHome(home, SUITE_PATH)}, and write its scenarios and bugs in ${inHome(home, CRITERIA_PATH)}.${ticket ? ` Tag the lines you add with "ticket: ${ticket}".` : ''}`,
+    `for task ${task.id}: "${task.title}". Set up or extend this repo's suite in ${inSuiteDir(dir, SUITE_NAME)}, and write its scenarios and bugs in ${inSuiteDir(dir, CRITERIA_NAME)}. Never write either file inside the repo.${ticket ? ` Tag the lines you add with "ticket: ${ticket}".` : ''}`,
     ...scenarioSources({ notes: task.notes, prd }),
   ].join('\n');
 }
@@ -58,11 +58,11 @@ export function awaitingReview<T extends Pick<CriteriaItem, 'status' | 'name'>>(
   return scenarios.filter((s) => s.status === 'todo' && !approved.has(s.name));
 }
 
-export const scenariosApprovedText = (home: string | null): string =>
-  `I reviewed the scenarios in ${inHome(home, CRITERIA_PATH)} and they look right. Read the file again first, since I may have edited it. Then write their tests: one or more per scenario, each named on its scenario line with "test: path::test name", and carry on as your instructions say.`;
+export const scenariosApprovedText = (dir: string | null): string =>
+  `I reviewed the scenarios in ${inSuiteDir(dir, CRITERIA_NAME)} and they look right. Read the file again first, since I may have edited it. Then write their tests: one or more per scenario, each named on its scenario line with "test: path::test name", and carry on as your instructions say.`;
 
-export const askAgainText = (home: string | null): string =>
-  `You stopped without writing ${inHome(home, SUITE_PATH)}. Finish drawing up this repo's suite and write that file, as your instructions say.`;
+export const askAgainText = (dir: string | null): string =>
+  `You stopped without writing ${inSuiteDir(dir, SUITE_NAME)}. Finish drawing up this repo's suite and write that file, as your instructions say.`;
 
-export const suiteProblemText = (home: string | null, problem: string): string =>
-  `Petal couldn't use ${inHome(home, SUITE_PATH)}: ${problem} Fix the file so it has this shape: {"stages": [{"name": "Unit", "command": "npm test", "level": "regression"}]}, then save it again.`;
+export const suiteProblemText = (dir: string | null, problem: string): string =>
+  `Petal couldn't use ${inSuiteDir(dir, SUITE_NAME)}: ${problem} Fix the file so it has this shape: {"stages": [{"name": "Unit", "command": "npm test", "level": "regression"}]}, then save it again.`;

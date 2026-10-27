@@ -11,18 +11,27 @@ Scenarios come first. The user decides what "done" means: you write new scenario
 
 ## 0. Find the repo's files
 
-The suite lives in the repo's **main checkout**, so every worktree shares it. Find it with:
+The suite lives in Petal, not in the repo: `~/.petal/repos/<repoKey>/`. Every session and worktree of the repo shares that one folder. Work out the path:
+
+1. The repo's main checkout is the parent folder of git's common dir:
 
 ```sh
-git rev-parse --path-format=absolute --git-common-dir   # its parent folder is the main checkout
+dirname "$(git rev-parse --path-format=absolute --git-common-dir)"
 ```
 
-- `<main>/.petal/suite.json`: the stages Petal runs.
-- `<main>/.petal/criteria.md`: scenarios, manual checks and bugs.
+   Outside git, use the current folder.
+2. `<repoKey>` is that absolute path with every character that is not a letter or digit replaced by `-`. For example, `/home/me/shop-app` becomes `-home-me-shop-app`, so the folder is `~/.petal/repos/-home-me-shop-app/`.
 
-Petal's request may name both paths; use those. Read both files first if they exist and keep everything that still applies. Lines other sessions wrote stay as they are. Make sure `<main>/.petal/.gitignore` exists and contains `*`.
+```sh
+echo "$HOME/.petal/repos/$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)" | sed 's/[^A-Za-z0-9]/-/g')"
+```
 
-Commands still run in the checkout you are in. Only the two files live in main.
+- `<suite folder>/suite.json`: the stages Petal runs.
+- `<suite folder>/criteria.md`: scenarios, manual checks and bugs.
+
+Petal's request may name both paths; use those. Create the folder if it is missing. Read both files first if they exist and keep everything that still applies. Lines other sessions wrote stay as they are.
+
+**Never write suite or criteria files inside the repo** (no `.petal/suite.json`, no `.petal/criteria.md`). The tests themselves are code: they still go in the repo's own test folders. Commands still run in the checkout you are in.
 
 ## 1. Inspect first
 
@@ -93,7 +102,7 @@ Run every stage you touched. Fix setup and test mistakes. When a test fails beca
 
 ## 5. Hand Petal the suite
 
-Write `.petal/suite.json` in the main checkout: stages in run order, 20 at most, each a short name (60 characters at most), one shell command (one line, run from the repo root) and a level. Keep `keepGoing` and `autoRun` as they are.
+Write `suite.json` in the suite folder from step 0, never in the repo: stages in run order, 20 at most, each a short name (60 characters at most), one shell command (one line, run from the repo root) and a level. Keep `keepGoing` and `autoRun` as they are.
 
 ```json
 {

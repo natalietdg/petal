@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MAX_FILE_BYTES, parseClaudePipeline, readClaudePipeline, type ClaudePipeline } from '../src/main/testing-claude-pipeline';
-import { removeTempDirs, tempDir } from './helpers';
+import { removeTempDirs, tempDir, useTempUserData } from './helpers';
+import { repoDir } from '../src/main/petal-home';
 
 const STAGES = [{ name: 'Typecheck', command: 'npm run typecheck' }, { name: 'Unit', command: 'npm test' }];
 const project = (text?: string): string => {
@@ -48,12 +49,15 @@ describe('parseClaudePipeline', () => {
 });
 
 describe('readClaudePipeline', () => {
-  it('null without the file; the stages and mtime with it', () => {
+  beforeEach(() => { useTempUserData(); });
+
+  it('null without the file; an older in-repo file is read from Petal’s copy, keyed by the checkout, with its mtime', () => {
     expect(readClaudePipeline(project())).toBeNull();
     const root = project(JSON.stringify(STAGES));
     const read = readClaudePipeline(root) as ClaudePipeline;
     expect(read.stages.map((s) => s.command)).toEqual(['npm run typecheck', 'npm test']);
-    expect(read.updatedAt).toBe(fs.statSync(path.join(root, '.petal', 'pipeline.json')).mtimeMs);
+    expect(read.updatedAt).toBe(fs.statSync(path.join(repoDir(root), 'pipeline.json')).mtimeMs);
+    expect(fs.readFileSync(path.join(root, '.petal', 'pipeline.json'), 'utf8')).toBe(JSON.stringify(STAGES));
   });
 
   it('a problem for an invalid or oversized file', () => {
@@ -66,7 +70,11 @@ describe('readClaudePipeline', () => {
     const linkedFile = project();
     fs.mkdirSync(path.join(linkedFile, '.petal'));
     fs.symlinkSync(path.join(outside, '.petal', 'pipeline.json'), path.join(linkedFile, '.petal', 'pipeline.json'));
-    expect(readClaudePipeline(linkedFile)).toEqual({ problem: 'it isn’t a plain file' });
+    expect(readClaudePipeline(linkedFile)).toBeNull(); // a link in the repo isn't copied into Petal
+    const linkedCopy = project();
+    fs.mkdirSync(repoDir(linkedCopy), { recursive: true });
+    fs.symlinkSync(path.join(outside, '.petal', 'pipeline.json'), path.join(repoDir(linkedCopy), 'pipeline.json'));
+    expect(readClaudePipeline(linkedCopy)).toEqual({ problem: 'it isn’t a plain file' });
     const linkedDir = project();
     fs.symlinkSync(path.join(outside, '.petal'), path.join(linkedDir, '.petal'));
     expect(readClaudePipeline(linkedDir)).toBeNull();

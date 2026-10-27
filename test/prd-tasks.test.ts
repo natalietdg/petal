@@ -52,11 +52,12 @@ describe('task file migration', () => {
   });
 
   it('loads a v1 file in memory and writes it back as v2 on the next change, PRDs kept', () => {
+    useTempUserData();
     const repo = tempDir('petal-repo-');
     fs.mkdirSync(path.join(repo, '.git'));
     fs.mkdirSync(path.join(repo, '.petal'));
-    fs.writeFileSync(path.join(repo, '.petal', '.gitignore'), '*\n');
-    fs.writeFileSync(tasksFile(repo), JSON.stringify({ version: 1, tasks: [{ id: 'a', title: 'Old task', status: 'open' }] }));
+    const old = JSON.stringify({ version: 1, tasks: [{ id: 'a', title: 'Old task', status: 'open' }] });
+    fs.writeFileSync(path.join(repo, '.petal', 'tasks.json'), old); // an older build's file in the repo: copied into Petal once
     expect(loadTasks(repo)).toMatchObject({ problem: null, prds: [], tasks: [{ id: 'a', prdId: null, parentId: null }] });
     updateTasks(repo, (tasks, data) => ({ tasks, prds: addPrd(data.prds, { title: 'Checkout' }, 'p1', 1) }));
     updateTasks(repo, (tasks, data) => ({ tasks: setTaskPrd(data, 'a', 'p1') })); // prds left out: kept
@@ -64,6 +65,7 @@ describe('task file migration', () => {
     expect(stored.version).toBe(2);
     expect(stored.prds.map((p: { id: string }) => p.id)).toEqual(['p1']);
     expect(stored.tasks[0]).toMatchObject({ id: 'a', prdId: 'p1', parentId: null });
+    expect(fs.readFileSync(path.join(repo, '.petal', 'tasks.json'), 'utf8')).toBe(old); // the repo's copy untouched
   });
 });
 

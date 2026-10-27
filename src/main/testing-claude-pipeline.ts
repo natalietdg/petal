@@ -1,10 +1,12 @@
-// <repo>/.petal/pipeline.json: the project-wide pipeline older versions of the testing-suite skill wrote. Read only, strictly
+// pipeline.json, copied from <checkout>/.petal/ into ~/.petal/repos/<repoKey of the checkout>/: the project-wide pipeline
+// older versions of the testing-suite skill wrote. Read only, strictly
 // checked, size-capped. Suites are per task now; this file is only offered as a starting point for a task with no suite.
 import fs from 'node:fs';
 import path from 'node:path';
+import { repoDir } from './petal-home';
 import { slugId, type StageConfig } from '../shared/testing';
 
-export const CLAUDE_PIPELINE_PATH = '.petal/pipeline.json';
+export const CLAUDE_PIPELINE_NAME = 'pipeline.json';
 export const MAX_FILE_BYTES = 16 * 1024;
 export const MAX_STAGES = 12;
 export const NAME_CHARS = 40;
@@ -42,10 +44,10 @@ export function parseClaudePipeline(text: string): ParsedPipeline {
   return { stages };
 }
 
-// null when there is no file. Never follows a symlink out of the repo, never reads past the cap.
+// null when there is no file. Never follows a symlink, never reads past the cap.
 export function readClaudePipeline(root: string): (ClaudePipeline | { problem: string }) | null {
-  const dir = path.join(root, '.petal');
-  const file = path.join(root, ...CLAUDE_PIPELINE_PATH.split('/'));
+  const dir = repoDir(root);
+  const file = path.join(dir, CLAUDE_PIPELINE_NAME);
   let stat: fs.Stats;
   try {
     if (!fs.lstatSync(dir).isDirectory()) return null;
