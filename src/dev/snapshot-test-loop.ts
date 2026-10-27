@@ -178,7 +178,9 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(['pass', 'fail', 'flaky', 'fixed'].every((t) => (grouped?.tags as string[] ?? []).includes(t)) && /1 line not in the item format/.test(String(grouped?.notes)), `every status shows and the stray line is counted: ${JSON.stringify(grouped?.notes)}`);
     const kept = fs.readFileSync(criteriaFile, 'utf8');
     check(kept.includes('coupon can take the total below zero') && kept.includes('a stray note') && repoUntouched(project), `the file keeps every line, and still nothing lands in the repo: ${JSON.stringify(kept.slice(0, 120))}`);
-    check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows on the stage strip: ${JSON.stringify(grouped?.live)}`);
+    const live = (grouped?.live ?? []) as string[][];
+    // Typecheck keeps whatever an earlier step's run left on this fixture repo; only Unit is this step's.
+    check(JSON.stringify(live.map(([name]) => name)) === JSON.stringify(['Typecheck', 'Unit', 'Mobile flows']) && live[1]?.[1] === 'failed' && live[2]?.[1] === 'waiting', `Claude's unit run shows on the stage strip: ${JSON.stringify(live)}`);
     // The open bugs join the queue; the idle bug fix agent gets the oldest one.
     const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, FIXER_SESSION), 8000);
     const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: coupon can take the total below zero.')) ?? null, 8000);
