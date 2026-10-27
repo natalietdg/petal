@@ -2,6 +2,13 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.5] · 2026-10-27
+- /login and /logout in the slash menu, and typing a command's exact name picks it first.
+- Code review diffs have syntax colours.
+- Switching reader tabs lands at the end of the newest reply.
+- The Testing tab shows three sections, with each scenario and bug listed once.
+- A session is named after three of your prompts, then never renamed.
+
 ## [1.1.4] · 2026-10-27
 - Code review: each reply that changed code gets a Code review (N) tab, its changes split into functions and explained by a reviewer Claude, including what its subagents wrote. The Board rolls it up per task.
 - PRs (N) in the reader: every PR a session made or named, with its services, an "Is main safe for prod?" check, a deploy order and a flow diagram.
