@@ -72,7 +72,7 @@ const PROBE = `(() => {
     tags: [...panel.querySelectorAll('.tst-crit-tag')].map((t) => t.textContent),
     regressions: [...panel.querySelectorAll('.tst-crit')].filter((c) => c.querySelector('.tst-crit-tag.is-regression')).map((c) => c.querySelector('.tst-crit-name').textContent),
     notes: panel.querySelector('.tst-crit-notes')?.textContent ?? '',
-    aboveStrip: !!view.querySelector('.tst-strip') && box.bottom <= view.querySelector('.tst-strip').getBoundingClientRect().top + 1,
+    belowStrip: !!view.querySelector('.tst-strip') && box.top >= view.querySelector('.tst-strip').getBoundingClientRect().bottom - 1,
     minRatio: worst[0],
     worst,
     overflowX: Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, view.scrollWidth - view.clientWidth, panel.scrollWidth - panel.clientWidth),
@@ -110,7 +110,7 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(await waitFor(async () => (await js("PastelTerm.tabs.get(PastelTerm.tabs.ids()[0])?.update?.state")) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
     await js("document.getElementById('testing-button').click()");
     const idle = await settle((p) => p.state.project === 'acme' && p.state.loop === 'idle' && p.state.stages.length === 3);
-    check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.aboveStrip, `the Loop panel sits above the pipeline, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, above: idle.aboveStrip })}`);
+    check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.belowStrip, `the Loop panel sits below the pipeline, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, below: idle.belowStrip })}`);
     check(idle && /two agents/.test(String(idle.hint)) && /Neither commits/.test(String(idle.hint)), `the hint says Start starts the two agents: ${JSON.stringify(idle?.hint)}`);
     await capture('test-loop-start');
 

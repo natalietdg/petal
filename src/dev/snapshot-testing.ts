@@ -419,10 +419,11 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       await settle((p) => p.state.stages.length === 0);
       await js("(() => { const s = document.querySelector('#testing .tst-task-select'); s.value = 'task:t-notes'; s.dispatchEvent(new Event('change')); })()");
       const notes = await settle((p) => p.state.task === 'Sort notes by date' && Boolean(p.makePipeline));
-      check(notes && (notes.history as string[]).some((r) => /^npx jest.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
+      // Read while the repo's Unit stage existed, so the jest run keeps that stage's name.
+      check(notes && (notes.history as string[]).some((r) => /^Unitby Claude.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
       await click('#testing .tst-make-pipeline');
       const made = await settle((p) => p.state.editing);
-      const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('input')].map((i) => i.value))") as string[][];
+      const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('.tst-edit-name, .tst-edit-command')].map((i) => i.value))") as string[][];
       check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
       await capture('testing-make-pipeline');
       await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
@@ -467,7 +468,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       // Ask Claude: the testing agent drawing up the suite gets a lane (chat, action log, tokens) before any suite exists.
       const startsBefore = testingFixture.loopStarts.length;
       await click('#testing .tst-ask-suite');
-      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.includes('You are this task\'s testing agent')) ?? null, 4000);
+      const asked = await waitFor(() => testingFixture.loopStarts.slice(startsBefore).find((l) => l.brief?.startsWith(`for task ${made[0]?.id}:`)) ?? null, 4000);
       check(asked?.brief && !asked.brief.startsWith('/petal-testing-suite') && asked.brief.includes('Write `suite.json` in the suite folder') && !fs.existsSync(path.join(testingFixture.claudeDir ?? outDir, 'skills', 'petal-testing-suite')), `with the skill missing, the brief carries its bundled instructions and nothing is installed: ${JSON.stringify(asked?.brief?.slice(0, 60))}`);
       const lane = await waitFor<{ roles: string[]; chat: boolean; views: number; tokens: string | null; queue: boolean; events: string[] } | null>(() => js(`(() => {
         const box = document.querySelector('#testing .tst-agentsbox');
