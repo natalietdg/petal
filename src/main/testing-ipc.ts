@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { BrowserWindow, Notification, shell, webContents, type WebContents } from 'electron';
+import { BrowserWindow, Notification, webContents, type WebContents } from 'electron';
 import { handle, send } from './ipc';
 import { allowedClaudeHome, claudeFolderAllowed, projectClaudeDir } from './claude-folder';
 import { isSnapshotRun, slashFixture, testingFixture } from './snapshot-mode';
@@ -21,34 +21,27 @@ import { sessionTitleFor } from './session-title';
 import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { load as loadConfig } from './config-store';
-import { agentOf, allAgents, loopsOf, saveLoop, testAgentsOf } from './task-suites';
-import { suiteDir, suiteFile, suiteHome, syncSuite, undoSuiteChange, writeSuite } from './repo-suite-store';
+import { agentOf, allAgents, loopsOf } from './task-suites';
+import { suiteFile, suiteHome, syncSuite } from './repo-suite-store';
 import { setAgentTitle } from './agent-titles';
-import { draftWithSkill } from './testing-skill';
-import { readAgentLog } from './agent-log';
-import { NO_TOKENS } from '../shared/token-usage';
-import { dismissRestored, lockHookPresent, lockRefusals, loadManifest, refreshLock, resolveUnconfirmed, setLock, upgradeLock } from './test-lock';
-import { AGENT_NAME_MAX, agentName, agentTabTitle, cleanAgentName, type AgentRole } from '../shared/agent-names';
-import { agentView, claimAgent, closeTaskAgents, findAgent, herEvent, listedLoops, loopView, openAgentTerminal, repliesOf, sendToAgent, startTestAgents, stopTaskLoop, watchRoot, windowReady, type Claim } from './test-agents';
-import { cleanSentBug, isRunning, loopForFixer, noEvents, openAgent, withEvent } from '../shared/agent-loop';
-import { addSent } from '../shared/bug-queue';
-import { buildSentFixerBrief, ITEMS_CAP, MANUAL_STATUSES, NAME_CAP, type ManualStatus } from '../shared/test-loop';
-import { scenariosApprovedText } from '../shared/suite-draft';
+import { lockHookPresent, lockRefusals, loadManifest, refreshLock, upgradeLock } from './test-lock';
+import { agentName, agentTabTitle } from '../shared/agent-names';
+import { loopView, startTestAgents } from './test-agents';
 import type { LoopNotice } from '../shared/loop-signals';
 import type { LockManifest } from '../shared/test-lock';
-import { NO_SUITE, autoRunStages, checkSuite, emptySuite, isLevel, isTaskId, stagesToRun, type RepoSuiteView } from '../shared/repo-suite';
+import { NO_SUITE, autoRunStages, isLevel, isTaskId, stagesToRun, type RepoSuiteView } from '../shared/repo-suite';
 import { foldAgents, listedSession, listedSessions, needsOwnTask, ownedTask, type AgentSession, type PickAgent, type PickSession, type SessionCandidate } from '../shared/task-testing';
 import { lastRunAt, latest } from '../shared/task-activity';
 import { panelSessions } from './agents-ipc';
 import { giveSessionTask } from './tasks-ipc';
 import { pruneProject } from './testing-prune';
 import * as store from './testing-store';
-import { criteriaFile, prepareCriteria, readCriteria, saveManualResult, saveScenarioStatuses } from './criteria-store';
+import { readCriteria, saveScenarioStatuses } from './criteria-store';
 import { envPrefix, planScenario, planTicket, scenarioOutcome, ticketScenarios, type ScenarioPlan } from '../shared/scenario-run';
 import type { CriteriaItem } from '../shared/test-loop';
 import {
   normalizeCommand, runStateOf, unconfirmed, addCounts, emptyCounts,
-  type Elsewhere, type LoopFacts, type LoopView, type StoredLoop, type TestAgent, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
+  type Elsewhere, type LoopView, type PipelineConfig, type PipelineRun, type RunReply, type StageConfig, type LockView, type StageResult, type SuiteSeed, type TestingState, NO_LOCK,
 } from '../shared/testing';
 import type { OpenTab, TabSession, TabSessions } from './tab-session';
 import type { Reply } from '../shared/types';
@@ -61,17 +54,18 @@ import { scopeFacts, taskIdAt } from './testing-tasks';
 import { namedRepo, transcriptRepo } from './session-repo';
 import * as organizer from './session-organizer';
 import * as repoIndex from './repo-index';
+import { makeTargets, sessionFor, type TestingIpcContext } from './testing-ipc-context';
+import { registerSuiteIpc } from './testing-ipc-suite';
+import { registerLockIpc } from './testing-ipc-lock';
+import { registerLoopControlIpc, registerLoopStartIpc } from './testing-ipc-loop';
+import { registerAgentIpc } from './testing-ipc-agents';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
 const SNAPSHOT_STAND_IN = ': petal-test-run'; // typed in snapshot runs instead of the real line
-const BRIEF_CAP = 12000;
 const CHANGED_DAYS = 7; // Suite health's core stage counts files changed this recently
 const CHANGED_CAP = 300;
-const KNOWN_CAP = 50; // loops one window asks about per tick
-const NAMES_CAP = 200; // scenario names approved in one go
 const NOTICE_MAX = 200;
-const EVENT_MAX = 200; // a lane line Petal writes for a follow-up
 
 // scenarios: a scenario run's scenarios, whose [pass]/[fail] are written back when it ends.
 interface ScenarioWatch { items: { name: string; tests: CriteriaItem['tests'] }[]; files: ScenarioPlan['files'] }
@@ -595,30 +589,24 @@ function startRun(root: string, stages: StageConfig[], keepGoing: boolean, conte
 export interface TestingDeps { sessions: TabSessions; openTab: OpenTab; agentOpening: (contentsId: number, tabId: string) => boolean }
 let deps: TestingDeps | null = null;
 
-const sessionFor = (sessions: TabSessions, contentsId: number, tabId: unknown): TabSession | undefined =>
-  [...sessions.values()].find((s) => s.contentsId === contentsId && s.tabId === tabId);
-
 export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingDeps): void {
   deps = { sessions, openTab, agentOpening };
   startLockTimer(sessions);
   startTestAgents({ sessions, openTab, agentOpening, notify: showNotice });
-  // The project and one of its tasks, for the calls that act on a task's suite.
-  const taskTarget = async (contentsId: number, tabId: unknown, picked: unknown, taskId: unknown): Promise<{ root: string; task: Task; tasks: Task[] } | { note: string }> => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, contentsId, tabId), picked);
-    if (!root) return { note: 'No project in this tab. Open one first.' };
-    const { tasks, problem } = loadTasks(root);
-    const task = tasks.find((t) => t.id === taskId);
-    return problem ? { note: problem } : task ? { root, task, tasks } : { note: 'That task is gone. It may have been deleted in another window.' };
-  };
-  // The project, for the calls that act on the repo's suite and criteria.
-  const projectTarget = async (contentsId: number, tabId: unknown, picked: unknown): Promise<{ root: string; tasks: Task[] } | { note: string }> => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, contentsId, tabId), picked);
-    return root ? { root, tasks: loadTasks(root).tasks } : { note: 'No project in this tab. Open one first.' };
-  };
-  const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], runners: [], tasks: [], prds: [], sessionTaskId: null });
+  const ctx: TestingIpcContext = { sessions, openTab, ...makeTargets(sessions, rootFor), projectSeed, lockClaudeDir, notify: showNotice };
+  registerStateIpc(ctx);
+  registerRunIpc(ctx);
+  registerSuiteIpc(ctx);
+  registerLockIpc(ctx);
+  registerLoopStartIpc(ctx);
+  registerLoopControlIpc(ctx);
+  registerAgentIpc(ctx);
+}
 
+const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], runners: [], tasks: [], prds: [], sessionTaskId: null });
+
+// The tab's project and its testing state: the full read, then the cheap refresh.
+function registerStateIpc({ sessions }: TestingIpcContext): void {
   // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
   // With `picker`, she asked for the session picker over the repo her session worked in.
   handle('testing:detect', async (event, { tabId, root: picked, session, picker }) => {
@@ -653,270 +641,17 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
       criteria: readCriteria(root), seed: projectSeed(root), suite, lock, agentNames: data.agentNames ?? {}, distillation: readDistillation(root), loops: loopViews(root, event.sender.id), ...scopeFacts(root, onProject?.feed.session?.sessionId ?? null),
     };
   });
+}
 
-  // A role's brief: its open agent gets it as a message, else that agent starts with it. The registry decides which.
-  const briefRole = async (contentsId: number, root: string, task: Task, role: AgentRole, brief: string): Promise<Claim | { note: string }> => {
-    const claim = await claimAgent(root, { taskId: task.id, taskTitle: task.title, role, brief, preferred: contentsId });
-    if ('note' in claim || claim.created) return claim;
-    const sent = await sendToAgent(root, claim.agent, brief, null, contentsId);
-    return 'note' in sent ? sent : claim;
-  };
-  const startedWords = (claim: Claim, name: string): string => (claim.created ? `Started ${name} in its own terminal` : `${name} moves on to the test loop`);
+// A run with a command not run before asks first, listing every command and which are new.
+const confirmPrompt = (root: string, stages: StageConfig[]): RunReply | null => {
+  const fresh = unconfirmed(confirmedOf(root), stages);
+  return fresh.length ? { confirm: { commands: stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } } : null;
+};
+const taskTag = (taskId: unknown, tasks: readonly Task[]): string | null => (isTaskId(taskId) && tasks.some((t) => t.id === taskId) ? taskId : null);
 
-  // The loop for a task: its testing agent and its bug fix agent, working at once. Each role's open agent is reused
-  // (the drafting agent moves on to the loop this way), else one starts. One brief joins a running bug fix agent.
-  handle('testing:loop-start', async (event, { tabId, root: picked, taskId, testerBrief, fixerBrief }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
-    if ('note' in target) return target;
-    const briefs = [testerBrief, fixerBrief].filter((brief) => brief !== null && brief !== undefined);
-    if (!briefs.length || briefs.some((brief) => typeof brief !== 'string' || !brief.trim() || brief.length > BRIEF_CAP)) return { note: 'A loop brief is empty or too long.' };
-    const { root, task } = target;
-    const prior = loopsOf(root)[task.id];
-    const running = isRunning(prior) ? prior : null;
-    const names = store.load(root).agentNames ?? {};
-    if (!fixerBrief && !running?.fixerSessionId) return { note: 'Start the loop to start its testing agent.' };
-    if (fixerBrief && running) return { note: `${agentName(names, 'fixer')} is already running for this task, maybe in another window.` };
-    prepareCriteria(root);
-    const tester = typeof testerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'tester', testerBrief) : null;
-    if (tester && 'note' in tester) return tester;
-    const fixer = typeof fixerBrief === 'string' ? await briefRole(event.sender.id, root, task, 'fixer', fixerBrief) : null;
-    if (fixer && 'note' in fixer) return fixer;
-    const now = Date.now();
-    const carried = prior?.approvedScenarios ? { approvedScenarios: prior.approvedScenarios } : {};
-    const base: StoredLoop = running ?? { kind: 'loop', testerSessionId: null, fixerSessionId: null, startedAt: now, stoppedAt: null, queue: [], events: prior?.kind === 'draft' ? prior.events : noEvents(), ...carried };
-    let events = base.events;
-    if (tester) events = withEvent(events, 'tester', startedWords(tester, agentName(names, 'tester')), now);
-    if (fixer) events = withEvent(events, 'fixer', startedWords(fixer, agentName(names, 'fixer')), now);
-    const loop: StoredLoop = { ...base, testerSessionId: tester?.agent.sessionId ?? base.testerSessionId, fixerSessionId: fixer?.agent.sessionId ?? base.fixerSessionId, events };
-    saveLoop(root, task.id, loop);
-    watchRoot(root);
-    const view = loopView(root, loop, event.sender.id);
-    return { tester: view.tester, fixer: view.fixer };
-  });
-
-  // Ask Claude to draw one up: the task's testing agent (its open one if any) on the testing-suite skill, checked first.
-  handle('testing:agent-start', async (event, { tabId, root: picked, taskId, prompt }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
-    if ('note' in target) return target;
-    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > BRIEF_CAP) return { note: 'The request is empty or too long.' };
-    const { root, task } = target;
-    const prior = loopsOf(root)[task.id];
-    const tester = openAgent(testAgentsOf(root), task.id, 'tester');
-    if (prior?.stoppedAt === null && prior.kind === 'loop') return { note: 'The test loop is running for this task. Stop it first.' };
-    if (prior?.stoppedAt === null && tester && prior.testerSessionId === tester.sessionId) return { note: 'This task’s testing agent is already drawing up its suite.' };
-    const skill = draftWithSkill(isSnapshotRun() ? testingFixture.claudeDir : allowedClaudeHome(), prompt.trim());
-    prepareCriteria(root); // its scenarios and the bugs it finds go in the repo's criteria file
-    const claim = await briefRole(event.sender.id, root, task, 'tester', skill.brief);
-    if ('note' in claim) return claim;
-    const name = agentName(store.load(root).agentNames ?? {}, 'tester');
-    const now = Date.now();
-    const words = claim.created ? `Started ${name} to draw up the suite` : `You → ${name} · draw up the suite`;
-    saveLoop(root, task.id, {
-      kind: 'draft', testerSessionId: claim.agent.sessionId, fixerSessionId: null, startedAt: now, stoppedAt: null, queue: [],
-      events: withEvent(prior?.events ?? noEvents(), 'tester', words, now), ...(prior?.approvedScenarios ? { approvedScenarios: prior.approvedScenarios } : {}),
-    });
-    return { agent: agentView(root, claim.agent, event.sender.id), reused: !claim.created, updatedSkill: skill.updated };
-  });
-
-  // Edit scenarios: the repo's criteria file, made first if missing, in her default editor.
-  handle('testing:open-criteria', async (event, { tabId, root: picked }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    prepareCriteria(target.root);
-    const file = criteriaFile(target.root);
-    if (isSnapshotRun()) { testingFixture.opened.push(file); return { ok: true as const }; }
-    const failure = await shell.openPath(file); // '' means it opened
-    return failure ? { note: `Couldn’t open the scenarios file: ${failure}` } : { ok: true as const };
-  });
-
-  // The lanes' read model. Main steps every queue itself, so a window only reads.
-  handle('testing:loops', (event, { known }) => {
-    if (!claudeFolderAllowed()) return { loops: [] };
-    windowReady(event.sender.id);
-    const asked = (Array.isArray(known) ? known.slice(0, KNOWN_CAP) : []).filter((k) => typeof k?.root === 'string' && projectRootOf(k.root) === k.root && isTaskId(k.taskId));
-    const loops: LoopFacts[] = listedLoops(asked, event.sender.id).map((listed) => ({ ...listed, names: store.load(listed.root).agentNames ?? {} }));
-    return { loops };
-  });
-
-  // Send to bug fix agent: the failure joins the queue of the task's open bug fix agent (a stopped loop starts again
-  // around it), else a bug fix agent starts on it. A running loop keeps its testing agent; a draft's becomes the loop's.
-  handle('testing:send-bug', async (event, { tabId, root: picked, taskId, bug }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
-    if ('note' in target) return target;
-    const clean = cleanSentBug(bug);
-    if (!clean) return { note: 'That failure can’t be sent.' };
-    const { root, task } = target;
-    const names = store.load(root).agentNames ?? {};
-    const fixerName = agentName(names, 'fixer');
-    const prior = loopsOf(root)[task.id];
-    const running = isRunning(prior) ? prior : null;
-    const now = Date.now();
-    const agents = testAgentsOf(root);
-    const fresh = (fixerSessionId: string): StoredLoop => loopForFixer(prior, agents, task.id, fixerSessionId, now);
-    const open = openAgent(agents, task.id, 'fixer');
-    if (open) {
-      const base = running?.fixerSessionId === open.sessionId ? running : fresh(open.sessionId);
-      const { queue, added } = addSent(base.queue, clean, now);
-      const fixer = agentView(root, open, event.sender.id, names);
-      if (!added) return { outcome: 'already' as const, fixer };
-      saveLoop(root, task.id, { ...base, queue, events: withEvent(base.events, 'fixer', `You → ${fixerName} · ${clean.name}`, now) });
-      watchRoot(root);
-      return { outcome: 'queued' as const, fixer };
-    }
-    const brief = buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: clean.name, prompt: clean.sent.failure, names: { tester: agentName(names, 'tester'), fixer: fixerName } });
-    const claim = await claimAgent(root, { taskId: task.id, taskTitle: task.title, role: 'fixer', brief, preferred: event.sender.id });
-    if ('note' in claim) return claim;
-    const base = running ? { ...running, fixerSessionId: claim.agent.sessionId, queue: running.queue.map((b) => (b.state === 'fixing' ? { ...b, state: 'open' as const, asked: false } : b)) } : fresh(claim.agent.sessionId);
-    const queue = addSent(base.queue, clean, now, 'fixing').queue; // its brief carries this bug
-    saveLoop(root, task.id, { ...base, queue, events: withEvent(base.events, 'fixer', `Started ${fixerName} on ${clean.name}`, now) });
-    watchRoot(root);
-    return { outcome: 'started' as const, fixer: agentView(root, claim.agent, event.sender.id, names) };
-  });
-
-  // One of the project's agents, by session id only; root must be a repo root Petal reads.
-  const agentAt = (root: unknown, sessionId: unknown): { root: string; agent: TestAgent } | { note: string } => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const agent = typeof root === 'string' && projectRootOf(root) === root ? findAgent(root, sessionId) : null;
-    return agent && typeof root === 'string' ? { root, agent } : { note: 'That isn’t one of this project’s agents.' };
-  };
-
-  // Her message to one agent from its lane, or Petal's follow-up with its own lane line.
-  handle('testing:agent-send', async (event, { root: asked, sessionId, text, event: line }) => {
-    const found = agentAt(asked, sessionId);
-    if ('note' in found) return found;
-    if (typeof text !== 'string' || !text.trim() || text.length > BRIEF_CAP) return { note: 'Type a message first.' };
-    const name = agentName(store.load(found.root).agentNames ?? {}, found.agent.role);
-    const words = typeof line === 'string' && line.trim() ? line.trim().slice(0, EVENT_MAX) : herEvent(name, text);
-    return sendToAgent(found.root, found.agent, text.trim(), words, event.sender.id);
-  });
-
-  // Open terminal: an ended agent resumes into this window with no message. Also Back to lane for a popped-out one.
-  handle('testing:agent-open', async (event, { root: asked, sessionId }) => {
-    const found = agentAt(asked, sessionId);
-    if ('note' in found) return found;
-    const problem = await openAgentTerminal(found.root, found.agent, event.sender.id);
-    return problem ? { note: problem } : { agent: agentView(found.root, found.agent, event.sender.id) };
-  });
-
-  // Looks right: the go-ahead goes to the task's testing agent, and the names she approved are saved with its loop.
-  handle('testing:scenarios-approve', async (event, { root, taskId, names }) => {
-    const loop = typeof root === 'string' && isTaskId(taskId) ? loopsOf(root)[taskId] : undefined;
-    const found = agentAt(root, loop?.testerSessionId);
-    if ('note' in found || !loop || typeof taskId !== 'string') return { note: 'Start the testing agent first.' };
-    const approved = (Array.isArray(names) ? names : []).filter((n): n is string => typeof n === 'string' && n.length > 0).map((n) => n.slice(0, NAME_CAP)).slice(0, NAMES_CAP);
-    if (!approved.length) return { note: 'There are no scenarios to approve.' };
-    const name = agentName(store.load(found.root).agentNames ?? {}, 'tester');
-    const sent = await sendToAgent(found.root, found.agent, scenariosApprovedText(suiteDir(suiteHome(found.root))), `You → ${name} · scenarios look right, write the tests`, event.sender.id);
-    if ('note' in sent) return sent;
-    const latest = loopsOf(found.root)[taskId] ?? loop;
-    saveLoop(found.root, taskId, { ...latest, approvedScenarios: [...(latest.approvedScenarios ?? []), ...approved].slice(-ITEMS_CAP) });
-    return sent;
-  });
-
-  // Stop: the queue stops stepping now; each running agent gets Esc, then the stop message once idle.
-  handle('testing:loop-stop', (_event, { root, taskId }) => {
-    if (!claudeFolderAllowed() || typeof root !== 'string' || projectRootOf(root) !== root || !isTaskId(taskId)) return { note: 'That loop isn’t one of this project’s.' };
-    const problem = stopTaskLoop(root, taskId);
-    return problem ? { note: problem } : { ok: true as const };
-  });
-
-  // A loop notification from the renderer: only while no Petal window is focused.
-  handle('testing:notify', (event, { title, body, tabId }) => {
-    if (typeof title !== 'string' || typeof body !== 'string') return { shown: false };
-    return { shown: showNotice({ title, body, tabId: typeof tabId === 'string' ? tabId : null }, event.sender.id) };
-  });
-
-  // An agent's action log, tokens and replies, from its transcript: the open terminal's log, else History's copy.
-  handle('testing:agent-log', async (event, { tabId, root: picked, sessionId }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root || typeof sessionId !== 'string' || !agentOf(root, sessionId)) return { note: 'That isn’t one of this project’s agents.' };
-    const open = [...sessions.values()].find((s) => s.feed.session?.sessionId === sessionId)?.feed.session?.transcript;
-    const file = open ?? history.findRecord(sessionId)?.file;
-    const replies = [...repliesOf(sessionId)];
-    return file ? { ...(await readAgentLog(file, root)), replies } : { actions: [], tokens: NO_TOKENS, replies };
-  });
-
-  // Close agents: each open agent's claude through the Sessions panel's Close, its terminal closed, the loop stopped.
-  handle('testing:close-agents', async (event, { tabId, root: picked, taskId }) => {
-    const target = await taskTarget(event.sender.id, tabId, picked, taskId);
-    if ('note' in target) return target;
-    return closeTaskAgents(target.root, target.task.id);
-  });
-
-  // The repo's suite, from the editor: written to its file. Confirmations only ever come from a confirmed run.
-  handle('testing:save-suite', async (event, { tabId, root: picked, suite }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    const check = checkSuite(suite);
-    if (!check.ok) return { note: 'Each stage needs a name, a one-line command and a level.' };
-    writeSuite(target.root, check.suite);
-    return { ok: true };
-  });
-
-  // Start from the project's commands: re-read here, never the renderer's copy. New commands still ask before their first run.
-  handle('testing:seed-suite', async (event, { tabId, root: picked }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    const seed = projectSeed(target.root);
-    if (!seed || !('stages' in seed)) return { note: 'The project has no commands to start from.' };
-    writeSuite(target.root, emptySuite(seed.stages));
-    return { ok: true };
-  });
-
-  // Her pass, fail or blocked on a manual case, with her Result note, written back into the criteria file.
-  handle('testing:manual-result', async (event, { tabId, root: picked, name, status, result }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    if (typeof name !== 'string' || !name || !(MANUAL_STATUSES as readonly string[]).includes(status) || typeof result !== 'string') return { note: 'That result can’t be saved.' };
-    const problem = saveManualResult(target.root, name, status as ManualStatus, result);
-    return problem ? { note: problem } : { ok: true };
-  });
-
-  // The test lock, per project: its manifest in ~/.petal, and the one hook entry in her user-level ~/.claude/settings.json.
-  handle('testing:lock', async (event, { tabId, root: picked, on }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab. Open one first.' };
-    const problem = setLock(root, on === true, lockClaudeDir());
-    return problem ? { note: problem } : { ok: true };
-  });
-
-  handle('testing:lock-dismiss', async (event, { tabId, root: picked }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    dismissRestored(target.root);
-    return { ok: true };
-  });
-
-  // Her Keep or Restore for a locked test changed outside Claude.
-  handle('testing:lock-resolve', async (event, { tabId, root: picked, path: rel, keep }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    const problem = resolveUnconfirmed(target.root, String(rel), keep === true);
-    return problem ? { note: problem } : { ok: true };
-  });
-
-  // Her name for an agent role, for every task in the project; empty puts the default back.
-  handle('testing:agent-name', async (event, { tabId, root: picked, role, name }) => {
-    if (!claudeFolderAllowed()) return { note: 'Petal isn’t reading your folders yet.' };
-    const root = await rootFor(sessionFor(sessions, event.sender.id, tabId), picked);
-    if (!root) return { note: 'No project in this tab. Open one first.' };
-    const clean = cleanAgentName(name);
-    if (clean === undefined || (role !== 'tester' && role !== 'fixer')) return { note: `A name is 1 to ${AGENT_NAME_MAX} characters on one line.` };
-    const data = store.load(root);
-    const names = { ...(data.agentNames ?? {}) };
-    if (clean === null) delete names[role as AgentRole]; else names[role as AgentRole] = clean;
-    store.save({ ...data, agentNames: names });
-    return { ok: true };
-  });
-
-  handle('testing:undo-suite', async (event, { tabId, root: picked }) => {
-    const target = await projectTarget(event.sender.id, tabId, picked);
-    if ('note' in target) return target;
-    return undoSuiteChange(target.root) ? { ok: true } : { note: 'There is no change to undo.' };
-  });
-
+// Running the repo's suite or a ticket's scenarios in a new tab, and stopping the watch on one.
+function registerRunIpc({ projectTarget, openTab }: TestingIpcContext): void {
   // Runs the repo's suite in this checkout: the stages her filter shows, opt-in ones only when she turned them on. Tagged
   // with the task when one is given.
   handle('testing:run', async (event, { tabId, root: picked, taskId = null, stageId = null, levels = [], optedIn = [], confirmed = false }): Promise<RunReply> => {
@@ -929,11 +664,10 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const filter = { levels: (Array.isArray(levels) ? levels : []).filter(isLevel), optedIn: (Array.isArray(optedIn) ? optedIn : []).filter((id): id is string => typeof id === 'string') };
     const stages = stagesToRun(suite.stages, filter, typeof stageId === 'string' ? stageId : null);
     if (!stages.length) return { note: 'There are no stages to run. Opt-in stages run only when turned on.' };
-    const fresh = unconfirmed(confirmedOf(root), stages);
-    if (fresh.length && !confirmed) return { confirm: { commands: stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
+    const ask = confirmPrompt(root, stages);
+    if (ask && !confirmed) return ask;
     rememberConfirmed(root, stages);
-    const tag = isTaskId(taskId) && target.tasks.some((t) => t.id === taskId) ? taskId : null;
-    return startRun(root, stages, suite.keepGoing, event.sender, openTab, 'click', tag);
+    return startRun(root, stages, suite.keepGoing, event.sender, openTab, 'click', taskTag(taskId, target.tasks));
   });
 
   // Runs one scenario's tests, or every tested scenario of a ticket (staging ones only with staging on), one command per
@@ -950,11 +684,10 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const { runners, prefix, commands } = scenarioEnv(root);
     const plan = typeof scenario === 'string' ? planScenario(items[0], runners, prefix, commands) : planTicket(items, runners, prefix, commands);
     if (!plan.stages.length) return { note: `No known runner for ${plan.skipped[0] ?? 'these tests'}.` };
-    const fresh = unconfirmed(confirmedOf(root), plan.stages);
-    if (fresh.length && !confirmed) return { confirm: { commands: plan.stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
+    const ask = confirmPrompt(root, plan.stages);
+    if (ask && !confirmed) return ask;
     rememberConfirmed(root, plan.stages);
-    const tag = isTaskId(taskId) && target.tasks.some((t) => t.id === taskId) ? taskId : null;
-    return startRun(root, plan.stages, true, event.sender, openTab, 'click', tag, { items: items.map(({ name, tests }) => ({ name, tests })), files: plan.files });
+    return startRun(root, plan.stages, true, event.sender, openTab, 'click', taskTag(taskId, target.tasks), { items: items.map(({ name, tests }) => ({ name, tests })), files: plan.files });
   });
 
   // Stop watching a run whose tab was closed or interrupted; the run keeps what finished.
