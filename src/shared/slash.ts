@@ -50,6 +50,8 @@ const BUILTIN_ROWS: [string, string][] = [
   ['output-style', 'List output styles or switch to one.'],
   ['skills', 'List available skills.'],
   ['plugin', 'Manage Claude Code plugins.'],
+  ['login', 'Sign in to your Anthropic account, or switch accounts.'],
+  ['logout', 'Sign out of your Anthropic account.'],
 ];
 
 export const BUILTINS: SlashItem[] = BUILTIN_ROWS.map(([name, description]) => ({
@@ -86,6 +88,12 @@ export function filterSlash(items: SlashItem[], rawQuery: string): SlashItem[] {
     .filter((row): row is { item: SlashItem; index: number; rank: number } => row.rank !== null)
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
     .map((row) => row.item);
+}
+
+// Where the item named exactly as typed sits, so Enter sends "/login" rather than a fuzzy match above it; -1 if none.
+export function exactMatchIndex(items: SlashItem[], rawQuery: string): number {
+  const query = rawQuery.trim().toLowerCase();
+  return query ? items.findIndex((item) => item.name.toLowerCase() === query) : -1;
 }
 
 // The "/word" she is typing at the very start of the box, while the caret is still inside it; else null.

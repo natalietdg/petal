@@ -138,7 +138,7 @@ export async function slashMenuCheck(kit: Kit, win: BrowserWindow): Promise<void
     check(live ? text === `\x1b[200~${picked} today\x1b[201~\r` : text.includes(`${picked} today`), `Send pastes "${picked} today": ${JSON.stringify(text)}`);
 
     // Tab inserts too; an agent goes in as an @agent- mention.
-    await openWith('/review', (p) => p.names[0] === '@agent-reviewer');
+    await openWith('/reviewer', (p) => p.names[0] === '@agent-reviewer'); // "/review" is a built-in now, and an exact name wins
     await key('Tab');
     await closed();
     check((await probe())?.value === '@agent-reviewer ', 'Tab inserts "@agent-reviewer "');

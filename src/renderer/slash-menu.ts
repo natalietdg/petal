@@ -2,7 +2,7 @@
 // One popup serves every box (the reader's and History's); it only fills the box, Send still sends.
 // A box given `mentions` also opens it on "@": other sessions here, then agents.
 import { el, isIpcError } from './dom';
-import { BUILTINS, MENTION_GROUPS, SLASH_GROUPS, applySlash, filterSlash, slashQuery, type SlashItem, type SlashList } from '../shared/slash';
+import { BUILTINS, MENTION_GROUPS, SLASH_GROUPS, applySlash, exactMatchIndex, filterSlash, slashQuery, type SlashItem, type SlashList } from '../shared/slash';
 import { applyMention, mentionQuery } from '../shared/mentions';
 
 interface Owner {
@@ -107,6 +107,8 @@ function render(): void {
   const groups = mention ? MENTION_GROUPS : SLASH_GROUPS;
   const matches = mention ? mentionMatches(list) : filterSlash([...list.items, ...BUILTINS], query);
   shown = groups.flatMap(({ kind }) => matches.filter((m) => m.kind === kind));
+  const exact = mention ? -1 : exactMatchIndex(shown, query);
+  if (exact >= 0) active = exact;
   listbox.replaceChildren();
   listbox.setAttribute('aria-label', mention ? 'Sessions and agents' : 'Skills, commands and agents');
   let index = 0;

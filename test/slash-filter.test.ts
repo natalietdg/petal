@@ -1,6 +1,6 @@
 // The "/" menu's filter, trigger and insert rules.
 import { describe, expect, it } from 'vitest';
-import { BUILTINS, applySlash, filterSlash, slashInsert, slashQuery, type SlashItem } from '../src/shared/slash';
+import { BUILTINS, applySlash, exactMatchIndex, filterSlash, slashInsert, slashQuery, type SlashItem } from '../src/shared/slash';
 
 const it_ = (kind: SlashItem['kind'], name: string, description = ''): SlashItem =>
   ({ kind, name, description, source: 'user', insert: slashInsert(kind, name) });
@@ -68,5 +68,17 @@ describe('BUILTINS', () => {
     expect(new Set(list).size).toBe(list.length);
     expect(list).toEqual(expect.arrayContaining(['clear', 'compact', 'context', 'model', 'resume', 'mcp', 'memory', 'config', 'help', 'init']));
     expect(BUILTINS.every((b) => b.insert === `/${b.name} ` && b.description && !b.description.includes('\u2014'))).toBe(true);
+  });
+});
+
+describe('exactMatchIndex', () => {
+  it('finds the item named exactly as typed, even below fuzzy matches', () => {
+    const shown = [it_('skill', 'cloudflare-one-migrations'), it_('skill', 'otp-sms-runbook', 'login fails'), ...BUILTINS]; // skills group renders first
+    expect(shown[exactMatchIndex(shown, ' Login ')].name).toBe('login');
+  });
+
+  it('is -1 with no exact name or an empty query', () => {
+    expect(exactMatchIndex(ITEMS, 'tri')).toBe(-1);
+    expect(exactMatchIndex(ITEMS, '')).toBe(-1);
   });
 });
