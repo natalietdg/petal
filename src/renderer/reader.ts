@@ -195,6 +195,7 @@ function redraw(): void {
 }
 
 export function update(shown: ShownUpdate): void {
+  switchedTab = lastUpdate !== null && shown.tabId !== lastUpdate.tabId;
   lastUpdate = shown;
   followNotesSession(shown);
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
@@ -268,10 +269,23 @@ function appendStop(): void {
   if (control) status.append(control);
 }
 
-// A new turn or reply: bring it into view once; the same one updating keeps her place.
+// Switching tabs lands at the end of the newest reply; a new turn in the same tab lands at its start.
+let switchedTab = false;
+const PIN_TO_END_MS = 2000; // long enough for diagrams and images to settle; later jumps (find, Flow) are left alone
+let pinnedUntil = 0;
 function bringIntoView(id: string | undefined): void {
-  if (id !== latestId) status.scrollIntoView({ block: 'start' });
+  if (switchedTab) {
+    pinnedUntil = Date.now() + PIN_TO_END_MS;
+    latest.scrollIntoView({ block: 'end' });
+  } else if (id !== latestId) {
+    pinnedUntil = 0;
+    status.scrollIntoView({ block: 'start' });
+  }
   latestId = id;
+}
+new ResizeObserver(() => { if (Date.now() < pinnedUntil) latest.scrollIntoView({ block: 'end' }); }).observe(latest);
+for (const type of ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const) {
+  scroller.addEventListener(type, () => { pinnedUntil = 0; }, { passive: true });
 }
 
 let flowTimer: ReturnType<typeof setTimeout> | undefined;
