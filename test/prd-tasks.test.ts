@@ -188,9 +188,9 @@ describe('criteria lines with and without a task', () => {
 
   it('the loop brief asks for the ticket on every line only when it has one, never the task', () => {
     const base = { focus: 'cart', rounds: 2, stages: [{ id: 'unit', name: 'Unit', command: 'npm test' }], stack: [] };
-    const tagged = buildLoopBrief({ ...base, taskId: 't-1a2b', ticket: 'AB#10427' });
-    expect(tagged).toContain('- [status] name · test: path::test name · ticket: AB#10427 · level: regression');
-    expect(tagged).toContain('Tag every line you add with "ticket: AB#10427"');
+    const tagged = buildLoopBrief({ ...base, taskId: 't-1a2b', ticket: 'AB#1234' });
+    expect(tagged).toContain('- [status] name · test: path::test name · ticket: AB#1234 · level: regression');
+    expect(tagged).toContain('Tag every line you add with "ticket: AB#1234"');
     expect(buildLoopBrief(base)).not.toContain('Tag every line');
     expect(tagged).not.toContain('task:');
     expect(tagged).not.toMatch(/[\u2014\u2013]/);
