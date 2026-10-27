@@ -301,8 +301,8 @@ export async function prdTasksCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, '
       return busy === 2 && a.queue.some((b) => b.state === 'fixing') && a.queue.some((b) => b.state === 'recheck') ? a : null;
     }, 10000);
     check(both && both.lanes[1]?.status === 'Fixing cart total drops a cent' && /Testing · round 1\/5/.test(both.lanes[0]?.status ?? ''), `both lanes busy at once, one bug fixing and the mid-edit one waiting for a recheck: ${JSON.stringify(both ?? await js('PastelTerm.testing.state().agents'))}`);
-    const counts: string = await js("document.querySelector('#testing .tst-queue-head')?.textContent ?? ''");
-    check(/Rechecking 1/.test(counts) && /Fixing 1/.test(counts), `the queue counts each state: ${counts}`);
+    const counts: string = await js("document.querySelector('#testing .tst-criteria-panel .tst-bug-counts')?.textContent ?? ''");
+    check(/Rechecking 1/.test(counts) && /Fixing 1/.test(counts), `the bug list counts each queue state: ${counts}`);
 
     // Chat: one message to each agent reaches that agent's session; its reply shows in the lane.
     for (const [role, tab, text] of [['tester', testerTab, 'Add a case for half a cent.'], ['fixer', fixerTab, 'Check the rounding in totals too.']] as const) {

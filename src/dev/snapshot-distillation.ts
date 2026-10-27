@@ -100,7 +100,7 @@ const PROBE = `(() => {
   ${CONTRAST}
   const view = document.getElementById('testing');
   if (!view || view.hidden) return null;
-  const loop = view.querySelector('.tst-loop .tst-distill');
+  const loop = view.querySelector('.tst-history .tst-distill'); // the one Distillation: under its session's row in History
   const health = view.querySelector('.tst-health');
   const texts = [...view.querySelectorAll('.tst-distill-title, .tst-distill-count, .tst-distill-round-title, .tst-distill-reason, .tst-course, .tst-distill-ask span, .tst-distill-answer span, .tst-needs-you, .tst-distill-threads-title, .thread-question, .thread-check, .thread-ask, .tst-thread-word, .tst-thread-note, .tst-health span, .tst-health .tst-muted, .tst-health-command, .tst-health-add:not(:disabled), .tst-section-title')];
   const worst = worstOf(texts);
@@ -116,6 +116,7 @@ const PROBE = `(() => {
       threads: [...r.querySelectorAll('.tst-thread')].map((t) => [t.querySelector('.thread-question')?.textContent, t.querySelector('.tst-thread-word')?.textContent, t.classList.contains('is-needs-you')]),
     })),
     historyDistill: view.querySelectorAll('.tst-runs .tst-distill').length,
+    loopDistill: view.querySelectorAll('.tst-loop .tst-distill').length,
     flaky: [...(health?.querySelectorAll('[aria-label="Flaky"] .tst-health-name') ?? [])].map((n) => n.textContent),
     core: health?.querySelector('.tst-health-command')?.textContent ?? null,
     addCore: health?.querySelector('.tst-health-add')?.textContent ?? null,
@@ -192,7 +193,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     const two = await settle((p) => p.rounds.length === 2 && p.historyDistill === 1, 10000);
     check(two && two.loopOpen === false, `the Distillation section starts collapsed: ${JSON.stringify(two?.summary)}`);
     check(two && /2 rounds · last course: retest/.test(String(two.summary)) && /needs you/.test(String(two.summary)), `the summary names rounds, course and who it needs: ${JSON.stringify(two?.summary)}`);
-    await js("document.querySelector('#testing .tst-loop .tst-distill-summary').click()");
+    await js("document.querySelector('#testing .tst-history .tst-distill-summary').click()");
     const opened = await settle((p) => p.loopOpen === true);
     const rounds = opened?.rounds ?? [];
     check(rounds[0]?.title === 'Round 1 of 5' && rounds[0]?.course === 'Fix bug' && rounds[0]?.qs === 3 && rounds[1]?.title === 'Round 2 of 5' && rounds[1]?.course === 'Retest' && rounds[1]?.qs === 4,
@@ -204,7 +205,7 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     ]), `round 1 leaves two threads, round 2 settles one and carries one; the needs-you thread is marked: ${JSON.stringify(threads)}`);
     check(rounds.length === 2 && rounds.every((r) => r.threadsTitle === 'Questions to follow up'),
       `each round's threads sit under "Questions to follow up", not the reader's "Open threads": ${JSON.stringify(rounds.map((r) => r.threadsTitle))}`);
-    check(opened?.historyDistill === 1, 'the Claude session in History has its own Distillation section');
+    check(opened?.historyDistill === 1 && opened.loopDistill === 0, `Distillation shows once, under the session's row in History, not in the loop panel: ${JSON.stringify(opened && { history: opened.historyDistill, loop: opened.loopDistill })}`);
     await wait(300);
     await capture('distillation');
 
@@ -304,8 +305,8 @@ export async function distillationCheck(kit: Kit, win: BrowserWindow): Promise<v
     await js("document.getElementById('testing-button').click()");
     await settle((p) => p.loopOpen === true);
     const beforeAsk = pasteWrites.length;
-    await waitFor(() => js("[...document.querySelectorAll('#testing .tst-loop .tst-thread')].some((t) => t.querySelector('.tst-thread-word')?.textContent === 'open') || null"), 6000);
-    await js(`[...document.querySelectorAll('#testing .tst-loop .tst-thread')].find((t) => t.querySelector('.tst-thread-word')?.textContent === 'open')?.querySelector('.thread-card').click()`);
+    await waitFor(() => js("[...document.querySelectorAll('#testing .tst-history .tst-thread')].some((t) => t.querySelector('.tst-thread-word')?.textContent === 'open') || null"), 6000);
+    await js(`[...document.querySelectorAll('#testing .tst-history .tst-thread')].find((t) => t.querySelector('.tst-thread-word')?.textContent === 'open')?.querySelector('.thread-card').click()`);
     const asked = await waitFor(() => pasteWrites.slice(beforeAsk).find((w) => w.data.includes('Is tax rounded per line')) ?? null, 4000);
     check(asked?.data === `${PASTE_START}Is tax rounded per line in the API as well? Check: read the helper in the tax package${PASTE_END}\r`, `a thread card sends "Question? Check: ..." to the session: ${JSON.stringify(asked?.data)}`);
 

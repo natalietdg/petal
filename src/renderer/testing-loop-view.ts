@@ -1,34 +1,25 @@
-// The Testing tab's Loop panel: start a test loop (focus, rounds), its round progress from Claude's Loop lines,
-// the criteria file grouped Scenarios / Bugs, and the latest suite results Claude ran. testing.ts owns the state.
+// The Testing tab's Loop panel: start a test loop (focus, rounds) and its round progress from Claude's Loop lines.
+// Scenarios, bugs and suite results show once each, in their own sections. testing.ts owns the state.
 import { el } from './dom';
 import { loopBarHtml, phaseWord, type LoopPhase, type LoopProgress } from '../shared/loop-line';
-import { DEFAULT_ROUNDS, MAX_ROUNDS, FOCUS_CAP, openBugs, type Criteria, type CriteriaItem, type CriteriaStatus, type LoopStatus } from '../shared/test-loop';
-import type { StageStatus } from '../shared/testing';
-import type { DistillRecord } from '../shared/distillation';
-import { distillSection } from './testing-distill-view';
+import { DEFAULT_ROUNDS, MAX_ROUNDS, FOCUS_CAP, type LoopStatus } from '../shared/test-loop';
 
 export interface LoopModel {
   status: LoopStatus;
   progress: LoopProgress | null;
-  criteria: Criteria | null;
+  openBugs: number | null; // from the criteria file, when Claude's Loop line has no count
   canStart: boolean;
   why: string; // why Start is off, or where the brief goes
-  stages: { name: string; status: StageStatus }[]; // Claude's latest result per stage since the loop started
   stopping: boolean;
   note: string;
-  distillation: DistillRecord[]; // this loop's rounds of self-review, oldest first
-  distillKey: string; // which loop session they belong to, so the open/closed state follows it
 }
 
-export interface LoopHandlers { start: (focus: string, rounds: number) => void; stop: () => void; askThread: (prompt: string) => void }
+export interface LoopHandlers { start: (focus: string, rounds: number) => void; stop: () => void }
 
 const STATUS_WORD: Record<LoopStatus, string> = { idle: 'Not started', starting: 'Starting', running: 'Running', done: 'Done', stopped: 'Stopped' };
 const STEPS: LoopPhase[] = ['scenarios', 'testing', 'fixing', 'verifying'];
-const ITEM_WORD: Record<CriteriaStatus, string> = { pass: 'pass', fail: 'fail', flaky: 'flaky', fixed: 'fixed', todo: 'no test yet', blocked: 'blocked', open: 'open' };
-const DOT_OF: Record<CriteriaStatus, string> = { pass: 'passed', fail: 'failed', flaky: 'flaky', fixed: 'fixed', todo: 'waiting', blocked: 'waiting', open: 'failed' };
-export const SOURCE_WORD = { prd: 'from the PRD', notes: 'from the task notes' } as const; // a scenario's from: part as its tag reads
 
-export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement; update: (model: LoopModel) => void; focusInput: HTMLInputElement } {
+export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement; update: (model: LoopModel) => void } {
   const panel = el('section', 'tst-loop');
   panel.setAttribute('aria-label', 'Test loop');
 
@@ -77,7 +68,7 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
     const bar = el('div', 'tst-loop-bar');
     bar.insertAdjacentHTML('beforeend', loopBarHtml(p)); // built from escaped text only
     const facts = el('p', 'tst-loop-facts');
-    const open = p.open ?? (model.criteria ? openBugs(model.criteria) : null);
+    const open = p.open ?? model.openBugs;
     facts.append(el('strong', null, `Round ${p.round} of ${p.total}`), el('span', null, phaseWord(p.phase)), ...(open === null ? [] : [el('span', `tst-loop-open${open ? ' has-open' : ''}`, `${open} open bug${open === 1 ? '' : 's'}`)]));
     const track = el('ol', 'tst-loop-steps');
     track.setAttribute('aria-label', 'Phases in a round');
@@ -89,66 +80,6 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
       track.append(item);
     });
     box.append(bar, facts, track);
-    return box;
-  }
-
-  function liveBlock(model: LoopModel): HTMLElement | null {
-    if (!model.stages.length) return null;
-    const row = el('ul', 'tst-loop-live');
-    row.setAttribute('aria-label', 'Latest suite results from Claude');
-    for (const stage of model.stages) {
-      const item = el('li', `tst-loop-live-item is-${stage.status}`);
-      const dot = el('span', `tst-dot is-${stage.status}`);
-      dot.setAttribute('aria-hidden', 'true');
-      item.append(dot, el('span', 'tst-loop-live-name', stage.name), el('span', 'tst-loop-live-word', stage.status === 'waiting' ? 'not run' : stage.status));
-      row.append(item);
-    }
-    return row;
-  }
-
-  function itemRow(item: CriteriaItem): HTMLElement {
-    const row = el('li', `tst-crit is-${item.status}`);
-    const line = el('div', 'tst-crit-line');
-    const dot = el('span', `tst-dot is-${DOT_OF[item.status]}`);
-    dot.setAttribute('role', 'img');
-    dot.setAttribute('aria-label', ITEM_WORD[item.status]);
-    line.append(dot, el('span', 'tst-crit-name', item.name), el('span', `tst-crit-tag is-${item.status}`, ITEM_WORD[item.status]));
-    if (item.regression) line.append(el('span', 'tst-crit-tag is-regression', 'regression'));
-    if (item.source) line.append(el('span', `tst-crit-tag is-source is-${item.source}`, SOURCE_WORD[item.source]));
-    row.append(line);
-    const tests = item.tests.map((t) => `${t.path}${t.name ? ` › ${t.name}` : ''}`);
-    const meta = [...tests, item.round === null ? '' : `round ${item.round}`].filter(Boolean).join(' · ');
-    if (meta) row.append(el('p', 'tst-crit-meta', meta));
-    return row;
-  }
-
-  function criteriaBlock(criteria: Criteria | null): HTMLElement {
-    const box = el('div', 'tst-criteria');
-    if (!criteria || (!criteria.scenarios.length && !criteria.bugs.length)) {
-      box.append(el('p', 'tst-muted', 'No scenarios or bugs in the repo’s criteria file yet. Claude adds them as the loop runs.'));
-      return box;
-    }
-    const column = (title: string, items: CriteriaItem[], tally: string, empty: string) => {
-      const col = el('section', 'tst-crit-col');
-      col.setAttribute('aria-label', title);
-      const head = el('h4', 'tst-sub tst-crit-head');
-      head.append(el('span', null, title), el('span', 'tst-crit-count', tally));
-      col.append(head);
-      if (!items.length) { col.append(el('p', 'tst-muted', empty)); return col; }
-      const list = el('ul', 'tst-crit-list');
-      for (const item of items) list.append(itemRow(item));
-      col.append(list);
-      return col;
-    };
-    const open = openBugs(criteria);
-    const fixed = criteria.bugs.filter((b) => b.status === 'fixed').length;
-    const passing = criteria.scenarios.filter((s) => s.status === 'pass').length;
-    box.append(
-      column('Scenarios', criteria.scenarios, `${passing}/${criteria.scenarios.length} pass`, 'None yet.'),
-      column('Bugs', criteria.bugs, `${open} open · ${fixed} fixed`, 'No bugs found so far.'),
-    );
-    const notes = [criteria.malformed ? `${criteria.malformed} line${criteria.malformed === 1 ? '' : 's'} not in the item format` : '', criteria.truncated ? 'file is long, showing its start' : ''].filter(Boolean);
-    if (notes.length) box.append(el('p', 'tst-muted tst-crit-notes', `${notes.join(' · ')}.`));
     return box;
   }
 
@@ -167,13 +98,9 @@ export function createLoopPanel(handlers: LoopHandlers): { element: HTMLElement;
     about.hidden = active; // explained before a loop starts, out of the way while one runs
     note.textContent = model.note;
     note.hidden = !model.note;
-    const showBody = model.status !== 'idle' || model.distillation.length > 0 || Boolean(model.criteria && (model.criteria.scenarios.length || model.criteria.bugs.length));
-    body.hidden = !showBody;
-    if (!showBody) { body.replaceChildren(); return; }
-    const live = liveBlock(model);
-    const distill = distillSection(model.distillation, `loop:${model.distillKey}`, handlers.askThread);
-    body.replaceChildren(...(model.status === 'idle' ? [] : [progressBlock(model)]), ...(live ? [live] : []), ...(distill ? [distill] : []), criteriaBlock(model.criteria));
+    body.hidden = model.status === 'idle';
+    body.replaceChildren(...(body.hidden ? [] : [progressBlock(model)]));
   }
 
-  return { element: panel, update, focusInput };
+  return { element: panel, update };
 }

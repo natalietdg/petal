@@ -45,7 +45,7 @@ export interface StageResult {
   runner: string | null;
 }
 
-export interface PipelineRun {
+export interface SuiteRun {
   id: string;
   by: RunBy;
   trigger: 'click' | 'auto' | 'transcript';
@@ -60,6 +60,7 @@ export interface PipelineRun {
   sessionName?: string; // a Claude run: its session's name, added when read, never stored
   taskId?: string | null; // the task its session held when it ran; absent on older runs
 }
+export type PipelineRun = SuiteRun; // the old name, still used outside the renderer
 
 // <userData>/testing/<project-hash>.json
 export interface ProjectTesting {

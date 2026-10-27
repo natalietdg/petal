@@ -1,18 +1,18 @@
-// Testing for the repo: its one suite of stages (typecheck, unit, e2e, mobile flows...) shared by every worktree, filtered
-// by level and ticket; results grouped by file with failures first; run history with a trend; scenarios, manual checks
-// and bugs; and the session's task's test loop. Nothing runs without her click; the first run of any command asks
-// first, and runs go in a new visible tab.
+// Testing for the repo, in three sections: Suite (its one suite of stages shared by every worktree, filtered by level and
+// ticket, with results grouped by file, failures first), Scenarios & bugs (scenarios, manual checks and one bug list),
+// and Agents (the session's task's test loop and its two agents). History, suite health and the repo's test tools sit
+// in the side column. Nothing runs without her click; the first run of any command asks first, in a new visible tab.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as composer from './composer';
 import * as agentTerms from './agent-terms';
 import { byId, el, isIpcError } from './dom';
 import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
-import { historyList, pipelineStrip, stackList, stageResults, trend, type FixWhere } from './testing-view';
+import { historyList, stackList, stageResults, suiteStrip, trend, type FixWhere } from './testing-view';
 import { historyDays, stagesFromRuns, type RunRow } from '../shared/testing-history';
-import { createLoopPanel, type LoopModel } from './testing-loop-view';
-import { buildFixPrompt, slugId, type PipelineRun, type StackItem, type StageResult, type TestCase, type TestingState } from '../shared/testing';
-import { buildSentFixerBrief, filterCriteria, isActive, ticketsOf, type Criteria, type ManualStatus } from '../shared/test-loop';
+import { createLoopPanel } from './testing-loop-view';
+import { buildFixPrompt, slugId, type StackItem, type SuiteRun, type StageResult, type TestCase, type TestingState } from '../shared/testing';
+import { buildSentFixerBrief, filterCriteria, isActive, openBugs, ticketsOf, type Criteria, type ManualStatus } from '../shared/test-loop';
 import { DRAFT_TURNS, FIX_TURNS, SUITE_SKILL_CHARS, agentEstimateText, agentTokens } from '../shared/token-usage';
 import { bySession, mergeRecords, recordsFromReplies, type DistillRecord } from '../shared/distillation';
 import { suiteHealth, withCoreStage } from '../shared/suite-health';
@@ -36,8 +36,9 @@ const LOOP_POLL_MS = 1500; // a running loop's Loop line and criteria refresh fa
 const view = byId('testing');
 view.tabIndex = -1;
 
-const head = el('header', 'tst-head');
 const title = el('h2', 'tst-title', 'Testing');
+const head = el('header', 'tst-head');
+const suiteTitle = el('h3', 'tst-zone-title', 'Suite');
 const summary = el('p', 'tst-summary');
 const tools = el('div', 'tst-tools-bar');
 const editButton = el('button', 'tst-button', 'Edit suite');
@@ -47,7 +48,7 @@ const runButton = el('button', 'tst-button tst-primary', 'Run');
 runButton.type = 'button';
 tools.append(editButton, runButton);
 const savedIn = el('p', 'tst-saved-in'); // where the suite lives: Petal's folder, never the repo
-head.append(title, summary, tools, savedIn);
+head.append(suiteTitle, summary, tools, savedIn);
 
 const pickerBox = el('div', 'tst-pickerbox');
 const changeBox = el('div', 'tst-changebox');
@@ -61,6 +62,7 @@ const strip = el('div', 'tst-strip');
 const criteriaBox = el('div', 'tst-criteriabox');
 const editor = el('div', 'tst-editor');
 const body = el('div', 'tst-body');
+const main = el('div', 'tst-main');
 const results = el('section', 'tst-results');
 results.setAttribute('aria-label', 'Results');
 const side = el('aside', 'tst-side');
@@ -71,9 +73,21 @@ healthBox.setAttribute('aria-label', 'Suite health');
 const stackBox = el('section', 'tst-stackbox');
 stackBox.setAttribute('aria-label', 'What this project tests with');
 side.append(historyBox, healthBox, stackBox);
-body.append(results, side);
-const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop(), askThread: (prompt) => void askLoopThread(prompt) });
-view.append(head, pickerBox, changeBox, note, confirmBox, filterBox, strip, editor, criteriaBox, loopPanel.element, body);
+const loopPanel = createLoopPanel({ start: (focus, rounds) => void startLoop(focus, rounds), stop: () => void stopCurrentLoop() });
+
+// A labelled section of the main column.
+function zone(label: string, ...children: HTMLElement[]): HTMLElement {
+  const box = el('section', 'tst-zone');
+  box.setAttribute('aria-label', label);
+  box.append(...children);
+  return box;
+}
+const suiteZone = zone('Suite', head, confirmBox, changeBox, filterBox, strip, editor, results);
+const scenariosZone = zone('Scenarios & bugs', el('h3', 'tst-zone-title', 'Scenarios & bugs'), criteriaBox);
+const agentsZone = zone('Agents', el('h3', 'tst-zone-title', 'Agents'), pickerBox, loopPanel.element); // the lanes follow, below
+main.append(suiteZone, scenariosZone, agentsZone);
+body.append(main, side);
+view.append(title, note, body);
 
 // ---- State, per window.
 let data: TestingState | null = null;
@@ -100,7 +114,7 @@ const optedIn = new Set<string>(); // opt-in stages she turned on for Run
 
 export const isOpen = (): boolean => overlays.isOpen('testing');
 const picked = (): string | null => (sourceTab ? pickedFor.get(sourceTab) ?? null : null);
-const runById = (id: string | null): PipelineRun | null => data?.runs.find((r) => r.id === id) ?? null;
+const runById = (id: string | null): SuiteRun | null => data?.runs.find((r) => r.id === id) ?? null;
 
 // ---- The repo's suite and runs; the session's task only for its agents and their rounds.
 const shownTask = (): Task | null => (target?.kind === 'task' ? data?.tasks.find((t) => t.id === target?.id) ?? null : null);
@@ -112,14 +126,13 @@ const suite = (): RepoSuite | null => data?.suite.suite ?? null;
 const home = (): string | null => data?.suite.home ?? null;
 const suiteDir = (): string | null => data?.suite.dir ?? null;
 const taskId = (): string | null => shownTask()?.id ?? null;
-const taskRuns = (): PipelineRun[] => data?.runs ?? [];
+const repoRuns = (): SuiteRun[] => data?.runs ?? [];
 // The checkout's run still going: one at a time, since it runs the one suite.
-const taskRunning = (): PipelineRun | null => (data?.running ?? []).map(runById).find((r) => r !== null) ?? null;
+const taskRunning = (): SuiteRun | null => (data?.running ?? []).map(runById).find((r) => r !== null) ?? null;
 const taskDistillation = (): DistillRecord[] => forTask(distillation, taskId());
 const filter = () => ({ levels: [...levels], optedIn: [...optedIn] });
 const filteredCriteria = (): Criteria | null => (criteria ? filterCriteria(criteria, { ticket, levels: [...levels] }) : null);
-// The loop's agents review and test the repo's scenarios.
-const taskCriteria = (): Criteria | null => criteria;
+const testerName = (): string => agentName(data?.agentNames, 'tester');
 
 function followSessionTask(): void {
   if (!data) return;
@@ -137,6 +150,7 @@ function pick(next: TestTarget): void {
   pickerBox.querySelector<HTMLElement>('.tst-task-select')?.focus();
 }
 
+// "Agents for": the task whose agents the lanes show; nothing else on the page follows it.
 function drawPicker(): void {
   pickerBox.replaceChildren();
   pickerBox.hidden = !folderAllowed || !data?.project || !target;
@@ -149,8 +163,8 @@ function drawChange(): void {
   if (!data?.project || draft) { changeBox.hidden = true; return; }
   const line = suiteChangeLine(data.suite.change, data.suite.problem, () => void undoChange());
   if (line) changeBox.append(line);
-  const names = { tester: agentName(data.agentNames, 'tester'), fixer: agentName(data.agentNames, 'fixer') };
-  changeBox.append(lockBar(data.lock, data.lock.restored, names, { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }, false));
+  const names = { tester: testerName(), fixer: agentName(data.agentNames, 'fixer') };
+  changeBox.append(lockBar(data.lock, data.lock.restored, names, { toggle: (on) => void toggleLock(on), dismiss: () => void dismissRestored(), resolve: (path, keep) => void resolveLock(path, keep) }));
   changeBox.hidden = false;
 }
 
@@ -169,19 +183,34 @@ function drawFilters(): void {
   if (optIns) filterBox.append(optIns);
 }
 
+// A manual check's Result note she is typing survives the agents' frequent redraws.
+const typingIn = (box: HTMLElement): boolean => document.activeElement instanceof HTMLInputElement && box.contains(document.activeElement);
+
+// Scenarios & bugs: her review of new scenarios, the criteria under her filter, and the loop's queue joined to the bugs.
 function drawCriteria(): void {
   criteriaBox.replaceChildren();
   criteriaBox.hidden = !folderAllowed || !data?.project || draft !== null;
-  if (!criteriaBox.hidden) criteriaBox.append(criteriaPanel(filteredCriteria(), {
+  scenariosZone.hidden = criteriaBox.hidden;
+  if (criteriaBox.hidden) return;
+  const awaiting = agents.awaiting();
+  criteriaBox.append(criteriaPanel({
+    criteria: filteredCriteria(),
+    allBugs: criteria?.bugs ?? [],
+    queue: agents.facts().record?.queue ?? null,
+    review: awaiting.length ? { tester: testerName(), scenarios: awaiting, note: agents.testerNote() } : null,
+    tester: testerName(),
+  }, {
     save: (name, status, result) => void saveManual(name, status, result),
     run: (name) => void runScenarios({ scenario: name }),
     blocked: (item) => (taskRunning() ? 'A run is still going.' : scenarioBlock(item, new Set(data?.runners ?? []), suite()?.stages.map((s) => s.command) ?? [])),
-  }, false));
+    editScenarios: () => void agents.editScenarios(),
+    approveScenarios: () => void agents.approveScenarios(),
+  }));
 }
 
 // The newest result for a stage, from the chosen run or across all runs (Claude's land on their matching stage).
-function resultOf(stageId: string): { stage: StageResult; run: PipelineRun } | null {
-  const runs = selectedRun ? [runById(selectedRun)].filter((r): r is PipelineRun => r !== null) : taskRuns();
+function resultOf(stageId: string): { stage: StageResult; run: SuiteRun } | null {
+  const runs = selectedRun ? [runById(selectedRun)].filter((r): r is SuiteRun => r !== null) : repoRuns();
   for (const run of runs) {
     const stage = run.stages.find((s) => s.stageId === stageId);
     if (stage) return { stage, run };
@@ -193,7 +222,7 @@ function resultOf(stageId: string): { stage: StageResult; run: PipelineRun } | n
 const visibleStages = () => shownStages(suite()?.stages ?? [], [...levels]);
 
 // The stage the results pane shows: the chosen one, else the first failed, else the first.
-function shownStage(): { stage: StageResult; run: PipelineRun } | null {
+function shownStage(): { stage: StageResult; run: SuiteRun } | null {
   const run = runById(selectedRun);
   if (run && !run.stages.some((s) => suite()?.stages.some((p) => p.id === s.stageId))) return run.stages[0] ? { stage: run.stages[0], run } : null;
   const stages = visibleStages();
@@ -215,6 +244,7 @@ function drawHead(): void {
   const p = suite();
   const onTask = Boolean(data?.project);
   summary.replaceChildren(data?.project ? headLine() : '');
+  suiteTitle.hidden = !data?.project;
   const shownDir = data?.project ? data.suite.shownDir : null;
   savedIn.textContent = shownDir ? `Saved in Petal · ${shownDir}` : '';
   savedIn.hidden = !shownDir;
@@ -298,9 +328,10 @@ function drawStrip(): void {
   const p = suite();
   if (!p) {
     if (draft) return;
-    const fromClaude = stagesFromRuns(taskRuns());
+    const fromClaude = stagesFromRuns(repoRuns());
     const drawn = agents.draft();
     strip.append(noSuite({
+      tester: testerName(),
       askClaude: () => void askForSuite(task),
       showDraft: drawn ? () => agents.showTerminal('tester') : null,
       draftEnded: drawn?.ended ?? false,
@@ -314,7 +345,7 @@ function drawStrip(): void {
     return;
   }
   const current = shownStage();
-  strip.append(pipelineStrip({ stages: visibleStages() }, (id) => resultOf(id)?.stage ?? null, current?.stage.stageId ?? null, {
+  strip.append(suiteStrip({ stages: visibleStages() }, (id) => resultOf(id)?.stage ?? null, current?.stage.stageId ?? null, {
     select: (id) => { selectedStage = id; drawAll(); strip.querySelector<HTMLElement>(`[data-stage="${id}"]`)?.focus(); },
     runStage: (id) => void run(id, false),
   }, Boolean(taskRunning()) || draft !== null));
@@ -461,16 +492,20 @@ async function chooseSession(sessionId: string): Promise<void> {
   await refresh();
 }
 
-// Each Claude session's distillation goes under that session's newest row in History, once.
+// Each Claude session's distillation goes under that session's newest row in History, once. The loop's testing agent
+// shows its live rounds too, and its threads are asked through main, which resumes it when no claude runs it.
 function historyExtras(): (row: RunRow) => HTMLElement | null {
   const groups = new Map(bySession(taskDistillation()).map((g) => [g.sessionId, g.records]));
+  const tester = loopDistillation();
+  if (tester.sessionId) groups.set(tester.sessionId, tester.distill);
   const placed = new Set<string>();
   return (row) => {
     const sessionId = row.run.by === 'claude' ? row.run.sessionId ?? null : null;
     const records = sessionId ? groups.get(sessionId) : undefined;
-    if (!sessionId || !records || placed.has(sessionId)) return null;
+    if (!sessionId || !records?.length || placed.has(sessionId)) return null;
     placed.add(sessionId);
-    return distillSection(records, `history:${sessionId}`, (prompt) => void askThread(tabOfSession(sessionId), prompt));
+    const ask = sessionId === tester.sessionId ? (prompt: string) => void askLoopThread(prompt) : (prompt: string) => void askThread(tabOfSession(sessionId), prompt);
+    return distillSection(records, `history:${sessionId}`, ask);
   };
 }
 
@@ -495,7 +530,7 @@ function drawHealth(): void {
   healthBox.replaceChildren();
   const p = suite();
   if (!data?.project || !p) return;
-  const health = suiteHealth({ runs: taskRuns(), changed: data.changed });
+  const health = suiteHealth({ runs: repoRuns(), changed: data.changed });
   healthBox.append(el('h3', 'tst-section-title', 'Suite health'), healthPanel(health, p.stages, { addCore: (command) => void addCoreStage(command) }, draft !== null));
 }
 
@@ -506,7 +541,7 @@ function drawSide(): void {
   drawHealth();
   if (!data?.project) return;
   historyBox.append(el('h3', 'tst-section-title', 'History'));
-  const runs = taskRuns();
+  const runs = repoRuns();
   const stages = suite()?.stages ?? [];
   if (runs.length) {
     historyBox.append(trend(runs, stages.map((s) => s.id), stages.map((s) => s.name)), historyList(historyDays(runs), selectedRun, expanded, {
@@ -536,57 +571,46 @@ const agents = createAgents({
   tabId: () => tabId(),
   task: () => shownTask(),
   prd: () => shownPrd(),
-  scenarios: () => taskCriteria()?.scenarios ?? [],
+  scenarios: () => criteria?.scenarios ?? [],
   suite: () => suite(),
   suiteDir: () => suiteDir(),
   stack: () => data?.stack ?? [],
   names: () => data?.agentNames ?? {},
-  taskRuns: () => taskRuns(),
-  redraw: () => { if (isOpen()) drawLoop(); },
+  taskRuns: () => repoRuns(),
+  redraw: () => { if (isOpen()) { drawLoop(); if (!typingIn(criteriaBox)) drawCriteria(); } }, // the queue and the scenario review show in Scenarios & bugs
   renamed: () => load(),
   say: (text) => { loopNote = text; drawLoop(); },
   open: () => void open(),
 });
-loopPanel.element.after(agents.element);
+agentsZone.append(agents.element);
 
-// Distillation stays on the testing agent's rounds: stored ones plus any its replies show since the loop started.
-function loopDistillation(): { distill: DistillRecord[]; distillKey: string } {
+// The testing agent's distillation: its stored rounds plus any its replies show since the loop started.
+function loopDistillation(): { distill: DistillRecord[]; sessionId: string | null } {
   const { record } = agents.facts();
   const sessionId = record?.tester?.sessionId ?? null;
   const live = sessionId ? recordsFromReplies([...agents.testerReplies()], sessionId, record?.startedAt ?? 0) : [];
   const groups = bySession(taskDistillation());
   const stored = sessionId ? groups.find((g) => g.sessionId === sessionId) : groups[0];
-  return { distill: mergeRecords(stored?.records ?? [], live), distillKey: (sessionId ?? stored?.sessionId) || 'none' };
-}
-
-// Claude's newest result per stage since the loop started.
-function claudeStages(since: number): LoopModel['stages'] {
-  const p = suite();
-  if (!p || !data) return [];
-  const claudeRuns = taskRuns().filter((r) => r.by === 'claude' && r.startedAt >= since);
-  if (!claudeRuns.length) return [];
-  return p.stages.map((stage) => ({ name: stage.name, status: claudeRuns.find((r) => r.stages.some((s) => s.stageId === stage.id))?.stages.find((s) => s.stageId === stage.id)?.status ?? 'waiting' }));
+  return { distill: mergeRecords(stored?.records ?? [], live), sessionId };
 }
 
 function drawLoop(): void {
   loopPanel.element.hidden = !folderAllowed || !data?.project || !suite();
   agents.draw();
+  agentsZone.hidden = pickerBox.hidden && loopPanel.element.hidden && agents.element.hidden;
   if (loopPanel.element.hidden) { stopLoopTick(); return; }
   const { record, progress, status, stopping } = agents.facts();
-  const { distill, distillKey } = loopDistillation();
   const stages = suite()?.stages ?? [];
   const names = data?.agentNames ?? {};
   const why = !stages.length ? 'Add stages to the repo’s suite first. The loop runs them each round.'
     : record && !record.stoppedAt && record.fixer && !record.tester ? `Start starts ${agentName(names, 'tester')} in its lane below. ${agentName(names, 'fixer')} keeps fixing what you sent it. Neither commits.`
     : `Start starts two agents, each in its lane below. ${agentName(names, 'tester')} writes and runs tests and files the bugs it finds; ${agentName(names, 'fixer')} fixes them at the same time. Neither commits.`;
+  const shownCriteria = filteredCriteria();
   loopPanel.update({
-    status, progress, criteria: filteredCriteria(), why,
+    status, progress, openBugs: shownCriteria ? openBugs(shownCriteria) : null, why,
     canStart: Boolean(stages.length && shownTask()) && !isActive(status) && draft === null,
-    stages: status === 'idle' ? [] : claudeStages(record?.startedAt ?? 0),
     stopping,
     note: loopNote,
-    distillation: distill,
-    distillKey,
   });
   // A live loop refreshes faster than the general poll.
   const wantTick = isOpen() && isActive(status);
@@ -850,4 +874,4 @@ export function resetLeftovers(): void {
 }
 
 // For the snapshot harness.
-export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: taskRuns().length, suiteChange: Boolean(data?.suite.change), suiteProblem: data?.suite.problem ?? null, levels: [...levels], ticket, optedIn: [...optedIn], elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: agents.testerHost(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });
+export const state = () => ({ target, task: shownTask()?.title ?? null, head: summary.textContent ?? '', sessionTaskId: data?.sessionTaskId ?? null, taskRuns: repoRuns().length, suiteChange: Boolean(data?.suite.change), suiteProblem: data?.suite.problem ?? null, levels: [...levels], ticket, optedIn: [...optedIn], elsewhere: data?.elsewhere ?? null, picked: picked(), sessionTab: data?.sessionTab ?? null, loop: agents.facts().status, distillation: loopDistillation().distill.length, loopProgress: agents.facts().progress, loopTab: agents.testerHost(), agents: agents.state(), project: data?.project?.name ?? null, stages: suite()?.stages.map((s) => s.name) ?? [], runs: data?.runs.length ?? 0, selectedRun, selectedStage, editing: draft !== null, seed: data?.seed ?? null, confirming: confirming?.commands.map((c) => c.command) ?? null, sourceTab });

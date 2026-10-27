@@ -180,7 +180,7 @@ const PROBE = `(() => {
     askSuite: Boolean(view.querySelector('.tst-ask-suite')),
     drawing: view.querySelector('.tst-drawing')?.textContent ?? null,
     pickerTitle: view.querySelector('.tst-picker-title')?.textContent ?? '',
-    makePipeline: Boolean(view.querySelector('.tst-make-pipeline')),
+    makeSuite: Boolean(view.querySelector('.tst-make-suite')),
     head: view.querySelector('.tst-summary')?.textContent ?? '',
     bars: view.querySelectorAll('.tst-bar').length,
     sumbar: view.querySelector('.tst-sumbar')?.textContent ?? '',
@@ -422,14 +422,14 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
       fs.rmSync(petalFileOf(bare, 'suite.json'), { force: true }); // another session removed the repo's suite
       await settle((p) => p.state.stages.length === 0);
       await js("(() => { const s = document.querySelector('#testing .tst-task-select'); s.value = 'task:t-notes'; s.dispatchEvent(new Event('change')); })()");
-      const notes = await settle((p) => p.state.task === 'Sort notes by date' && Boolean(p.makePipeline));
+      const notes = await settle((p) => p.state.task === 'Sort notes by date' && Boolean(p.makeSuite));
       // Read while the repo's Unit stage existed, so the jest run keeps that stage's name.
       check(notes && (notes.history as string[]).some((r) => /^Unitby Claude.*while: make the notes list sort by date.*12 passed/.test(r)), `notes-app shows its own runs: ${JSON.stringify(notes?.history)}`);
-      await click('#testing .tst-make-pipeline');
+      await click('#testing .tst-make-suite');
       const made = await settle((p) => p.state.editing);
       const fields = await js("[...document.querySelectorAll('#testing .tst-edit-row')].map((r) => [...r.querySelectorAll('.tst-edit-name, .tst-edit-command')].map((i) => i.value))") as string[][];
       check(made && JSON.stringify(fields) === JSON.stringify([['Typecheck', 'npx tsc --noEmit'], ['Unit', 'npx jest']]), `Start from Claude's checks proposes them: ${JSON.stringify(fields)}`);
-      await capture('testing-make-pipeline');
+      await capture('testing-make-suite');
       await js("[...document.querySelectorAll('#testing .tst-editor .tst-button')].find((b) => b.textContent === 'Cancel').click()");
       await click('#testing .tst-change-session');
       check(await settle((p) => p.state.elsewhere?.reason === 'home'), 'Change session goes back to the picker');
@@ -478,7 +478,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
         const box = document.querySelector('#testing .tst-agentsbox');
         const lanes = box && !box.hidden ? [...box.querySelectorAll('.tst-agent-lane')] : [];
         const tokens = box?.querySelector('.tst-agent-tokens')?.textContent ?? null;
-        return lanes.length && tokens ? { roles: lanes.map((l) => l.dataset.role), chat: !!box.querySelector('.tst-agent-chat'), views: box.querySelectorAll('.tst-agent-view').length, tokens, queue: !!box.querySelector('.tst-queue'), events: PastelTerm.testing.state().agents.events.tester.map((e) => e.text) } : null;
+        return lanes.length && tokens ? { roles: lanes.map((l) => l.dataset.role), chat: !!box.querySelector('.tst-agent-chat'), views: box.querySelectorAll('.tst-agent-view').length, tokens, queue: !!document.querySelector('#testing .tst-bug-counts'), events: PastelTerm.testing.state().agents.events.tester.map((e) => e.text) } : null;
       })()`), 8000);
       check(asked && lane && JSON.stringify(lane.roles) === JSON.stringify(['tester']) && lane.chat && lane.views === 2 && /^[\d.]+k? tokens( \([\d.]+k? of them cached reads\))?$/.test(lane.tokens ?? '') && !lane.queue, `the drafting agent has its own lane before a suite exists: ${JSON.stringify(lane)}`);
       const draft = store.load(emptyRepo).loops?.[made[0]?.id ?? ''];

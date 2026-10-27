@@ -1,6 +1,7 @@
 // Test loop: Start pastes the brief into the fixture's Claude tab (never a real claude) and makes the repo's criteria file in
 // Petal, never in the repo;
-// fixture Loop lines drive the round progress here and in the reader's strip; a criteria fixture renders grouped;
+// fixture Loop lines drive the round progress here and in the reader's strip; a criteria fixture renders once, in
+// Scenarios & bugs, with the loop's queue joined to its bugs, and Claude's run shows once, on the stage strip;
 // Start stays off while the loop runs; with Testing closed main still steps the queue and saves it, and the lanes come
 // back from main on the next open; the last round's tokens show next to the estimate; Stop records one Esc, then the stop message once idle;
 // the criteria agents write go in that one file; Close agents closes both without a signal.
@@ -53,7 +54,9 @@ const PROBE = `(() => {
   const backOf = (el) => { for (let n = el; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c; } return [255, 255, 255]; };
   const ratio = (el) => { const a = lum(rgb(getComputedStyle(el).color)), b = lum(backOf(el)); const [hi, lo] = a > b ? [a, b] : [b, a]; return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100; };
   const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-  const texts = [...panel.querySelectorAll('.tst-section-title, .tst-loop-state, .tst-button:not(:disabled), .tst-input, .tst-loop-rounds span, .tst-loop-hint, .tst-loop-note, .tst-loop-facts strong, .tst-loop-facts span, .tst-loop-step, .tst-loop-live-name, .tst-loop-live-word, .tst-sub span, .tst-crit-name, .tst-crit-tag, .tst-crit-meta, .tst-muted')].filter(visible);
+  const crit = view.querySelector('.tst-criteria-panel');
+  const texts = [...panel.querySelectorAll('.tst-section-title, .tst-loop-state, .tst-button:not(:disabled), .tst-input, .tst-loop-rounds span, .tst-loop-hint, .tst-loop-note, .tst-loop-facts strong, .tst-loop-facts span, .tst-loop-step, .tst-muted'),
+    ...(crit?.querySelectorAll('.tst-sub, .tst-crit-name, .tst-crit-status, .tst-crit-tag, .tst-crit-meta, .tst-bug-count, .tst-muted') ?? []), ...view.querySelectorAll('.tst-zone-title')].filter(visible);
   const worst = texts.map((t) => [ratio(t), t.className || t.tagName, t.textContent.slice(0, 30)]).sort((a, b) => a[0] - b[0])[0] ?? [99];
   const bar = panel.querySelector('.tst-loop-bar [role="progressbar"]');
   const box = panel.getBoundingClientRect();
@@ -67,16 +70,26 @@ const PROBE = `(() => {
     facts: panel.querySelector('.tst-loop-facts')?.textContent ?? '',
     bar: bar ? { now: bar.getAttribute('aria-valuenow'), max: bar.getAttribute('aria-valuemax'), segs: bar.querySelectorAll('.station-seg').length, done: bar.querySelectorAll('.station-seg.done').length } : null,
     step: panel.querySelector('.tst-loop-step.is-current')?.textContent ?? null,
-    live: [...panel.querySelectorAll('.tst-loop-live-item')].map((i) => [i.querySelector('.tst-loop-live-name').textContent, [...i.classList].find((c) => c.startsWith('is-'))?.slice(3)]),
-    columns: [...panel.querySelectorAll('.tst-crit-col')].map((c) => [c.getAttribute('aria-label'), c.querySelectorAll('.tst-crit').length, c.querySelector('.tst-crit-count')?.textContent]),
-    tags: [...panel.querySelectorAll('.tst-crit-tag')].map((t) => t.textContent),
-    regressions: [...panel.querySelectorAll('.tst-crit')].filter((c) => c.querySelector('.tst-crit-tag.is-regression')).map((c) => c.querySelector('.tst-crit-name').textContent),
-    notes: panel.querySelector('.tst-crit-notes')?.textContent ?? '',
+    live: [...view.querySelectorAll('.tst-suite-strip .tst-stage-item')].map((i) => [i.querySelector('.tst-stage-name').textContent, [...i.classList].find((c) => c.startsWith('is-'))?.slice(3)]),
+    sections: crit ? [['Scenarios', crit.querySelectorAll('.tst-crit-item[data-scenario]').length, [...crit.querySelectorAll('.tst-sub')].find((h) => h.textContent.startsWith('Scenarios'))?.textContent], ['Bugs', crit.querySelectorAll('.tst-bug').length, [...crit.querySelectorAll('.tst-sub')].find((h) => h.textContent.startsWith('Bugs'))?.textContent]] : [],
+    tags: [...(crit?.querySelectorAll('.tst-crit-status') ?? [])].map((t) => t.textContent),
+    regressions: [...(crit?.querySelectorAll('.tst-bug') ?? [])].filter((c) => c.querySelector('.tst-crit-tag.is-regression')).map((c) => c.querySelector('.tst-crit-name').textContent),
+    notes: crit?.querySelector('.tst-crit-notes')?.textContent ?? '',
+    bugCounts: crit?.querySelector('.tst-bug-counts')?.textContent ?? '',
+    bugStates: [...(crit?.querySelectorAll('.tst-bug') ?? [])].map((b) => [b.querySelector('.tst-crit-name').textContent, b.querySelector('.tst-crit-status').textContent]),
+    copies: {
+      loopItems: panel.querySelectorAll('.tst-crit-item, .tst-stage-item, .tst-distill').length,
+      queueInLanes: view.querySelectorAll('.tst-agentsbox .tst-bug, .tst-agentsbox .tst-crit-item').length,
+      bugNamed: [...view.querySelectorAll('.tst-crit-name')].filter((n) => n.textContent === 'coupon can take the total below zero').length,
+      scenarioNamed: [...view.querySelectorAll('.tst-crit-name')].filter((n) => n.textContent === 'guest checkout with a saved card').length,
+    },
+    zones: [...view.querySelectorAll('.tst-zone')].filter(visible).map((z) => z.getAttribute('aria-label')),
+    pickerInAgents: !!view.querySelector('.tst-zone[aria-label="Agents"] .tst-pickerbox .tst-task-select'),
     belowStrip: !!view.querySelector('.tst-strip') && box.top >= view.querySelector('.tst-strip').getBoundingClientRect().bottom - 1,
     minRatio: worst[0],
     worst,
     overflowX: Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth, view.scrollWidth - view.clientWidth, panel.scrollWidth - panel.clientWidth),
-    inWindow: [...panel.querySelectorAll('.tst-loop-top, .tst-loop-start, .tst-crit, .tst-loop-progress')].filter(visible).every((n) => { const b = n.getBoundingClientRect(); return b.left >= -1 && b.right <= window.innerWidth + 1; }),
+    inWindow: [...panel.querySelectorAll('.tst-loop-top, .tst-loop-start, .tst-loop-progress'), ...(crit?.querySelectorAll('.tst-crit-item') ?? [])].filter(visible).every((n) => { const b = n.getBoundingClientRect(); return b.left >= -1 && b.right <= window.innerWidth + 1; }),
   };
 })()`;
 
@@ -110,7 +123,8 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(await waitFor(async () => (await js("PastelTerm.tabs.get(PastelTerm.tabs.ids()[0])?.update?.state")) === 'live' || null, 15000), 'the fixture tab follows its Claude session');
     await js("document.getElementById('testing-button').click()");
     const idle = await settle((p) => p.state.project === 'acme' && p.state.loop === 'idle' && p.state.stages.length === 3);
-    check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.belowStrip, `the Loop panel sits below the pipeline, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, below: idle.belowStrip })}`);
+    check(idle && !idle.formHidden && !idle.startDisabled && !idle.stopShown && idle.belowStrip, `the Loop panel sits below the stage strip, Start ready: ${JSON.stringify(idle && { form: !idle.formHidden, start: !idle.startDisabled, below: idle.belowStrip })}`);
+    check(idle && JSON.stringify(idle.zones) === JSON.stringify(['Suite', 'Scenarios & bugs', 'Agents']) && idle.pickerInAgents, `three sections in order, with Agents for in Agents: ${JSON.stringify(idle && { zones: idle.zones, picker: idle.pickerInAgents })}`);
     check(idle && /two agents/.test(String(idle.hint)) && /Neither commits/.test(String(idle.hint)), `the hint says Start starts the two agents: ${JSON.stringify(idle?.hint)}`);
     await capture('test-loop-start');
 
@@ -147,22 +161,24 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
     check(bar && bar.now === '2' && bar.max === '5' && bar.segs === 5 && bar.done === 1 && running?.step === 'Fixing', `five round segments, one done, Fixing current: ${JSON.stringify({ bar, step: running?.step })}`);
     check(running && running.startDisabled && running.formHidden, 'Start stays off while the loop runs');
 
-    // The criteria, grouped, with the bug that became a regression test marked, as the testing agent writes the repo's file.
+    // The criteria, once, in Scenarios & bugs, with the bugs that became regression tests marked, as the testing agent writes the repo's file.
     fs.writeFileSync(criteriaFile, CRITERIA_FIXTURE);
-    // Claude's own unit run lands as the live pipeline result.
+    // Claude's own unit run lands on the stage strip.
     if (transcript) {
       const at = new Date().toISOString();
       fs.appendFileSync(transcript, line({ type: 'assistant', uuid: 'loop-a-bash', timestamp: at, cwd: project, message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_loop_1', name: 'Bash', input: { command: 'npm test', description: 'Run the unit tests' } }] } })
         + line({ type: 'user', uuid: 'loop-u-bash', timestamp: at, cwd: project, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_loop_1', is_error: true, content: 'Exit code 1\n Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 14 passed (16)\n' }] } }));
     }
-    const grouped = await settle((p) => (p.columns as unknown[]).length === 2 && (p.live as string[][]).some(([name, status]) => name === 'Unit' && status === 'failed'));
-    const columns = (grouped?.columns ?? []) as [string, number, string][];
-    check(columns[0]?.[0] === 'Scenarios' && columns[0][1] === 5 && columns[1]?.[0] === 'Bugs' && columns[1][1] === 3, `criteria grouped Scenarios / Bugs: ${JSON.stringify(columns)}`);
-    check(JSON.stringify(grouped?.regressions) === JSON.stringify(['tax rounds per order, not per line', 'coupon can take the total below zero']), `bugs with a test are marked regression: ${JSON.stringify(grouped?.regressions)}`);
+    const grouped = await settle((p) => (p.sections as [string, number][]).every(([, n]) => n > 0) && (p.live as string[][]).some(([name, status]) => name === 'Unit' && status === 'failed'));
+    const sections = (grouped?.sections ?? []) as [string, number, string][];
+    check(sections[0]?.[0] === 'Scenarios' && sections[0][1] === 5 && sections[1]?.[0] === 'Bugs' && sections[1][1] === 3, `criteria in Scenarios & bugs, Scenarios then Bugs: ${JSON.stringify(sections)}`);
+    check(JSON.stringify([...(grouped?.regressions as string[] ?? [])].sort()) === JSON.stringify(['coupon can take the total below zero', 'tax rounds per order, not per line']), `bugs with a test are marked regression: ${JSON.stringify(grouped?.regressions)}`);
+    const copies = grouped?.copies as Record<string, number> | undefined;
+    check(copies && copies.loopItems === 0 && copies.queueInLanes === 0 && copies.bugNamed === 1 && copies.scenarioNamed === 1, `each scenario and bug shows once; the loop panel and lanes hold no copies: ${JSON.stringify(copies)}`);
     check(['pass', 'fail', 'flaky', 'fixed'].every((t) => (grouped?.tags as string[] ?? []).includes(t)) && /1 line not in the item format/.test(String(grouped?.notes)), `every status shows and the stray line is counted: ${JSON.stringify(grouped?.notes)}`);
     const kept = fs.readFileSync(criteriaFile, 'utf8');
     check(kept.includes('coupon can take the total below zero') && kept.includes('a stray note') && repoUntouched(project), `the file keeps every line, and still nothing lands in the repo: ${JSON.stringify(kept.slice(0, 120))}`);
-    check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows as the live result: ${JSON.stringify(grouped?.live)}`);
+    check(JSON.stringify(grouped?.live) === JSON.stringify([['Typecheck', 'waiting'], ['Unit', 'failed'], ['Mobile flows', 'waiting']]), `Claude's unit run shows on the stage strip: ${JSON.stringify(grouped?.live)}`);
     // The open bugs join the queue; the idle bug fix agent gets the oldest one.
     const fixerTab = await waitFor(() => hostOf(win.webContents.id, project, FIXER_SESSION), 8000);
     const handed = await waitFor(() => pasteWrites.find((w) => w.tabId === fixerTab && w.data.includes('Bug: coupon can take the total below zero.')) ?? null, 8000);
@@ -203,6 +219,10 @@ export async function testLoopCheck(kit: Kit, win: BrowserWindow, feed: ReaderFe
       return l.lanes === 2 && l.tokens === 2 && l.queue.some(([, state]) => state === 'verify') ? l : null;
     }, 8000);
     check(back && back.fixerEvents.includes('Testing agent → Bug fix agent · coupon can take the total below zero') && back.queue.some(([name, state]) => name === 'Place order stays enabled with an empty cart' && state === 'fixing'), `the lanes come back from main: ${JSON.stringify(back)}`);
+    // The queue's states show on the one bug list, joined to each bug's criteria line.
+    const merged = await settle((p) => (p.bugStates as string[][]).some(([name, state]) => name === 'coupon can take the total below zero' && state === 'Awaiting verify'));
+    check(merged && (merged.bugStates as string[][]).some(([name, state]) => name === 'Place order stays enabled with an empty cart' && state === 'Fixing') && /Fixing 1/.test(String(merged.bugCounts)) && /Awaiting verify 1/.test(String(merged.bugCounts)) && (merged.sections as [string, number][])[1]?.[1] === 3,
+      `the bug list shows each queued bug's state once, with the queue's counts: ${JSON.stringify(merged && { bugs: merged.bugStates, counts: merged.bugCounts })}`);
 
     // Every theme and reading style; then widths.
     for (const theme of ['paleSky', 'blush', 'nightPastel']) {

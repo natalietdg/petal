@@ -106,7 +106,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()"); // the button toggles; Testing may still be open from step 1
     fs.appendFileSync(drafterLog, say(DRAFTER, 'd1', 'go on', 'I looked at the refunds code and need to think about the stages.'));
     const ended = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
-    check(drafterTab && ended?.ended === 'The testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show terminal: ${JSON.stringify(ended)}`);
+    check(drafterTab && ended?.ended === 'Testing agent stopped without a suite.' && ended.askAgain && ended.show && !ended.drawing && !ended.ask, `the draft ends with Ask again and Show terminal: ${JSON.stringify(ended)}`);
     await capture('suite-draft-ended');
     const pastesBefore = pasteWrites.length;
     await js("document.querySelector('#testing .tst-ask-again')?.click()");
@@ -173,7 +173,7 @@ export async function suiteDraftCheck(kit: Kit, win: BrowserWindow): Promise<voi
     await js("PastelTerm.testing.isOpen() || document.getElementById('testing-button').click()");
     await pickTask('t-edit');
     const gone = await waitFor(async () => { const s = await screen(); return s.ended ? s : null; }, 10000);
-    check(editTab && gone?.ended === 'The testing agent stopped without a suite.' && gone.askAgain && gone.show, `a closed terminal ends the draft, with Ask again and Show terminal: ${JSON.stringify({ gone, editSession, editTab, screen: gone ? null : await screen(), lane: gone ? null : await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.state, l.status])") })}`);
+    check(editTab && gone?.ended === 'Testing agent stopped without a suite.' && gone.askAgain && gone.show, `a closed terminal ends the draft, with Ask again and Show terminal: ${JSON.stringify({ gone, editSession, editTab, screen: gone ? null : await screen(), lane: gone ? null : await js("PastelTerm.testing.state().agents.lanes.map((l) => [l.role, l.state, l.status])") })}`);
     const resumesBefore = testingFixture.resumes.length;
     await js("document.querySelector('#testing .tst-ask-again')?.click()");
     const resumed = await waitFor(() => testingFixture.resumes.slice(resumesBefore).find((r) => r.sessionId === editSession) ?? null, 5000);

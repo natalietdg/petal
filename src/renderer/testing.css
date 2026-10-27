@@ -1,4 +1,4 @@
-/* Testing: replaces the reader below the dock, like the Library. Task picker and the task's stage strip on top, results left, history and stack right. */
+/* Testing: replaces the reader below the dock, like the Library. Three sections left (Suite, Scenarios & bugs, Agents), history and stack right. */
 #reader-area > #testing { order: 1; flex: 1; min-height: 0; }
 #reader-area:has(> #testing:not([hidden])) #sessions-dock { background: none; }
 
@@ -88,7 +88,7 @@
 
 /* ---- The pipeline strip: chips joined left to right; it scrolls sideways rather than squeezing. */
 .tst-strip { overflow-x: auto; padding: 4px 2px 6px; }
-.tst-pipeline { display: flex; align-items: stretch; gap: 0; margin: 0; padding: 0; list-style: none; }
+.tst-suite-strip { display: flex; align-items: stretch; gap: 0; margin: 0; padding: 0; list-style: none; }
 .tst-stage-item { position: relative; display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 140px; max-width: 220px; flex: 1 1 0; }
 .tst-stage-item + .tst-stage-item { margin-left: 28px; }
 .tst-stage-item + .tst-stage-item::before {
@@ -150,6 +150,10 @@
 
 /* ---- Body: results and the side column; the side drops below on narrow windows. */
 .tst-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 20px; align-items: start; }
+.tst-main { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.tst-zone { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tst-zone + .tst-zone { padding-top: 16px; border-top: 1px solid var(--rule); }
+.tst-zone-title { margin: 0; font: 600 1.2em/1.2 var(--display-font); letter-spacing: -0.01em; }
 @container (max-width: 1000px) { .tst-body { grid-template-columns: minmax(0, 1fr); } }
 .tst-section-title { margin: 4px 0 8px; font: 700 15px var(--ui-font); }
 .tst-sub { margin: 12px 0 6px; color: var(--muted); font: 700 12.5px var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
@@ -254,7 +258,7 @@
 .tst-other::before { content: '▸ '; }
 .tst-other[aria-expanded="true"]::before { content: '▾ '; }
 .tst-other-list { margin: 0 0 4px 28px; padding: 0; list-style: none; color: var(--muted); font: 12px var(--mono-font); overflow-wrap: anywhere; }
-.tst-make-pipeline { margin-top: 4px; }
+.tst-make-suite { margin-top: 4px; }
 .tst-picker { display: flex; flex-direction: column; gap: 8px; }
 .tst-picker-title { margin: 0; font-weight: 600; }
 .tst-picker-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -309,30 +313,13 @@
 .tst-loop-step.is-done { color: var(--reader-fg); }
 .tst-loop-step.is-current { border-color: var(--next-ink); background: var(--reader-bg); color: var(--next-ink); font-weight: 700; }
 
-.tst-loop-live { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
-.tst-loop-live-item { display: inline-flex; align-items: center; gap: 6px; }
-.tst-loop-live-name { font-weight: 600; }
-.tst-loop-live-word { color: var(--muted); }
 
-.tst-criteria { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; }
-@container (max-width: 760px) { .tst-criteria { grid-template-columns: minmax(0, 1fr); } }
-.tst-crit-notes { grid-column: 1 / -1; font-size: 12.5px; }
-.tst-crit-col { min-width: 0; }
-.tst-crit-head { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+.tst-crit-notes { font-size: 12.5px; }
 .tst-crit-count { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
-.tst-crit-list { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
-.tst-crit { padding: 5px 0; border-top: 1px solid var(--rule); }
-.tst-crit-line { display: flex; align-items: center; gap: 8px; }
-.tst-crit-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tst-crit-tag { padding: 0 8px; border-radius: 999px; background: var(--code-bg); color: var(--reader-fg); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.tst-crit-tag.is-pass, .tst-crit-tag.is-fixed { background: var(--done-pill); color: var(--done-ink); }
-.tst-crit-tag.is-fail { background: var(--decide-pill); color: var(--decide-ink); }
-.tst-crit-tag.is-flaky { background: var(--watch-pill); color: var(--watch-ink); }
 .tst-crit-tag.is-regression { background: var(--why-pill); color: var(--why-ink); }
 .tst-crit-tag.is-source { background: var(--next-pill); color: var(--next-ink); font-weight: 600; }
 .tst-crit-meta { margin: 1px 0 0 18px; color: var(--muted); font: 12px var(--mono-font); overflow-wrap: anywhere; }
-.tst-dot.is-flaky { border-color: var(--watch-ink); border-style: dashed; }
-.tst-dot.is-fixed { border-color: var(--done-ink); background: var(--reader-bg); box-shadow: inset 0 0 0 2px var(--done-ink); }
 .tst-loop-about { font-size: 13px; margin: 2px 0 10px; max-width: 72ch; }
 
 /* ---- The loop's two agents: a lane each, then the bug queue between them. */
@@ -363,19 +350,8 @@
 .tst-agent-step.is-petal .tst-agent-step-text { color: var(--muted); font-style: italic; }
 .tst-agent-step-more > summary { cursor: pointer; list-style-position: outside; }
 .tst-agent-step-detail { max-height: 220px; margin: 4px 0; padding: 6px 8px; overflow: auto; border-radius: 6px; background: var(--code-bg); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tst-queue { display: flex; flex-direction: column; gap: 4px; }
 .tst-close-agents { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--reader-fg); font-size: 13px; }
 .tst-close-agents .tst-sep { color: var(--muted); }
-.tst-queue-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; font-size: 13px; }
-.tst-queue-count { color: var(--muted); }
-.tst-queue-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.tst-queue-bug { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 13px; }
-.tst-queue-state { min-width: 8.5em; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-.tst-queue-state.is-open { color: var(--decide-ink); }
-.tst-queue-state.is-fixing { color: var(--next-ink); }
-.tst-queue-state.is-verified { color: var(--done-ink); }
-.tst-queue-name { min-width: 0; overflow-wrap: anywhere; }
-.tst-queue-when { color: var(--muted); font-size: 12px; }
 :is(.tst-agent-log-head, .tst-agent-step-more > summary):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 .tst-agent-views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 999px; align-self: flex-start; }
 .tst-agent-view { padding: 2px 12px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 12px var(--ui-font); cursor: pointer; }
@@ -435,6 +411,11 @@
 .tst-crit-status.is-pass, .tst-crit-status.is-fixed { background: var(--done-pill); color: var(--done-ink); }
 .tst-crit-status.is-fail, .tst-crit-status.is-open { background: var(--decide-pill); color: var(--decide-ink); }
 .tst-crit-status.is-blocked, .tst-crit-status.is-flaky { background: var(--watch-pill); color: var(--watch-ink); }
+/* A bug the loop's queue holds: its queue state in place of its criteria status. */
+.tst-crit-status.is-recheck, .tst-crit-status.is-fixing { background: var(--next-pill); color: var(--next-ink); }
+.tst-crit-status.is-verify { background: var(--watch-pill); color: var(--watch-ink); }
+.tst-crit-status.is-verified { background: var(--done-pill); color: var(--done-ink); }
+.tst-bug-counts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 6px; color: var(--muted); font-size: 13px; }
 .tst-crit-details { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; flex: 1 1 100%; margin: 4px 0 0; font-size: 13px; }
 .tst-crit-details dt { color: var(--muted); font-weight: 700; }
 .tst-crit-details dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }

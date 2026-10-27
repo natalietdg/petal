@@ -1,21 +1,17 @@
 // The two agents of a task's test loop, side by side: a lane each (her name for it, what it is doing, its conversation
 // and message box, its live terminal on demand, tokens so far, an action log), the last round's tokens next to the
-// estimate, then the bug queue between them. testing-agents.ts owns the state and the handoffs.
+// estimate. Their bug queue shows in the Scenarios & bugs list. testing-agents.ts owns the state and the handoffs.
 import { el } from './dom';
-import { when } from './testing-view';
-import { BUG_STATES, BUG_STATE_WORDS, queueCounts, type QueuedBug } from '../shared/bug-queue';
+import { statusDot } from './testing-view';
+import type { QueuedBug } from '../shared/bug-queue';
 import { roundSummaries, type AgentAction } from '../shared/agent-actions';
 import { AGENT_NAME_MAX, type AgentRole } from '../shared/agent-names';
 import { tokenText, usageText, type RoundEstimate } from '../shared/token-usage';
 import { render } from './markdown';
 import type { ChatTurn, LaneTerminal } from '../shared/agent-chat';
 import type { AgentState, LoopEvent } from '../shared/testing';
-import type { CriteriaItem } from '../shared/test-loop';
-import { SOURCE_WORD } from './testing-loop-view';
 
 const LOG_PAGE = 20;
-
-export type PetalEvent = LoopEvent;
 
 export interface LaneModel {
   role: AgentRole;
@@ -34,18 +30,17 @@ export interface LaneModel {
   needsYou: boolean; // a prompt on its screen waits on her
   tokens: Spent | null; // null before it started
   actions: AgentAction[]; // oldest first
-  events: PetalEvent[]; // Petal's own: handoffs, queue moves, restores, suite changes
+  events: LoopEvent[]; // Petal's own: handoffs, queue moves, restores, suite changes
   turns: ChatTurn[]; // the last few turns of its session, oldest first
   startedAt: number; // when the loop started; 0 before
   note: string; // why her last message didn't go, or that it did
-  review: { scenarios: CriteriaItem[] } | null; // the testing agent's [todo] scenarios she hasn't approved yet
 }
 
 export interface Spent { total: number; cached: number } // cached: the cache reads among them
 
 export interface AgentsModel {
   lanes: LaneModel[];
-  queue: QueuedBug[] | null; // null until the loop starts
+  queue: QueuedBug[] | null; // null until the loop starts; listed in Scenarios & bugs
   estimate: RoundEstimate | null; // tokens per round for both agents
   round: { label: string; tokens: number; cached: number } | null; // the last round's actual tokens, once the loop started
   total: Spent | null; // tokens so far, once an agent started
@@ -72,8 +67,6 @@ export interface AgentsHandlers {
   send: (role: AgentRole, text: string) => void;
   askClose: (asking: boolean) => void; // show or cancel the confirm
   close: () => void;
-  editScenarios: () => void;
-  approveScenarios: () => void;
 }
 
 type LogRow = { at: number; text: string; detail: string; kind: string; tokens: number; cached: number };
@@ -193,35 +186,6 @@ function actionLog(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTM
   return box;
 }
 
-// Scenarios first: the rules tests will be written from, for her to read, edit or accept before their tests exist.
-function scenarioReview(lane: LaneModel, scenarios: CriteriaItem[], on: AgentsHandlers): HTMLElement {
-  const box = el('div', 'tst-scenario-review');
-  box.setAttribute('role', 'group');
-  box.setAttribute('aria-label', 'Scenarios to review');
-  const many = scenarios.length !== 1;
-  box.append(el('p', 'tst-scenario-intro', `${scenarios.length} scenario${many ? 's' : ''} from ${lane.name} wait${many ? '' : 's'} for your review. ${many ? 'Their' : 'Its'} tests get written once you say so.`));
-  const list = el('ul', 'tst-scenario-list');
-  for (const item of scenarios) {
-    const row = el('li', 'tst-scenario');
-    row.append(el('span', 'tst-scenario-name', item.name));
-    if (item.source) row.append(el('span', `tst-crit-tag is-source is-${item.source}`, SOURCE_WORD[item.source]));
-    list.append(row);
-  }
-  const actions = el('div', 'tst-actions');
-  const edit = el('button', 'tst-button tst-edit-scenarios', 'Edit scenarios');
-  edit.type = 'button';
-  edit.title = 'Opens the repo’s criteria file in your editor';
-  edit.addEventListener('click', () => on.editScenarios());
-  const approve = el('button', 'tst-button tst-primary tst-approve-scenarios', 'Looks right · write the tests');
-  approve.type = 'button';
-  approve.title = `Tells ${lane.name} to write the tests`;
-  approve.addEventListener('click', () => on.approveScenarios());
-  actions.append(edit, approve);
-  box.append(list, actions);
-  if (lane.note) box.append(el('p', 'tst-muted tst-agent-note', lane.note));
-  return box;
-}
-
 // Terminal shows or hides its live terminal in the lane; Pop out moves it to the tab bar; Back to lane returns it.
 function terminalButtons(lane: LaneModel, on: AgentsHandlers): HTMLElement[] {
   const link = (cls: string, text: string, onClick: () => void): HTMLButtonElement => {
@@ -260,9 +224,7 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
     head.append(group);
   }
   const facts = el('p', 'tst-agent-status');
-  const dot = el('span', `tst-dot is-${lane.needsYou ? 'needs-you' : lane.busy ? 'running' : 'waiting'}`);
-  dot.setAttribute('aria-hidden', 'true');
-  facts.append(dot, el('span', lane.needsYou ? 'tst-agent-needs' : null, lane.status));
+  facts.append(statusDot(lane.needsYou ? 'needs-you' : lane.busy ? 'running' : 'waiting'), el('span', lane.needsYou ? 'tst-agent-needs' : null, lane.status));
   if (lane.needsYou && !lane.termOpen && lane.terminal !== 'elsewhere') { // the prompt waits in its terminal
     const show = el('button', 'tst-link tst-agent-show', 'Show terminal');
     show.type = 'button';
@@ -274,7 +236,6 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
   if (!lane.started) return box;
   if (lane.terminalNote) box.append(el('p', 'tst-muted tst-agent-where', lane.terminalNote));
   if (lane.termBox) box.append(lane.termBox);
-  if (lane.review) box.append(scenarioReview(lane, lane.review.scenarios, on)); // her review comes before chat, which stays open
   const view = model.view[lane.role] ?? 'chat';
   const switcher = el('div', 'tst-agent-views');
   switcher.setAttribute('role', 'group');
@@ -291,25 +252,6 @@ function laneEl(lane: LaneModel, model: AgentsModel, on: AgentsHandlers): HTMLEl
   return box;
 }
 
-function queueEl(queue: QueuedBug[]): HTMLElement {
-  const box = el('section', 'tst-queue');
-  box.setAttribute('aria-label', 'Bug queue');
-  const counts = queueCounts(queue);
-  const head = el('p', 'tst-queue-head');
-  head.append(el('strong', null, 'Bug queue'), ...BUG_STATES.filter((s) => counts[s] || s !== 'recheck').map((s) => el('span', `tst-queue-count is-${s}`, `${BUG_STATE_WORDS[s]} ${counts[s]}`)));
-  box.append(head);
-  if (!queue.length) { box.append(el('p', 'tst-muted', 'No bugs yet. Bugs the testing agent files show here.')); return box; }
-  const list = el('ul', 'tst-queue-list');
-  for (const bug of [...queue].sort((a, b) => BUG_STATES.indexOf(a.state) - BUG_STATES.indexOf(b.state) || a.since - b.since)) {
-    const item = el('li', `tst-queue-bug is-${bug.state}`);
-    item.dataset.bug = bug.key;
-    item.append(el('span', `tst-queue-state is-${bug.state}`, BUG_STATE_WORDS[bug.state]), el('span', 'tst-queue-name', `${bug.name}${bug.rechecked ? ' · rechecked' : ''}`), el('span', 'tst-queue-when', when(bug.since)));
-    list.append(item);
-  }
-  box.append(list);
-  return box;
-}
-
 export function agentsPanel(model: AgentsModel, on: AgentsHandlers): HTMLElement {
   const box = el('div', 'tst-agents');
   const lanes = el('div', 'tst-agent-lanes');
@@ -319,7 +261,6 @@ export function agentsPanel(model: AgentsModel, on: AgentsHandlers): HTMLElement
   if (!model.queue && e) box.append(el('p', 'tst-muted tst-agent-estimate', `About ${tokenText(e.tokens)} tokens per round for both agents. ${e.rounds ? `The average of this task’s last ${e.rounds === 1 ? 'round' : `${e.rounds} rounds`}.` : 'A rough estimate from the briefs and the last run’s output.'}`));
   if (model.round) box.append(el('p', 'tst-muted tst-agent-round', `${model.round.label}: ${usageText(model.round.tokens, model.round.cached)} for both agents${e ? ` · about ${tokenText(e.tokens)} estimated per round${e.rounds ? '' : ' (rough)'}` : ''}`));
   if (model.total !== null) box.append(el('p', 'tst-muted tst-agent-total', `${usageText(model.total.total, model.total.cached)} so far${model.queue ? ' for both agents' : ''}`));
-  if (model.queue) box.append(queueEl(model.queue));
   if (model.close) box.append(closeRow(model.close, on));
   return box;
 }

@@ -71,8 +71,8 @@ export function noTasks(): HTMLElement {
   return box;
 }
 
-// draftEnded: the testing agent stopped with no suite; askAgain then stands where Ask Claude was.
-export interface NoSuiteActions { askClaude: () => void; showDraft: (() => void) | null; draftEnded: boolean; askAgain: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null; askEstimate?: string | null; scenariosReady?: boolean }
+// draftEnded: the testing agent stopped with no suite; askAgain then stands where Ask Claude was. tester: her name for it.
+export interface NoSuiteActions { tester: string; askClaude: () => void; showDraft: (() => void) | null; draftEnded: boolean; askAgain: () => void; seed: (() => void) | null; edit: () => void; fromRuns: (() => void) | null; askEstimate?: string | null; scenariosReady?: boolean }
 
 export function noSuite(actions: NoSuiteActions, seedProblem: string | null, busy: boolean): HTMLElement {
   const box = el('div', 'tst-no-suite');
@@ -86,7 +86,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
   const row = el('div', 'tst-actions');
   let ended: HTMLElement | null = null;
   if (actions.draftEnded) {
-    ended = el('p', 'tst-muted tst-draft-ended', 'The testing agent stopped without a suite.');
+    ended = el('p', 'tst-muted tst-draft-ended', `${actions.tester} stopped without a suite.`);
     ended.setAttribute('role', 'status');
     row.append(button('tst-ask-again', 'Ask again', actions.askAgain, true));
     if (actions.showDraft) {
@@ -96,7 +96,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     }
   } else if (actions.showDraft) {
     // While its testing agent draws, a status stands where Ask Claude was, so a second agent can't be started.
-    const status = el('span', 'tst-button tst-drawing', actions.scenariosReady ? 'Scenarios ready for your review above' : 'Testing agent is drawing up the suite');
+    const status = el('span', 'tst-button tst-drawing', actions.scenariosReady ? 'Scenarios ready for your review below' : `${actions.tester} is drawing up the suite`);
     status.setAttribute('role', 'status');
     status.setAttribute('aria-disabled', 'true');
     const show = button('tst-show-draft', 'Show terminal', actions.showDraft, true);
@@ -104,7 +104,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
     row.append(status, show);
   } else row.append(button('tst-ask-suite', 'Ask Claude to draw one up', actions.askClaude, true));
   if (actions.seed) row.append(button('tst-seed-suite', 'Start from the project’s commands', actions.seed));
-  if (actions.fromRuns) row.append(button('tst-make-pipeline', 'Start from Claude’s checks', actions.fromRuns));
+  if (actions.fromRuns) row.append(button('tst-make-suite', 'Start from Claude’s checks', actions.fromRuns));
   row.append(button('tst-edit-suite', 'Add stages yourself', actions.edit));
   box.append(el('p', 'tst-empty tst-no-suite-title', 'No suite for this repo yet'), ...(ended ? [ended] : []), row);
   if (!actions.showDraft && !actions.draftEnded && actions.askEstimate) box.append(el('p', 'tst-estimate tst-ask-estimate', actions.askEstimate)); // under Ask Claude to draw one up
@@ -137,13 +137,12 @@ export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => vo
 
 // "Lock tests", a Keep or Restore question for each locked test weakened outside Claude, a red line for each one a
 // session weakened and Petal put back, and each edit the lock refused.
-export function lockBar(lock: LockView, restored: RestoredFlag[], names: { tester: string; fixer: string }, handlers: LockHandlers, busy: boolean): HTMLElement {
+export function lockBar(lock: LockView, restored: RestoredFlag[], names: { tester: string; fixer: string }, handlers: LockHandlers): HTMLElement {
   const box = el('div', 'tst-lock');
   const label = el('label', 'tst-toggle tst-lock-toggle');
   const box2 = el('input');
   box2.type = 'checkbox';
   box2.checked = lock.enabled && lock.hookPresent;
-  box2.disabled = busy;
   box2.addEventListener('change', () => handlers.toggle(box2.checked));
   label.append(box2, el('span', null, 'Lock tests'), el('span', 'tst-muted', 'Any session may add or fix tests; none may delete, skip or weaken one. Adds one hook to your Claude settings, not the repo.'));
   box.append(label);
@@ -151,7 +150,7 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], names: { teste
   const asks = restored.filter((f) => f.by === 'unconfirmed');
   if (asks.length) {
     const list = el('ul', 'tst-lock-flags');
-    list.append(...asks.map((flag) => unconfirmedRow(flag, handlers.resolve, busy)));
+    list.append(...asks.map((flag) => unconfirmedRow(flag, handlers.resolve)));
     box.append(list);
   }
   const done = restored.filter((f) => f.by !== 'unconfirmed');

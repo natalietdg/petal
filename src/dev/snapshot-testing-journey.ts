@@ -97,7 +97,7 @@ export async function testingJourneyCheck(kit: Kit, win: BrowserWindow): Promise
     fs.appendFileSync(logOf(TESTER), say(TESTER, 'j1', 'draw up the suite', 'Wrote the first scenario for **Account email**. It waits for your review.'));
     put(petalFileOf(project, 'criteria.md'), ['# Test criteria', '', '## Scenarios', `- [todo] ${SCENARIO} · task: ${TASK}`, '', '## Bugs', ''].join('\n'));
     const ready = await waitLane('tester', (l) => l.status === 'Scenarios ready' && l.turns > 0);
-    check(ready && await js("Boolean(document.querySelector('#testing .tst-approve-scenarios'))"), `its lane shows the conversation and the scenario review: ${JSON.stringify(ready)}`);
+    check(ready && await js("Boolean(document.querySelector('#testing .tst-criteria-panel .tst-approve-scenarios'))"), `its lane shows the conversation; the scenario review shows in Scenarios & bugs: ${JSON.stringify(ready)}`);
     await js("document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-terminal')?.click()");
     const mounted = await waitLane('tester', (l) => l.mounted === firstHost, 4000);
     check(mounted && await js("Boolean(document.querySelector('#testing .tst-agent-lane[data-role=\"tester\"] .tst-agent-term .term-host'))"), `Terminal mounts its live terminal in the lane: ${JSON.stringify(mounted)}`);

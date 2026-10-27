@@ -1,12 +1,11 @@
 // Suite health in the Testing tab: flaky, never-failing, slowest and duplicate-looking tests from the run history,
 // and a fast core stage to run first. Recommendations only; nothing here deletes or skips a test.
 import { el } from './dom';
+import { duration } from './testing-view';
 import { testLabel } from '../shared/testing-history';
 import { CORE_STAGE_ID, STEADY_RUNS, type SuiteHealth } from '../shared/suite-health';
 
 export interface HealthHandlers { addCore: (command: string) => void }
-
-const seconds = (ms: number): string => (ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10_000 ? 0 : 1)}s` : `${ms}ms`);
 
 function group(title: string, hint: string, rows: { name: string; meta: string; tone?: string }[]): HTMLElement | null {
   if (!rows.length) return null;
@@ -61,7 +60,7 @@ export function healthPanel(health: SuiteHealth, stages: readonly { id: string; 
 
   const groups = [
     group('Flaky', 'Passed and failed close together, or kept changing. Fix or quarantine before trusting a red run.', health.flaky.map((t) => ({ name: testLabel(t), meta: `${t.passes} pass · ${t.fails} fail`, tone: 'flaky' }))),
-    group('Slowest', 'Median time per run.', health.slowest.map((t) => ({ name: testLabel(t), meta: seconds(t.medianMs) }))),
+    group('Slowest', 'Median time per run.', health.slowest.map((t) => ({ name: testLabel(t), meta: duration(t.medianMs) }))),
     group('Never failed', `Passed in every one of ${STEADY_RUNS}+ runs. Keep them, but they need not run first.`, health.steady.map((t) => ({ name: testLabel(t), meta: `${t.runs} runs` }))),
     group('Look duplicated', 'The same test name in more than one file.', health.duplicates.map((d) => ({ name: d.title, meta: d.files.map((f) => f.split('/').pop()).join(', ') }))),
   ].filter((g): g is HTMLElement => g !== null);

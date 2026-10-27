@@ -50,9 +50,9 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     const lane = v.querySelector('.tst-agent-lane[data-role="tester"]');
     return {
       lane: lane?.querySelector('.tst-agent-status')?.children[1]?.textContent ?? null, // the word after its dot
-      scenarios: [...v.querySelectorAll('.tst-scenario .tst-scenario-name')].map((n) => n.textContent),
-      sources: [...v.querySelectorAll('.tst-scenario .is-source')].map((n) => n.textContent),
-      edit: !!v.querySelector('.tst-edit-scenarios'), approve: !!v.querySelector('.tst-approve-scenarios'),
+      scenarios: [...v.querySelectorAll('.tst-criteria-panel .tst-scenario .tst-scenario-name')].map((n) => n.textContent),
+      sources: [...v.querySelectorAll('.tst-criteria-panel .tst-scenario .is-source')].map((n) => n.textContent),
+      edit: !!v.querySelector('.tst-criteria-panel .tst-edit-scenarios'), approve: !!v.querySelector('.tst-criteria-panel .tst-approve-scenarios'),
       drawing: v.querySelector('.tst-drawing')?.textContent ?? null, ended: !!v.querySelector('.tst-draft-ended'),
     };
   })()`);
@@ -112,8 +112,8 @@ export async function scenariosFirstCheck(kit: Kit, win: BrowserWindow): Promise
     ]));
     fs.appendFileSync(logOf(DRAFTER), say(DRAFTER, 's1', 'go on', 'The scenarios are ready for review in Petal’s Testing tab.'));
     const ready = await waitScreen((s) => s.lane === 'Scenarios ready' && s.scenarios.length === 3);
-    check(drafterTab && ready && ready.edit && ready.approve && !ready.ended, `the lane reads Scenarios ready with both actions: ${JSON.stringify(ready ?? await screen())}`);
-    check(ready?.sources.join('|') === 'from the task notes|from the PRD' && ready.drawing === 'Scenarios ready for your review above', `sources are tagged and the strip points at the review: ${JSON.stringify(ready && { sources: ready.sources, drawing: ready.drawing })}`);
+    check(drafterTab && ready && ready.edit && ready.approve && !ready.ended, `the lane reads Scenarios ready; the review and both actions sit in Scenarios & bugs: ${JSON.stringify(ready ?? await screen())}`);
+    check(ready?.sources.join('|') === 'from the task notes|from the PRD' && ready.drawing === 'Scenarios ready for your review below', `sources are tagged and the strip points down at the review in Scenarios & bugs: ${JSON.stringify(ready && { sources: ready.sources, drawing: ready.drawing })}`);
     await capture('scenarios-first-ready');
 
     // 3 Edit scenarios opens only the repo's criteria file, in Petal.

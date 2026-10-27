@@ -1,7 +1,7 @@
 // The Testing tab's pieces, built from data: a suite's stage strip, a stage's grouped results, history with its trend,
 // and what the project tests with. testing.ts owns the state and wires the handlers passed in here.
 import { el } from './dom';
-import { groupByFile, passRate, type PipelineRun, type StageConfig, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
+import { groupByFile, passRate, type SuiteRun, type StageConfig, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
 import { chartRuns, resultText, runDuration, runTitle, runWhy, shortCommand, type HistoryDay, type RunRow } from '../shared/testing-history';
 
 const TREND_RUNS = 20;
@@ -23,21 +23,25 @@ export function when(at: number, now = Date.now()): string {
   return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export const byLabel = (run: PipelineRun): string => (run.by === 'claude' ? 'by Claude' : run.trigger === 'auto' ? 'auto, after Claude’s turn' : 'by you');
+export const byLabel = (run: SuiteRun): string => (run.by === 'claude' ? 'by Claude' : run.trigger === 'auto' ? 'auto, after Claude’s turn' : 'by you');
 
-const dot = (status: string): HTMLElement => {
+// A status dot; with a label it is read out, else hidden from screen readers.
+export function statusDot(status: string, label?: string): HTMLElement {
   const node = el('span', `tst-dot is-${status}`);
-  node.setAttribute('aria-hidden', 'true');
+  if (label) {
+    node.setAttribute('role', 'img');
+    node.setAttribute('aria-label', label);
+  } else node.setAttribute('aria-hidden', 'true');
   return node;
-};
+}
 
 // ---- The suite: stage chips left to right, joined by a line.
 export interface StripHandlers { select: (stageId: string) => void; runStage: (stageId: string) => void }
 
-export function pipelineStrip(pipeline: { stages: StageConfig[] }, resultOf: (stageId: string) => StageResult | null, selected: string | null, handlers: StripHandlers, busy: boolean): HTMLElement {
-  const list = el('ol', 'tst-pipeline');
+export function suiteStrip(suite: { stages: StageConfig[] }, resultOf: (stageId: string) => StageResult | null, selected: string | null, handlers: StripHandlers, busy: boolean): HTMLElement {
+  const list = el('ol', 'tst-suite-strip');
   list.setAttribute('aria-label', 'Suite stages');
-  pipeline.stages.forEach((stage, i) => {
+  suite.stages.forEach((stage, i) => {
     const result = resultOf(stage.id);
     const status: StageStatus = result?.status ?? 'waiting';
     const item = el('li', `tst-stage-item is-${status}`);
@@ -47,7 +51,7 @@ export function pipelineStrip(pipeline: { stages: StageConfig[] }, resultOf: (st
     chip.setAttribute('aria-pressed', String(stage.id === selected));
     chip.title = stage.command;
     const meta = [STATUS_WORD[status], duration(result?.durationMs ?? null), result && (result.counts.failed || result.counts.passed) ? `${result.counts.failed ? `${result.counts.failed} failed` : `${result.counts.passed} passed`}` : ''].filter(Boolean).join(' · ');
-    chip.append(dot(status), el('span', 'tst-stage-text'));
+    chip.append(statusDot(status), el('span', 'tst-stage-text'));
     chip.lastElementChild?.append(el('span', 'tst-stage-name', stage.name), el('span', 'tst-stage-meta', meta));
     chip.setAttribute('aria-label', `Stage ${i + 1}, ${stage.name}: ${meta}`);
     chip.addEventListener('click', () => handlers.select(stage.id));
@@ -84,7 +88,7 @@ function fixActions(label: string, title: string, fix: (where: FixWhere) => void
   return box;
 }
 
-function summaryBar(stage: StageResult, run: PipelineRun, handlers: ResultHandlers): HTMLElement {
+function summaryBar(stage: StageResult, run: SuiteRun, handlers: ResultHandlers): HTMLElement {
   const bar = el('div', `tst-sumbar is-${stage.status}`);
   const counts = el('div', 'tst-counts');
   const pill = (n: number, word: string, cls: string) => { const p = el('span', `tst-count ${cls}`); p.append(el('strong', null, String(n)), ` ${word}`); return p; };
@@ -100,10 +104,7 @@ function summaryBar(stage: StageResult, run: PipelineRun, handlers: ResultHandle
 function testRow(stage: StageResult, test: TestCase, handlers: ResultHandlers): HTMLElement {
   const row = el('li', `tst-row is-${test.status}`);
   const line = el('div', 'tst-row-line');
-  line.append(dot(test.status), el('span', 'tst-row-name', test.name), el('span', 'tst-row-time', duration(test.durationMs)));
-  line.querySelector('.tst-dot')?.setAttribute('aria-label', test.status);
-  line.querySelector('.tst-dot')?.removeAttribute('aria-hidden');
-  line.querySelector('.tst-dot')?.setAttribute('role', 'img');
+  line.append(statusDot(test.status, test.status), el('span', 'tst-row-name', test.name), el('span', 'tst-row-time', duration(test.durationMs)));
   row.append(line);
   if (test.status === 'failed') {
     if (test.failure) {
@@ -118,7 +119,7 @@ function testRow(stage: StageResult, test: TestCase, handlers: ResultHandlers): 
   return row;
 }
 
-export function stageResults(stage: StageResult | null, run: PipelineRun | null, handlers: ResultHandlers): HTMLElement {
+export function stageResults(stage: StageResult | null, run: SuiteRun | null, handlers: ResultHandlers): HTMLElement {
   const box = el('div', 'tst-results-body');
   if (!stage || !run) {
     box.append(el('p', 'tst-empty', 'This stage hasn’t run yet. Run it alone or run the whole suite.'));
@@ -132,7 +133,7 @@ export function stageResults(stage: StageResult | null, run: PipelineRun | null,
     details.open = group.failed;
     const summary = el('summary', 'tst-group-head');
     const tally = [group.counts.failed && `${group.counts.failed} failed`, group.counts.passed && `${group.counts.passed} passed`, group.counts.skipped && `${group.counts.skipped} skipped`].filter(Boolean).join(' · ');
-    summary.append(dot(group.failed ? 'failed' : group.counts.passed ? 'passed' : 'skipped'), el('span', 'tst-group-file', group.file), el('span', 'tst-group-tally', tally));
+    summary.append(statusDot(group.failed ? 'failed' : group.counts.passed ? 'passed' : 'skipped'), el('span', 'tst-group-file', group.file), el('span', 'tst-group-tally', tally));
     const rows = el('ul', 'tst-rows');
     for (const test of group.tests) rows.append(testRow(stage, test, handlers));
     details.append(summary, rows);
@@ -151,9 +152,9 @@ export function stageResults(stage: StageResult | null, run: PipelineRun | null,
 }
 
 // ---- History: pass rate and seconds per stage for the last runs with results, oldest left; then the run list.
-const seconds = (ms: number): string => (ms >= 60000 ? `${Math.round(ms / 60000)}m` : `${Math.round(ms / 1000)}s`);
+const axisTime = (ms: number): string => (ms >= 60000 ? `${Math.round(ms / 60000)}m` : `${Math.round(ms / 1000)}s`); // whole minutes or seconds, for the chart's axis
 
-export function trend(allRuns: PipelineRun[], stageIds: string[], stageNames: string[] = []): HTMLElement {
+export function trend(allRuns: SuiteRun[], stageIds: string[], stageNames: string[] = []): HTMLElement {
   const recent = chartRuns(allRuns, TREND_RUNS).reverse();
   const box = el('div', 'tst-trend');
   box.setAttribute('role', 'img');
@@ -184,7 +185,7 @@ export function trend(allRuns: PipelineRun[], stageIds: string[], stageNames: st
   const rateRow = el('div', 'tst-chart');
   rateRow.append(rate, axis('100%'));
   const timeRow = el('div', 'tst-chart');
-  timeRow.append(times, axis(timed ? seconds(longest) : ''));
+  timeRow.append(times, axis(timed ? axisTime(longest) : ''));
   box.append(
     el('span', 'tst-trend-label', `Pass rate · last ${recent.length} runs`), rateRow,
     el('span', 'tst-trend-label', `Stage time · seconds per stage, last ${recent.length} runs`), timeRow,
@@ -208,7 +209,7 @@ function runButton(row: RunRow, selectedId: string | null, choose: (id: string) 
   button.setAttribute('aria-pressed', String(row.repeats.some((r) => r.id === selectedId)));
   button.title = run.stages.map((s) => s.command).join('\n');
   const top = el('span', 'tst-run-top');
-  top.append(dot(run.state), el('span', 'tst-run-name', row.title), el('span', `tst-by${run.by === 'claude' ? ' is-claude' : ''}`, row.by));
+  top.append(statusDot(run.state), el('span', 'tst-run-name', row.title), el('span', `tst-by${run.by === 'claude' ? ' is-claude' : ''}`, row.by));
   button.append(top);
   if (row.why) button.append(el('span', 'tst-run-why', row.why));
   const result = el('span', 'tst-run-meta');

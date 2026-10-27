@@ -7,7 +7,7 @@ import { agentsPanel, keepTurnsScroll, type AgentsModel, type LaneModel } from '
 import { latestLoop, phaseWord, type LoopProgress } from '../shared/loop-line';
 import { IDLE_GIVE_UP_MS, buildFixerBrief, buildLoopBrief, isActive, loopStatus, ticketInText, type CriteriaItem, type LoopStatus } from '../shared/test-loop';
 import { queueDone, type SentBug } from '../shared/bug-queue';
-import { laneWord, needsNotice, newlyWaiting, NEEDS_YOU, SCENARIOS_READY, type LoopNotice } from '../shared/loop-signals';
+import { laneWord, needsNotice, newlyWaiting, NEEDS_YOU, type LoopNotice } from '../shared/loop-signals';
 import { ROLES, agentOf, finishedRounds, isRunning, noEvents, roundLabel, roundTokens } from '../shared/agent-loop';
 import { agentName, type AgentNames, type AgentRole } from '../shared/agent-names';
 import { cachedTokens, estimateRoundTokens, roundEstimate, totalTokens, type RoundEstimate, type TokenUsage } from '../shared/token-usage';
@@ -15,7 +15,7 @@ import type { RepoSuite } from '../shared/repo-suite';
 import { askAgainText, awaitingReview, draftEnded, suiteProblemText } from '../shared/suite-draft';
 import type { AgentAction } from '../shared/agent-actions';
 import { canMessage, chatPlaceholder, chatTurns, isAnswered, laneTerminal, mountStep, routeMessage, sentNote, terminalNote, withPending, type ChatTurn, type LaneTerminal, type PendingMessage } from '../shared/agent-chat';
-import type { AgentView, LoopFacts, LoopView, PipelineRun, StackItem } from '../shared/testing';
+import type { AgentView, LoopFacts, LoopView, StackItem, SuiteRun } from '../shared/testing';
 import type { Prd, Task } from '../shared/tasks';
 import type { Reply } from '../shared/types';
 
@@ -40,7 +40,7 @@ export interface AgentContext {
   suiteDir: () => string | null; // the suite's folder in Petal, holding the repo's suite and criteria
   stack: () => StackItem[];
   names: () => AgentNames;
-  taskRuns: () => PipelineRun[];
+  taskRuns: () => SuiteRun[];
   redraw: () => void; // draws only while Testing is open
   renamed: () => Promise<void>; // reload after a name changed
   say: (text: string) => void; // the loop panel's note
@@ -127,7 +127,7 @@ export function createAgents(ctx: AgentContext) {
     if (!from) return;
     const reply = await window.pastel.testing.openCriteria({ tabId: from, root: ctx.picked() });
     notes.tester = isIpcError(reply) ? `Couldn’t open the file: ${reply.error}` : 'note' in reply ? reply.note : 'Opened in your editor. Save it, then come back here.';
-    draw();
+    ctx.redraw(); // the note shows under the review, in Scenarios & bugs
   }
 
   // A follow-up to the testing agent, through main (which resumes it if needed); a draft's worked counts again from now.
@@ -564,7 +564,6 @@ export function createAgents(ctx: AgentContext) {
       terminal, termOpen, termBox: agent && termOpen ? boxOf(agent.sessionId) : null, terminalNote: terminalNote(terminal), agentNote: agent?.note ?? null,
       tokens: agent && r?.tokens[role] ? { total: totalTokens(r.tokens[role]), cached: cachedTokens(r.tokens[role]) } : null, actions: agent ? r?.actions[role] ?? [] : [], events: agent ? r?.events[role] ?? [] : [],
       turns: r && agent ? laneTurns(r, role, agent) : [], startedAt: r?.startedAt ?? 0, note: notes[role] ?? '',
-      review: status === SCENARIOS_READY ? { scenarios: awaiting() } : null,
     };
   }
 
@@ -602,8 +601,6 @@ export function createAgents(ctx: AgentContext) {
       send: (role, text) => void send(role, text),
       askClose: (asking) => { closeAsking = asking; draw(); },
       close: () => void closeAgents(),
-      editScenarios: () => void editScenarios(),
-      approveScenarios: () => void approveScenarios(),
     }));
     restoreScroll();
     syncTerminals(r);
@@ -634,7 +631,8 @@ export function createAgents(ctx: AgentContext) {
 
   const testerHost = (): string | null => facts().record?.tester?.hostTabId ?? null;
 
-  return { element, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerHost, testerReplies: () => repliesOf(shownLoop(), 'tester'), draft, awaiting, askAgain, askTester, checkDraft, showTerminal, state };
+  const testerNote = (): string => notes.tester ?? '';
+  return { element, facts, refreshLogs, adoptAll, start, stop, sendToFixer, draw, testerHost, testerReplies: () => repliesOf(shownLoop(), 'tester'), draft, awaiting, editScenarios, approveScenarios, testerNote, askAgain, askTester, checkDraft, showTerminal, state };
 }
 
 export type Agents = ReturnType<typeof createAgents>;
