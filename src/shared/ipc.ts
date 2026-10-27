@@ -268,7 +268,7 @@ export interface InvokeChannels {
   'prs:deploy-order': { args: [request: { sessionId: string }]; result: Guarded<DeployOrder> };
   'prs:notes-save': { args: [request: { sessionId: string; url: string; notes: PrNotes }]; result: Guarded<PrNotesSaveResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
-  'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null }]; result: Guarded<TestingState> };
+  'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null; picker?: boolean }]; result: Guarded<TestingState> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suite: RepoSuiteView; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent. Each role's open agent is reused (its brief is sent to it),
   // else started under a session id Petal picks. One brief starts or briefs that agent alone.

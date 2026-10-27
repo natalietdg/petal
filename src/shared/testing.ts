@@ -143,7 +143,7 @@ export interface Elsewhere { reason: 'home' | 'no-repo'; sessions: PickSession[]
 export interface TestingState {
   allowed: boolean; // the folder gate; false reads nothing
   project: ProjectRef | null;
-  elsewhere: Elsewhere | null; // set when project is null because the tab is in ~ or outside a repo
+  elsewhere: Elsewhere | null; // set when the tab is in ~ or outside a repo: its picker, or behind Change session when project is the repo its session worked in
   stack: StackItem[];
   proposed: StageConfig[]; // stages detection suggests
   seed: SuiteSeed | null; // the project's commands, offered when the repo has no suite

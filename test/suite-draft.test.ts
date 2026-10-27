@@ -97,7 +97,7 @@ describe('the skill’s bug line', () => {
     const criteria = parseCriteria(`${CRITERIA_SKELETON}${block}\n`);
     expect(criteria.malformed).toBe(0);
     expect(criteria.bugs).toHaveLength(1);
-    expect(criteria.bugs[0]).toMatchObject({ status: 'open', name: 'coupon can take the total below zero', test: { path: 'src/checkout/coupon.test.ts', name: 'caps at the total' }, ticket: 'AB#10427', regression: true });
+    expect(criteria.bugs[0]).toMatchObject({ status: 'open', name: 'coupon can take the total below zero', test: { path: '~/.petal/repos/-home-me-shop-app/tests/src/checkout/coupon.test.ts', name: 'caps at the total' }, ticket: 'AB#10427', regression: true });
     expect(Object.keys(criteria.bugs[0].details)).toEqual(['Steps', 'Expected', 'Actual', 'Env', 'Evidence']);
     expect(openBugs(criteria)).toBe(1);
   });

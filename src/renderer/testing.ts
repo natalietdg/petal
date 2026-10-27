@@ -86,6 +86,7 @@ let message = '';
 let folderAllowed = true;
 let poll: ReturnType<typeof setInterval> | null = null;
 const pickedFor = new Map<string, string>(); // tab id -> the repo of the session she picked there, when the tab is in ~ or outside a repo
+const pickerFor = new Set<string>(); // tabs where she chose Change session: the picker, not the repo the tab's session worked in
 const expanded = new Set<string>(); // history rows opened to their repeats or other commands
 let criteria: Criteria | null = null;
 let distillation: DistillRecord[] = []; // the project's stored rounds, from .petal/distillation.jsonl
@@ -217,10 +218,10 @@ function drawHead(): void {
   const shownDir = data?.project ? data.suite.shownDir : null;
   savedIn.textContent = shownDir ? `Saved in Petal · ${shownDir}` : '';
   savedIn.hidden = !shownDir;
-  if (data?.project && picked()) {
+  if (data?.project && (picked() || data.elsewhere)) {
     const change = el('button', 'tst-link tst-change-session', 'Change session');
     change.type = 'button';
-    change.addEventListener('click', () => { if (sourceTab) pickedFor.delete(sourceTab); target = null; targetPicked = false; selectedRun = null; selectedStage = null; void load(); });
+    change.addEventListener('click', () => { if (sourceTab) { pickedFor.delete(sourceTab); pickerFor.add(sourceTab); } target = null; targetPicked = false; selectedRun = null; selectedStage = null; void load(); });
     summary.append(' · ', change);
   }
   const busy = Boolean(taskRunning());
@@ -448,7 +449,7 @@ async function chooseSession(sessionId: string): Promise<void> {
   if (!id) return;
   const result = await window.pastel.testing.detect(id, null, sessionId);
   if (isIpcError(result)) { message = result.error; drawAll(); return; }
-  if (sourceTab && result.project) pickedFor.set(sourceTab, result.project.root);
+  if (sourceTab && result.project) { pickedFor.set(sourceTab, result.project.root); pickerFor.delete(sourceTab); }
   data = result;
   folderAllowed = result.allowed;
   target = result.sessionTaskId ? { kind: 'task', id: result.sessionTaskId } : null;
@@ -756,7 +757,7 @@ const undoChange = (): Promise<boolean> => suiteCall((request) => window.pastel.
 async function load(): Promise<void> {
   const id = tabId();
   if (!id) return;
-  const result = await window.pastel.testing.detect(id, picked());
+  const result = await window.pastel.testing.detect(id, picked(), null, Boolean(sourceTab && pickerFor.has(sourceTab)));
   if (isIpcError(result)) { message = `Couldn’t read this project: ${result.error}`; drawAll(); return; }
   data = result;
   folderAllowed = result.allowed;
@@ -768,6 +769,7 @@ async function load(): Promise<void> {
 async function refresh(): Promise<void> {
   const id = tabId();
   if (!id || !data) return load();
+  if (!data.project) return; // the picker: nothing of a repo to refresh
   const root = picked();
   const result = await window.pastel.testing.history(id, root);
   if (isIpcError(result) || !data || picked() !== root) return; // a session picked or let go meanwhile: this answer is another repo's

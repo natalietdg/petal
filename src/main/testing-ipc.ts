@@ -58,6 +58,9 @@ import { captureReplies, readDistillation } from './distillation-store';
 import { loadTasks } from './tasks-store';
 import type { Task } from '../shared/tasks';
 import { scopeFacts, taskIdAt } from './testing-tasks';
+import { namedRepo, transcriptRepo } from './session-repo';
+import * as organizer from './session-organizer';
+import * as repoIndex from './repo-index';
 
 const POLL_MS = 1000;
 const GIVE_UP_MS = 3 * 60 * 60 * 1000; // a run with no end marker after 3 hours counts as stopped
@@ -97,13 +100,28 @@ async function cwdOf(session: TabSession): Promise<string | null> {
   return session.feed.session?.cwd ?? (await shellCwd(session.pty.pid));
 }
 
-// The tab's project: the git repo its folder is in; null for the home folder or a folder outside a repo.
-const projectOf = async (session: TabSession | undefined): Promise<string | null> => projectRootOf(session ? await cwdOf(session) : null);
+// The repo a Claude session worked in when its folder names none: its log's file paths, else History's project name.
+async function workedIn(sessionId: string | null | undefined, transcript: string | null | undefined): Promise<string | null> {
+  if (!sessionId) return null;
+  const file = transcript || history.findRecord(sessionId)?.file;
+  const fromLog = file ? await transcriptRepo(file) : null;
+  return fromLog ?? namedRepo(organizer.loadCached()[sessionId]?.project, repoIndex.current()?.repos ?? []);
+}
 
-// A project she picked in Testing (the tab is in ~); taken only when it is itself a repo root, else the tab's.
-async function rootFor(session: TabSession | undefined, picked: unknown): Promise<string | null> {
-  if (typeof picked === 'string' && projectRootOf(picked) === picked) return picked;
-  return projectOf(session);
+// The git repo the tab's folder is in; null for the home folder or a folder outside a repo.
+const folderProject = async (session: TabSession | undefined): Promise<string | null> => projectRootOf(session ? await cwdOf(session) : null);
+
+// The tab's project: its folder's repo, else the repo its Claude session worked in; null when neither.
+async function projectOf(session: TabSession | undefined): Promise<string | null> {
+  if (!session) return null;
+  return (await folderProject(session)) ?? workedIn(session.feed.session?.sessionId, session.feed.session?.transcript);
+}
+
+const isPick = (picked: unknown): picked is string => typeof picked === 'string' && projectRootOf(picked) === picked;
+
+// A project she picked in Testing for this tab; taken only when it is itself a repo root, else the tab's.
+export async function rootFor(session: TabSession | undefined, picked: unknown): Promise<string | null> {
+  return isPick(picked) ? picked : projectOf(session);
 }
 
 // ---- Reading the project: stack, skills, proposal.
@@ -335,15 +353,18 @@ const named = (runs: PipelineRun[]): PipelineRun[] => {
 };
 
 const PICK_MAX = 20;
+const RESOLVE_MAX = 40; // logs read per listing for sessions whose folder is no repo, newest first
 type Candidate = SessionCandidate & { cwd: string | null };
 type Pick = Candidate & { root: string; taskId: string | null; agents: PickAgent[] };
 
 // Her Claude sessions in a repo, for a tab in ~ or outside a repo: the Sessions panel's live ones and History's recent ones.
-// A task's agent sessions are folded into the row of the session owning it.
-function sessionPicks(): Pick[] {
-  const live = panelSessions().map((s): Candidate => ({ sessionId: s.sessionId, cwd: s.cwd, root: projectRootOf(s.cwd), status: s.status === 'busy' ? 'busy' : 'idle', at: s.updatedAt ?? null }));
+// A session in ~ is listed under the repo it worked in. A task's agent sessions are folded into the row of the session owning it.
+async function sessionPicks(): Promise<Pick[]> {
+  const live = panelSessions().map((s): Candidate & { file: string | null } => ({ sessionId: s.sessionId, cwd: s.cwd, root: projectRootOf(s.cwd), status: s.status === 'busy' ? 'busy' : 'idle', at: s.updatedAt ?? null, file: null }));
   const recent = history.listSessions(new Set(), testingClaudeDir()).filter((r) => !r.live)
-    .map((r): Candidate => ({ sessionId: r.sessionId, cwd: r.cwd, root: projectRootOf(r.cwd), status: 'closed', at: r.lastAt }));
+    .map((r): Candidate & { file: string | null } => ({ sessionId: r.sessionId, cwd: r.cwd, root: projectRootOf(r.cwd), status: 'closed', at: r.lastAt, file: r.file }));
+  const rootless = [...live, ...recent].filter((c) => !c.root).sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, RESOLVE_MAX);
+  await Promise.all(rootless.map(async (c) => { c.root = await workedIn(c.sessionId, c.file); }));
   const rows = listedSessions(live, recent, Infinity).map(taskRunActivity());
   return foldAgents(rows, repoAgents(new Set(rows.map((r) => r.root))), PICK_MAX);
 }
@@ -370,7 +391,7 @@ function taskRunActivity(): (c: Candidate & { root: string }) => Candidate & { r
 async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere | null> {
   const cwd = session ? await cwdOf(session) : null;
   if (!cwd) return null;
-  const rows = sessionPicks().map((s): PickSession => ({
+  const rows = (await sessionPicks()).map((s): PickSession => ({
     sessionId: s.sessionId, name: sessionTitleFor(s.sessionId, { cwd: s.cwd }), root: s.root, project: path.basename(s.root), status: s.status,
     suite: fs.existsSync(suiteFile(suiteHome(s.root))), agents: s.agents,
   }));
@@ -378,8 +399,8 @@ async function elsewhereFor(session: TabSession | undefined): Promise<Elsewhere 
 }
 
 // A session she picked from that list: its repo, and its task, made for it now if it owns none. Only a listed session is taken.
-function pickedSession(sessionId: unknown): { root: string; taskId: string } {
-  const picked = listedSession(sessionPicks(), sessionId);
+async function pickedSession(sessionId: unknown): Promise<{ root: string; taskId: string }> {
+  const picked = listedSession(await sessionPicks(), sessionId);
   if (!picked) throw new Error('That session isn’t one of your Claude sessions in a repo.');
   return { root: picked.root, taskId: picked.taskId ?? giveAutoTask(picked.root, { sessionId: picked.sessionId, cwd: picked.cwd }) };
 }
@@ -598,18 +619,21 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
   const blank = (allowed: boolean, elsewhere: Elsewhere | null = null): TestingState => ({ allowed, project: null, elsewhere, stack: [], proposed: [], seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, runs: [], running: [], sessionTab: null, changed: [], runners: [], tasks: [], prds: [], sessionTaskId: null });
 
   // With `session`, the one she picked outside a repo: its repo, and its task as the session's task.
-  handle('testing:detect', async (event, { tabId, root: picked, session }) => {
+  // With `picker`, she asked for the session picker over the repo her session worked in.
+  handle('testing:detect', async (event, { tabId, root: picked, session, picker }) => {
     if (!claudeFolderAllowed()) return blank(false);
     const asking = sessionFor(sessions, event.sender.id, tabId);
     if (session) {
-      const { root, taskId } = pickedSession(session);
+      const { root, taskId } = await pickedSession(session);
       return { ...(await stateFor(root, sessions, await sessionOnProject(root, sessions, asking))), sessionTaskId: taskId };
     }
-    const root = await rootFor(asking, picked);
+    const inFolder = await folderProject(asking);
+    const root = isPick(picked) ? picked : inFolder ?? (picker === true ? null : await projectOf(asking));
     if (!root) return blank(true, await elsewhereFor(asking));
     pruneProject(root, openSessionIds(sessions));
     await giveTabTask(root, asking);
-    return stateFor(root, sessions, await sessionOnProject(root, sessions, asking));
+    const state = await stateFor(root, sessions, await sessionOnProject(root, sessions, asking));
+    return inFolder || isPick(picked) ? state : { ...state, elsewhere: await elsewhereFor(asking) }; // followed: the picker stays one click away
   });
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.

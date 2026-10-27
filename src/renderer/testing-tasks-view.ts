@@ -108,7 +108,7 @@ export function noSuite(actions: NoSuiteActions, seedProblem: string | null, bus
   row.append(button('tst-edit-suite', 'Add stages yourself', actions.edit));
   box.append(el('p', 'tst-empty tst-no-suite-title', 'No suite for this repo yet'), ...(ended ? [ended] : []), row);
   if (!actions.showDraft && !actions.draftEnded && actions.askEstimate) box.append(el('p', 'tst-estimate tst-ask-estimate', actions.askEstimate)); // under Ask Claude to draw one up
-  if (seedProblem) box.append(el('p', 'tst-muted', `The project’s .petal/pipeline.json can’t be used: ${seedProblem}.`));
+  if (seedProblem) box.append(el('p', 'tst-muted', `Petal’s copy of the project’s pipeline.json (~/.petal/repos/…/pipeline.json) can’t be used: ${seedProblem}.`));
   return box;
 }
 
@@ -145,7 +145,7 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], names: { teste
   box2.checked = lock.enabled && lock.hookPresent;
   box2.disabled = busy;
   box2.addEventListener('change', () => handlers.toggle(box2.checked));
-  label.append(box2, el('span', null, 'Lock tests'), el('span', 'tst-muted', 'Any session may add or fix tests; none may delete, skip or weaken one. Adds a hook to this repo’s .claude/settings.local.json.'));
+  label.append(box2, el('span', null, 'Lock tests'), el('span', 'tst-muted', 'Any session may add or fix tests; none may delete, skip or weaken one. Adds one hook to your Claude settings, not the repo.'));
   box.append(label);
   if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from your ~/.claude/settings.json. Turn the lock off and on again.'));
   const asks = restored.filter((f) => f.by === 'unconfirmed');

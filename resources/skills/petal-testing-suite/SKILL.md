@@ -28,10 +28,11 @@ echo "$HOME/.petal/repos/$(dirname "$(git rev-parse --path-format=absolute --git
 
 - `<suite folder>/suite.json`: the stages Petal runs.
 - `<suite folder>/criteria.md`: scenarios, manual checks and bugs.
+- `<suite folder>/tests/`: the test code, mirroring the repo's test layout.
 
 Petal's request may name both paths; use those. Create the folder if it is missing. Read both files first if they exist and keep everything that still applies. Lines other sessions wrote stay as they are.
 
-**Never write suite or criteria files inside the repo** (no `.petal/suite.json`, no `.petal/criteria.md`). The tests themselves are code: they still go in the repo's own test folders. Commands still run in the checkout you are in.
+**Never write suite or criteria files inside the repo** (no `.petal/suite.json`, no `.petal/criteria.md`). Test code lives in Petal too: nothing test-related is written in the repo, no test files, configs or fixtures. Tests already committed in the repo stay where they are. Commands still run in the checkout you are in.
 
 ## 1. Inspect first
 
@@ -62,12 +63,35 @@ Add scenarios under `## Scenarios` in `criteria.md`. Create the file with `## Sc
 
 Say in a few lines what you will add: runners, stages, which scenarios get tests first, anything to install. Then build it.
 
-- **Runners:** reuse what is installed; add one only when nothing fits.
-- **Config:** add it only if missing. Never rewrite working config.
-- **Tests:** real inputs and real assertions; no placeholders or snapshot-only tests. Name each test on its scenario's line, one `test:` part per test:
+- **Where:** test code goes in `<suite folder>/tests/`, mirroring the repo's layout: the repo's `src/refund.test.ts` would be `<suite folder>/tests/src/refund.test.ts`. Source is imported from the checkout, never copied.
+- **Runners:** reuse the repo's runner; add one only when nothing fits.
+- **Config:** a stage runs the repo's runner against `<suite folder>/tests/` with a config kept in the suite folder, whose root is the checkout the stage runs in (`process.cwd()`), so each worktree tests its own code. Never touch the repo's config. For vitest, `<suite folder>/vitest.config.mjs` is a plain object (no imports, so it loads from outside the repo):
+
+```js
+const repo = process.cwd();
+const suite = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
+export default {
+  root: repo,
+  resolve: {
+    alias: [
+      { find: /^@repo\/(.*)$/, replacement: `${repo}/$1` }, // source: import { refund } from '@repo/src/refund'
+      { find: /^([^./\0][^:]*)$/, replacement: `${repo}/node_modules/$1` }, // bare imports from the repo's node_modules
+    ],
+  },
+  server: { fs: { allow: [repo, suite] } },
+  test: {
+    include: [`${suite}/tests/**/*.test.{ts,tsx,js,mjs}`],
+    setupFiles: [`${repo}/test/setup.ts`], // the repo's own setupFiles, if any
+    reporters: ['default'],
+  },
+};
+```
+
+  Its stage command is `npx vitest run --config <suite folder>/vitest.config.mjs`. Other runners follow the same idea: jest with `--rootDir` on the checkout and `--roots` on the suite's tests, playwright with `testDir` in a suite-folder config, maestro with the flow paths under the suite folder.
+- **Tests:** real inputs and real assertions; no placeholders or snapshot-only tests. Name each test on its scenario's line, one `test:` part per test, naming its path in Petal:
 
 ```
-- [pass] a refund larger than the amount paid is refused · test: src/refund.test.ts::refuses over-refund · ticket: AB#10427 · level: regression
+- [pass] a refund larger than the amount paid is refused · test: ~/.petal/repos/-home-me-shop-app/tests/src/refund.test.ts::refuses over-refund · ticket: AB#10427 · level: regression
 ```
 
   `[pass]` once all its tests pass, `[fail]` while any fails, `[todo]` if you can't test it yet (say why).
@@ -88,7 +112,7 @@ Say in a few lines what you will add: runners, stages, which scenarios get tests
 Run every stage you touched. Fix setup and test mistakes. When a test fails because the app is wrong, keep the test and record the bug under `## Bugs`; don't fix app code unless the user asked you to:
 
 ```
-- [open] coupon can take the total below zero · test: src/checkout/coupon.test.ts::caps at the total · ticket: AB#10427
+- [open] coupon can take the total below zero · test: ~/.petal/repos/-home-me-shop-app/tests/src/checkout/coupon.test.ts::caps at the total · ticket: AB#10427
   - Steps: add a RM5 item, apply coupon SAVE10
   - Expected: total RM0.00
   - Actual: total -RM5.00
@@ -108,7 +132,7 @@ Write `suite.json` in the suite folder from step 0, never in the repo: stages in
 {
   "stages": [
     { "name": "Typecheck", "command": "npm run typecheck", "level": "smoke" },
-    { "name": "Unit", "command": "npm test", "level": "regression" },
+    { "name": "Unit", "command": "npx vitest run --config ~/.petal/repos/-home-me-shop-app/vitest.config.mjs", "level": "regression" },
     { "name": "Staging e2e", "command": "npm run e2e:staging", "level": "staging", "optIn": true, "note": "needs VPN and a staging login" }
   ]
 }

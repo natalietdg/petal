@@ -384,7 +384,7 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     if (fixerTab) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(fixerTab)})`);
     check(await waitFor(() => (fixerTab && !agentTerminals().includes(fixerTab)) || null, 8000), 'the bug fix agent terminal closes again');
 
-    // A tab in the home folder is not a project: pick one of her Claude sessions instead, newest activity first, its repo and status as the small line.
+    // A tab in the home folder is not a project: it follows the repo its session worked in, and Change session picks one of her Claude sessions instead, newest activity first, its repo and status as the small line.
     // Fixture sessions only: a live one in acme with no task (last active 1 h ago), a live one in ~ (left out), a recent one in notes-app holding a task with a suite (2 h ago).
     // The notes task's busy testing agent is not a row of its own: its owner shows its status and sorts first by the agent's activity.
     testingFixture.project = os.homedir();
@@ -405,7 +405,11 @@ export async function testingCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     try {
       await js('PastelTerm.overlays.hideCurrent()');
       await click('#testing-button');
-      const home = await settle((p) => p.state.elsewhere?.reason === 'home');
+      // The tab's own session ran its checks in notes-app (its "cd" lines), so Testing follows it there; the picker is one click away.
+      const followed = await settle((p) => p.state.project === 'notes-app' && p.state.elsewhere?.reason === 'home');
+      check(followed && Boolean(await js("document.querySelector('#testing .tst-change-session')")), `a tab in ~ opens on the repo its session worked in, with Change session: ${JSON.stringify(followed?.state.project)}`);
+      await click('#testing .tst-change-session');
+      const home = await settle((p) => !p.state.project && p.state.elsewhere?.reason === 'home');
       const wantRows = [['Notes sorting', 'notes-app · closed has a suite', 'Testing agent · busy'], ['Polish the settings copy', 'acme · busy has a suite', null]];
       check(home && home.pickerTitle === 'This tab isn’t in a project. Pick a session:' && JSON.stringify(home.picker) === JSON.stringify(wantRows), `home folder shows the session picker, newest first, ~ and the agent session left out, the agent's status on its owner: ${home?.pickerTitle} ${JSON.stringify(home?.picker)}`);
       check(home && home.state.stages.length === 0 && !home.history.length, 'no suite or history for ~');

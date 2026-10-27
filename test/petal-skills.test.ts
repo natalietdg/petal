@@ -119,12 +119,26 @@ describe('the bundled skills', () => {
   it('the testing skill writes the repo’s suite in Petal’s folder, never in the repo, never weakens tests, and never commits', () => {
     expect(text('petal-testing-suite')).toContain('Write `suite.json` in the suite folder from step 0, never in the repo');
     expect(text('petal-testing-suite')).toContain('Never write suite or criteria files inside the repo');
+    expect(text('petal-testing-suite')).not.toContain('they still go in the repo\'s own test folders');
     expect(text('petal-testing-suite')).toContain('`/home/me/shop-app` becomes `-home-me-shop-app`');
     expect(text('petal-testing-suite')).not.toContain('.gitignore');
     expect(text('petal-testing-suite')).toContain('git rev-parse --path-format=absolute --git-common-dir');
     expect(text('petal-testing-suite')).toContain('Never delete, skip or weaken a test');
     expect(text('petal-testing-suite')).not.toContain('testing agent may');
     expect(text('petal-testing-suite')).toMatch(/Never commit/);
+  });
+
+  it('the testing skill keeps test code in Petal: a suite-folder tests dir and a runner config rooted at the checkout', () => {
+    const suite = text('petal-testing-suite');
+    expect(suite).toContain('`<suite folder>/tests/`: the test code, mirroring the repo\'s test layout');
+    expect(suite).toContain('nothing test-related is written in the repo');
+    expect(suite).toContain('Tests already committed in the repo stay where they are');
+    expect(suite).toContain('npx vitest run --config <suite folder>/vitest.config.mjs');
+    expect(suite).toContain('root: repo,');
+    expect(suite).toContain('`${repo}/node_modules/$1`');
+    expect(suite).toContain('server: { fs: { allow: [repo, suite] } }');
+    expect(suite).toContain("reporters: ['default']");
+    expect(suite).toMatch(/test: ~\/\.petal\/repos\/-home-me-shop-app\/tests\/src\/refund\.test\.ts::/);
   });
 
   it('no em dashes and nothing the privacy scan bans', () => {
