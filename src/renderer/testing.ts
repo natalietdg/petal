@@ -175,7 +175,7 @@ function drawCriteria(): void {
   if (!criteriaBox.hidden) criteriaBox.append(criteriaPanel(filteredCriteria(), {
     save: (name, status, result) => void saveManual(name, status, result),
     run: (name) => void runScenarios({ scenario: name }),
-    blocked: (item) => (taskRunning() ? 'A run is still going.' : scenarioBlock(item, new Set(data?.runners ?? []))),
+    blocked: (item) => (taskRunning() ? 'A run is still going.' : scenarioBlock(item, new Set(data?.runners ?? []), suite()?.stages.map((s) => s.command) ?? [])),
   }, false));
 }
 

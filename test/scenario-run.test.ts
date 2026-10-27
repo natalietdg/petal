@@ -2,7 +2,7 @@
 // unknown runners, the stages' shared environment prefix, and reading each scenario's result back.
 import { describe, expect, it } from 'vitest';
 import {
-  dquote, envPrefix, escapeRegex, fileCommand, planScenario, planTests, planTicket, runnerForFile, scenarioBlock, scenarioOutcome, ticketScenarios,
+  dquote, envPrefix, escapeRegex, fileCommand, isOutsidePath, planScenario, planTests, planTicket, runnerForFile, scenarioBlock, scenarioOutcome, shellPath, suiteCallFor, ticketScenarios,
 } from '../src/shared/scenario-run';
 import { parseCriteria } from '../src/shared/test-loop';
 import type { StageResult, TestCase } from '../src/shared/testing';
@@ -109,5 +109,47 @@ describe('each scenario’s result', () => {
   it('a test the report doesn’t list takes its stage’s result; a file that never ran leaves it as it was', () => {
     expect(scenarioOutcome(CRITERIA.scenarios[0], [stage('scenario-1', 'passed', []), stage('scenario-2', 'failed', [])], plan.files)).toBe('fail');
     expect(scenarioOutcome(CRITERIA.scenarios[1], [stage('scenario-1', 'skipped', [])], plan.files)).toBeNull();
+  });
+});
+
+describe('a test kept in the suite folder in Petal', () => {
+  const NVM = 'source ~/.nvm/nvm.sh >/dev/null && nvm use 24 >/dev/null';
+  const SUITE = '~/.petal/repos/-home-me-app';
+  const general = `${NVM} && npx vitest run --config ${SUITE}/vitest.config.mjs --project general`;
+  const other = `${NVM} && npx vitest run --config ${SUITE}/vitest.config.mjs --project needs-x`;
+  const repoStages = [`${NVM} && npm test`, 'zsh ~/scripts/staging.sh'];
+  const file = `${SUITE}/tests/routes/email/perEmail.test.ts`;
+
+  it('is a home or absolute path; it becomes one shell word with $HOME, never ~ inside quotes', () => {
+    expect([file, '$HOME/x.test.ts', '/abs/x.test.ts', 'src/x.test.ts'].map(isOutsidePath)).toEqual([true, true, true, false]);
+    expect(shellPath(`${SUITE}/a b.test.ts`)).toBe('"$HOME""/.petal/repos/-home-me-app/a b.test.ts"');
+    expect(shellPath('/abs/x.test.ts')).toBe('"/abs/x.test.ts"');
+  });
+
+  it('runs through the suite stage whose --config sits in its folder: that stage’s steps, config and project, then the file and test filter', () => {
+    const plan = planTests([{ path: file, name: 'caller sends old names only' }], VITEST, '', [...repoStages, general]);
+    expect(plan.skipped).toEqual([]);
+    expect(plan.stages.map((s) => s.command)).toEqual([
+      `${NVM} && npx vitest run --config "$HOME""/.petal/repos/-home-me-app/vitest.config.mjs" --project "general" "$HOME""/.petal/repos/-home-me-app/tests/routes/email/perEmail.test.ts" -t "caller sends old names only"`,
+    ]);
+    expect(plan.files).toEqual({ 'scenario-1': file });
+  });
+
+  it('across stages on several projects: the one its path names, else the first; a config in another folder is not used', () => {
+    expect(suiteCallFor(file, [general, other])?.project).toBe('general');
+    expect(suiteCallFor(`${SUITE}/tests/needs-x/routes/email/perEmail.test.ts`, [general, other])?.project).toBe('needs-x');
+    expect(suiteCallFor(file, [`npx vitest run --config=${SUITE}/vitest.config.mjs`])).toMatchObject({ prefix: '', project: null });
+    expect(suiteCallFor(file, [`npx vitest run --config ~/.petal/repos/-home-me-other/vitest.config.mjs`])).toBeNull();
+    expect(suiteCallFor(file.replace('~', '$HOME'), [general])?.config).toBe(`${SUITE}/vitest.config.mjs`);
+  });
+
+  it('with no such stage, or a runner other than vitest, its Run is off instead of a broken command; repo paths are unchanged', () => {
+    const item = (path: string) => parseCriteria(`## Scenarios\n- [todo] x · test: ${path}::t\n## Manual\n## Bugs\n`).scenarios[0];
+    expect(scenarioBlock(item(file), VITEST, repoStages)).toBe(`No known runner for ${file}`);
+    expect(scenarioBlock(item(file), VITEST, [general])).toBeNull();
+    for (const path of [`${SUITE}/tests/a_test.go`, `${SUITE}/tests/test_a.py`, `${SUITE}/flows/login.yaml`]) {
+      expect(scenarioBlock(item(path), new Set(['vitest', 'jest', 'playwright']), [general])).toBe(`No known runner for ${path}`);
+    }
+    expect(planTests([{ path: 'src/a.test.ts', name: 'one' }], VITEST, `${NVM} && `, [general]).stages[0].command).toBe(`${NVM} && npx vitest run "src/a.test.ts" -t "one"`);
   });
 });

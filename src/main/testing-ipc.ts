@@ -553,12 +553,13 @@ function writeScenarioResults(root: string, watch: ScenarioWatch, stages: StageR
   try { saveScenarioStatuses(root, statuses); } catch (error) { console.warn('[petal] scenario results not written:', (error as Error).message); }
 }
 
-// The runners the suite's stages call (through package.json scripts too), and the environment prefix they share.
-function scenarioEnv(root: string): { runners: Set<string>; prefix: string } {
+// The runners the suite's stages call (through package.json scripts too), the environment prefix they share, and their commands.
+function scenarioEnv(root: string): { runners: Set<string>; prefix: string; commands: string[] } {
   const stages = syncSuite(root).suite?.stages ?? fallbackStages(root);
   const scripts = scriptsOf(root);
   const runners = new Set(stages.map((s) => resolveRunner(s.command, scripts).runner).filter((r): r is string => r !== null));
-  return { runners, prefix: envPrefix(stages.map((s) => s.command)) };
+  const commands = stages.map((s) => s.command);
+  return { runners, prefix: envPrefix(commands), commands };
 }
 
 // Writes the script, opens a new tab that runs it, and starts watching. Snapshot runs record the line instead.
@@ -946,8 +947,8 @@ export function registerTestingIpc({ sessions, openTab, agentOpening }: TestingD
     const items = typeof scenario === 'string' ? scenarios.filter((s) => s.name === scenario && s.tests.length)
       : typeof ticket === 'string' ? ticketScenarios(scenarios, ticket, staging === true) : [];
     if (!items.length) return { note: typeof scenario === 'string' ? 'That scenario names no test.' : 'No scenario of this ticket names a test.' };
-    const { runners, prefix } = scenarioEnv(root);
-    const plan = typeof scenario === 'string' ? planScenario(items[0], runners, prefix) : planTicket(items, runners, prefix);
+    const { runners, prefix, commands } = scenarioEnv(root);
+    const plan = typeof scenario === 'string' ? planScenario(items[0], runners, prefix, commands) : planTicket(items, runners, prefix, commands);
     if (!plan.stages.length) return { note: `No known runner for ${plan.skipped[0] ?? 'these tests'}.` };
     const fresh = unconfirmed(confirmedOf(root), plan.stages);
     if (fresh.length && !confirmed) return { confirm: { commands: plan.stages.map((s) => ({ name: s.name, command: s.command, isNew: fresh.includes(s) })) } };
