@@ -10,9 +10,9 @@ export type NameSource = 'organizer' | 'claude' | 'known' | 'manual';
 // A session is named only after this many of her prompts: one prompt is too thin to name a whole session.
 export const PROMPTS_BEFORE_NAMING = 3;
 
-// Fixtures carry no prompt count and count as ready, like a fixture without firstAiTitle.
-export const readyToName = (record: { prompts?: number } | null | undefined): boolean =>
-  Boolean(record) && (record?.prompts ?? PROMPTS_BEFORE_NAMING) >= PROMPTS_BEFORE_NAMING;
+// Fixtures carry no prompt count and count as ready; a log too big to read whole has context enough.
+export const readyToName = (record: { prompts?: number; messagesExact?: boolean } | null | undefined): boolean =>
+  Boolean(record) && (record?.messagesExact === false || (record?.prompts ?? PROMPTS_BEFORE_NAMING) >= PROMPTS_BEFORE_NAMING);
 
 export interface PinnedName {
   title: string;

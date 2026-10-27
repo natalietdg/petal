@@ -43,6 +43,10 @@ describe('naming a session once', () => {
     expect(names.pinned('s9')).toBeNull();
   });
 
+  it('names a log too big to read whole, even when the sampled prompt count is low', () => {
+    expect(name(record({ prompts: 1, messagesExact: false, firstAiTitle: 'Long Petal session', title: 'Long Petal session' }))).toBe('Long Petal session');
+  });
+
   it('pins once at the threshold from the latest ai-title', () => {
     expect(name(record({ prompts: 2, firstAiTitle: 'Session list scroll bug', title: 'Session list scroll bug' }))).toBe('fix the build');
     expect(name(record({ prompts: 3, firstAiTitle: 'Session list scroll bug', title: 'Petal naming and scroll fixes' }))).toBe('Petal naming and scroll fixes');
