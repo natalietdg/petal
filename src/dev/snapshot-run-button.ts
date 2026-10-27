@@ -46,6 +46,7 @@ export async function runButtonCheck(kit: Kit, win: BrowserWindow): Promise<void
   const { project, claudeDir } = seedTestingProject(outDir);
   fs.writeFileSync(petalFileOf(project, 'suite.json'), JSON.stringify({ stages: STAGES, keepGoing: false, autoRun: false }, null, 2));
   store.savePipeline(project, { stages: [], keepGoing: false, autoRun: false, confirmed: STAGES.map((s) => s.command) });
+  const before = { project: testingFixture.project, claudeDir: testingFixture.claudeDir };
   testingFixture.project = project;
   testingFixture.claudeDir = claudeDir;
   testingFixture.runs.length = 0;
@@ -56,11 +57,19 @@ export async function runButtonCheck(kit: Kit, win: BrowserWindow): Promise<void
   const click = (x: number, y: number) => {
     for (const type of ['mouseDown', 'mouseUp'] as const) win.webContents.sendInputEvent({ type, x, y, button: 'left', clickCount: 1 });
   };
-  const runReady = () => waitFor(async () => { const b = await js(RUN); return b && /^Run \d/.test(b.text) ? b : null; }, 8000);
+  const runReady = () => waitFor(async () => { const b = await js(RUN); return b && b.text === 'Run 2 stages' && !b.disabled && b.x > 0 ? b : null; }, 8000);
+  // Open on the fixture repo with no level chip or opt-in left on by an earlier step; Run back to its two stages.
+  const openOnFixture = async () => {
+    await js('PastelTerm.overlays.hideCurrent()');
+    await js("document.querySelector('#testing-button').click()");
+    await waitFor(async () => (await js('PastelTerm.testing.state().stages.length')) === STAGES.length || null, 8000);
+    await js("document.querySelectorAll('#testing .tst-chip.is-on:is(.is-smoke, .is-regression, .is-staging)').forEach((c) => c.click())");
+    await js("document.querySelectorAll('#testing .tst-optin input:checked').forEach((c) => c.click())");
+    return runReady();
+  };
   try {
     resizeOffscreen(win, 1280, 900);
-    await js("document.querySelector('#testing-button').click()");
-    const shown = await runReady();
+    const shown = await openOnFixture();
     check(shown && shown.text === 'Run 2 stages' && !shown.disabled && shown.onTop, `Run is enabled and takes the click: ${JSON.stringify(shown)}`);
     if (shown) click(shown.x, shown.y);
     const ran = await waitFor(() => testingFixture.runs[0] ?? null, 6000);
@@ -74,9 +83,7 @@ export async function runButtonCheck(kit: Kit, win: BrowserWindow): Promise<void
     testingFixture.runs.length = 0;
 
     // The opt-in stage's own Run with its toggle off: nothing runs, and the reason shows even with the view scrolled.
-    await js('PastelTerm.overlays.hideCurrent()');
-    await js("document.querySelector('#testing-button').click()");
-    await runReady();
+    await openOnFixture();
     const stageRun = await js(STAGE_RUN);
     check(stageRun && !stageRun.disabled && stageRun.scrollTop > 0, `the opt-in stage's Run is clickable in a scrolled view: ${JSON.stringify(stageRun)}`);
     if (stageRun) click(stageRun.x, stageRun.y);
@@ -87,8 +94,12 @@ export async function runButtonCheck(kit: Kit, win: BrowserWindow): Promise<void
     check(testingFixture.runs.length === 0, 'and nothing runs');
     await capture('run-button-opt-in');
   } finally {
+    testingFixture.project = before.project;
+    testingFixture.claudeDir = before.claudeDir;
+    testingFixture.runs.length = 0;
     await closeExtraTabs(kit, startTabs);
     await js('PastelTerm.overlays.hideCurrent()');
+    await js('PastelTerm.testing.resetLeftovers()');
     resizeOffscreen(win, startWidth, startHeight);
   }
 }
