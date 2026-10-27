@@ -57,6 +57,21 @@ describe('History lists real sessions', () => {
     expect(session).toMatchObject({ title: 'Deploy the fix', firstAiTitle: 'Fix the build', customTitle: 'Build fix v2' });
   });
 
+  it('counts only her own prompts, for naming after enough context', async () => {
+    const { home, log } = folder();
+    log('-tmp-a', 1, [
+      userEntry('fix the build', { cwd: '/tmp/a' }),
+      toolResultEntry(),
+      userEntry('<system-reminder>reminder</system-reminder>'),
+      userEntry('<command-name>/clear</command-name>'),
+      userEntry('Caveat: meta line', { isMeta: true }),
+      assistantEntry('Done.'),
+      userEntry('now deploy it'),
+    ]);
+    const [session] = await listed(home);
+    expect(session.prompts).toBe(2);
+  });
+
   it('keeps a session whose cwd folder no longer exists', async () => {
     const { home, log } = folder();
     log('-tmp-gone', 2, [userEntry('old work', { cwd: '/tmp/petal-folder-that-is-gone' }), assistantEntry('ok')]);
@@ -88,6 +103,15 @@ describe('History lists real sessions', () => {
     log('-tmp-d', 5, [userEntry('long one', { cwd: '/tmp/d' }), ...filler, JSON.stringify({ type: 'ai-title', aiTitle: 'Long session' })]);
     const [session] = await listed(home);
     expect(session).toMatchObject({ title: 'Long session', messagesExact: false });
+  });
+
+  it('a very large log counts prompts from its head and tail, each once', async () => {
+    const { home, log } = folder();
+    const filler = Array.from({ length: 400 }, (_, i) => assistantEntry(`step ${i} ${big(2)}`, `a-${i}`));
+    const small = (from: number) => Array.from({ length: 4 }, (_, i) => assistantEntry('ok', `s-${from + i}`));
+    log('-tmp-e', 6, [userEntry('first', { cwd: '/tmp/e', uuid: 'u1' }), ...small(0), ...filler, userEntry('second', { uuid: 'u2' }), ...small(10), userEntry('third', { uuid: 'u3' })]);
+    const [session] = await listed(home);
+    expect(session).toMatchObject({ messagesExact: false, prompts: 3 });
   });
 
   it('still drops an empty log and ignores loose files beside the project folders', async () => {

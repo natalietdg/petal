@@ -167,10 +167,12 @@ function projectNames(store: OrganizerStore): string[] {
 // Organizer-owned and never tagged yet; her manual sessions are never due for tags.
 const needsTags = (session: ListedSession, tags: TagsData): boolean => !tags.sessions[session.sessionId];
 
-// A pinned name is never retitled, so a labelled session that only grew isn't due: no tokens spent on it.
+// No tokens on a session too young to name, or a pinned one that only grew; a pinned, never-tagged one is grouped once.
 function needsLabel(session: ListedSession, store: OrganizerStore, tags: TagsData, openIds: Set<string>): boolean {
+  if (!names.readyToName(session)) return false;
   const entry = store[session.sessionId];
-  const current = entry && (entry.mtimeMs === session.lastAt || names.pinned(session.sessionId));
+  const pinned = names.pinned(session.sessionId);
+  const current = pinned || (entry && entry.mtimeMs === session.lastAt);
   if (current && !needsTags(session, tags)) return false;
   return !(openIds.has(session.sessionId) && Date.now() - session.lastAt < BUSY_WINDOW_MS);
 }

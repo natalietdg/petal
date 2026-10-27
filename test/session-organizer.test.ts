@@ -175,6 +175,20 @@ describe('session-organizer passes', () => {
     expect(stub.runClaude).toHaveBeenCalledTimes(1);
   });
 
+  it('spends no pass on a session with fewer prompts than the naming threshold', async () => {
+    stub.sessions = [session('s1', fixture, { prompts: 2 })];
+    expect(await organizer.runNow()).toEqual({ titled: 0, failed: 0, due: 0 });
+    stub.sessions = [session('s1', fixture, { prompts: 3 })];
+    expect((await organizer.runNow()).due).toBe(1);
+  });
+
+  it('spends no pass on a pinned, already-tagged session it never labelled', async () => {
+    fs.writeFileSync(path.join(userData, 'session-names.json'), JSON.stringify({ since: 0, names: { s1: { title: 'Pinned name', from: 'known', at: 'x' } } }));
+    tags.addTag('s1', 'mine');
+    expect(await organizer.runNow()).toEqual({ titled: 0, failed: 0, due: 0 });
+    expect(stub.runClaude).not.toHaveBeenCalled();
+  });
+
   it('an already-titled but untagged session keeps its title (tag-only backfill)', async () => {
     const mtimeMs = fs.statSync(fixture).mtimeMs;
     fs.writeFileSync(organizerFile(), JSON.stringify({ s1: { title: 'SEEDED TITLE', project: 'Seed', status: 'done', mtimeMs, at: 'x' } }));
