@@ -227,8 +227,8 @@ describe('what never reaches the reviewer', () => {
   });
 
   it('removes emails, keys and assigned secrets from prompt text', () => {
-    const text = redactSecrets('mail natalie@example.com; key sk-ant-abcdefghijklmnopqrstuv; password = "hunter22"; AKIAABCDEFGHIJKLMNOP');
-    expect(text).not.toMatch(/natalie@|abcdefghijklmnop|hunter22|AKIAABCDEFGHIJKLMNOP/);
+    const text = redactSecrets('mail sam@example.com; key sk-ant-abcdefghijklmnopqrstuv; password = "hunter22"; AKIAABCDEFGHIJKLMNOP');
+    expect(text).not.toMatch(/sam@|abcdefghijklmnop|hunter22|AKIAABCDEFGHIJKLMNOP/);
     expect(text).toContain('[email]');
   });
 });

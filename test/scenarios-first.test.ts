@@ -39,7 +39,7 @@ describe('the scenario line', () => {
     expect(lines).toHaveLength(2);
     const criteria = parseCriteria(`${CRITERIA_SKELETON.replace('## Manual', `${lines.join('\n')}\n\n## Manual`)}`);
     expect(criteria.malformed).toBe(0);
-    expect(criteria.scenarios.map((s) => [s.status, s.source, s.tests.length, s.ticket, s.level])).toEqual([['todo', 'prd', 0, 'AB#10427', 'regression'], ['pass', null, 1, 'AB#10427', 'regression']]);
+    expect(criteria.scenarios.map((s) => [s.status, s.source, s.tests.length, s.ticket, s.level])).toEqual([['todo', 'prd', 0, 'AB#1234', 'regression'], ['pass', null, 1, 'AB#1234', 'regression']]);
   });
 });
 

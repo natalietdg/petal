@@ -49,7 +49,7 @@ Read before proposing anything:
 Add scenarios under `## Scenarios` in `criteria.md`. Create the file with `## Scenarios`, `## Manual` and `## Bugs` headings if it is missing. One line each, parts split by ` · ` exactly:
 
 ```
-- [todo] a refund larger than the amount paid is refused · ticket: AB#10427 · level: regression · from: prd
+- [todo] a refund larger than the amount paid is refused · ticket: AB#1234 · level: regression · from: prd
 ```
 
 - One plain-language rule per line: behaviour someone could observe.
@@ -91,14 +91,14 @@ export default {
 - **Tests:** real inputs and real assertions; no placeholders or snapshot-only tests. Name each test on its scenario's line, one `test:` part per test, naming its path in Petal:
 
 ```
-- [pass] a refund larger than the amount paid is refused · test: ~/.petal/repos/-home-me-shop-app/tests/src/refund.test.ts::refuses over-refund · ticket: AB#10427 · level: regression
+- [pass] a refund larger than the amount paid is refused · test: ~/.petal/repos/-home-me-shop-app/tests/src/refund.test.ts::refuses over-refund · ticket: AB#1234 · level: regression
 ```
 
   `[pass]` once all its tests pass, `[fail]` while any fails, `[todo]` if you can't test it yet (say why).
 - **Manual checks** (what can't be automated) go under `## Manual`:
 
 ```
-- [todo] receipt email arrives on a real phone · ticket: AB#10427 · level: manual
+- [todo] receipt email arrives on a real phone · ticket: AB#1234 · level: manual
   - Prereq: staging account with a verified email
   - Steps: pay RM10, open the inbox on the phone
   - Expected: receipt within 1 minute, amount RM10.00
@@ -112,7 +112,7 @@ export default {
 Run every stage you touched. Fix setup and test mistakes. When a test fails because the app is wrong, keep the test and record the bug under `## Bugs`; don't fix app code unless the user asked you to:
 
 ```
-- [open] coupon can take the total below zero · test: ~/.petal/repos/-home-me-shop-app/tests/src/checkout/coupon.test.ts::caps at the total · ticket: AB#10427
+- [open] coupon can take the total below zero · test: ~/.petal/repos/-home-me-shop-app/tests/src/checkout/coupon.test.ts::caps at the total · ticket: AB#1234
   - Steps: add a RM5 item, apply coupon SAVE10
   - Expected: total RM0.00
   - Actual: total -RM5.00

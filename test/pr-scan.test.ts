@@ -5,15 +5,15 @@ import { PrScan, titleBeside } from '../src/main/pr-scan';
 import { groupServices } from '../src/shared/session-prs';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 
-const GH = 'https://github.com/paywatch/admin-v3/pull/412';
-const ADO = 'https://dev.azure.com/PaywatchMY/Paywatch/_git/BusinessLogic-Admin/pullrequest/9001';
+const GH = 'https://github.com/acme/shop-web/pull/412';
+const ADO = 'https://dev.azure.com/acme/Shop/_git/shop-api/pullrequest/9001';
 
 describe('findPrLinks', () => {
   it('reads GitHub and Azure DevOps PR links in order, canonical and without trailing tabs', () => {
     const found = findPrLinks(`see ${ADO}?_a=files and ${GH}/files#diff-1.`);
     expect(found.map((f) => f.ref)).toEqual([
-      { host: 'azure', url: ADO, repoId: 'PaywatchMY/Paywatch/BusinessLogic-Admin', repo: 'BusinessLogic-Admin', number: 9001 },
-      { host: 'github', url: GH, repoId: 'paywatch/admin-v3', repo: 'admin-v3', number: 412 },
+      { host: 'azure', url: ADO, repoId: 'acme/Shop/shop-api', repo: 'shop-api', number: 9001 },
+      { host: 'github', url: GH, repoId: 'acme/shop-web', repo: 'shop-web', number: 412 },
     ]);
   });
 
@@ -28,20 +28,20 @@ describe('findPrLinks', () => {
   });
 
   it('keys a PR the same whatever its case', () => {
-    const [a] = findPrLinks('https://GitHub.com/Paywatch/Admin-V3/pull/412');
+    const [a] = findPrLinks('https://GitHub.com/Acme/Shop-Web/pull/412');
     expect(a && prKey(a.ref)).toBe(prKey({ url: GH }));
   });
 
   it('joins an Azure repo web URL and PR id into the PR page', () => {
-    expect(azurePrUrl('https://dev.azure.com/PaywatchMY/Paywatch/_git/BusinessLogic-Admin/', 9001)?.url).toBe(ADO);
+    expect(azurePrUrl('https://dev.azure.com/acme/Shop/_git/shop-api/', 9001)?.url).toBe(ADO);
     expect(azurePrUrl('https://example.com/x', 1)).toBeNull();
   });
 });
 
 describe('parseCreateCommand', () => {
   it('reads gh pr create: title, head branch and the folder of the cd before it', () => {
-    expect(parseCreateCommand('cd /repos/admin-v3 && git push -u origin feat/x && gh pr create --title "Add payouts v2" --head feat/x --body "b"', '/elsewhere'))
-      .toEqual({ tool: 'gh', title: 'Add payouts v2', branch: 'feat/x', dir: '/repos/admin-v3' });
+    expect(parseCreateCommand('cd /repos/shop-web && git push -u origin feat/x && gh pr create --title "Add payouts v2" --head feat/x --body "b"', '/elsewhere'))
+      .toEqual({ tool: 'gh', title: 'Add payouts v2', branch: 'feat/x', dir: '/repos/shop-web' });
   });
 
   it('resolves a relative cd against the call folder and falls back to it', () => {
@@ -60,7 +60,7 @@ describe('parseCreateCommand', () => {
   });
 
   it('reads the PR from az output JSON', () => {
-    const out = JSON.stringify({ pullRequestId: 9001, title: 'Sms switch', sourceRefName: 'refs/heads/feat/y', repository: { webUrl: 'https://dev.azure.com/PaywatchMY/Paywatch/_git/BusinessLogic-Admin' } });
+    const out = JSON.stringify({ pullRequestId: 9001, title: 'Sms switch', sourceRefName: 'refs/heads/feat/y', repository: { webUrl: 'https://dev.azure.com/acme/Shop/_git/shop-api' } });
     expect(parseAzOutput(out)).toEqual({ ref: expect.objectContaining({ url: ADO }), title: 'Sms switch', branch: 'feat/y' });
     expect(parseAzOutput('ERROR: TF401179')).toBeNull();
   });
@@ -78,7 +78,7 @@ describe('titleBeside', () => {
 
 let uuid = 0;
 const entry = (fields: Partial<TranscriptEntry>): TranscriptEntry => ({ uuid: `u${++uuid}`, timestamp: `2026-10-21T10:0${uuid % 10}:00.000Z`, ...fields });
-const bash = (id: string, command: string, cwd = '/repos/admin-v3') =>
+const bash = (id: string, command: string, cwd = '/repos/shop-web') =>
   entry({ type: 'assistant', cwd, message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
 const result = (id: string, content: unknown) => entry({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content }] } });
 const says = (text: string, extra: Partial<TranscriptEntry> = {}) => entry({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] }, ...extra });
@@ -90,11 +90,11 @@ describe('PrScan', () => {
     scan.add(bash('t1', 'gh pr create --title "Payouts v2" --head feat/payouts'));
     scan.add(result('t1', [{ type: 'text', text: `${GH}\n` }]));
     scan.add(bash('t2', 'az repos pr create --title "Sms switch"', '/repos/bl-admin'));
-    scan.add(result('t2', JSON.stringify({ pullRequestId: 9001, title: 'Sms switch', sourceRefName: 'refs/heads/feat/sms', repository: { webUrl: 'https://dev.azure.com/PaywatchMY/Paywatch/_git/BusinessLogic-Admin' } })));
+    scan.add(result('t2', JSON.stringify({ pullRequestId: 9001, title: 'Sms switch', sourceRefName: 'refs/heads/feat/sms', repository: { webUrl: 'https://dev.azure.com/acme/Shop/_git/shop-api' } })));
     scan.add(says(`Both are open: ${GH.toUpperCase().replace('HTTPS://GITHUB.COM', 'https://github.com')} and ${ADO}`));
     const prs = scan.prs();
     expect(prs).toHaveLength(2);
-    expect(prs[0]).toMatchObject({ url: GH, title: 'Payouts v2', branch: 'feat/payouts', localPath: '/repos/admin-v3', created: true });
+    expect(prs[0]).toMatchObject({ url: GH, title: 'Payouts v2', branch: 'feat/payouts', localPath: '/repos/shop-web', created: true });
     expect(prs[1]).toMatchObject({ url: ADO, title: 'Sms switch', branch: 'feat/sms', localPath: '/repos/bl-admin', created: true });
   });
 
@@ -123,13 +123,13 @@ describe('groupServices', () => {
     const scan = new PrScan();
     scan.add(bash('t1', 'gh pr create --title a'));
     scan.add(result('t1', GH));
-    scan.add(says('and https://github.com/paywatch/admin-v3/pull/415 plus https://github.com/paywatch/employer-portal/pull/3'));
+    scan.add(says('and https://github.com/acme/shop-web/pull/415 plus https://github.com/acme/shop-admin/pull/3'));
     scan.add(says(ADO));
-    const services = groupServices(scan.prs(), '/repos/employer-portal');
+    const services = groupServices(scan.prs(), '/repos/shop-admin');
     expect(services.map((s) => [s.repo, s.prUrls.length, s.localPath])).toEqual([
-      ['admin-v3', 2, '/repos/admin-v3'],
-      ['employer-portal', 1, '/repos/employer-portal'],
-      ['BusinessLogic-Admin', 1, null],
+      ['shop-web', 2, '/repos/shop-web'],
+      ['shop-admin', 1, '/repos/shop-admin'],
+      ['shop-api', 1, null],
     ]);
   });
 });

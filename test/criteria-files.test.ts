@@ -20,29 +20,29 @@ const FILE = [
   'Her notes stay as written.',
   '',
   '## Scenarios',
-  '- [pass] refund over the amount paid is refused · test: src/refund.test.ts::refuses over-refund · test: e2e/refund.spec.ts::shows the limit · ticket: AB#10427 · level: regression · from: prd',
-  '- [todo] partial refund emails the payer · ticket: AB#10427 · level: smoke',
-  '- [fail] staging webhook retries · test: e2e/hook.spec.ts::retries · ticket: AB#10500 · level: staging',
+  '- [pass] refund over the amount paid is refused · test: src/refund.test.ts::refuses over-refund · test: e2e/refund.spec.ts::shows the limit · ticket: AB#1234 · level: regression · from: prd',
+  '- [todo] partial refund emails the payer · ticket: AB#1234 · level: smoke',
+  '- [fail] staging webhook retries · test: e2e/hook.spec.ts::retries · ticket: AB#1250 · level: staging',
   '- [pass] old line · test: src/old.test.ts · round 2',
   '',
   '## Manual',
-  '- [todo] receipt email arrives on a real phone · ticket: AB#10427 · level: manual',
+  '- [todo] receipt email arrives on a real phone · ticket: AB#1234 · level: manual',
   '  - Prereq: staging account with a verified email',
   '  - Steps: pay RM10, open the inbox',
   '  - Expected: receipt within 1 minute',
-  '- [blocked] SMS on a Celcom SIM · ticket: AB#10500 · level: manual',
+  '- [blocked] SMS on a Celcom SIM · ticket: AB#1250 · level: manual',
   '  - Steps: request an OTP',
   '  - Expected: SMS within 30 s',
   '  - Result: no Celcom SIM in the office',
   '',
   '## Bugs',
-  '- [open] coupon can take the total below zero · test: src/coupon.test.ts::caps at the total · ticket: AB#10427',
+  '- [open] coupon can take the total below zero · test: src/coupon.test.ts::caps at the total · ticket: AB#1234',
   '  - Steps: add a RM5 item, apply SAVE10',
   '  - Expected: total RM0.00',
   '  - Actual: total -RM5.00',
   '  - Env: local, node 22',
   '  - Evidence: expected 0, received -5',
-  '- [fixed] cent off · ticket: AB#10500',
+  '- [fixed] cent off · ticket: AB#1250',
   '',
 ].join('\n');
 
@@ -56,18 +56,18 @@ describe('the three sections', () => {
   it('reads scenarios with every test, ticket, level and source; manual cases and bugs with their sub-bullets', () => {
     expect(parsed.malformed).toBe(0);
     expect(parsed.scenarios.map((s) => [s.status, s.tests.length, s.ticket, s.level, s.source])).toEqual([
-      ['pass', 2, 'AB#10427', 'regression', 'prd'], ['todo', 0, 'AB#10427', 'smoke', null], ['fail', 1, 'AB#10500', 'staging', null], ['pass', 1, null, null, null],
+      ['pass', 2, 'AB#1234', 'regression', 'prd'], ['todo', 0, 'AB#1234', 'smoke', null], ['fail', 1, 'AB#1250', 'staging', null], ['pass', 1, null, null, null],
     ]);
-    expect(parsed.manual[0]).toMatchObject({ status: 'todo', name: 'receipt email arrives on a real phone', ticket: 'AB#10427', level: 'manual', details: { Prereq: 'staging account with a verified email', Steps: 'pay RM10, open the inbox', Expected: 'receipt within 1 minute' } });
+    expect(parsed.manual[0]).toMatchObject({ status: 'todo', name: 'receipt email arrives on a real phone', ticket: 'AB#1234', level: 'manual', details: { Prereq: 'staging account with a verified email', Steps: 'pay RM10, open the inbox', Expected: 'receipt within 1 minute' } });
     expect(parsed.manual[1].details.Result).toBe('no Celcom SIM in the office');
-    expect(parsed.bugs[0]).toMatchObject({ status: 'open', regression: true, ticket: 'AB#10427', details: { Steps: 'add a RM5 item, apply SAVE10', Actual: 'total -RM5.00', Env: 'local, node 22' } });
+    expect(parsed.bugs[0]).toMatchObject({ status: 'open', regression: true, ticket: 'AB#1234', details: { Steps: 'add a RM5 item, apply SAVE10', Actual: 'total -RM5.00', Env: 'local, node 22' } });
   });
 
   it('round-trips all three sections, sub-bullets included', () => {
     const text = criteriaText(parsed);
     expect(parseCriteria(text)).toEqual({ ...parsed, truncated: false });
     expect(criteriaText(parseCriteria(text))).toBe(text);
-    expect(text).toContain('## Manual\n- [todo] receipt email arrives on a real phone · ticket: AB#10427 · level: manual\n  - Prereq: staging account with a verified email\n  - Steps: pay RM10, open the inbox\n  - Expected: receipt within 1 minute\n');
+    expect(text).toContain('## Manual\n- [todo] receipt email arrives on a real phone · ticket: AB#1234 · level: manual\n  - Prereq: staging account with a verified email\n  - Steps: pay RM10, open the inbox\n  - Expected: receipt within 1 minute\n');
   });
 
   it('a sub-bullet with no item above it, or an unknown part, counts as malformed', () => {
@@ -82,7 +82,7 @@ describe('her manual ticks', () => {
     expect(ticked).not.toBeNull();
     const parsed = parseCriteria(ticked as string);
     expect(parsed.manual[0]).toMatchObject({ status: 'pass', details: { Result: 'arrived in 20 s', Steps: 'pay RM10, open the inbox' } });
-    expect((ticked as string).split('\n').filter((l) => !FILE.split('\n').includes(l))).toEqual(['- [pass] receipt email arrives on a real phone · ticket: AB#10427 · level: manual', '  - Result: arrived in 20 s']);
+    expect((ticked as string).split('\n').filter((l) => !FILE.split('\n').includes(l))).toEqual(['- [pass] receipt email arrives on a real phone · ticket: AB#1234 · level: manual', '  - Result: arrived in 20 s']);
   });
 
   it('replaces an existing Result, removes it when empty, and is null for a case that’s gone', () => {
@@ -104,8 +104,8 @@ describe('filters and coverage', () => {
   const parsed = parseCriteria(FILE);
 
   it('ticket chips list every ticket once; a ticket filters every section', () => {
-    expect(ticketsOf(parsed)).toEqual(['AB#10427', 'AB#10500']);
-    const one = filterCriteria(parsed, { ticket: 'AB#10500', levels: [] });
+    expect(ticketsOf(parsed)).toEqual(['AB#1234', 'AB#1250']);
+    const one = filterCriteria(parsed, { ticket: 'AB#1250', levels: [] });
     expect([one.scenarios.length, one.manual.length, one.bugs.length]).toEqual([1, 1, 1]);
   });
 
@@ -122,7 +122,7 @@ describe('filters and coverage', () => {
   });
 
   it('takes a task’s AB# id from its name', () => {
-    expect(ticketInText('AB#10427 refund caps')).toBe('AB#10427');
+    expect(ticketInText('AB#1234 refund caps')).toBe('AB#1234');
     expect(ticketInText('Refunds')).toBeNull();
   });
 });
@@ -131,7 +131,7 @@ describe('a bug for Azure DevOps', () => {
   it('is plain text in the repro-steps shape, with its failing test', () => {
     const text = adoBugText(parseCriteria(FILE).bugs[0]);
     expect(text).toBe([
-      'Title: coupon can take the total below zero', 'Related: AB#10427', '',
+      'Title: coupon can take the total below zero', 'Related: AB#1234', '',
       'Steps to reproduce:', 'add a RM5 item, apply SAVE10', '',
       'Expected result:', 'total RM0.00', '',
       'Actual result:', 'total -RM5.00', '',
@@ -187,10 +187,10 @@ describe('the repo file on disk', () => {
     put(path.join(root, '.petal', 'criteria', 't-cart.md'), cart);
     put(path.join(root, '.petal', 'criteria', 't-coupon.md'), coupon);
     put(path.join(root, '.petal', 'test-criteria.md'), shared);
-    const tasks = [task('t-cart', 'AB#10427 Fix the cart total'), task('t-coupon', 'Coupons')];
+    const tasks = [task('t-cart', 'AB#1234 Fix the cart total'), task('t-coupon', 'Coupons')];
     const read = readCriteria(root, tasks);
-    expect(read?.scenarios.map((s) => [s.name, s.ticket, s.taskId])).toEqual([['an old scenario', null, null], ['cart rounds', 'AB#10427', null], ['coupon caps', 'AB#9', null]]);
-    expect(read?.bugs.map((b) => [b.name, b.status, b.ticket])).toEqual([['cent off', 'fail', 'AB#10427']]);
+    expect(read?.scenarios.map((s) => [s.name, s.ticket, s.taskId])).toEqual([['an old scenario', null, null], ['cart rounds', 'AB#1234', null], ['coupon caps', 'AB#9', null]]);
+    expect(read?.bugs.map((b) => [b.name, b.status, b.ticket])).toEqual([['cent off', 'fail', 'AB#1234']]);
     expect(fs.readFileSync(path.join(root, '.petal', 'criteria', 't-cart.md'), 'utf8')).toBe(cart);
     expect(fs.readFileSync(path.join(root, '.petal', 'test-criteria.md'), 'utf8')).toBe(shared);
     const text = fs.readFileSync(criteriaFile(root), 'utf8');

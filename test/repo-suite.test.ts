@@ -167,7 +167,7 @@ describe('the main checkout', () => {
 
 describe('the repo key', () => {
   it('is the main checkout’s path with every non-alphanumeric as "-": a worktree shares it, a folder outside git keys itself', () => {
-    expect(repoKey('/Users/natalieleong/Integration-Communication')).toBe('-Users-natalieleong-Integration-Communication');
+    expect(repoKey('/home/me/shop-app')).toBe('-home-me-shop-app');
     expect(repoKey('/Users/n/my repo_2.0/ä')).toBe('-Users-n-my-repo-2-0--');
     const { main, worktree } = repoWithWorktree();
     expect(repoKey(suiteHome(worktree))).toBe(repoKey(main));

@@ -39,7 +39,7 @@ export interface CriteriaItem {
   round: number | null;
   regression: boolean; // a bug with a test that reproduces it
   taskId: string | null;
-  ticket: string | null; // AB#10427
+  ticket: string | null; // AB#1234
   level: ItemLevel | null;
   details: Record<string, string>; // sub-bullets by their key as written: Steps, Expected...
 }

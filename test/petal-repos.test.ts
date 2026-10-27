@@ -42,7 +42,7 @@ function oldCheckout(): string {
 
 describe('the repo key', () => {
   it('replaces every non-alphanumeric with "-", like ~/.claude/projects', () => {
-    expect(repoKey('/Users/natalieleong/Integration-Communication')).toBe('-Users-natalieleong-Integration-Communication');
+    expect(repoKey('/home/me/shop-app')).toBe('-home-me-shop-app');
     expect(repoKey('/a/b_c.d e')).toBe('-a-b-c-d-e');
     expect(repoDirIn('/h', '/a/b')).toBe('/h/.petal/repos/-a-b');
   });
