@@ -320,7 +320,7 @@ export async function refreshFlow(): Promise<void> {
 // Built from the replies already shown, so it follows them as they update.
 function refreshConfirmed(): void {
   const groups = confirmedItems(lastUpdate?.replies ?? [], (lastUpdate?.waiting ?? []).map((w) => w.prompt));
-  confirmed.render(confirmedView, groups, (replyId) => showReply([replyId]));
+  confirmed.render(confirmedView, groups, lastUpdate?.cwd ?? null, (replyId) => showReply([replyId]));
 }
 
 const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed';

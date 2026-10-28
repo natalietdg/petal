@@ -10,6 +10,28 @@ export type PromptPart = { kind: 'text'; text: string } | { kind: 'image'; path:
 
 export const IMAGE_EXTENSION = /\.(?:png|jpe?g|gif|webp)$/i;
 
+const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+// A relative path in prose needs a folder in it ("docs/shot.png"), so a bare "logo.png" stays words.
+const RELATIVE_IN_TEXT = /(?<=^|[\s(])(?:\.{1,2}\/)?[\w@+-][\w@.+-]*(?:\/[\w@.+-]+)+\.(?:png|jpe?g|gif|webp)(?=$|[\s),.;:!?])/gi;
+
+// A reply image's src that Petal may load: a path or file:, never a web or other scheme.
+export const isLocalImageSrc = (src: string): boolean => Boolean(src) && (!SCHEME.test(src) || /^file:/i.test(src));
+
+// Inline code in a reply that is a whole image path: absolute, ~/, relative or file:.
+export function imageCodePath(text: string): string | null {
+  const path = text.trim().replace(/^(['"])(.*)\1$/, '$2');
+  if (!path || /\n/.test(path) || !IMAGE_EXTENSION.test(path)) return null;
+  return isLocalImageSrc(path) ? path : null;
+}
+
+// Image paths in a reply's prose, in order: absolute and ~/ the way her bubbles read them, plus relative ones with a folder.
+export function imageTextPaths(text: string): string[] {
+  const found = findImageRefs(text).map((ref) => ({ at: ref.start, path: ref.path }));
+  RELATIVE_IN_TEXT.lastIndex = 0;
+  for (let match = RELATIVE_IN_TEXT.exec(text); match; match = RELATIVE_IN_TEXT.exec(text)) found.push({ at: match.index, path: match[0] });
+  return found.sort((a, b) => a.at - b.at).map((f) => f.path);
+}
+
 // One shell word or Claude Code's own "[Image: source: …]" note; a word starts after whitespace or "(".
 const TOKEN = new RegExp([
   String.raw`\[Image: source: (?<source>[^\]\n]+)\]`,

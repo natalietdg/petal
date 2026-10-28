@@ -1,12 +1,17 @@
-// The reader's Confirmed tab: Verified, Decided, Done and In progress from a sample session, light and dark.
-import type { BrowserWindow } from 'electron';
+// The reader's Confirmed tab: Verified (Screens, Features, Facts), Decided, Done and In progress from a sample session, light and dark.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { app, type BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
+import { pictureRoot } from './snapshot-reply-images';
 import { resizeTo } from './snapshot-tables';
 import { resizeOffscreen } from '../main/snapshot-window';
 
 const THEMES = ['paleSky', 'nightPastel']; // one light, one dark
 const WIDTH = 990;
-const TALL_HEIGHT = 1300;
+const TALL_HEIGHT = 1900;
+const SAMPLE_PNG = 'build/icon.iconset/icon_128x128.png'; // the app icon, already in the repo
 
 const NEWEST = [
   '**The export button is half built.**',
@@ -17,12 +22,15 @@ const NEWEST = [
   '**Next:** pick the file formats',
   '',
   '**Checked:** the toolbar renders in both themes, 4 of 4 layout checks pass.',
+  '**Verified:** the export button opens the save dialog.',
   '',
   '**Decide:** CSV only, or CSV and JSON?',
 ].join('\n');
 
-const MIDDLE = [
+const middle = (screen: string): string => [
   '**Settings now save when the window closes.**',
+  '',
+  `![Settings screen](${screen})`,
   '',
   '**Done:** the settings file is written on quit.',
   '',
@@ -41,27 +49,32 @@ const OLDEST = [
   '**Impact:** one less button on the main screen.',
 ].join('\n');
 
-const sampleUpdate = {
+const sampleUpdate = (screen: string) => ({
   state: 'live',
   replies: [
     { id: 'confirmed-3', timestamp: '2026-10-28T10:30:00.000Z', prompt: 'yes, keep one backup', markdown: NEWEST },
-    { id: 'confirmed-2', timestamp: '2026-10-28T10:10:00.000Z', prompt: 'make settings save on close', markdown: MIDDLE },
+    { id: 'confirmed-2', timestamp: '2026-10-28T10:10:00.000Z', prompt: 'make settings save on close', markdown: middle(screen) },
     { id: 'confirmed-1', timestamp: '2026-10-28T09:50:00.000Z', prompt: 'tidy the toolbar', markdown: OLDEST },
   ],
-};
+});
 
-const EXPECTED = { verified: 2, decided: 1, done: 2, progress: 2 };
+const EXPECTED = { screens: 1, features: 1, facts: 2, decided: 1, done: 2, progress: 2 };
 
 // Group titles in order, item counts, and the pills with their painted colours.
 const MEASURE = `(() => {
   const view = document.getElementById('confirmed-view');
   const groups = [...view.querySelectorAll('.confirmed-group')];
   const count = (key) => view.querySelectorAll('.confirmed-' + key + ' .confirmed-item').length;
+  const part = (key) => { const h = view.querySelector('.confirmed-part-' + key); const list = h && h.nextElementSibling; return list ? list.querySelectorAll('.confirmed-item').length : 0; };
+  const thumbs = [...view.querySelectorAll('.confirmed-screens img.confirmed-thumb')];
   const pill = (cls) => { const p = view.querySelector('.' + cls); return p ? { text: p.textContent, bg: getComputedStyle(p).backgroundColor } : null; };
   const answer = view.querySelector('.confirmed-decided .confirmed-answer');
   return {
     titles: groups.map((g) => g.querySelector('.confirmed-title').textContent),
-    counts: { verified: count('verified'), decided: count('decided'), done: count('done'), progress: count('progress') },
+    subtitles: [...view.querySelectorAll('.confirmed-verified .confirmed-subtitle')].map((h) => h.textContent),
+    thumbs: thumbs.map((t) => ({ natural: t.naturalWidth, width: Math.round(t.getBoundingClientRect().width), height: Math.round(t.getBoundingClientRect().height) })),
+    capitalised: [...view.querySelectorAll('.confirmed-text')].every((t) => t.firstChild?.nodeType !== 3 || !/^[a-z]/.test(t.firstChild.textContent)), // code at the start stays as written
+    counts: { screens: part('screens'), features: part('features'), facts: part('facts'), decided: count('decided'), done: count('done'), progress: count('progress') },
     progressPill: pill('confirmed-pill-progress'), waitingPill: pill('confirmed-pill-waiting'),
     answer: answer ? answer.textContent : null,
     codeInText: view.querySelectorAll('.confirmed-verified .confirmed-text code').length,
@@ -72,7 +85,13 @@ const MEASURE = `(() => {
 
 // The last In progress card ends above the reader's bottom edge.
 const FITS = "document.querySelector('#confirmed-view .confirmed-progress .confirmed-item:last-child').getBoundingClientRect().bottom <= document.getElementById('reader').getBoundingClientRect().bottom";
-const SHOWN ="document.getElementById('confirmed-view').textContent.includes('wiring the export button')";
+const SHOWN = "document.getElementById('confirmed-view').textContent.includes('Wiring the export button')";
+
+// The fake-home script puts HOME and the snapshot folder side by side in one scratch folder; her real HOME never is.
+function sideBySideHome(outDir: string): boolean {
+  const rel = path.relative(fs.realpathSync(path.dirname(outDir)), fs.realpathSync(os.homedir()));
+  return Boolean(rel) && !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.includes(path.sep);
+}
 
 export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme } = kit;
@@ -80,11 +99,23 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
   const [startWidth, startHeight] = win.getContentSize();
   await js('PastelTerm.getStarted.close()'); // a fresh profile opens on Get started, over the reader
 
+  const place = sideBySideHome(kit.outDir) ? { root: os.homedir() } : pictureRoot(kit.outDir);
+  const source = path.join(app.getAppPath(), SAMPLE_PNG);
+  if ('skip' in place || !fs.existsSync(source)) {
+    log(`FAIL confirmed: no place for the sample screen (${'skip' in place ? place.skip : `missing ${source}`})`);
+    return;
+  }
+  // A scratch HOME gets it as ~/; under her real HOME it sits under the snapshot folder, as an absolute path.
+  const screenDir = path.join(place.root, 'Desktop', 'petal-confirmed-sample');
+  fs.mkdirSync(screenDir, { recursive: true });
+  fs.copyFileSync(source, path.join(screenDir, 'settings.png'));
+  const screen = place.root === os.homedir() ? '~/Desktop/petal-confirmed-sample/settings.png' : path.join(screenDir, 'settings.png');
+
   // The fixture feed can redraw its own replies; re-send the sample whenever it is gone.
   const showSample = async () => {
     await js("PastelTerm.reader.setView('confirmed')");
     if (await js(SHOWN)) return true;
-    await js(`PastelTerm.reader.update(${JSON.stringify(sampleUpdate)})`);
+    await js(`PastelTerm.reader.update(${JSON.stringify(sampleUpdate(screen))})`);
     return waitFor(() => js(SHOWN), 5000);
   };
   check(await showSample(), 'sample session shown on the Confirmed tab');
@@ -98,11 +129,15 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
     applyTheme(theme, { persist: false });
     await wait(300);
     check(await showSample(), `${theme} sample shown`);
-    const m = await js(MEASURE) as { titles: string[]; counts: Record<string, number>; progressPill: { text: string; bg: string } | null; waitingPill: { text: string; bg: string } | null; answer: string | null; codeInText: number; fencedDone: boolean; visible: boolean };
+    await waitFor(() => js("[...document.querySelectorAll('#confirmed-view img.confirmed-thumb')].every((t) => t.complete)"), 5000);
+    const m = await js(MEASURE) as { titles: string[]; subtitles: string[]; thumbs: { natural: number; width: number; height: number }[]; capitalised: boolean; counts: Record<string, number>; progressPill: { text: string; bg: string } | null; waitingPill: { text: string; bg: string } | null; answer: string | null; codeInText: number; fencedDone: boolean; visible: boolean };
     log(`confirmed ${theme}: ${JSON.stringify(m)}`);
     check(m.visible, `${theme} Confirmed page is visible`);
     check(m.titles.join(',') === 'Verified,Decided,Done,In progress', `${theme} four groups in order`);
+    check(m.subtitles.join(',') === 'Screens,Features,Facts', `${theme} Verified has Screens, Features and Facts`);
     check(JSON.stringify(m.counts) === JSON.stringify(EXPECTED), `${theme} item counts ${JSON.stringify(EXPECTED)}`);
+    check(m.thumbs.length === 1 && m.thumbs.every((t) => t.natural > 0 && t.width > 0 && t.height > 0), `${theme} one screen thumbnail, loaded with a nonzero size`);
+    check(m.capitalised, `${theme} every item starts with a capital letter`);
     check(m.progressPill?.text === 'In progress' && m.progressPill.bg !== 'rgba(0, 0, 0, 0)', `${theme} In progress pill shows with a fill`);
     check(m.waitingPill?.text === 'Waiting on you' && m.waitingPill.bg !== m.progressPill?.bg, `${theme} Waiting on you pill has its own fill`);
     check(m.answer === 'You: yes, keep one backup', `${theme} decision shows her answer`);
@@ -121,17 +156,20 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
     check(await js(FITS), `${theme} every group fits in the picture`);
   }
 
-  await showSample();
-  await js("document.querySelector('#confirmed-view .confirmed-done .confirmed-item').click()");
-  const jumped = await js(`(() => ({
+  const JUMPED = `(() => ({
     replies: !document.getElementById('replies-view').hidden,
     confirmedHidden: document.getElementById('confirmed-view').hidden,
     selected: document.querySelector('#reader-head .view-toggle [aria-selected="true"]').dataset.view,
     flashed: Boolean(document.querySelector('[data-reply-id="confirmed-2"].flash')),
-  }))()`) as { replies: boolean; confirmedHidden: boolean; selected: string; flashed: boolean };
-  log(`confirmed jump: ${JSON.stringify(jumped)}`);
-  check(jumped.replies && jumped.confirmedHidden && jumped.selected === 'replies', 'clicking an item switches to Replies');
-  check(jumped.flashed, 'clicking an item flashes its reply');
+  }))()`;
+  for (const [what, selector] of [['an item', '.confirmed-done .confirmed-item'], ['a screen', '.confirmed-screen']]) {
+    await showSample();
+    await js(`document.querySelectorAll('.flash').forEach((n) => n.classList.remove('flash')); document.querySelector('#confirmed-view ${selector}').click()`); // a fresh flash, not the last one's
+    const jumped = await js(JUMPED) as { replies: boolean; confirmedHidden: boolean; selected: string; flashed: boolean };
+    log(`confirmed jump from ${what}: ${JSON.stringify(jumped)}`);
+    check(jumped.replies && jumped.confirmedHidden && jumped.selected === 'replies', `clicking ${what} switches to Replies`);
+    check(jumped.flashed, `clicking ${what} flashes its reply`);
+  }
 
   await js("PastelTerm.reader.setView('replies')");
   await js(`PastelTerm.layout.setTerminalMinimised(${Boolean(wasMinimised)}, false)`);

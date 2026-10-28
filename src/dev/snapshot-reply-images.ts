@@ -87,7 +87,7 @@ const isInside = (child: string, dir: string): boolean => {
 
 // Where the fixture pictures go. A scratch HOME (snapshot or temp folder) gets them on its Desktop, written as ~/.
 // Under her real HOME (the official gate) they go under the snapshot folder, written as absolute paths; her HOME is never written.
-function pictureRoot(outDir: string): { root: string; desk: string } | { skip: string } {
+export function pictureRoot(outDir: string): { root: string; desk: string } | { skip: string } {
   const home = os.homedir();
   if (isInside(home, outDir) || isInside(home, os.tmpdir())) return { root: home, desk: '~/Desktop/petal-discord' };
   const root = path.join(outDir, 'reply-images-home');

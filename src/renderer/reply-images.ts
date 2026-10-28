@@ -1,34 +1,15 @@
 // Pictures in Claude's replies: a Markdown image or an image path becomes a thumbnail with its filename,
 // Show in Finder and Open; a click opens it larger. Bytes come only through petal-img:// (main/reply-image.ts).
 import { el, isIpcError } from './dom';
-import { IMAGE_EXTENSION, findImageRefs } from '../shared/image-paths';
+import { imageCodePath, imageTextPaths, isLocalImageSrc } from '../shared/image-paths';
 import { replyImageUrl, type ReplyImageStatus } from '../shared/reply-image-url';
 
 const REMOTE = /^https?:\/\//i;
-const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
-// A relative path in prose needs a folder in it ("docs/shot.png"), so a bare "logo.png" stays words.
-const RELATIVE_IN_TEXT = /(?<=^|[\s(])(?:\.{1,2}\/)?[\w@+-][\w@.+-]*(?:\/[\w@.+-]+)+\.(?:png|jpe?g|gif|webp)(?=$|[\s),.;:!?])/gi;
 const SKIP_TEXT_IN = 'a, code, pre, figure, .reply-image, .status-block';
 const BLOCKS = 'p, li, td, th, h1, h2, h3, h4, h5, h6, dd, dt, blockquote';
 const INSIDE_BLOCKS = new Set(['LI', 'TD', 'TH', 'DD', 'BLOCKQUOTE']); // the picture goes at the end inside these, after the others
 
 const fileName = (file: string): string => file.replace(/\/+$/, '').split('/').pop() || file;
-
-// Inline code that is a whole image path: absolute, ~/, relative or file:.
-function codePath(text: string): string | null {
-  const path = text.trim().replace(/^(['"])(.*)\1$/, '$2');
-  if (!path || /\n/.test(path) || !IMAGE_EXTENSION.test(path)) return null;
-  if (SCHEME.test(path) && !/^file:/i.test(path)) return null;
-  return path;
-}
-
-// Image paths in one text node, in order: absolute and ~/ the way her bubbles read them, plus relative ones with a folder.
-function textPaths(text: string): string[] {
-  const found = findImageRefs(text).map((ref) => ({ at: ref.start, path: ref.path }));
-  RELATIVE_IN_TEXT.lastIndex = 0;
-  for (let match = RELATIVE_IN_TEXT.exec(text); match; match = RELATIVE_IN_TEXT.exec(text)) found.push({ at: match.index, path: match[0] });
-  return found.sort((a, b) => a.at - b.at).map((f) => f.path);
-}
 
 // ---- One picture ----
 
@@ -209,7 +190,7 @@ export function inlineImages(root: HTMLElement, cwd: string | null): void {
   for (const img of [...root.querySelectorAll<HTMLImageElement>('img')]) {
     const src = img.getAttribute('src') ?? '';
     img.removeAttribute('src'); // nothing loads from Claude's own src; the thumbnail asks petal-img://
-    if (!src || (SCHEME.test(src) && !/^file:/i.test(src))) {
+    if (!isLocalImageSrc(src)) {
       replaceRemote(img, src);
       continue;
     }
@@ -223,7 +204,7 @@ export function inlineImages(root: HTMLElement, cwd: string | null): void {
 
   for (const code of [...root.querySelectorAll<HTMLElement>('code')]) {
     if (code.closest('pre')) continue;
-    const path = codePath(code.textContent ?? '');
+    const path = imageCodePath(code.textContent ?? '');
     if (path && !seen(code, path)) placeAfter(code, imageFigure(path, '', cwd), root);
   }
 
@@ -235,6 +216,6 @@ export function inlineImages(root: HTMLElement, cwd: string | null): void {
   for (const text of texts) {
     const anchor = text.parentElement;
     if (!anchor) continue;
-    for (const path of textPaths(text.data)) if (!seen(anchor, path)) placeAfter(anchor, imageFigure(path, '', cwd), root);
+    for (const path of imageTextPaths(text.data)) if (!seen(anchor, path)) placeAfter(anchor, imageFigure(path, '', cwd), root);
   }
 }

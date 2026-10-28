@@ -16,6 +16,17 @@
 }
 .confirmed-list { margin: 0; padding: 0; list-style: none; }
 
+/* Verified's parts: Screens, Features, Facts. */
+.confirmed-subtitle { margin: 16px 0 8px; color: var(--muted); font: 600 13px var(--ui-font); }
+.confirmed-subtitle:first-of-type { margin-top: 0; }
+
+/* Screens: a grid of thumbnails, each over its reply's headline. */
+.confirmed-screens { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 10px; }
+.confirmed-screens .confirmed-item { margin: 0; padding: 10px; }
+.confirmed-thumb-frame { display: flex; align-items: center; justify-content: center; height: 130px; overflow: hidden; border-radius: 6px; background: var(--code-bg); }
+.confirmed-thumb { max-width: 100%; max-height: 100%; object-fit: contain; }
+.confirmed-thumb-missing { padding: 0 8px; color: var(--muted); font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+
 .confirmed-item {
   margin: 0 0 10px;
   padding: 12px 16px;
