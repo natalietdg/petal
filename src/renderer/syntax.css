@@ -1,0 +1,17 @@
+/* Syntax tokens for the Code review diff and fenced code in replies; colours come from theme.ts. */
+:is(.cr-code, .code-syntax) :is(.hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-meta) { color: var(--syn-keyword); }
+:is(.cr-code, .code-syntax) :is(.hljs-string, .hljs-regexp, .hljs-template-tag) { color: var(--syn-string); }
+:is(.cr-code, .code-syntax) :is(.hljs-number, .hljs-symbol, .hljs-bullet) { color: var(--syn-number); }
+:is(.cr-code, .code-syntax) :is(.hljs-title, .hljs-title.class_, .hljs-type, .hljs-name, .hljs-selector-tag, .hljs-selector-class) { color: var(--syn-type); }
+:is(.cr-code, .code-syntax) .hljs-title.function_ { color: var(--syn-function); }
+:is(.cr-code, .code-syntax) :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-variable.language_) { color: var(--syn-attr); }
+:is(.cr-code, .code-syntax) :is(.hljs-comment, .hljs-quote, .hljs-doctag) { color: var(--syn-comment); font-style: italic; }
+
+/* ```diff in a reply: one tinted row per line, sign in its own gutter, same tints as the Code review diff. */
+.code-diff .code-line { display: block; padding: 0 8px; }
+.code-diff .code-sign { display: inline-block; width: 1.4em; color: var(--muted); user-select: none; }
+.code-diff .code-add { background: var(--done-wash); }
+.code-diff .code-add .code-sign { color: var(--done-ink); font-weight: 700; }
+.code-diff .code-del { background: var(--decide-wash); }
+.code-diff .code-del .code-sign { color: var(--decide-ink); font-weight: 700; }
+.code-diff .code-meta { color: var(--muted); }

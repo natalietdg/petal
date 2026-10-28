@@ -57,6 +57,7 @@ import './conclusion.css';
 import './prs.css';
 import './sessions-board.css';
 import './code-review.css';
+import './syntax.css';
 import './mentions.css';
 import './board-coord.css';
 import './focus.css';
