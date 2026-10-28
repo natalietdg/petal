@@ -229,6 +229,9 @@ function wrapStory(root: HTMLElement): void {
 
 // fold: a reply's key, so its sections fold and keep what she opened across redraws; other prose never folds.
 // images: a reply's pictures become thumbnails; cwd is the session's folder, for relative paths.
+// One line of inline markdown (code, bold, links) as sanitised HTML, without the reply page treatment.
+export const renderInline = (markdownText: string): string => DOMPurify.sanitize(marked.parseInline(markdownText, { async: false }), { FORBID_ATTR: ['style'] });
+
 export function render(markdownText: string, options: { fold?: string; images?: { cwd: string | null } } = {}): HTMLDivElement {
   const html = DOMPurify.sanitize(marked.parse(markdownText, { async: false }), { FORBID_ATTR: ['style'] });
   const root = document.createElement('div');

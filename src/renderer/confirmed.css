@@ -1,0 +1,58 @@
+/* Confirmed: Verified, Decided, Done and In progress, each item a card that jumps to its reply. */
+#confirmed-view { font-family: var(--ui-font); color: var(--reader-fg); }
+
+.confirmed-verified { --ink: var(--next-ink); --wash: var(--next-wash); }
+.confirmed-decided { --ink: var(--decide-ink); --wash: var(--decide-wash); }
+.confirmed-done { --ink: var(--done-ink); --wash: var(--done-wash); }
+.confirmed-progress { --ink: var(--watch-ink); --wash: var(--watch-wash); }
+
+.confirmed-group { margin: 0 0 30px; }
+.confirmed-title {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font: 700 13px var(--ui-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.confirmed-list { margin: 0; padding: 0; list-style: none; }
+
+.confirmed-item {
+  margin: 0 0 10px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--ink);
+  border-radius: 0 10px 10px 0;
+  background: var(--wash);
+  cursor: pointer;
+}
+.confirmed-item:hover .confirmed-text { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+.confirmed-item:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.confirmed-text { font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+.confirmed-text code { padding: 0.05em 0.35em; border-radius: 4px; background: var(--code-bg); font-size: 0.9em; }
+
+.confirmed-answer { margin: 6px 0 0; font-size: 15px; line-height: 1.45; }
+.confirmed-you { font-weight: 700; color: var(--ink); }
+
+/* The reply it came from: one quiet line. */
+.confirmed-context {
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.confirmed-pill {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font: 600 11px var(--ui-font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.confirmed-pill-progress { background: var(--watch-pill); color: var(--watch-ink); }
+.confirmed-pill-waiting { background: var(--decide-pill); color: var(--decide-ink); }
+
+.confirmed-empty { margin: 18vh 0 0; color: var(--muted); font-size: 17px; text-align: center; }

@@ -43,6 +43,7 @@ import { shortcutsCheck } from './snapshot-shortcuts';
 import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
 import { codeColoursCheck } from './snapshot-code-colours';
+import { confirmedCheck } from './snapshot-confirmed';
 import { openThreadsCheck } from './snapshot-open-threads';
 import { slashMenuCheck } from './snapshot-slash';
 import { libraryCheck } from './snapshot-library';
@@ -459,6 +460,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['reader collapse', () => readerCollapseCheck(kit, win)],
     ['reader steps', () => readerStepsCheck(kit, win)],
     ['code colours', () => codeColoursCheck(kit, win)],
+    ['confirmed', () => confirmedCheck(kit, win)],
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
     ['library', keepingStores(['library', 'cost', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
@@ -659,6 +661,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'code-colours') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await codeColoursCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'confirmed') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await confirmedCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

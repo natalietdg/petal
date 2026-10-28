@@ -1,5 +1,6 @@
 import * as diagrams from './diagrams';
 import * as flow from './flow';
+import * as confirmed from './confirmed';
 import { byId, query } from './dom';
 import { setSessionName } from './session-name';
 import * as notesPanel from './notes-panel';
@@ -21,8 +22,9 @@ import type { PendingEcho } from './pending-echo';
 import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/types';
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 import { emptyLine } from '../shared/reader-empty';
+import { confirmedItems } from '../shared/confirmed';
 
-export type ReaderView = 'replies' | 'flow';
+export type ReaderView = 'replies' | 'flow' | 'confirmed';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
@@ -198,6 +200,7 @@ export function update(shown: ShownUpdate): void {
   switchedTab = lastUpdate !== null && shown.tabId !== lastUpdate.tabId;
   lastUpdate = shown;
   followNotesSession(shown);
+  if (view === 'confirmed') refreshConfirmed();
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
   const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
   pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
@@ -302,9 +305,10 @@ scroller.addEventListener('click', (event) => {
   window.pastel.openLink(link.href);
 });
 
-// Replies | Flow toggle for this window's session.
+// Replies | Flow | Confirmed toggle for this window's session.
 const repliesView = byId('replies-view');
 const flowView = byId('flow-view');
+const confirmedView = byId('confirmed-view');
 const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
 
@@ -313,14 +317,22 @@ export async function refreshFlow(): Promise<void> {
   flow.render(flowView, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
 }
 
-const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow';
+// Built from the replies already shown, so it follows them as they update.
+function refreshConfirmed(): void {
+  const groups = confirmedItems(lastUpdate?.replies ?? [], (lastUpdate?.waiting ?? []).map((w) => w.prompt));
+  confirmed.render(confirmedView, groups, (replyId) => showReply([replyId]));
+}
+
+const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed';
 
 export function setView(next: ReaderView): void {
   view = next;
   repliesView.hidden = view !== 'replies';
   flowView.hidden = view !== 'flow';
+  confirmedView.hidden = view !== 'confirmed';
   for (const button of toggles) button.setAttribute('aria-selected', String(button.dataset.view === view));
-  if (view !== 'replies') refreshFlow();
+  if (view === 'flow') refreshFlow();
+  if (view === 'confirmed') refreshConfirmed();
 }
 
 // The notes panel follows the shown tab's Claude session, or the last one it had once Claude ends;
@@ -346,7 +358,7 @@ for (const button of toggles) {
   button.addEventListener('click', () => { if (isView(button.dataset.view)) setView(button.dataset.view); });
 }
 
-// Jump from a flow step to its reply; only the newest 20 replies are kept on screen.
+// Jump from a flow step or a Confirmed item to its reply; only the newest 20 replies are kept on screen.
 export function showReply(replyIds: readonly (string | undefined)[]): void {
   setView('replies');
   const target = [...replyIds].reverse().map((id) => document.querySelector<HTMLElement>(`[data-reply-id="${CSS.escape(String(id))}"]`)).find(Boolean);
