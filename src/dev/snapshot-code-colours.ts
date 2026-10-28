@@ -96,5 +96,6 @@ export async function codeColoursCheck(kit: Kit, win: BrowserWindow): Promise<vo
     }
     check(pictured, `${theme} picture shows the sample reply`);
   }
+  applyTheme('paleSky', { persist: false }); // back to the baseline look for the steps after
   resizeOffscreen(win, startWidth, startHeight);
 }
