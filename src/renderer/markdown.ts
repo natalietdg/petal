@@ -8,6 +8,7 @@ import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status
 import { foldSections, liftSummary } from './fold';
 import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
 import { inlineImages } from './reply-images';
+import { highlightCodeBlocks } from './syntax';
 
 const LABELS: Record<string, string> = { 'done': 'done', 'why': 'why', 'watch out': 'watch', 'decide': 'decide', 'next': 'next' };
 
@@ -233,6 +234,7 @@ export function render(markdownText: string, options: { fold?: string; images?: 
   const root = document.createElement('div');
   root.className = 'prose';
   root.innerHTML = html;
+  highlightCodeBlocks(root);
   if (options.images) inlineImages(root, options.images.cwd); // first, so a remote image's link gets its short label below
   shortenBareLinks(root); // first, so headline length counts the label, not the URL
   tagCallouts(root);

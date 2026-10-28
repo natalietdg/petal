@@ -1,48 +1,14 @@
 // One function card: where it is, a compact before/after diff, and the reviewer's "why it's written like this".
 import { el } from './dom';
-import hljs from 'highlight.js/lib/core';
-import bash from 'highlight.js/lib/languages/bash';
-import css from 'highlight.js/lib/languages/css';
-import go from 'highlight.js/lib/languages/go';
-import javascript from 'highlight.js/lib/languages/javascript';
-import json from 'highlight.js/lib/languages/json';
-import kotlin from 'highlight.js/lib/languages/kotlin';
-import python from 'highlight.js/lib/languages/python';
-import swift from 'highlight.js/lib/languages/swift';
-import typescript from 'highlight.js/lib/languages/typescript';
-import xml from 'highlight.js/lib/languages/xml';
 import { compactDiff, diffLines, type DiffLine } from '../shared/line-diff';
 import { KIND_WORDS, type FunctionCard, type ReasoningExcerpt, type WhyAnswer } from '../shared/code-review';
+import { highlightedLines, languageFor } from './syntax';
 
 export interface CardState {
   answer: WhyAnswer | null;
   explained: boolean; // a run finished for this content
   running: boolean;
   onRetry: (() => void) | null;
-}
-
-for (const [name, language] of Object.entries({ bash, css, go, javascript, json, kotlin, python, swift, typescript, xml })) hljs.registerLanguage(name, language);
-
-// Each language's aliases cover its extensions (ts, py, kt, sh, html...); anything else stays plain.
-export function languageFor(file: string): string | null {
-  const ext = /\.([\w]+)$/.exec(file)?.[1]?.toLowerCase();
-  return ext && hljs.getLanguage(ext) ? ext : null;
-}
-
-// Highlighted HTML per line: open spans are closed at each newline and reopened on the next, so a block comment stays coloured.
-function highlightedLines(text: string, language: string): string[] {
-  const html = hljs.highlight(text.replace(/\n$/, ''), { language, ignoreIllegals: true }).value;
-  const lines: string[] = [];
-  const open: string[] = [];
-  let line = '';
-  for (const part of html.split(/(<span[^>]*>|<\/span>|\n)/)) {
-    if (part === '\n') { lines.push(line + '</span>'.repeat(open.length)); line = open.join(''); }
-    else if (part.startsWith('<span')) { open.push(part); line += part; }
-    else if (part === '</span>') { open.pop(); line += part; }
-    else line += part;
-  }
-  lines.push(line);
-  return lines;
 }
 
 // Before lines feed '-' and ' ' rows, after lines feed '+' rows, matching diffLines' order.
