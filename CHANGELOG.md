@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.6] · 2026-10-28
+- Code blocks in replies have syntax colours, light and dark. Diffs tint added and removed lines.
+- A Testing Run that can't start says why, even with the view scrolled.
+
 ## [1.1.5] · 2026-10-27
 - /login and /logout in the slash menu, and typing a command's exact name picks it first.
 - Code review diffs have syntax colours.
