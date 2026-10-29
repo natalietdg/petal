@@ -47,6 +47,7 @@ import * as stopClaude from './stop-claude';
 import * as textSize from './text-size';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
+import { quotePaths } from '../shared/quote-path';
 import type { Tab } from './tabs';
 import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
@@ -199,6 +200,16 @@ async function start(): Promise<void> {
   // Clicking the reader must not steal keystrokes from the shell (unless selecting text).
   byId('reader').addEventListener('mouseup', () => {
     if (!window.getSelection()?.toString()) focusTerminal();
+  });
+  // A file dropped on the reader goes to this tab's Claude prompt, as a drop on its terminal does.
+  terminal.acceptFileDrags(byId('reader'));
+  byId('reader').addEventListener('drop', (event) => {
+    const paths = terminal.droppedPaths(event.dataTransfer);
+    const tab = tabs.active();
+    if (!paths.length || !tab) return;
+    event.preventDefault();
+    tab.term.paste(`${quotePaths(paths)} `);
+    focusTerminal();
   });
 
   window.addEventListener('petal:focus-terminal', focusTerminal);
