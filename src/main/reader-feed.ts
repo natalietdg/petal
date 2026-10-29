@@ -81,6 +81,11 @@ export class ReaderFeed implements ProcessListener {
     return this.replies;
   }
 
+  // Her prompts Claude hasn't answered with text yet, oldest first; the quit's resume notes read them.
+  get waitingPrompts(): readonly WaitingPrompt[] {
+    return this.waiting;
+  }
+
   get needsProcesses(): boolean {
     return !this.fixture;
   }

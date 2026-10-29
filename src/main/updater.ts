@@ -114,10 +114,12 @@ export function checkForUpdatesNow(env: Pick<UpdaterEnv, 'onReady' | 'onNote'>):
 }
 
 // The pill's Restart: never while a Claude or any other foreground command runs in Petal, since quitting would cut it off.
-export async function restartToUpdate(env: Pick<UpdaterEnv, 'claudeRunning' | 'commandRunning'>): Promise<RestartResult> {
+// beforeInstall runs while the windows are still open (quitAndInstall closes them before before-quit).
+export async function restartToUpdate(env: Pick<UpdaterEnv, 'claudeRunning' | 'commandRunning'> & { beforeInstall?: () => Promise<void> }): Promise<RestartResult> {
   if (!readyVersion || !updater) return { note: NOT_READY_NOTE };
   if (await env.claudeRunning()) return { note: CLAUDE_RUNNING_NOTE };
   if (await env.commandRunning()) return { note: COMMAND_RUNNING_NOTE };
+  await env.beforeInstall?.();
   updater.quitAndInstall();
   return { restarting: true };
 }

@@ -71,6 +71,7 @@ import { formattingGuideCheck } from './snapshot-formatting-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
 import { sessionsBoardCheck } from './snapshot-sessions-board';
+import { resumeNotesCheck } from './snapshot-resume-notes';
 import { mentionsCheck } from './snapshot-mentions';
 import { clashesCheck } from './snapshot-clashes';
 import { prdTasksCheck } from './snapshot-prd-tasks';
@@ -434,6 +435,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['favorites', () => favoritesCheck(kit, win)],
     ['session names', () => sessionNamesCheck(kit, { win, openTab: tabs.openTab })],
     ['sessions board', () => sessionsBoardCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })],
+    ['resume notes', () => resumeNotesCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions })], // fixture tabs and a scratch repo; removes the notes it wrote
     ['clashes', () => clashesCheck(kit, { win, openTab: tabs.openTab })],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
@@ -813,6 +815,14 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await sessionNamesCheck(kit, { win, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  // The notes Petal's quit writes, triggered directly; the run's own quit at the end writes them again for real.
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'resume-notes' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await resumeNotesCheck(kit, { win, openTab, sessions }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 
