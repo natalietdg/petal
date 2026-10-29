@@ -5,6 +5,7 @@ Each release gets a `## [version] · date` entry here before `npm run release`; 
 ## [1.1.6] · 2026-10-28
 - Code blocks in replies have syntax colours, light and dark. Diffs tint added and removed lines.
 - A Testing Run that can't start says why, even with the view scrolled.
+- A Confirmed tab in the reader: what the session verified (screens, features, facts), decided, finished, and still has in progress.
 
 ## [1.1.5] · 2026-10-27
 - /login and /logout in the slash menu, and typing a command's exact name picks it first.
