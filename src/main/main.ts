@@ -10,6 +10,7 @@ import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
 import * as organizer from './session-organizer';
 import * as responseHook from './response-hook';
+import * as resumeNotes from './resume-notes';
 import { registerWorkflowIpc } from './workflow-ipc';
 import { registerSlashIpc } from './slash-ipc';
 import { registerLibraryIpc } from './library-ipc';
@@ -95,6 +96,8 @@ function createWindow(): BrowserWindow {
 
   const contentsId = win.webContents.id;
   assignSlot(contentsId);
+  // The last window's tabs stop on 'closed', before quit begins; the resume notes read them first.
+  win.on('close', () => { if (BrowserWindow.getAllWindows().length <= 1) resumeNotes.noteClosingWindow(sessions); });
   win.on('closed', () => {
     closeWindowTabs(contentsId);
     releaseSlot(contentsId);
@@ -198,7 +201,7 @@ function registerIpc(): void {
   registerReplyImages({ sessions });
   registerLayoutIpc();
   handle('update:status', () => ({ readyVersion: updateReadyVersion(), whatsNew: takeWhatsNew() }));
-  handle('update:restart', () => restartToUpdate(liveEnv()));
+  handle('update:restart', () => restartToUpdate({ ...liveEnv(), beforeInstall: () => resumeNotes.writeOnQuit(sessions) }));
   handle('update:whats-new', async (event) => {
     await showWhatsNew(BrowserWindow.fromWebContents(event.sender));
     return { ok: true as const };
@@ -221,6 +224,12 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => responseHook.stopAllHooks()); // hooks run detached, so they would outlive Petal
+// Cmd+Q, the last window closing, osascript's quit: held up to ~3s while each open tab's resume note is written.
+app.on('before-quit', (event) => {
+  if (resumeNotes.quitNotesDone()) return;
+  event.preventDefault();
+  void resumeNotes.writeOnQuit(sessions).then(() => app.quit());
+});
 app.on('will-quit', () => { organizer.stop(); coord.stop(); flushActivity(); });
 
 app.on('window-all-closed', () => app.quit());
