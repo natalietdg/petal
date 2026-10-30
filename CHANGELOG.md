@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.7] · 2026-10-30
+- Drop a file or image on the reader and its path goes into that tab's Claude prompt.
+- When Petal quits, each open session leaves a resume note in ~/.petal/resume, so you can pick up where you left off.
+
 ## [1.1.6] · 2026-10-28
 - Code blocks in replies have syntax colours, light and dark. Diffs tint added and removed lines.
 - A Testing Run that can't start says why, even with the view scrolled.
