@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { app, type BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
 import { pictureRoot } from './snapshot-reply-images';
 import { resizeTo } from './snapshot-tables';
@@ -11,7 +11,7 @@ import { resizeOffscreen } from '../main/snapshot-window';
 const THEMES = ['paleSky', 'nightPastel']; // one light, one dark
 const WIDTH = 990;
 const TALL_HEIGHT = 1900;
-const SAMPLE_PNG = 'build/icon.iconset/icon_128x128.png'; // the app icon, already in the repo
+const SAMPLE_SIZE = 128; // px; a corner of the window itself, so it exists in a packaged build too
 
 const NEWEST = [
   '**The export button is half built.**',
@@ -100,15 +100,15 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
   await js('PastelTerm.getStarted.close()'); // a fresh profile opens on Get started, over the reader
 
   const place = sideBySideHome(kit.outDir) ? { root: os.homedir() } : pictureRoot(kit.outDir);
-  const source = path.join(app.getAppPath(), SAMPLE_PNG);
-  if ('skip' in place || !fs.existsSync(source)) {
-    log(`FAIL confirmed: no place for the sample screen (${'skip' in place ? place.skip : `missing ${source}`})`);
+  if ('skip' in place) {
+    log(`FAIL confirmed: no place for the sample screen (${place.skip})`);
     return;
   }
   // A scratch HOME gets it as ~/; under her real HOME it sits under the snapshot folder, as an absolute path.
   const screenDir = path.join(place.root, 'Desktop', 'petal-confirmed-sample');
   fs.mkdirSync(screenDir, { recursive: true });
-  fs.copyFileSync(source, path.join(screenDir, 'settings.png'));
+  const corner = await win.webContents.capturePage({ x: 0, y: 0, width: SAMPLE_SIZE, height: SAMPLE_SIZE });
+  fs.writeFileSync(path.join(screenDir, 'settings.png'), corner.resize({ width: SAMPLE_SIZE, height: SAMPLE_SIZE }).toPNG());
   const screen = place.root === os.homedir() ? '~/Desktop/petal-confirmed-sample/settings.png' : path.join(screenDir, 'settings.png');
 
   // The fixture feed can redraw its own replies; re-send the sample whenever it is gone.
