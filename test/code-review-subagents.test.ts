@@ -121,6 +121,34 @@ describe('matching a subagent to the turn that launched it', () => {
   });
 });
 
+describe('a background subagent’s hand-back', () => {
+  // The parent launches in the background, replies, and later answers the subagent's hand-back with its own reply.
+  const backgroundParent = (): TranscriptEntry[] => [
+    ...parentEntries().slice(0, 3),
+    { isSidechain: false, cwd: '/repo', sessionId: SESSION, type: 'user', uuid: 'p-h', isMeta: true, origin: { kind: 'peer', handback: true, from: AGENT }, message: { role: 'user', content: 'The cart is fixed.' } },
+    { isSidechain: false, cwd: '/repo', sessionId: SESSION, type: 'assistant', uuid: 'p-b', message: { role: 'assistant', content: [{ type: 'text', text: 'The cart fix is built.' }] } },
+  ] as TranscriptEntry[];
+
+  it('records the reporting agent on the turn its hand-back opened', () => {
+    const c = new CodeChangeCollector();
+    for (const entry of backgroundParent()) c.add(entry);
+    expect(c.changed().map((t) => [t.turnId, t.replyId, t.agentCalls, t.agentReports])).toEqual([['p-u', 'p-a', [CALL], []], ['p-h', 'p-b', [], [AGENT]]]);
+  });
+
+  it('lists the subagent’s changes under the reply that reports them, as well as the launching one', async () => {
+    const { root, parent } = layout();
+    const c = new CodeChangeCollector();
+    for (const entry of backgroundParent()) c.add(entry);
+    const byTurn = await subagentsByTurn(parent, c.changed(), [root]);
+    expect([...byTurn].map(([turnId, agents]) => [turnId, agents.map((a) => [a.agentId, a.functions])])).toEqual([['p-u', [[AGENT, 4]]], ['p-h', [[AGENT, 4]]]]);
+  });
+
+  it('ignores a hand-back from an agent that isn’t this session’s subagent', async () => {
+    const { root, parent } = layout();
+    expect((await subagentsByTurn(parent, [{ turnId: 'p-h', agentCalls: [], agentReports: ['elsewhere'] }], [root])).size).toBe(0);
+  });
+});
+
 describe('the reply view’s groups', () => {
   it('puts each launched subagent under its own heading after the reply’s own turns', async () => {
     const { reviewGroups } = await import('../src/renderer/code-review-groups');

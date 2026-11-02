@@ -135,7 +135,7 @@ function paintAll(key: string | null = null): void {
 export function attach(host: HTMLElement, parts: HTMLElement[], source: ReviewSource | null, match: TurnMatch): void {
   if (!source || ('replyId' in match && !match.replyId)) return;
   const mount: Mount = { host, parts, source, match, tabs: null, panel: null };
-  mounts = [...mounts.filter((m) => m.host.isConnected && m.host !== host), mount];
+  mounts = [...mounts.filter((m) => m.host !== host), mount]; // History builds its cards before inserting them; paintAll drops detached ones
   paint(mount);
   if (shown.get(matchKey(mount)) === 'review' && !loadedAll(mount)) void loadReviews(mount);
   void refreshSummary(source);

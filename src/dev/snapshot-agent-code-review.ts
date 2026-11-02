@@ -1,5 +1,6 @@
 // Code review for subagents: the reply that launched a subagent counts its changes and lists them under
-// "By subagent: …", with the same cards and Explain. The reviewer is the snapshot stub only.
+// "By subagent: …", with the same cards and Explain. A background subagent's changes also show on the reply
+// answering its hand-back. The reviewer is the snapshot stub only.
 // Everything it adds is taken out again: the fixture logs, the History record, cached answers, the stub and Activity.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,10 +18,17 @@ const ORIGINAL = 'export function total(items: Item[]): number {\n  return items
 const OLD = 'return items.reduce((sum, i) => sum + i.price, 0);';
 const NEW = 'return items.reduce((sum, i) => sum + i.price * i.qty, 0);';
 const REASON = 'The total ignored quantity, so multiply each price by qty.';
+// The background subagent: launched into its own worktree, it reports back later with a hand-back.
+const BG_AGENT = 'fxcodereviewbg1';
+const BG_CALL = 'toolu_fx_agent_review_bg';
+const BG_TASK = 'Add a discount';
+const BG_ORIGINAL = 'export const price = (p: number): number => p;\n';
+const BG_NEW = 'export const discounted = (p: number): number => p * 0.9;\n';
 
 const jsonl = (lines: unknown[]) => lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
 
-// The parent: her prompt and one Agent call whose id the subagent's meta.json records.
+// The parent: her prompt and one Agent call whose id the subagent's meta.json records; then a background
+// launch, and the reply that answers its hand-back.
 function parentLines(cwd: string): unknown[] {
   const base = { isSidechain: false, cwd, sessionId: SESSION, timestamp: new Date().toISOString() };
   return [
@@ -28,6 +36,23 @@ function parentLines(cwd: string): unknown[] {
     { ...base, type: 'assistant', uuid: 'pa-a', message: { role: 'assistant', content: [{ type: 'text', text: 'Sending an agent to fix it.' }, { type: 'tool_use', id: CALL, name: 'Agent', input: { description: TASK, prompt: 'Fix the cart total.' } }] } },
     { ...base, type: 'user', uuid: 'pa-r', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: CALL, content: 'Fixed.' }] } },
     { ...base, type: 'assistant', uuid: 'pa-d', message: { role: 'assistant', content: [{ type: 'text', text: 'The agent fixed the total.' }] } },
+    { ...base, type: 'user', uuid: 'pb-u', message: { role: 'user', content: 'build a discount in the background' } },
+    { ...base, type: 'assistant', uuid: 'pb-a', message: { role: 'assistant', content: [{ type: 'tool_use', id: BG_CALL, name: 'Agent', input: { description: BG_TASK, prompt: 'Add a discount.', run_in_background: true, isolation: 'worktree' } }] } },
+    { ...base, type: 'user', uuid: 'pb-r', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: BG_CALL, content: 'Async agent launched.' }] } },
+    { ...base, type: 'assistant', uuid: 'pb-d', message: { role: 'assistant', content: [{ type: 'text', text: 'A background agent is adding it.' }] } },
+    { ...base, type: 'user', uuid: 'pb-h', isMeta: true, origin: { kind: 'peer', handback: true, from: BG_AGENT }, message: { role: 'user', content: 'The discount is added.' } },
+    { ...base, type: 'assistant', uuid: 'pb-b', message: { role: 'assistant', content: [{ type: 'text', text: 'The discount is built.' }] } },
+  ];
+}
+
+// The background subagent's log: one Write in a worktree that is gone by now.
+function backgroundLines(cwd: string): unknown[] {
+  const file = path.join(cwd, '.claude', 'worktrees', `agent-${BG_AGENT}`, 'src', 'price.ts');
+  const base = { isSidechain: true, agentId: BG_AGENT, cwd, timestamp: new Date().toISOString() };
+  return [
+    { ...base, type: 'user', uuid: 'bg-u', message: { role: 'user', content: 'Add a discount.' } },
+    { ...base, type: 'assistant', uuid: 'bg-e', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'bg-t1', name: 'Write', input: { file_path: file, content: BG_ORIGINAL + BG_NEW } }] } },
+    { ...base, type: 'user', uuid: 'bg-r', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'bg-t1', content: 'ok' }] }, toolUseResult: { type: 'update', filePath: file, originalFile: BG_ORIGINAL } },
   ];
 }
 
@@ -44,12 +69,12 @@ function agentLines(cwd: string): unknown[] {
   ];
 }
 
-function writeAgent(dir: string, cwd: string): void {
-  const file = path.join(dir, `agent-${AGENT}.jsonl`);
+function writeAgent(dir: string, agent: { id: string; task: string; call: string; lines: unknown[] }): void {
+  const file = path.join(dir, `agent-${agent.id}.jsonl`);
   assertFixtureOutsideClaude(file);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, jsonl(agentLines(cwd)));
-  fs.writeFileSync(path.join(dir, `agent-${AGENT}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description: TASK, toolUseId: CALL }));
+  fs.writeFileSync(file, jsonl(agent.lines));
+  fs.writeFileSync(path.join(dir, `agent-${agent.id}.meta.json`), JSON.stringify({ agentType: 'general-purpose', description: agent.task, toolUseId: agent.call }));
 }
 
 const STUB_REPLY = JSON.stringify({
@@ -82,33 +107,44 @@ export async function agentCodeReviewCheck(kit: Kit): Promise<void> {
   const parentFile = path.join(project, `${SESSION}.jsonl`);
   assertFixtureOutsideClaude(parentFile);
   fs.mkdirSync(project, { recursive: true });
-  fs.writeFileSync(parentFile, jsonl(parentLines(project)));
-  writeAgent(path.join(project, SESSION, 'subagents'), project);
+  const lines = parentLines(project);
+  fs.writeFileSync(parentFile, jsonl(lines));
+  writeAgent(path.join(project, SESSION, 'subagents'), { id: AGENT, task: TASK, call: CALL, lines: agentLines(project) });
+  writeAgent(path.join(project, SESSION, 'subagents'), { id: BG_AGENT, task: BG_TASK, call: BG_CALL, lines: backgroundLines(project) });
   codeReviewFixture.projectsRoots = [path.join(root, 'projects')];
-  historyFixture.records = [{ sessionId: SESSION, file: parentFile, cwd: project, title: 'Agent code review fixture', firstPrompt: 'have an agent fix the cart total', lastAt: Date.now() + 60_000, messages: 4, messagesExact: true }];
+  historyFixture.records = [{ sessionId: SESSION, file: parentFile, cwd: project, title: 'Agent code review fixture', firstPrompt: 'have an agent fix the cart total', lastAt: Date.now() + 60_000, messages: lines.length, messagesExact: true }];
   const prompts: string[] = [];
   codeReviewFixture.review = async (prompt) => { prompts.push(prompt); return STUB_REPLY; };
   const restoreActivity = keepActivity();
   const H = '#history-preview';
+  const H0 = `${H} .history-turn[data-turn="0"]`; // newest first, so each check names its reply
   try {
     // History: the reply that launched the agent counts its changes and shows them under the agent's task.
     await js(`PastelTerm.history.open().then(() => { PastelTerm.history.select(${JSON.stringify(SESSION)}); return PastelTerm.history.setPreviewMode('replies'); })`);
-    const listed = await probe(H, (p) => p.tabs.length === 2);
+    const listed = await probe(H0, (p) => p.tabs.length === 2);
     check(listed?.tabs[1] === 'Code review (1)' && listed.selected === 'Reply', `the launching reply has Reply · Code review (1): ${JSON.stringify(listed?.tabs)}`);
-    await click(`${H} .cr-tab:last-of-type`);
-    const grouped = await probe(H, (p) => p.cards.length === 1 && p.explain);
+    await click(`${H0} .cr-tab:last-of-type`);
+    const grouped = await probe(H0, (p) => p.cards.length === 1 && p.explain);
     check(grouped?.headings.join() === `By subagent: ${TASK}` && grouped.cards[0].name === 'total' && grouped.cards[0].diff, `the agent's card sits under its heading: ${JSON.stringify(grouped)}`);
     check(/^Explain every function · ~[\d,]+ tokens$/.test(grouped?.explain ?? '') && prompts.length === 0, `the estimate shows before any call: ${JSON.stringify(grouped?.explain)}`);
-    await click(`${H} .cr-explain-button`);
-    const answered = await probe(H, (p) => p.cards[0]?.why);
+    await click(`${H0} .cr-explain-button`);
+    const answered = await probe(H0, (p) => p.cards[0]?.why);
     check(answered?.cards[0].why.startsWith('Recorded') && prompts.length === 1 && prompts[0].includes(`+  ${NEW}`), `one stubbed call, answered as recorded: ${JSON.stringify(answered?.cards)}`);
     check(fs.existsSync(path.join(app.getPath('userData'), 'code-review', `${SESSION}--${AGENT}.json`)), 'the answers are cached per agent');
     await capture('agent-code-review-light');
     applyTheme('nightPastel', { persist: false });
     await capture('agent-code-review-dark');
     applyTheme('paleSky', { persist: false });
-    await click(`${H} .cr-tab:first-of-type`);
-    check(await probe(H, (p) => p.selected === 'Reply'), 'Reply is back on');
+    await click(`${H0} .cr-tab:first-of-type`);
+    check(await probe(H0, (p) => p.selected === 'Reply'), 'Reply is back on');
+    // The background agent: its changes show on the reply answering its hand-back, not only where it was launched.
+    const HB = `${H} .history-turn[data-turn="2"]`;
+    const reported = await probe(HB, (p) => p.tabs.length === 2);
+    check(reported?.tabs[1] === 'Code review (1)', `the hand-back reply has Reply · Code review (1): ${JSON.stringify(reported?.tabs)}`);
+    await click(`${HB} .cr-tab:last-of-type`);
+    const built = await probe(HB, (p) => p.cards.length === 1);
+    check(built?.headings.join() === `By subagent: ${BG_TASK}` && built.cards[0].name === 'discounted' && built.cards[0].diff, `the background agent's card sits under its heading: ${JSON.stringify(built)}`);
+    await click(`${HB} .cr-tab:first-of-type`);
     await js('PastelTerm.history.close()');
   } finally {
     codeReviewFixture.review = null;

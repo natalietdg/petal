@@ -22,6 +22,7 @@ export interface CodeTurn {
   cards: FunctionCard[];
   skipped: string[];
   agentCalls: string[]; // tool_use ids of the subagents this turn launched (their meta.json toolUseId)
+  agentReports: string[]; // agent ids whose hand-back opened this turn: the reply that reports what they built
 }
 
 // The file as it is now, when the transcript lacks the original; null when unreadable.
@@ -61,6 +62,7 @@ export class CodeChangeCollector {
   private afterAgent = false;
   private cwd: string | null = null;
   private opener: TranscriptEntry | null = null; // the entry that ended the last turn; the next turn is keyed by it
+  private reporter: string | null = null; // the subagent whose hand-back ended the last turn
   private readonly readCurrent: ReadCurrent;
   private readonly sidechain: boolean;
 
@@ -77,6 +79,7 @@ export class CodeChangeCollector {
     if (isUserTurn(entry) || queuedPromptText(entry) || isAgentMessage(entry)) {
       this.turn = null; // the next text or edit opens a new turn, as in the reader
       this.opener = entry;
+      this.reporter = handbackAgent(entry);
       return;
     }
     if (entry.type === 'assistant' && !entry.isSidechain) this.readAssistant(entry);
@@ -85,7 +88,7 @@ export class CodeChangeCollector {
 
   // Turns that changed code or launched subagents (which may have), oldest first.
   changed(): CodeTurn[] {
-    return this.turns.filter((t) => t.cards.length || t.skipped.length || t.agentCalls.length);
+    return this.turns.filter((t) => t.cards.length || t.skipped.length || t.agentCalls.length || t.agentReports.length);
   }
 
   // Mirrors readTurns: a prompt (or slash command) starts one; Claude's answer to another agent starts one with its first text.
@@ -107,9 +110,11 @@ export class CodeChangeCollector {
     this.turn = {
       turnId: opener.uuid ?? `turn-${this.turns.length}`, replyId: null, historyIndex: this.historyIndex,
       at: entry.timestamp ?? null, cwd: this.cwd, reasoning: [], cards: [], skipped: [], agentCalls: [],
+      agentReports: this.reporter ? [this.reporter] : [],
     };
     this.turns.push(this.turn);
     this.opener = null;
+    this.reporter = null;
     return this.turn;
   }
 
@@ -200,3 +205,7 @@ export class CodeChangeCollector {
 }
 
 const isError = (item: ContentItem): boolean => item.is_error === true;
+
+// A background subagent's final report arrives as a hand-back from its agent id.
+const handbackAgent = (entry: TranscriptEntry): string | null =>
+  isAgentMessage(entry) && entry.origin?.handback === true ? text(entry.origin.from) : null;

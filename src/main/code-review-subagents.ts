@@ -91,16 +91,17 @@ async function changesOf(session: ReviewSession): Promise<{ turnIds: string[]; f
   return next;
 }
 
-// Each parent turn's subagents that changed code, by turn id.
+// Each parent turn's subagents that changed code, by turn id: the turn that launched one, and the turn its hand-back opened.
 export async function subagentsByTurn(
-  parent: ReviewSession, turns: readonly { turnId: string; agentCalls: string[] }[], roots: readonly string[] = subagentRoots(),
+  parent: ReviewSession, turns: readonly { turnId: string; agentCalls: string[]; agentReports?: string[] }[], roots: readonly string[] = subagentRoots(),
 ): Promise<Map<string, SubagentChanges[]>> {
   const byTurn = new Map<string, SubagentChanges[]>();
-  if (!turns.some((t) => t.agentCalls.length)) return byTurn;
+  if (!turns.some((t) => t.agentCalls.length || t.agentReports?.length)) return byTurn;
   const launched = launchedAgents(subagentsDirOf(parent));
   for (const turn of turns) {
     const agents: SubagentChanges[] = [];
-    for (const agentId of turn.agentCalls.map((call) => launched.get(call))) {
+    const agentIds = new Set([...turn.agentCalls.map((call) => launched.get(call)), ...(turn.agentReports ?? [])]);
+    for (const agentId of agentIds) {
       const session = agentId ? subagentSession(parent, agentId, roots) : null;
       const changes = session ? await changesOf(session).catch(() => null) : null;
       if (agentId && session && changes?.functions) agents.push({ agentId, description: subagentTask(session.transcript), turnIds: changes.turnIds, functions: changes.functions });

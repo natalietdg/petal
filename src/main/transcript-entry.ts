@@ -36,7 +36,7 @@ export interface TranscriptEntry {
   cwd?: unknown;
   aiTitle?: string;
   customTitle?: string; // a 'custom-title' entry: her /rename
-  origin?: { kind?: string; handback?: boolean }; // another agent's message arrives as a meta user entry, kind 'peer'
+  origin?: { kind?: string; handback?: boolean; from?: string }; // another agent's message arrives as a meta user entry, kind 'peer'; from: the sender's agent id
   message?: { role?: string; content?: string | ContentItem[]; stop_reason?: string | null };
   toolUseResult?: unknown; // on a tool_result entry: Claude Code's own record of the call, e.g. an edit's originalFile
   attachment?: { type?: string; commandMode?: string; prompt?: string | ContentItem[]; origin?: { kind?: string } }; // queued_command: her message sent while Claude works
