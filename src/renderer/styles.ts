@@ -57,6 +57,7 @@ import './agents.css';
 import './conclusion.css';
 import './prs.css';
 import './sessions-board.css';
+import './waiting.css';
 import './code-review.css';
 import './syntax.css';
 import './mentions.css';
