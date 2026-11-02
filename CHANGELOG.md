@@ -2,6 +2,10 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.8] · 2026-11-02
+- A Waiting button gathers every open question and running job across your sessions in one list.
+- Code review shows what a background subagent built on the reply that reports it.
+
 ## [1.1.7] · 2026-10-30
 - Drop a file or image on the reader and its path goes into that tab's Claude prompt.
 - When Petal quits, each open session leaves a resume note in ~/.petal/resume, so you can pick up where you left off.
