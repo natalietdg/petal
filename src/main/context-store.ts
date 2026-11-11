@@ -82,6 +82,9 @@ export function record({ sessionId, cwd, repo, replies, files }: RecordInput): v
   save();
 }
 
+// When a session's record was last written from, so a backfill skips logs it has already read.
+export const recordedAt = (sessionId: string): number | null => loaded()[sessionId]?.lastAt ?? null;
+
 // What the Related view draws for one session; null when the session has no record yet.
 export function related(sessionId: string): RelatedWork | null {
   const all = loaded();

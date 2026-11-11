@@ -30,9 +30,13 @@ const MAX_TOPICS = 24;
 const MAX_ENTRIES = 40;
 const MAX_FILES = 200;
 
+// The repo label reads "name · branch"; the topic is the name, so sessions on different branches of one repo still relate.
+export const repoTopic = (repo: string | null): string | null => (repo ? repo.split(' · ')[0]?.trim() || null : null);
+
 export function topicsOf(markdowns: readonly string[], repo: string | null): string[] {
   const found = new Set<string>();
-  if (repo) found.add(repo);
+  const name = repoTopic(repo);
+  if (name) found.add(name);
   for (const text of markdowns) for (const id of text.match(TICKET) ?? []) found.add(id);
   return [...found].slice(0, MAX_TOPICS);
 }

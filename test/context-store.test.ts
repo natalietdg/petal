@@ -22,7 +22,7 @@ const session = (over: Partial<SessionContext>): SessionContext => ({
 
 describe('topicsOf', () => {
   it('collects the repo and ticket ids, once each', () => {
-    expect(topicsOf(['AB#10496 is scoped. PAY-412 too, and AB#10496 again.'], 'admin-v3')).toEqual(['admin-v3', 'AB#10496', 'PAY-412']);
+    expect(topicsOf(['AB#10496 is scoped. PAY-412 too, and AB#10496 again.'], 'admin-v3 · feature/x')).toEqual(['admin-v3', 'AB#10496', 'PAY-412']);
   });
 
   it('ignores ordinary words and short dashes', () => {

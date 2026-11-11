@@ -4,6 +4,7 @@ import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
 import { registerContextIpc } from './context-ipc';
+import { backfillContextStore } from './context-backfill';
 import { registerSessionsIpc } from './sessions-ipc';
 import { registerAgentsIpc } from './agents-ipc';
 import { claudeFixture, folderFixture, freshInstallRun, isSnapshotRun, userDataDir } from './snapshot-mode';
@@ -220,6 +221,7 @@ app.whenReady().then(() => {
   // The organizer starts the same way in snapshot runs, so they prove the default; its passes never call Claude there.
   organizer.start({ openSessionIds });
   coord.start(sessions, { tabLabel: tabLabelOf }); // tasks, file clashes and the activity feed across live sessions
+  if (!isSnapshotRun()) void backfillContextStore(); // past sessions into the shared context store, one log per event-loop turn
   // The dev harness is a separate chunk, loaded only in snapshot runs; release builds compile it out.
   if (__PASTEL_DEV_HARNESS__ && isSnapshotRun()) import('../dev/snapshot').then((snapshot) => snapshot.run({ win, sessions, activeSession, openTab, themes, applyTheme }));
   void startUpdater(liveEnv()); // off in snapshot, dev and non-Developer ID builds
