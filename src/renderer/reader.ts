@@ -1,7 +1,7 @@
 import * as diagrams from './diagrams';
 import * as flow from './flow';
 import * as confirmed from './confirmed';
-import { byId, query } from './dom';
+import { byId, isIpcError, query } from './dom';
 import { setSessionName } from './session-name';
 import * as notesPanel from './notes-panel';
 import { timeOf } from './format';
@@ -25,7 +25,7 @@ import { emptyLine } from '../shared/reader-empty';
 import { confirmedItems } from '../shared/confirmed';
 import { sessionWordsLine } from '../shared/headline';
 import * as related from './related';
-import type { RelatedWork } from '../shared/context-store';
+import { relatedLine, type RelatedWork } from '../shared/context-store';
 
 export type ReaderView = 'replies' | 'flow' | 'confirmed' | 'related';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
@@ -39,6 +39,25 @@ const scroller = byId('reader');
 const strip = createStrip();
 strip.id = 'reader-status-strip';
 query(byId('reader-head'), '.reader-head-column').append(strip);
+// One line under the strip when other sessions relate to this one; clicking it opens the Related tab.
+const relatedLineEl = document.createElement('button');
+relatedLineEl.type = 'button';
+relatedLineEl.id = 'reader-related-line';
+relatedLineEl.className = 'reader-related-line';
+relatedLineEl.hidden = true;
+relatedLineEl.addEventListener('click', () => setView('related'));
+query(byId('reader-head'), '.reader-head-column').append(relatedLineEl);
+let relatedLineKey = ''; // "<sessionId>:<reply count>", so the store is asked once per new reply, not per redraw
+
+async function paintRelatedLine(shown: ShownUpdate): Promise<void> {
+  const key = `${shown.sessionId ?? ''}:${shown.replies.length}`;
+  if (key === relatedLineKey) return;
+  relatedLineKey = key;
+  const result = shown.sessionId ? await window.pastel.context.related(shown.sessionId) : null;
+  const line = result && !isIpcError(result) && result.related ? relatedLine(result.related) : null;
+  relatedLineEl.textContent = line ? `Related · ${line}` : '';
+  relatedLineEl.hidden = !line;
+}
 let latestId: string | null | undefined = null;
 const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
 const FLASH_MS = 1600;
@@ -211,6 +230,7 @@ export function update(shown: ShownUpdate): void {
   paintPinned();
   prsTab.paint(notesSession ?? null, `${replies.length}:${replies[0]?.id}:${replies[0]?.markdown.length ?? 0}:${waiting.length}`);
   paintStrip(strip, replies.map((r) => r.markdown));
+  void paintRelatedLine(shown);
   banners.paint();
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
@@ -340,6 +360,9 @@ async function refreshRelated(): Promise<void> {
 export function showRelated(sample: RelatedWork, label: string | null): void {
   setView('related');
   related.render(relatedView, { related: sample }, label);
+  const line = relatedLine(sample);
+  relatedLineEl.textContent = line ? `Related · ${line}` : '';
+  relatedLineEl.hidden = !line;
 }
 
 const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed' || value === 'related';

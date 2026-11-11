@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { entriesOf, relatedWork, shortFile, topicsOf, type SessionContext } from '../src/shared/context-store';
+import { entriesOf, relatedLine, relatedWork, shortFile, topicsOf, type SessionContext } from '../src/shared/context-store';
+
+describe('relatedLine', () => {
+  const s = (over: Partial<SessionContext>): SessionContext => ({ sessionId: 'x', cwd: null, repo: null, title: '', topics: [], entries: [], files: [], firstAt: null, lastAt: null, ...over });
+  it('is nothing when nothing relates', () => {
+    expect(relatedLine({ waitsOn: [], waitingOnThis: [], sharedTopics: {}, overlap: [] })).toBeNull();
+  });
+  it('leads with overlap, then earlier decisions, then later sessions', () => {
+    const earlier = s({ sessionId: 'e', entries: [{ kind: 'decided', text: 'a' }, { kind: 'decided', text: 'b' }, { kind: 'next', text: 'c' }] });
+    const work = { waitsOn: [earlier], waitingOnThis: [s({ sessionId: 'l' })], sharedTopics: {}, overlap: [{ file: '/r/a.ts', sessions: [earlier] }] };
+    expect(relatedLine(work)).toBe('1 file also being changed elsewhere · 2 decisions made earlier · 1 later session builds on this');
+  });
+  it('counts earlier sessions when they decided nothing', () => {
+    expect(relatedLine({ waitsOn: [s({ sessionId: 'e' })], waitingOnThis: [], sharedTopics: {}, overlap: [] })).toBe('1 earlier session');
+  });
+});
 
 const session = (over: Partial<SessionContext>): SessionContext => ({
   sessionId: 's', cwd: null, repo: null, title: '', topics: [], entries: [], files: [], firstAt: null, lastAt: null, ...over,

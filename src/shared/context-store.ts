@@ -81,5 +81,16 @@ export function relatedWork(self: SessionContext, others: readonly SessionContex
   return { waitsOn, waitingOnThis, sharedTopics, overlap };
 }
 
+// One line for the reader head when a session has related work, so it is seen without opening the tab; null when there is none.
+export function relatedLine(work: RelatedWork): string | null {
+  const parts: string[] = [];
+  if (work.overlap.length) parts.push(work.overlap.length === 1 ? '1 file also being changed elsewhere' : `${work.overlap.length} files also being changed elsewhere`);
+  const decided = work.waitsOn.reduce((sum, s) => sum + s.entries.filter((e) => e.kind === 'decided').length, 0);
+  if (decided) parts.push(decided === 1 ? '1 decision made earlier' : `${decided} decisions made earlier`);
+  else if (work.waitsOn.length) parts.push(work.waitsOn.length === 1 ? '1 earlier session' : `${work.waitsOn.length} earlier sessions`);
+  if (work.waitingOnThis.length) parts.push(work.waitingOnThis.length === 1 ? '1 later session builds on this' : `${work.waitingOnThis.length} later sessions build on this`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 // Short name for a file in the overlap list: the last two path segments.
 export const shortFile = (file: string): string => file.split('/').slice(-2).join('/');

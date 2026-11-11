@@ -462,6 +462,24 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
   color: var(--reader-fg);
 }
 .status-strip[hidden] { display: none; }
+
+/* Related work, one line under the strip, in the watch colour because it is the one thing another session may change. */
+.reader-related-line {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: 600 11px/1.5 var(--ui-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--watch-ink);
+  cursor: pointer;
+}
+.reader-related-line:hover { text-decoration: underline; }
+.reader-related-line[hidden] { display: none; }
 /* One quiet bar above the strip folds it and the pinned conclusion away (reader-banners.ts); the strip's rule moves up to it. */
 .banners-bar {
   display: flex;

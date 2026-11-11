@@ -41,6 +41,7 @@ const MEASURE = `(() => {
     cards: view.querySelectorAll('.related-card').length,
     pills: [...view.querySelectorAll('.related-pill')].map((p) => p.textContent),
     selected: document.querySelector('#reader-head .view-toggle [aria-selected="true"]').dataset.view,
+    line: (() => { const l = document.getElementById('reader-related-line'); return l && !l.hidden ? l.textContent : null; })(),
   };
 })()`;
 
@@ -60,7 +61,7 @@ export async function relatedCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     applyTheme(theme, { persist: false });
     await wait(300);
     await show();
-    const m = await js(MEASURE) as { visible: boolean; headline: string | null; titles: string[]; overlapRows: number; cards: number; pills: string[]; selected: string };
+    const m = await js(MEASURE) as { visible: boolean; headline: string | null; titles: string[]; overlapRows: number; cards: number; pills: string[]; selected: string; line: string | null };
     log(`related ${theme}: ${JSON.stringify(m)}`);
     check(m.visible, `${theme} Related page is visible`);
     check(m.selected === 'related', `${theme} Related button is the selected tab`);
@@ -68,6 +69,7 @@ export async function relatedCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(m.titles.join(',') === 'Overlap,Waiting on this,Waits on', `${theme} sections in weight order`);
     check(m.overlapRows === 1 && m.cards === 2, `${theme} one overlap row and two session cards`);
     check(m.pills.join(',') === 'Open,Next,Decided,Next', `${theme} entries carry their kind`);
+    check(m.line === 'Related · 1 file also being changed elsewhere · 1 decision made earlier · 1 later session builds on this', `${theme} the head line sums it up`);
     resizeOffscreen(win, WIDTH, TALL_HEIGHT);
     await wait(300);
     await show();
