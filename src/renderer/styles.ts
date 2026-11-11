@@ -36,6 +36,7 @@ import './scenes/tarot.css';
 import './scenes/scene-card.css';
 import './flow.css';
 import './confirmed.css';
+import './related.css';
 import './history.css';
 import './favorites.css';
 import './notes.css';

@@ -220,6 +220,9 @@ const api = {
     cancel: () => invoke('code-review:cancel'),
     onChanged: (callback: (change: EventChannels['code-review:changed']) => void) => subscribe('code-review:changed', callback),
   },
+  context: {
+    related: (sessionId: string) => invoke('context:related', { sessionId }),
+  },
   history: {
     list: () => invoke('history:list'),
     pastSummary: () => invoke('history:past-summary'),

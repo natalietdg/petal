@@ -3,6 +3,7 @@ import path from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
+import { registerContextIpc } from './context-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
 import { registerAgentsIpc } from './agents-ipc';
 import { claudeFixture, folderFixture, freshInstallRun, isSnapshotRun, userDataDir } from './snapshot-mode';
@@ -174,6 +175,7 @@ function registerIpc(): void {
   registerWorkflowIpc({ sessions, history, organizer });
   registerSlashIpc();
   registerLibraryIpc({ sessions });
+  registerContextIpc();
   registerTestingIpc({ sessions, openTab, agentOpening });
   registerSessionInfoIpc({ sessions });
   registerSessionPrsIpc({ sessions });

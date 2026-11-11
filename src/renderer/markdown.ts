@@ -7,6 +7,7 @@ import { parseTaskLine, TASK_STATE_WORDS, type TaskLine } from '../shared/task-l
 import { parseStatusLine, STATUS_TITLES, type StatusKey } from '../shared/status-lines';
 import { foldSections, liftSummary } from './fold';
 import { isAssumedTitle, isCheckedLabel, isOpenThreadsHeading } from '../shared/reply-threads';
+import { headlineOverBudget } from '../shared/headline';
 import { inlineImages } from './reply-images';
 import { highlightCodeBlocks } from './syntax';
 
@@ -128,6 +129,9 @@ function tagHeadline(root: HTMLElement): void {
   const length = textOf(first).length;
   if (length > HEADLINE_VERY_LONG_CHARS) first.classList.add('headline-very-long');
   else if (length > HEADLINE_LONG_CHARS) first.classList.add('headline-long');
+  // Over ten words, the count shows under the headline (CSS reads the attribute; the text itself stays untouched).
+  const over = headlineOverBudget(textOf(first));
+  if (over) first.setAttribute('data-words', String(over));
 }
 
 // Open threads is back matter too, so the end mark and each look's section numbering stop before it.

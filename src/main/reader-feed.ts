@@ -9,6 +9,7 @@ import { claudeFolderAllowed } from './claude-folder';
 import { isClosingConcludePrompt, sameConclusion, type Conclusion } from '../shared/conclusion';
 import { ConcludeWatch } from './conclude-close';
 import { derivedStatus } from './turn-state';
+import * as contextStore from './context-store';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderNotice, ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
@@ -159,7 +160,7 @@ export class ReaderFeed implements ProcessListener {
     void this.refreshConclusion();
   }
 
-  private show({ replies, waiting, promptCount, turnOpen }: TranscriptView): void {
+  private show({ replies, waiting, promptCount, turnOpen, files }: TranscriptView): void {
     if (this.firstReadIn) this.transcriptChangedAt = Date.now();
     this.firstReadIn = true;
     this.turnOpen = turnOpen;
@@ -167,6 +168,8 @@ export class ReaderFeed implements ProcessListener {
     this.waiting = waiting;
     this.promptCount = promptCount;
     this.emit('live');
+    // The shared context store keeps what this session decided, left open and edited, for the Related view of every other session.
+    if (this.session?.sessionId) contextStore.record({ sessionId: this.session.sessionId, cwd: this.session.cwd ?? null, repo: this.repo, replies, files });
     void this.refreshConclusion();
   }
 

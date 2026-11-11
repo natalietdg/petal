@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ReplyCollector } from './replies';
-import { parseEntry } from './transcript-entry';
+import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { TurnTracker } from './turn-state';
 import type { Reply, WaitingPrompt } from '../shared/types';
 
@@ -11,6 +11,22 @@ export interface TranscriptView {
   waiting: WaitingPrompt[];
   promptCount: number;
   turnOpen: boolean; // Claude still owes a turn, read from the log; used only when the session file has no status
+  files: string[]; // every file an Edit or Write touched, oldest first, for the shared context store
+}
+
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
+// The file paths this assistant entry edited or wrote, if any.
+export function editedFiles(entry: TranscriptEntry): string[] {
+  const content = entry.message?.content;
+  if (entry.type !== 'assistant' || !Array.isArray(content)) return [];
+  const files: string[] = [];
+  for (const item of content) {
+    if (item.type !== 'tool_use' || !item.name || !EDIT_TOOLS.has(item.name)) continue;
+    const file = item.input?.file_path ?? item.input?.notebook_path;
+    if (file) files.push(file);
+  }
+  return files;
 }
 
 export type OnTranscript = (view: TranscriptView) => void;
@@ -166,6 +182,7 @@ export class TranscriptTail {
   private readonly onUpdate: OnTranscript;
   private collector = new ReplyCollector();
   private turn = new TurnTracker();
+  private files = new Set<string>();
   private changed = false;
   private readonly tail: JsonlTail;
 
@@ -178,6 +195,7 @@ export class TranscriptTail {
   private restart(): void {
     this.collector = new ReplyCollector();
     this.turn = new TurnTracker();
+    this.files = new Set();
     this.changed = false;
     this.onUpdate(this.view());
   }
@@ -193,6 +211,7 @@ export class TranscriptTail {
         const entry = parseEntry(line);
         const repliesChanged = this.collector.add(entry);
         const turnChanged = this.turn.add(entry);
+        for (const file of editedFiles(entry)) this.files.add(file);
         this.changed = repliesChanged || turnChanged || this.changed;
       } catch {
         // Skip malformed lines.
@@ -212,6 +231,7 @@ export class TranscriptTail {
       waiting: this.collector.waiting(),
       promptCount: this.collector.promptCount,
       turnOpen: this.turn.open,
+      files: [...this.files],
     };
   }
 

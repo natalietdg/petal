@@ -329,6 +329,17 @@ h2.foldable:hover .fold-toggle { color: var(--reader-fg); }
   text-wrap: balance;
   margin-bottom: 0.5em;
 }
+/* A headline past the ten-word budget shows its count, in the watch colour, so the length is seen before it is read. */
+#latest .headline[data-words]::after {
+  content: attr(data-words) ' words';
+  display: block;
+  margin-top: 0.35em;
+  font: 600 11px/1.4 var(--ui-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--watch-ink);
+}
+
 /* Standfirst: the paragraph right after the headline, like a news deck. */
 #latest .headline + p {
   font-size: 1.14em;

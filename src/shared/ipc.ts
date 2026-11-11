@@ -1,6 +1,7 @@
 // The IPC contract: every channel between main and the renderer, with its payload and reply types.
 // main/ipc.ts and preload.ts only accept channels listed here, so a renamed channel fails typecheck.
 import type { Choice, FlowTarget, IpcError, Reply, TabId, TabReaderUpdate, Theme, TermSize } from './types';
+import type { RelatedWork } from './context-store';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
 import type { ListedSession, PastSessionsSummary } from '../main/history';
@@ -315,6 +316,9 @@ export interface InvokeChannels {
   'factory:get': { args: []; result: Guarded<FactoryState> };
   'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };
   'factory:use-global': { args: [request: { repo: string }]; result: Guarded<FactoryState> };
+
+  // The Related view: sessions sharing a topic or a file with this one, from the shared context store.
+  'context:related': { args: [request: { sessionId: string }]; result: Guarded<{ related: RelatedWork | null }> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
   'history:search': { args: [request: { query: string }]; result: Guarded<HistorySearchResult> }; // her prompts and Claude's replies, not just titles

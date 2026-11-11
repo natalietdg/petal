@@ -23,8 +23,10 @@ import type { ReaderNotice, ReaderState, Reply, WaitingPrompt } from '../shared/
 import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 import { emptyLine } from '../shared/reader-empty';
 import { confirmedItems } from '../shared/confirmed';
+import { sessionWordsLine } from '../shared/headline';
+import * as related from './related';
 
-export type ReaderView = 'replies' | 'flow' | 'confirmed';
+export type ReaderView = 'replies' | 'flow' | 'confirmed' | 'related';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
@@ -201,6 +203,7 @@ export function update(shown: ShownUpdate): void {
   lastUpdate = shown;
   followNotesSession(shown);
   if (view === 'confirmed') refreshConfirmed();
+  if (view === 'related') void refreshRelated();
   const { state, replies, waiting = [], pending = [], busy = false, repo = null, conclusion = null } = shown;
   const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
   pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
@@ -230,9 +233,10 @@ export function update(shown: ShownUpdate): void {
   else if (empty === 'start') showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
   if (empty || !newest) return;
   status.classList.remove('empty');
+  const words = sessionWordsLine(replies.map((r) => r.markdown));
   status.textContent = state === 'ended'
-    ? `Session ended · last reply ${timeOfReply(newest.timestamp)}`
-    : `Latest reply · ${timeOfReply(newest.timestamp)}`;
+    ? `Session ended · last reply ${timeOfReply(newest.timestamp)} · ${words}`
+    : `Latest reply · ${timeOfReply(newest.timestamp)} · ${words}`;
   appendStop();
   // Chat-style: what she asked sits in a quiet bubble above Claude's reply.
   const needsYou = live && !busy ? distillCard.card(shown.tabId ?? null, 'reader') : null; // a test-loop round waiting on her
@@ -309,6 +313,7 @@ scroller.addEventListener('click', (event) => {
 const repliesView = byId('replies-view');
 const flowView = byId('flow-view');
 const confirmedView = byId('confirmed-view');
+const relatedView = byId('related-view');
 const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
 
@@ -323,16 +328,25 @@ function refreshConfirmed(): void {
   confirmed.render(confirmedView, groups, lastUpdate?.cwd ?? null, (replyId) => showReply([replyId]));
 }
 
-const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed';
+// Other sessions that share a topic or a file with this one, read from the shared context store.
+async function refreshRelated(): Promise<void> {
+  const sessionId = lastUpdate?.sessionId ?? null;
+  const result = sessionId ? await window.pastel.context.related(sessionId) : null;
+  related.render(relatedView, result, lastUpdate?.label ?? null);
+}
+
+const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed' || value === 'related';
 
 export function setView(next: ReaderView): void {
   view = next;
   repliesView.hidden = view !== 'replies';
   flowView.hidden = view !== 'flow';
   confirmedView.hidden = view !== 'confirmed';
+  relatedView.hidden = view !== 'related';
   for (const button of toggles) button.setAttribute('aria-selected', String(button.dataset.view === view));
   if (view === 'flow') refreshFlow();
   if (view === 'confirmed') refreshConfirmed();
+  if (view === 'related') void refreshRelated();
 }
 
 // The notes panel follows the shown tab's Claude session, or the last one it had once Claude ends;
