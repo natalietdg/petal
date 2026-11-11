@@ -45,6 +45,7 @@ import { readerCollapseCheck } from './snapshot-reader-collapse';
 import { readerStepsCheck } from './snapshot-reader-steps';
 import { codeColoursCheck } from './snapshot-code-colours';
 import { confirmedCheck } from './snapshot-confirmed';
+import { relatedCheck } from './snapshot-related';
 import { waitingCheck } from './snapshot-waiting';
 import { openThreadsCheck } from './snapshot-open-threads';
 import { slashMenuCheck } from './snapshot-slash';
@@ -467,6 +468,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['code colours', () => codeColoursCheck(kit, win)],
     ['waiting', () => waitingCheck(kit, { win, openTab: tabs.openTab })], // two fixture tabs; closes them after
     ['confirmed', () => confirmedCheck(kit, win)],
+    ['related', () => relatedCheck(kit, win)], // a fixture result drawn straight into the view; the store is never read
     ['open threads', () => openThreadsCheck(kit, win)], // sends one card's question to the fixture tab
     ['slash menu', () => slashMenuCheck(kit, win)], // sends one picked command to the fixture tab
     ['library', keepingStores(['library', 'cost', 'activity'], () => libraryCheck(kit, win), kit.outDir)], // a stubbed extractor only; never a real claude
@@ -680,6 +682,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'confirmed') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await confirmedCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'related') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await relatedCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

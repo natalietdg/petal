@@ -25,6 +25,7 @@ import { emptyLine } from '../shared/reader-empty';
 import { confirmedItems } from '../shared/confirmed';
 import { sessionWordsLine } from '../shared/headline';
 import * as related from './related';
+import type { RelatedWork } from '../shared/context-store';
 
 export type ReaderView = 'replies' | 'flow' | 'confirmed' | 'related';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
@@ -333,6 +334,12 @@ async function refreshRelated(): Promise<void> {
   const sessionId = lastUpdate?.sessionId ?? null;
   const result = sessionId ? await window.pastel.context.related(sessionId) : null;
   related.render(relatedView, result, lastUpdate?.label ?? null);
+}
+
+// For the snapshot run: draws a given Related result without the store, so the page can be pictured from a fixture.
+export function showRelated(sample: RelatedWork, label: string | null): void {
+  setView('related');
+  related.render(relatedView, { related: sample }, label);
 }
 
 const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed' || value === 'related';
