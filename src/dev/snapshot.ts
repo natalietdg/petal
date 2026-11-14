@@ -633,6 +633,9 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'book-look') {
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    // About 1s after launch the tab's feed turns live on the fixture log; that update would replace the sample reply the check draws.
+    const settled = await waitFor(() => js("PastelTerm.tabs.active()?.update?.state === 'live' || null"), 10000);
+    log(`${settled ? 'ok' : 'FAIL'} book look: the tab's feed went live before the sample reply is drawn`);
     await bookLookCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
