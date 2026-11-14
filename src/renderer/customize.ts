@@ -34,7 +34,7 @@ const SECTIONS: Section[] = [
   workflowSection('time'),
   workflowSection('handoffs'),
   workflowSection('factory'),
-  { id: 'advanced', name: 'Advanced', summary: 'Power tools for many sessions, test loops and releases. Off for new installs.' },
+  { id: 'advanced', name: 'Advanced', summary: 'Power tools for many sessions, tasks and releases. Off for new installs.' },
 ];
 
 for (const s of SECTIONS) {

@@ -1,4 +1,4 @@
-// Customize › Advanced: shows or hides the power tools (Factory, Tasks, the testing loop, deploy order and the like).
+// Customize › Advanced: shows or hides the power tools (Factory, Tasks, the test lock, deploy order and the like).
 // Hiding is UI only. Elements with the class "advanced-only" hide through CSS; code that builds rows asks isOn().
 const listeners = new Set<(on: boolean) => void>();
 let on = false;

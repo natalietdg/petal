@@ -62,7 +62,7 @@ export interface Config {
   text: { terminalFontSize: number; readerPercent: number };
   // OS notifications from the Testing loop (needs you, fix landed, loop finished); the dock badge and lanes show regardless.
   testing: { notify: boolean };
-  // Advanced: Factory, Tasks, the testing loop and other power tools. UI only; hooks and skills in ~/.claude stay as they are.
+  // Advanced: Factory, Tasks, the test lock and other power tools. UI only; hooks and skills in ~/.claude stay as they are.
   advanced: { on: boolean };
   // Conclude closes the tab after its summary; the first time, Petal asks first. True once she said Close.
   conclude: { warned: boolean };

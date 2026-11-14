@@ -87,7 +87,7 @@ const suiteZone = zone('Suite', head, confirmBox, changeBox, filterBox, strip, e
 const scenariosZone = zone('Scenarios & bugs', el('h3', 'tst-zone-title', 'Scenarios & bugs'), criteriaBox);
 const agentsZone = zone('Agents', el('h3', 'tst-zone-title', 'Agents'), pickerBox, loopPanel.element); // the lanes follow, below
 scenariosZone.classList.add('advanced-only'); // scenarios, manual checks, ADO copy and the bug queue are Advanced tools
-agentsZone.classList.add('advanced-only'); // the task picker, test loop and its agents' lanes too
+pickerBox.classList.add('advanced-only'); // picking another task is Tasks/PRDs; the loop, its agents and lanes are core
 main.append(suiteZone, scenariosZone, agentsZone);
 body.append(main, side);
 view.append(title, note, body);
@@ -450,7 +450,7 @@ const fixHandlers = {
   fixStage: (stage: StageResult, where: FixWhere) => fix(stage, null, where),
   fixEstimate: (stage: StageResult): string | null => {
     const task = shownTask();
-    if (!task || !advanced.isOn()) return null; // the estimate is the bug fix agent's
+    if (!task) return null; // the estimate is the bug fix agent's, which works per task
     const prompt = buildFixPrompt({ stage: stage.name, command: stage.command, tests: stage.tests, output: stage.output });
     return agentEstimateText(agentTokens(buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: stage.name, prompt }).length, FIX_TURNS));
   },
@@ -499,7 +499,6 @@ async function chooseSession(sessionId: string): Promise<void> {
 // Each Claude session's distillation goes under that session's newest row in History, once. The loop's testing agent
 // shows its live rounds too, and its threads are asked through main, which resumes it when no claude runs it.
 function historyExtras(): ((row: RunRow) => HTMLElement | null) | undefined {
-  if (!advanced.isOn()) return undefined; // distillation is an Advanced tool
   const groups = new Map(bySession(taskDistillation()).map((g) => [g.sessionId, g.records]));
   const tester = loopDistillation();
   if (tester.sessionId) groups.set(tester.sessionId, tester.distill);

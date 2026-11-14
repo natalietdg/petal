@@ -6,10 +6,10 @@ import { card, field, note, page, save } from './customize-kit';
 const SHOWS = [
   'Factory, /factory and the Station bar',
   'Tasks, PRDs and subtasks',
-  'The test loop, testing and bug-fix agents, lane chat, the bug queue and distillation',
+  'Picking another task for the test loop',
   'The test lock',
   'PRs deploy order and “Is main safe for prod?”',
-  'Manual checks and Azure DevOps bug copy',
+  'Scenarios, manual checks, the bug queue and Azure DevOps bug copy',
   'Customize › Prompts, Time, Handoffs and Factory',
 ];
 
@@ -20,7 +20,7 @@ export function renderAdvanced(): HTMLElement[] {
   const list = el('ul', 'cz-list');
   list.append(...SHOWS.map((line) => el('li', null, line)));
   return [
-    card('Advanced tools', field('Show advanced tools', toggle, 'For running many sessions, test loops and releases.'),
+    card('Advanced tools', field('Show advanced tools', toggle, 'For running many sessions, tasks and releases.'),
       note('Turning this on shows:'), list,
       note('Turning it off only hides them. Nothing is uninstalled, and hooks or skills already in your Claude folder keep running.')),
   ];

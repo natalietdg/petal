@@ -34,7 +34,7 @@ function stationRow(station: StationProgress): HTMLElement {
 }
 
 function loopRow(loop: LoopProgress): HTMLElement {
-  const row = el('div', 'status-row status-station status-loop advanced-only');
+  const row = el('div', 'status-row status-station status-loop');
   row.append(el('span', 'status-chip', 'Loop'));
   row.insertAdjacentHTML('beforeend', loopBarHtml(loop)); // built from escaped text only
   return row;
@@ -54,9 +54,9 @@ type Found = { lines: StatusLines; station: StationProgress | null; loop: LoopPr
 function newestLines(newestFirst: readonly string[]): Found | null {
   for (const markdown of newestFirst) {
     const lines = parseStatus(markdown);
-    const power = advanced.isOn(); // Station, Loop and Task lines are Advanced tools; Doing / Recommend / Next always show
+    const power = advanced.isOn(); // Station and Task lines are Advanced tools; the test loop and Doing / Recommend / Next always show
     const station = power ? parseStation(markdown) : null;
-    const loop = power ? parseLoop(markdown) : null;
+    const loop = parseLoop(markdown);
     const task = power ? parseTask(markdown) : null;
     if (hasStatus(lines) || station || loop || task) return { lines, station, loop, task };
   }
