@@ -77,7 +77,7 @@ function sessionRow({ title, sessionId, running }: ResumeNotesSet['sessions'][nu
 }
 
 export function resumeCard(set: ResumeNotesSet): HTMLElement {
-  const card = el('div', 'status resume-notice');
+  const card = el('div', 'resume-notice'); // not .status: the looks restyle that as a caps kicker pill
   card.setAttribute('role', 'status');
   const count = set.notes === 1 ? 'a note' : `${set.notes} notes`;
   card.append(el('p', 'resume-notice-line', `When Petal last quit (${set.when}) it saved ${count} on where each session stopped.`));
@@ -87,7 +87,7 @@ export function resumeCard(set: ResumeNotesSet): HTMLElement {
     card.append(list);
   }
   const actions = el('div', 'resume-notice-actions');
-  const reveal = el('button', 'flow-button resume-notice-reveal', 'Show notes in Finder');
+  const reveal = el('button', 'cz-quiet-button resume-notice-reveal', 'Show notes in Finder');
   reveal.type = 'button';
   reveal.addEventListener('click', () => void window.pastel.resumeNotes.reveal(set.stamp));
   const dismiss = el('button', 'cz-quiet-button resume-notice-dismiss', 'Dismiss');
