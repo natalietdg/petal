@@ -2,13 +2,14 @@
    Ivar is used when installed; Newsreader and Instrument Serif stand in otherwise. IBM Plex Mono for the running head (OFL, bundled).
    :is(#latest, .prose) carries an id's weight, so these beat reader.css and magazine.css's shared rules. */
 
-[data-reading="book"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
+/* #app, not just the reader: Board, History, Customize and the side panels take the same paper. */
+[data-reading="book"] :is(#app, .cz-preview, .ck-sample) {
   --book-ink: var(--reader-fg);
   --book-mono: "IBM Plex Mono", var(--mono-font);
   --book-display: "Ivar Display Condensed", "Ivar Display", "Instrument Serif", "Newsreader Variable", Georgia, serif; /* Ivar when installed (licensed, not bundled) */
 }
 /* Light themes: grey paper, soft black ink, as on the reference page. */
-[data-reading="book"][data-theme="light"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
+[data-reading="book"][data-theme="light"] :is(#app, .cz-preview, .ck-sample) {
   --reader-bg: #EFEFEF;
   --reader-fg: #2D2D2D;
   --muted: #6B6B6B;
@@ -214,70 +215,38 @@
 
 /* ---- Wide window: a two-page spread. The headline sits pinned on the left page, the text runs on the right,
    a double dashed rule between them, as on the Stripe Press reader. ---- */
+/* Wide windows: the text column stays 760px; a reply's Doing / Recommend / Next pin in a column on its left. */
 @media (min-width: 1200px) {
-  [data-reading="book"] :is(#reader, #reader-head, #composer) {
-    --reading-measure: 1680px;
-    --book-text: min(760px, 56%); /* right page width; % of the spread */
-    --book-gutter: 72px;
-  }
-  [data-reading="book"] #replies-view {
-    position: relative;
+  [data-reading="book"] :is(#reader, #reader-head, #composer) { --reading-measure: 760px; --book-pin: 260px; --book-pin-gap: 64px; }
+  [data-reading="book"]:has(#latest > .prose > .status-block) :is(#reader, #reader-head) { --reading-measure: calc(760px + var(--book-pin) + var(--book-pin-gap)); }
+  [data-reading="book"] #latest > .prose:has(> .status-block) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--book-text);
-    column-gap: var(--book-gutter);
+    grid-template-columns: var(--book-pin) minmax(0, 1fr);
+    column-gap: var(--book-pin-gap);
+    align-items: start;
   }
-  /* The double rule, centred in the gutter, full height of the spread. */
-  [data-reading="book"] #replies-view::before,
-  [data-reading="book"] #replies-view::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    border-left: 1px dashed var(--rule);
-    pointer-events: none;
-  }
-  [data-reading="book"] #replies-view::before { right: calc(var(--book-text) + var(--book-gutter) / 2 - 12px); }
-  [data-reading="book"] #replies-view::after { right: calc(var(--book-text) + var(--book-gutter) / 2 + 12px); }
-
-  [data-reading="book"] #reader-status { grid-column: 1; grid-row: 1; margin: 0 0 1.6em; border-bottom: 0; }
-  [data-reading="book"] #latest { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: subgrid; }
-  [data-reading="book"] #older { grid-column: 2; grid-row: 3; }
-  [data-reading="book"] #latest > * { grid-column: 2; }
-  [data-reading="book"] #latest > .prose { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-content: start; }
-  [data-reading="book"] #latest > .prose > * { grid-column: 2; }
-  /* Left page: the chapter title at the top; the opening lines run beside it on the right page. */
-  [data-reading="book"] #latest > .prose > .story-head {
+  [data-reading="book"] #latest > .prose:has(> .status-block) > * { grid-column: 2; }
+  [data-reading="book"] #latest > .prose > .status-block {
     grid-column: 1;
-    grid-row: 1 / span 6; /* spans the opening rows; empty ones collapse to nothing */
-    align-self: start;
-    margin: 0;
-    padding-right: 8px;
-  }
-  /* Margin notes: each section spans the spread; its sidebars and pull quotes sit on the left page beside it. */
-  [data-reading="book"] #latest > .prose > .story-section { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: start; }
-  [data-reading="book"] #latest > .prose > .story-section > h2 { grid-column: 2; grid-row: 1; }
-  [data-reading="book"] #latest > .prose > .story-section > .section-body { grid-column: 2; grid-row: 2; }
-  [data-reading="book"] #latest > .prose > .story-section:not(.folded) > .section-body { display: block; }
-  [data-reading="book"] #latest > .prose > .story-section:not(.folded) > .rail {
-    display: block;
-    grid-column: 1;
-    grid-row: 1 / span 2;
-    position: sticky; /* follows its section down the page, then stops at the section's end */
+    grid-row: 1 / span 400; /* the whole reply, so it stays pinned to the end */
+    position: sticky;
     top: 24px;
-    padding-right: 8px;
+    grid-template-columns: minmax(0, 1fr); /* label above its line in the narrow column */
+    gap: 0.15em;
+    margin: 0;
+    padding-top: 0.75em;
+    border-top: 1px solid var(--rule);
   }
-  [data-reading="book"] #latest .rail blockquote:first-child { margin-top: 0.2em; }
-  [data-reading="book"] #latest .rail blockquote.pull-quote { margin-left: 0; font-size: 2.1em; }
-  [data-reading="book"] #latest .rail blockquote.sidebar { font-size: 0.85em; }
+  [data-reading="book"] #latest > .prose > .status-block .status-chip + * { margin-bottom: 0.9em; }
+  [data-reading="book"]:has(#latest > .prose > .status-block) :is(#older, #reader-status) { margin-left: calc(var(--book-pin) + var(--book-pin-gap)); }
+  [data-reading="book"]:has(#latest > .prose > .status-block) #reader-status-strip { display: none; } /* pinned beside the text instead */
+  /* Its fold bar too, when the conclusion pin and PRs it also folds are absent. */
+  [data-reading="book"]:has(#latest > .prose > .status-block):has(#reader-conclusion-pin[hidden]):has(#reader-prs[hidden]) #reader-banners-bar { display: none; }
   [data-reading="book"] #latest > .prose > .story-head .headline { font-size: clamp(3.2em, 4.6vw, 5em); line-height: 0.92; }
   [data-reading="book"] #latest > .prose > .story-head .headline.headline-long { font-size: clamp(2.8em, 3.8vw, 4em); }
   [data-reading="book"] #latest > .prose > .story-head .headline.headline-very-long { font-size: clamp(2.2em, 2.9vw, 3em); }
   [data-reading="book"] #latest > .prose > .story-head .checked-line::before { content: "[ "; }
   [data-reading="book"] #latest > .prose > .story-head .checked-line::after { content: " ]"; }
-
-  /* The reply box sits under the right page. */
-  [data-reading="book"] #composer { --reading-measure: 760px; justify-content: end; }
-  [data-reading="book"] #reader-head { justify-content: start; }
 }
 
 /* ---- Doing / Recommend / Next: mono labels between hairlines. ---- */

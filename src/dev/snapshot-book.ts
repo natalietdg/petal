@@ -34,17 +34,31 @@ export async function bookLookCheck(kit: Kit, win: BrowserWindow): Promise<void>
   })()`);
   check(shape.align === 'justify' && shape.indent !== '0px' && shape.gap === '0px' && shape.quote?.style === 'italic' && shape.quote?.border === '0px', `book page shape: ${JSON.stringify(shape)}`);
 
-  // Margin notes: every section's rail sits on the left page, beside and level with its own text.
-  await js("document.getElementById('reader').scrollTop = 0"); // at rest; scrolled, sticky notes follow their section down
-  await wait(200);
-  const notes = await js(`(() => [...document.querySelectorAll('#latest .story-section:not(.folded) > .rail')].map((rail) => {
-    const r = rail.getBoundingClientRect();
-    const body = rail.parentElement.querySelector(':scope > .section-body').getBoundingClientRect();
-    const head = document.querySelector('#latest .story-head').getBoundingClientRect();
-    const h2 = rail.parentElement.querySelector(':scope > h2').getBoundingClientRect();
-    return { left: r.right <= body.left, level: Math.abs(r.top - h2.top) < 40, offset: Math.round(r.top - h2.top), clearOfHead: r.top >= head.bottom - 1, shown: r.height > 0 };
-  }))()`);
-  check(notes.length > 0 && notes.every((n: Record<string, boolean | number>) => n.left && n.level && n.clearOfHead && n.shown), `margin notes on the left page: ${JSON.stringify(notes)}`);
+  // Newest reply last at every width, like the other looks.
+  const order = await js(`(() => {
+    const older = document.getElementById('older');
+    const latest = document.getElementById('latest').getBoundingClientRect();
+    const hasOlder = older && older.getBoundingClientRect().height > 0;
+    return { width: innerWidth, hasOlder, olderAbove: !hasOlder || older.getBoundingClientRect().bottom <= latest.top + 1 };
+  })()`);
+  check(order.olderAbove, `newest reply below earlier turns: ${JSON.stringify(order)}`);
+
+  // Doing / Recommend / Next pin on the left of the text and stay on screen while the reply scrolls.
+  const pin = await js(`(async () => {
+    const r = document.getElementById('reader');
+    const block = document.querySelector('#latest > .prose > .status-block');
+    const text = document.querySelector('#latest > .prose > .story-section');
+    if (!block || !text) return { found: false };
+    const left = block.getBoundingClientRect().right <= text.getBoundingClientRect().left;
+    const latest = document.getElementById('latest');
+    r.scrollTop = latest.offsetTop + latest.offsetHeight / 2 - r.clientHeight / 2; // middle of the newest reply
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    const b = block.getBoundingClientRect(), view = r.getBoundingClientRect();
+    const strip = document.getElementById('reader-status-strip');
+    return { found: true, left, pinned: b.top >= view.top && b.bottom <= view.bottom, stripHidden: !strip || getComputedStyle(strip).display === 'none', barHidden: getComputedStyle(document.getElementById('reader-banners-bar')).display === 'none' };
+  })()`);
+  check(pin.found && pin.left && pin.pinned && pin.stripHidden && pin.barHidden, `status lines pinned left of the text: ${JSON.stringify(pin)}`);
+  await js("document.getElementById('reader').scrollTop = 0");
 
   for (const id of ['paleSky', 'nightPastel', 'black']) {
     applyTheme(id, { persist: false });
@@ -61,7 +75,15 @@ export async function bookLookCheck(kit: Kit, win: BrowserWindow): Promise<void>
     }
   }
 
+  // Other views take the same paper, not the theme's cream.
   applyTheme('paleSky', { persist: false });
+  await js('PastelTerm.history.open()');
+  await wait(400);
+  const historyBg = await js("getComputedStyle(document.getElementById('history')).backgroundColor");
+  check(historyBg === BOOK_PAPER, `History on book paper ${historyBg}`);
+  await capture('book-paleSky-history');
+  await js('PastelTerm.history.close()');
+
   await js("window.pastel.look.setReading('newspaper')");
   check(await waitFor(async () => (await js('document.documentElement.dataset.reading')) === 'newspaper', 5000), 'back to Newspaper');
 }
