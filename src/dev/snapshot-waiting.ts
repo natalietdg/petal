@@ -124,8 +124,9 @@ export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
       check(!m.waitingButton, `${theme} no separate Waiting dock button`);
       check(m.rows.length >= 2 && m.badge === String(m.rows.length), `${theme} the Board button's badge counts the lane: "${m.badge}"`);
       check(m.badgeFits, `${theme} the Board badge is a full pill holding its number`); // Testing's 8px dot rule once squashed it
-      check(JSON.stringify(ours.map((r) => r.tabId)) === JSON.stringify([gardenTab, recipeTab]), `${theme} rows from both sessions, newest first, open Decides only`);
-      check(ours[0]?.text === 'Morning or evening reminders?' && ours[1]?.text === 'Round amounts to the nearest quarter cup?', `${theme} row text from each reply`);
+      // Longest wait first (waitingLane in shared/needs-you.ts): the 40-minute recipe Decide before the 5-minute garden one.
+      check(JSON.stringify(ours.map((r) => r.tabId)) === JSON.stringify([recipeTab, gardenTab]), `${theme} rows from both sessions, longest wait first, open Decides only: ${JSON.stringify(ours.map((r) => r.tabId))}`);
+      check(ours[0]?.text === 'Round amounts to the nearest quarter cup?' && ours[1]?.text === 'Morning or evening reminders?', `${theme} row text from each reply: ${JSON.stringify(ours.map((r) => r.text))}`);
       check(!m.rows.some((r) => /^Drafting the reminder|^Nothing, waiting/i.test(r.text)), `${theme} Doing lines stay on the cards, not the lane`);
       check(ours.every((r) => r.session && r.ago.endsWith('ago')), `${theme} every row names its session and how long ago`);
       await capture(`waiting-${theme}`);
