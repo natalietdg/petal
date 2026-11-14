@@ -1,10 +1,9 @@
-// Tarot Room: the scene renders with today's card face, hover shows its tip, click opens the reading, Esc and an outside click close it.
+// Tarot Room: the scene renders with today's card face, hover names it, and a click opens nothing (the card is art, no reading).
 // Customize › Look has no birthday field: everyone shares the day's card.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { Kit } from './snapshot';
-import { unclippedCheck } from './snapshot-divider';
 import { cardFor } from '../renderer/scenes/tarot-deck';
 
 const STATE = `(() => {
@@ -13,7 +12,6 @@ const STATE = `(() => {
   const faces = [...document.querySelectorAll('#cat .scene-tarot .scene-variant')];
   const shown = faces.filter((g) => getComputedStyle(g).display !== 'none').map((g) => g.dataset.variant);
   const tip = document.querySelector('.tarot-tip');
-  const popover = document.querySelector('.tarot-popover');
   return {
     scene: Boolean(scene),
     rects: scene ? scene.querySelectorAll('rect').length : 0,
@@ -22,15 +20,13 @@ const STATE = `(() => {
     trCard: root.dataset.trCard,
     tipShown: Boolean(tip && !tip.hidden && tip.getBoundingClientRect().height > 0),
     tip: tip ? tip.innerText : '',
-    popoverShown: Boolean(popover && !popover.hidden && popover.getBoundingClientRect().height > 0),
-    popover: popover ? popover.innerText : '',
+    popovers: document.querySelectorAll('.tarot-popover').length,
+    anyPopoverShown: [...document.querySelectorAll('.scene-popover')].some((p) => !p.hidden),
   };
 })()`;
 const SCENE_RECT = "document.querySelector('#cat .scene-tarot rect:nth-of-type(400)')";
 const hover = `${SCENE_RECT}.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`;
 const click = `${SCENE_RECT}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`;
-const escape = "document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))";
-const clickOutside = "document.getElementById('reader').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
 
 // The unfocused snapshot window hands back the previous frame once; take and drop one capture first.
 async function settle(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -53,22 +49,15 @@ export async function captureRoom(kit: Kit, win: BrowserWindow, name: string): P
   kit.log(`captured ${name}: ${file}`);
 }
 
-// The birthday field is gone from Customize › Look, and the reading never shows a birth card.
+// The birthday field is gone from Customize › Look.
 async function noBirthdayCheck(kit: Kit, check: (ok: unknown, what: string) => void): Promise<void> {
-  const { js, wait, waitFor } = kit;
+  const { js, waitFor } = kit;
   await js("PastelTerm.customize.open('look')");
   await waitFor(() => js("Boolean(document.querySelector('#customize-body .cz-card'))"), 5000);
   const field = await js("Boolean(document.querySelector('#customize-body .cz-date, #customize-body .cz-birthday'))");
   const text = await js("document.getElementById('customize-body').innerText");
   check(!field && !/birthday|date of birth/i.test(text), `Customize › Look has no birthday field: field=${field}`);
   await js('PastelTerm.customize.close()');
-  await js(click);
-  await wait(200);
-  const opened = await js(STATE);
-  await unclippedCheck(kit, 'tarot popover', '.scene-popover:not([hidden])');
-  check(opened.popoverShown && !/birth card/i.test(opened.popover), `the reading has no birth card line: ${JSON.stringify(opened.popover)}`);
-  await js(escape);
-  await wait(200);
 }
 
 export async function tarotCheck(kit: Kit, win: BrowserWindow): Promise<void> {
@@ -97,28 +86,14 @@ export async function tarotCheck(kit: Kit, win: BrowserWindow): Promise<void> {
     return now.tipShown ? now : null;
   }, 3000);
   const tip = tipped ?? await js(STATE);
-  check(tipped && tip.tip.includes(today.name) && tip.tip.includes(today.reading), `hover tip shows today's name and reading: ${JSON.stringify(tip.tip)}`);
+  const name = `${today.numeral} · ${today.name}`;
+  check(tipped && tip.tip.trim() === name, `hover tip names today's card only, no reading: ${JSON.stringify(tip.tip)}`);
   await captureRoom(kit, win, 'tarot-tip-paleSky');
 
   await js(click);
   await wait(200);
-  const opened = await js(STATE);
-  check(opened.popoverShown && !opened.tipShown && opened.popover.includes(today.name) && opened.popover.includes(today.numeral) && opened.popover.includes(today.reading),
-    `click opens the reading with numeral, name and reading: ${JSON.stringify(opened.popover)}`);
-  for (const id of ['paleSky', 'nightPastel']) {
-    applyTheme(id, { persist: false });
-    await captureRoom(kit, win, `tarot-popover-${id}`);
-  }
-  applyTheme('paleSky', { persist: false });
-
-  await js(escape);
-  check(await waitFor(async () => !(await js(STATE)).popoverShown || null, 3000), 'Esc closes the reading');
-
-  await js(click);
-  await wait(200);
-  const reopened = (await js(STATE)).popoverShown;
-  await js(clickOutside);
-  check(reopened && await waitFor(async () => !(await js(STATE)).popoverShown || null, 3000), 'a click outside closes the reading');
+  const clicked = await js(STATE);
+  check(clicked.popovers === 0 && !clicked.anyPopoverShown, `a click on the card opens nothing: popovers=${clicked.popovers}`);
 
   await noBirthdayCheck(kit, check);
 

@@ -1,4 +1,4 @@
-// A scene's hover tip and click-open card (Tarot Room's reading, Planetarium's planet of the day).
+// A scene's hover tip, and for Planetarium a click-open card with the planet of the day.
 // They sit beside #cat, not in it, because cat.ts rebuilds #cat on every pet or scene change.
 import { byId } from './dom';
 
@@ -11,13 +11,31 @@ export interface SceneCard {
 
 const cards: SceneCard[] = [];
 
-// `scene` is the scene's selector inside #cat; `prefix` names its tip and popover (e.g. tarot-tip, tarot-popover).
-export function sceneCard(scene: string, prefix: string, label: string): SceneCard {
-  const cat = byId('cat');
+const onSceneOf = (scene: string) => (target: EventTarget | null): boolean => target instanceof Element && Boolean(target.closest(scene));
+
+function makeTip(prefix: string): HTMLElement {
   const tip = document.createElement('div');
   tip.className = `scene-tip ${prefix}-tip`;
   tip.setAttribute('role', 'tooltip');
   tip.hidden = true;
+  return tip;
+}
+
+// A hover tip only, for scene art with nothing to open (Tarot Room's card name).
+export function sceneTip(scene: string, prefix: string): HTMLElement {
+  const cat = byId('cat');
+  const tip = makeTip(prefix);
+  cat.after(tip);
+  const onScene = onSceneOf(scene);
+  cat.addEventListener('mouseover', (event) => { tip.hidden = !onScene(event.target); });
+  cat.addEventListener('mouseleave', () => { tip.hidden = true; });
+  return tip;
+}
+
+// `scene` is the scene's selector inside #cat; `prefix` names its tip and popover (e.g. planet-tip, planet-popover).
+export function sceneCard(scene: string, prefix: string, label: string): SceneCard {
+  const cat = byId('cat');
+  const tip = makeTip(prefix);
   const popover = document.createElement('div');
   popover.className = `scene-popover ${prefix}-popover`;
   popover.setAttribute('role', 'dialog');
@@ -25,7 +43,7 @@ export function sceneCard(scene: string, prefix: string, label: string): SceneCa
   popover.hidden = true;
   cat.after(tip, popover);
 
-  const onScene = (target: EventTarget | null): boolean => target instanceof Element && Boolean(target.closest(scene));
+  const onScene = onSceneOf(scene);
   const isOpen = (): boolean => !popover.hidden;
   const close = (): void => { popover.hidden = true; };
   const open = (): void => {

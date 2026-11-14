@@ -1,5 +1,5 @@
 /* Rooms with a hover tip and click card (scene-card.ts): the room is clickable and its tip replaces the cat's own. */
-#cat :is(.scene-tarot, .scene-planetarium) { cursor: pointer; }
+#cat .scene-planetarium { cursor: pointer; } /* Tarot's card is art only, nothing to click */
 #cat:has(:is(.scene-tarot, .scene-planetarium):hover) .cat-tip { opacity: 0; }
 
 /* The tip and card sit above the cat. */

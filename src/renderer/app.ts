@@ -18,7 +18,7 @@ import * as overlays from './overlays';
 import * as promptDock from './prompt-dock';
 import * as repos from './repos';
 import * as sceneCards from './scene-card';
-import * as tarotReading from './tarot-reading';
+import './tarot-card';
 import { COLOUR_LABELS_ID } from './formatting-guide';
 import './planet-reading';
 import * as getStarted from './get-started';
@@ -57,7 +57,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, advanced, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, advanced, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 

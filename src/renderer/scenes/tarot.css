@@ -37,7 +37,7 @@
 .sc-tr-sun-glint { fill: #F3D27A; } .sc-tr-stitch-glint1, .sc-tr-stitch-glint2 { fill: #9C7436; }
 .sc-tr-rd-hem1, .sc-tr-rd-hem2 { fill: #E0B85A; } .sc-tr-rd-tail1, .sc-tr-rd-tail2 { fill: #B0386F; } .sc-tr-rd-eye { fill: #FFF3D6; }
 
-/* The day's card: every face is drawn, only the one named by data-tr-card (set by tarot-reading.ts) shows. */
+/* The day's card: every face is drawn, only the one named by data-tr-card (set by tarot-card.ts) shows. */
 #cat .scene-tarot .scene-variant { display: none; }
 :root[data-tr-card="0"] #cat .scene-tarot [data-variant="0"],
 :root[data-tr-card="1"] #cat .scene-tarot [data-variant="1"],
@@ -93,5 +93,3 @@
 @keyframes tr-hem { 0%, 49% { fill: #E0B85A; } 50%, 100% { fill: #C7B5DC; } }
 @keyframes tr-sway { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes tr-eye { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.35; } }
-
-/* The birthday lines under the day's reading (tarot-reading.ts); the tip and popover themselves are in scene-card.css. */

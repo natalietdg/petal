@@ -19,15 +19,11 @@ function inZone(zone: string, body: () => void): void {
 }
 
 describe('tarot deck', () => {
-  it('has the 22 Major Arcana in order, each with a short reading and no em dashes', () => {
+  it('has the 22 Major Arcana in order, names only (the card is scene art, no reading)', () => {
     expect(DECK.map((card) => card.number)).toEqual([...Array(22).keys()]);
     expect(DECK[0]?.name).toBe('The Fool');
     expect(DECK[21]?.name).toBe('The World');
-    for (const card of DECK) {
-      expect(card.reading.length).toBeGreaterThan(30);
-      expect(card.reading.length).toBeLessThan(140);
-      expect(`${card.name} ${card.reading}`).not.toMatch(/[–—]/);
-    }
+    for (const card of DECK) expect(Object.keys(card).sort()).toEqual(['name', 'number', 'numeral']);
   });
 });
 
