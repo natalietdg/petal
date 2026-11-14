@@ -46,6 +46,13 @@ const CARDS = `[...document.querySelectorAll('#board .board-card')].map((c) => (
   agents: c.querySelector('.board-agents')?.textContent ?? null, star: Boolean(c.querySelector('.board-star')), since: c.querySelector('.board-since')?.textContent ?? null,
 }))`;
 
+// Each repo group's heading and its cards' statuses, top to bottom.
+const GROUPS = `[...document.querySelectorAll('#board .board-repo')].map((g) => ({
+  repo: g.querySelector('.board-repo-name')?.textContent ?? null,
+  statuses: [...g.querySelectorAll('.board-card')].map((c) => c.className.replace('board-card', '').trim().split(' ')[0]),
+}))`;
+const by0 = <T extends { id: string }>(list: T[], f: Fixture): T | undefined => list.find((c) => c.id === f.id);
+
 // Page, board and card overflow sideways; text lines cut without spilling out of their card.
 const OVERFLOW = `(() => {
   const over = [];
@@ -231,9 +238,9 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     win.webContents.send('board:toggle');
     await waitFor(() => boardOpen().then((o) => o || null), 3000);
 
-    // 3 One card per open session, Waiting first and highlighted, then Working, then Idle newest first, Concluded last.
+    // 3 One card per open session, grouped by repo (#732): groups newest first, inside each Waiting, Working, Idle, Concluded.
     freshAgent();
-    const want = [WAIT, WORK, ELSEWHERE_BUSY, IDLE, ELSEWHERE_IDLE, DONE].map((f) => f.id);
+    const want = [...ALL].sort((a, b) => a.minutesAgo - b.minutesAgo).map((f) => f.id); // one repo per fixture, so group order is card order
     const ordered = await waitFor(async () => {
       const got = await cards();
       return JSON.stringify(mine(got).map((c) => c.id)) === JSON.stringify(want) && got.find((c) => c.id === ELSEWHERE_BUSY.id)?.next && got.find((c) => c.id === ELSEWHERE_IDLE.id)?.agents ? got : null;
@@ -241,12 +248,13 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const all = ordered ?? await cards();
     const liveTabs: string[] = await js("PastelTerm.tabs.ids().map((t) => PastelTerm.tabs.get(t).update).filter((u) => u?.state === 'live' && u.sessionId).map((u) => u.sessionId)");
     const expectCount = new Set([...liveTabs, ...ALL.map((f) => f.id)]).size;
-    check(ordered, `order is Waiting, Working, Idle by recency, Concluded: ${JSON.stringify(mine(all).map((c) => `${ALL.find((f) => f.id === c.id)?.folder}:${c.status}`))}`);
+    check(ordered, `repo groups newest first: ${JSON.stringify(mine(all).map((c) => `${ALL.find((f) => f.id === c.id)?.folder}:${c.status}`))}`);
     check(all.length === expectCount, `one card per open session: ${all.length} cards, ${expectCount} open (${liveTabs.length} live tabs + sessions elsewhere)`);
-    const ranks = all.map((c) => ['waiting', 'working', 'idle', 'concluded'].indexOf(c.status));
-    check(ranks.every((r, i) => i === 0 || r >= (ranks[i - 1] ?? 0)), `statuses never go back up the order: ${JSON.stringify(all.map((c) => c.status))}`);
-    const first = all[0];
-    check(first?.id === WAIT.id && first.word === 'Waiting on you', `Waiting on you is first: ${JSON.stringify(first)}`);
+    const groups: { repo: string; statuses: string[] }[] = await js(GROUPS);
+    const rank = (s: string) => ['waiting', 'working', 'idle', 'concluded'].indexOf(s);
+    check(groups.length && groups.every((g) => g.statuses.every((st, i) => i === 0 || rank(st) >= rank(g.statuses[i - 1] ?? ''))), `inside each repo, statuses never go back up the order: ${JSON.stringify(groups)}`);
+    const lane = await js("(() => { const l = document.getElementById('waiting'); const g = document.querySelector('#board .board-grid'); return { inBoard: l?.parentElement?.id === 'board', aboveGroups: Boolean(l && g && (l.compareDocumentPosition(g) & Node.DOCUMENT_POSITION_FOLLOWING)) }; })()");
+    check(by0(all, WAIT)?.word === 'Waiting on you' && lane.inBoard && lane.aboveGroups, `Waiting on you: the card says so, and the lane sits above the repo groups: ${JSON.stringify({ card: by0(all, WAIT), lane })}`);
     const colours = await js(`(() => {
       const css = (sel, prop) => getComputedStyle(document.querySelector(sel))[prop];
       const root = getComputedStyle(document.documentElement);
@@ -283,7 +291,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const workingOnly = await filterTo('working');
     check(JSON.stringify(workingOnly.ids) === JSON.stringify([WORK.id, ELSEWHERE_BUSY.id]) && (await cards()).every((c) => c.status === 'working'), `Working filter: ${JSON.stringify(workingOnly)}`);
     const idleOnly = await filterTo('idle');
-    check(JSON.stringify(idleOnly.ids) === JSON.stringify([IDLE.id, ELSEWHERE_IDLE.id, DONE.id]) && (await cards()).every((c) => c.status === 'idle' || c.status === 'concluded'), `Idle filter takes Concluded too: ${JSON.stringify(idleOnly)}`);
+    check(JSON.stringify(idleOnly.ids) === JSON.stringify([DONE.id, IDLE.id, ELSEWHERE_IDLE.id]) && (await cards()).every((c) => c.status === 'idle' || c.status === 'concluded'), `Idle filter takes Concluded too: ${JSON.stringify(idleOnly)}`);
     const back = await filterTo('all');
     check(back.total === expectCount, `All brings every card back: ${back.total}`);
     const labels: string[] = await js("[...document.querySelectorAll('#board .board-filter')].map((b) => b.textContent)");
@@ -440,8 +448,8 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const beside = await js("(() => { const b = document.getElementById('board-button').getBoundingClientRect(); const h = document.getElementById('history-button').getBoundingClientRect(); return { board: Math.round((b.top + b.bottom) / 2), history: Math.round((h.top + h.bottom) / 2), after: b.left >= h.right }; })()");
     check(pressed === 'true' && Math.abs(beside.board - beside.history) < 2 && beside.after, `Board opens the board, pressed, on History's row: ${JSON.stringify({ pressed, ...beside })}`);
     // Each dock button: one hidden line icon before its label, and the label alone is its accessible name.
-    const icons = await js("[...document.querySelectorAll('#sessions-dock .dock-button')].map((b) => ({ id: b.id, svgs: b.querySelectorAll(':scope > svg[aria-hidden=\"true\"]').length, first: b.firstElementChild?.tagName, named: !b.hasAttribute('aria-label') && !b.hasAttribute('aria-labelledby'), label: b.textContent }))");
-    const DOCK_LABELS = ['Customize', 'Library', 'Testing', 'History', 'Board', 'Waiting', 'Add Session'];
+    const icons = await js("[...document.querySelectorAll('#sessions-dock .dock-button')].map((b) => ({ id: b.id, svgs: b.querySelectorAll(':scope > svg[aria-hidden=\"true\"]').length, first: b.firstElementChild?.tagName, named: !b.hasAttribute('aria-label') && !b.hasAttribute('aria-labelledby'), label: [...b.childNodes].filter((n) => !n.classList?.contains('dock-badge')).map((n) => n.textContent).join('') }))"); // the Board count pill is not part of the label
+    const DOCK_LABELS = ['Customize', 'Library', 'Testing', 'History', 'Board', 'Add Session']; // Waiting folded into Board (#752)
     check(icons.length === DOCK_LABELS.length && icons.every((b: { svgs: number; first: string; named: boolean; label: string }, i: number) => b.svgs === 1 && b.first === 'svg' && b.named && b.label === DOCK_LABELS[i]),
       `every dock button has one icon and its label as its name: ${JSON.stringify(icons)}`);
     for (const width of WIDTHS) {
