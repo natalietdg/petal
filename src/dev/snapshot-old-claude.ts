@@ -40,4 +40,5 @@ export async function oldClaudeCheck(kit: Kit): Promise<void> {
   check(choosing?.choices.length === 2 && choosing.choices[0].includes('fix the login bug') && choosing.choices[1].startsWith('Started'), `one button per log: ${JSON.stringify(choosing?.choices)}`);
   check(choosing?.hint?.startsWith(expected), 'the update hint still shows under the choice');
   await capture('old-claude-choose');
+  await js('(() => { const tab = PastelTerm.tabs.active(); PastelTerm.reader.update({ ...tab.update, tabId: tab.id }); })()'); // back to the fixture's replies
 }

@@ -172,6 +172,7 @@ function showMessage(html: string, action: EmptyAction | null = null, extra: HTM
     status.append(document.createElement('br'), button);
   }
   latest.replaceChildren();
+  delete latest.dataset.replyId; // no reply on screen now; a stale id would count as one
   older.replaceChildren();
   contentsRail.paint([]);
   latestId = null;
