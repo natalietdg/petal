@@ -63,6 +63,7 @@ const MEASURE = `(() => {
     title: lane.querySelector('.waiting-title')?.textContent ?? '',
     pressed: document.getElementById('board-button').getAttribute('aria-pressed'),
     badge: document.querySelector('#board-button .dock-badge').textContent,
+    badgeFits: (() => { const b = document.querySelector('#board-button .dock-badge'); return b.getBoundingClientRect().height >= 16 && b.scrollHeight <= b.clientHeight + 1; })(),
     waitingButton: Boolean(document.getElementById('waiting-button')),
     rows,
     readerHidden: document.getElementById('reader').hidden,
@@ -70,7 +71,7 @@ const MEASURE = `(() => {
 })()`;
 
 interface Row { tabId: string; text: string; session: string; ago: string }
-interface Measure { visible: boolean; aboveCards: boolean; title: string; pressed: string; badge: string; waitingButton: boolean; rows: Row[]; readerHidden: boolean }
+interface Measure { visible: boolean; aboveCards: boolean; title: string; pressed: string; badge: string; badgeFits: boolean; waitingButton: boolean; rows: Row[]; readerHidden: boolean }
 
 export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'openTab'> & { win: BrowserWindow }): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, outDir } = kit;
@@ -122,6 +123,7 @@ export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
       check(m.visible && m.aboveCards && m.title === 'Waiting on you' && m.readerHidden && m.pressed === 'true', `${theme} the lane tops the Board, open over the reader, Board pressed`);
       check(!m.waitingButton, `${theme} no separate Waiting dock button`);
       check(m.rows.length >= 2 && m.badge === String(m.rows.length), `${theme} the Board button's badge counts the lane: "${m.badge}"`);
+      check(m.badgeFits, `${theme} the Board badge is a full pill holding its number`); // Testing's 8px dot rule once squashed it
       check(JSON.stringify(ours.map((r) => r.tabId)) === JSON.stringify([gardenTab, recipeTab]), `${theme} rows from both sessions, newest first, open Decides only`);
       check(ours[0]?.text === 'Morning or evening reminders?' && ours[1]?.text === 'Round amounts to the nearest quarter cup?', `${theme} row text from each reply`);
       check(!m.rows.some((r) => /^Drafting the reminder|^Nothing, waiting/i.test(r.text)), `${theme} Doing lines stay on the cards, not the lane`);

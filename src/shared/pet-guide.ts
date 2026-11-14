@@ -146,7 +146,7 @@ export const libraryConfirm = (plan: BackfillPlan): string => plan.sessions
 
 // Under the style picks: what a style costs, in plain words. tokens is the picked style's size.
 export const styleCost = (tokens: number): string =>
-  `This style adds about ${tokens.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Formatting.`;
+  `This style adds about ${tokens.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Claude setup.`;
 
 export const STYLE_LABELS = { use: 'Use this style', later: 'Not now' } as const;
 

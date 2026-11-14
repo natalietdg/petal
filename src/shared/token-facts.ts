@@ -7,7 +7,7 @@ export const tokenLead = (): string => 'Petal itself makes no calls to Claude. I
 
 export function styleLine(): string {
   const { low, high } = styleTokenRange();
-  return `A Petal reply style adds about ${low.toLocaleString('en-US')} to ${high.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Turn it off in Customize › Formatting.`;
+  return `A Petal reply style adds about ${low.toLocaleString('en-US')} to ${high.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Turn it off in Customize › Claude setup.`;
 }
 
 // What starts Claude on your plan, and how to turn each off.

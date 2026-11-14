@@ -98,7 +98,7 @@ describe('the reply-style card', () => {
 
   it('says the cost per turn plainly, with no em dash', () => {
     expect(cardCopy('style', MIKI).title).toBe('How should Claude write?');
-    expect(styleCost(1900)).toBe('This style adds about 1,900 tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Formatting.');
+    expect(styleCost(1900)).toBe('This style adds about 1,900 tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Claude setup.');
     expect(styleCost(1900)).not.toContain('—');
   });
 });

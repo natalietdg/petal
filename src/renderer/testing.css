@@ -332,7 +332,7 @@
 .tst-agent-needs { color: var(--watch-ink); font-weight: 600; }
 .tst-agent-show { font-size: 13px; }
 /* An agent waits on her: a dot on the dock's Testing button, seen with Testing closed. */
-.dock-badge { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--watch-ink); }
+#testing-button .dock-badge { flex: none; width: 8px; height: 8px; padding: 0; border-radius: 50%; background: var(--watch-ink); } /* Board's .dock-badge is a count pill */
 .tst-agent-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
 .tst-agent-name { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .tst-agent-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
