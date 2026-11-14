@@ -223,6 +223,17 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   const allowed = await waitFor(() => (configStore.load().claudeFolder.choice === 'allowed' ? true : null), 5000);
   check(allowed, 'Allow saves claudeFolder.choice = allowed');
 
+  // 4b. No Petal style in the stand-in folder: the reply-style card, with its cost per turn; Not now writes nothing.
+  const styled = await until((s) => s.card === 'style');
+  check(styled && styled.title === 'How should Claude write?' && styled.counter === 'Step 5 of 5' && styled.buttons.join() === 'Use this style,Not now,Skip setup'
+    && /adds about 1,900 tokens of instructions to every turn/.test(await js("document.querySelector('#pet-guide .pg-cost')?.textContent ?? ''")),
+    `style card after Allow: title, counter, buttons and the Magazine cost line: ${JSON.stringify(styled && { title: styled.title, counter: styled.counter, buttons: styled.buttons })}`);
+  await shot('04b-style');
+  await contrastOk('style card');
+  await fitsAtEveryWidth('style');
+  await js("document.querySelector('#pet-guide .pg-later').click()");
+  check(!fs.existsSync(path.join(home, 'output-styles')), 'style card Not now writes no output style');
+
   // 5. The bubble: Add Session, pointed at and pulsing; focus on it; the bubble never covers it.
   const add = await until((s) => s.bubble?.step === 'add-session');
   check(add && add.card === null && configStore.load().onboarding.step === 'add-session', 'no past sessions in the Claude folder: no import card, straight to the bubble');
@@ -314,14 +325,14 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   check(escaped && configStore.load().onboarding.step === 'skipped' && configStore.load().claudeFolder.choice === 'allowed', `Esc on a card skips setup and keeps the folder answer: ${JSON.stringify(configStore.load().onboarding)}`);
   send(win.webContents, 'pet-guide:open');
   await until((s) => s.card === 'welcome');
-  for (const next of ['pet', 'scene']) {
+  for (const next of ['pet', 'scene', 'style']) {
     await js("document.querySelector('#pet-guide .pg-next').click()");
     await until((s) => s.card === next);
   }
-  await js("document.querySelector('#pet-guide .pg-next').click()");
+  await js("document.querySelector('#pet-guide .pg-later').click()"); // the style card, still no Petal style on
   // The first-reply session is now a past session: the import card, then Not now moves on without starting anything.
   const one = await until((s) => s.card === 'import');
-  check(one && one.said === 'You’ve used Claude Code before! I found 1 past session in 1 project.' && one.counter === 'Step 5 of 5' && one.buttons.join() === 'Show them in History,Not now,Skip setup',
+  check(one && one.said === 'You’ve used Claude Code before! I found 1 past session in 1 project.' && one.counter === 'Step 6 of 6' && one.buttons.join() === 'Show them in History,Not now,Skip setup',
     `with the folder answered, scene goes to the import card for the one past session: ${JSON.stringify(one && { said: one.said, counter: one.counter, past: one.past, buttons: one.buttons })}`);
   const runsBefore = (await js('window.pastel.library.backfillState()')).total;
   await js("document.querySelector('#pet-guide .pg-later').click()");
@@ -330,6 +341,16 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   await wait(500);
   const notStarted = await js('window.pastel.library.backfillState()');
   check(!notStarted.running && notStarted.total === runsBefore, `Not now starts no Library read: ${JSON.stringify(notStarted)}`);
+  // All steps: the bubble opens the Get started checklist as the pet guide's What's next card; Esc closes only the card.
+  await js("document.querySelector('#pet-bubble .pb-steps').click()");
+  const steps = await until((s) => s.overlay === 'pet-guide' && s.card === 'whats-next');
+  const rows = await js("document.querySelectorAll('#pet-guide .gs-list .gs-step, #pet-guide .gs-list .gs-all-set').length");
+  check(steps && steps.title === 'What’s next' && rows > 0 && /^Close,Back to \w+$/.test(steps.buttons.join()) && steps.step === 'ask',
+    `All steps shows the checklist inside the pet guide, the bubble still running: ${JSON.stringify(steps && { title: steps.title, buttons: steps.buttons, rows, step: steps.step })}`);
+  await shot('09a-whats-next');
+  await js("document.querySelector('#pet-guide .gs-close').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  const backToBubble = await until((s) => s.overlay === null && s.bubble?.step === 'ask');
+  check(backToBubble && configStore.load().onboarding.step === 'ask', 'Esc on What’s next closes the card; the guide keeps going');
   await shot('09-skip-from-bubble');
   await js("document.querySelector('#pet-bubble .pb-skip').click()");
   const skipped = await until((s) => s.step === null && s.bubble === null);
@@ -356,14 +377,16 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   libraryFixture.extract = async (prompt) => { extracts.push(prompt); return JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify({ topics: [] }) }); };
   send(win.webContents, 'pet-guide:open');
   const restarted = await until((s) => s.card === 'welcome');
-  check(restarted?.counter === 'Step 1 of 5', `a restart that knows about past sessions counts five cards from the start: ${restarted?.counter}`);
-  for (const next of ['pet', 'scene', 'import']) {
+  check(restarted?.counter === 'Step 1 of 6', `a restart that knows about past sessions counts six cards from the start (style card included): ${restarted?.counter}`);
+  for (const next of ['pet', 'scene', 'style']) {
     await js("document.querySelector('#pet-guide .pg-next').click()");
     await until((s) => s.card === next);
   }
+  await js("document.querySelector('#pet-guide .pg-later').click()");
+  await until((s) => s.card === 'import');
   const found = await until((s) => s.card === 'import' && s.past.length === 3);
   const wantPast = [['Fix the payout cutoff', PAST_PROJECT], ['Draft the launch notes', SESSION_CWD], ['Why is the build slow', PAST_PROJECT]]; // /tmp paths show as themselves
-  check(found && found.title === 'Import your past sessions' && found.said === 'You’ve used Claude Code before! I found 5 past sessions in 2 projects.' && found.counter === 'Step 5 of 5'
+  check(found && found.title === 'Import your past sessions' && found.said === 'You’ve used Claude Code before! I found 5 past sessions in 2 projects.' && found.counter === 'Step 6 of 6'
     && JSON.stringify(found.past) === JSON.stringify(wantPast) && found.library?.label === 'Also build my Library from them' && !found.library.checked && found.focus === 'pg-primary pg-show' && found.emDashes === 0,
     `import card: 5 sessions in 2 projects, the 3 newest titles with projects, the Library box unticked, Show them in History focused: ${JSON.stringify(found && { said: found.said, counter: found.counter, past: found.past, library: found.library, focus: found.focus })}`);
   const listedNow = await js('window.pastel.history.list()');

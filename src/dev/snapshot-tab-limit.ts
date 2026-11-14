@@ -3,6 +3,7 @@ import { Menu, type MenuItem } from 'electron';
 import * as configStore from '../main/config-store';
 import { panelFixture } from '../main/snapshot-mode';
 import type { Kit } from './snapshot';
+import { pickHomeFolder } from './snapshot-add-session';
 
 const STATE = `(() => {
   const panel = document.getElementById('sessions-panel');
@@ -57,6 +58,7 @@ export async function tabLimitCheck(kit: Kit): Promise<void> {
   for (const [name, open] of paths) {
     const before = (await state()).ids;
     await open();
+    check(await pickHomeFolder(kit), `${name} below the limit asks for a folder first`);
     const grown = await waitFor(async () => { const s = await state(); return s.ids.length === before.length + 1 ? s : null; }, 6000);
     const fresh = grown?.ids.find((id: string) => !before.includes(id));
     if (fresh) opened.push(fresh);

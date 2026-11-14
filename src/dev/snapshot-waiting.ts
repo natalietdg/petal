@@ -1,5 +1,5 @@
-// The Waiting inbox (PASTEL_SNAPSHOT_MODE=waiting): two fixture sessions in background tabs, their open Decides and Doing lines in one panel.
-// Asserts the dock count, rows from both sessions with their pills, and that a row opens its own tab; light and dark.
+// Board's Waiting on you lane (PASTEL_SNAPSHOT_MODE=waiting): two fixture sessions in background tabs, their open Decides on top of the Board.
+// Asserts the Board button's badge, rows from both sessions, Doing lines left to the cards, and that a row opens its own tab; light and dark.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -46,28 +46,31 @@ function writeLog(file: string, prompt: string, reply: string, at: string): void
 
 const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
 
-// What the panel and the dock button show, rows in order.
+// What the lane and the Board button show, rows in order.
 const MEASURE = `(() => {
-  const view = document.getElementById('waiting');
-  const rows = [...view.querySelectorAll('.waiting-row')].map((r) => ({
+  const lane = document.getElementById('waiting');
+  const board = document.getElementById('board');
+  const rows = [...lane.querySelectorAll('.waiting-row')].map((r) => ({
     tabId: r.dataset.tabId,
-    pill: r.querySelector('.waiting-pill')?.textContent ?? '',
-    pillBg: getComputedStyle(r.querySelector('.waiting-pill')).backgroundColor,
     text: r.querySelector('.waiting-text')?.textContent ?? '',
     session: r.querySelector('.waiting-session')?.textContent ?? '',
     ago: r.querySelector('.waiting-ago')?.textContent ?? '',
   }));
+  const grid = board.querySelector('.board-grid');
   return {
-    visible: !view.hidden && view.getBoundingClientRect().height > 100,
-    pressed: document.getElementById('waiting-button').getAttribute('aria-pressed'),
-    label: document.querySelector('#waiting-button .dock-label').textContent,
+    visible: !board.hidden && !lane.hidden && lane.getBoundingClientRect().height > 40,
+    aboveCards: Boolean(grid && lane.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING),
+    title: lane.querySelector('.waiting-title')?.textContent ?? '',
+    pressed: document.getElementById('board-button').getAttribute('aria-pressed'),
+    badge: document.querySelector('#board-button .dock-badge').textContent,
+    waitingButton: Boolean(document.getElementById('waiting-button')),
     rows,
     readerHidden: document.getElementById('reader').hidden,
   };
 })()`;
 
-interface Row { tabId: string; pill: string; pillBg: string; text: string; session: string; ago: string }
-interface Measure { visible: boolean; pressed: string; label: string; rows: Row[]; readerHidden: boolean }
+interface Row { tabId: string; text: string; session: string; ago: string }
+interface Measure { visible: boolean; aboveCards: boolean; title: string; pressed: string; badge: string; waitingButton: boolean; rows: Row[]; readerHidden: boolean }
 
 export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'openTab'> & { win: BrowserWindow }): Promise<void> {
   const { js, wait, waitFor, log, capture, applyTheme, outDir } = kit;
@@ -104,6 +107,7 @@ export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     const [gardenTab, recipeTab] = loaded;
 
     await resizeTo(kit, win, WIDTH);
+    await js('PastelTerm.sessionsBoard.resetFilters()'); // the lane shows in the Sessions view
     await js('PastelTerm.waiting.open()');
     await win.webContents.capturePage(); // warm-up: the run's first offscreen frame can be stale
 
@@ -115,15 +119,13 @@ export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
       const m = await js(MEASURE) as Measure;
       log(`waiting ${theme}: ${JSON.stringify(m)}`);
       const ours = m.rows.filter((r) => r.tabId === gardenTab || r.tabId === recipeTab);
-      const asks = m.rows.filter((r) => r.pill === 'Waiting on you').length;
-      check(m.visible && m.readerHidden && m.pressed === 'true', `${theme} panel is open over the reader, button pressed`);
-      check(asks >= 2 && m.label === `Waiting (${asks})`, `${theme} dock count matches the Waiting on you rows: "${m.label}"`);
-      check(JSON.stringify(ours.map((r) => [r.tabId, r.pill])) === JSON.stringify([[gardenTab, 'Waiting on you'], [gardenTab, 'In progress'], [recipeTab, 'Waiting on you']]),
-        `${theme} rows from both sessions, newest first, open Decide before Doing`);
-      check(ours[0]?.text === 'Morning or evening reminders?' && ours[1]?.text === 'Drafting the reminder times for each plant' && ours[2]?.text === 'Round amounts to the nearest quarter cup?', `${theme} row text from each reply`);
-      check(!m.rows.some((r) => /^Nothing, waiting/i.test(r.text)), `${theme} a nothing-Doing line is skipped`);
+      check(m.visible && m.aboveCards && m.title === 'Waiting on you' && m.readerHidden && m.pressed === 'true', `${theme} the lane tops the Board, open over the reader, Board pressed`);
+      check(!m.waitingButton, `${theme} no separate Waiting dock button`);
+      check(m.rows.length >= 2 && m.badge === String(m.rows.length), `${theme} the Board button's badge counts the lane: "${m.badge}"`);
+      check(JSON.stringify(ours.map((r) => r.tabId)) === JSON.stringify([gardenTab, recipeTab]), `${theme} rows from both sessions, newest first, open Decides only`);
+      check(ours[0]?.text === 'Morning or evening reminders?' && ours[1]?.text === 'Round amounts to the nearest quarter cup?', `${theme} row text from each reply`);
+      check(!m.rows.some((r) => /^Drafting the reminder|^Nothing, waiting/i.test(r.text)), `${theme} Doing lines stay on the cards, not the lane`);
       check(ours.every((r) => r.session && r.ago.endsWith('ago')), `${theme} every row names its session and how long ago`);
-      check(ours[0] && ours[1] && ours[0].pillBg !== ours[1].pillBg && ours[0].pillBg !== 'rgba(0, 0, 0, 0)', `${theme} the two pills have their own fills`);
       await capture(`waiting-${theme}`);
     }
 
@@ -135,7 +137,7 @@ export async function waitingCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
       return state.active === recipeTab && !state.open && state.flashed ? state : null;
     }, 3000);
     log(`waiting jump: ${JSON.stringify(jumped)}`);
-    check(jumped, `clicking a row activates its tab (${recipeTab}), closes the panel and flashes its reply`);
+    check(jumped, `clicking a row activates its tab (${recipeTab}), closes the Board and flashes its reply`);
   } finally {
     extraTabFixtures.length = 0;
     if (await js('PastelTerm.waiting.isOpen()')) await js('PastelTerm.waiting.close()');

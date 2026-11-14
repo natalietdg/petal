@@ -100,7 +100,7 @@ export async function sessionPrsCheck(kit: Kit, file: string): Promise<void> {
     check(order && order.order[0] === 'payouts-api PR 7' && order.inferred === 'inferred', `the proposed order, labelled inferred, and an arrow in the diagram: ${JSON.stringify(order)}`);
 
     await js(`(() => { const t = document.querySelector('#reader-prs .prs-notes-input'); t.value = 'drops the old payouts column'; t.dispatchEvent(new Event('input')); })()`);
-    const notesFile = path.join(userDataDir(), 'session-prs', 'notes-snapshot-fixture.json');
+    const notesFile = path.join(userDataDir(), 'notes', 'snapshot-fixture.prs.json'); // the one notes store
     const saved = await waitFor(() => (fs.existsSync(notesFile) ? JSON.parse(fs.readFileSync(notesFile, 'utf8')) : null), 5000);
     check(saved?.[GH_A]?.risks === 'drops the old payouts column', `Risks saved per PR in userData: ${JSON.stringify(saved)}`);
     await capture('session-prs-open');

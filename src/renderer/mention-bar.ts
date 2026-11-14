@@ -1,5 +1,6 @@
 // The reply box's To line: who a message with @session mentions goes to, and whether this session gets it too.
 import { el } from './dom';
+import { isOn } from './mentions';
 import { SESSION_PREFIX, deliverySummary, parseMentions, planMentions, type Delivery, type MentionPlan, type MentionTarget } from '../shared/mentions';
 
 const RESULT_MS = 8000;
@@ -53,7 +54,7 @@ export function create(form: HTMLFormElement, input: HTMLTextAreaElement, target
 
   function refresh(): void {
     const parsed = parseMentions(input.value, targets());
-    const mentioned = parsed.targets.length + parsed.unknown.length > 0;
+    const mentioned = isOn() && parsed.targets.length + parsed.unknown.length > 0;
     chips.replaceChildren(...parsed.targets.map((t) => chip(t, t.slug)), ...parsed.unknown.map((slug) => chip(null, slug)));
     toRow.hidden = !mentioned;
     if (!mentioned) box.checked = false;
@@ -73,7 +74,7 @@ export function create(form: HTMLFormElement, input: HTMLTextAreaElement, target
   refresh();
 
   return {
-    plan: (text) => planMentions(text, targets(), box.checked),
+    plan: (text) => (isOn() ? planMentions(text, targets(), box.checked) : null), // one session: the text goes to Claude as typed
     refresh,
     showResult: (deliveries, unknown) => note(deliverySummary(deliveries, unknown)),
     note,

@@ -41,7 +41,7 @@ function drawNotice(): void {
     notice.append(el('span', null, 'Petal isn’t reading your Claude folder, so lessons can’t be learned or added to a CLAUDE.md.'),
       button('Allow', 'lib-link', () => window.dispatchEvent(new Event('petal:allow-folder'))));
   } else if (data && !data.learn && data.lessons.length) {
-    notice.append(el('span', null, 'Learn lessons from sessions is off, so no new ones arrive.'), button('Turn it on', 'lib-link', () => customize.open('organizer')));
+    notice.append(el('span', null, 'Learn lessons from sessions is off, so no new ones arrive.'), button('Turn it on', 'lib-link', () => customize.open('claude')));
   }
   notice.hidden = !notice.childElementCount;
 }
@@ -55,7 +55,7 @@ function drawEmpty(): void {
   empty.append(el('p', 'lib-empty-text', data.learn
     ? 'When a session ends, Petal notes how to work with you here. Nothing yet.'
     : 'Turn on Learn lessons from sessions and Petal notes how to work with you after each session ends. It uses your Claude plan.'));
-  if (!data.learn) empty.append(button('Open the setting', 'lib-read', () => customize.open('organizer')));
+  if (!data.learn) empty.append(button('Open the setting', 'lib-read', () => customize.open('claude')));
 }
 
 function diffBlock(preview: LessonPreview): HTMLElement {

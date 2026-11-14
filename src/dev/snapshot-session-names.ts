@@ -47,11 +47,11 @@ const SURFACES = `(() => {
     const tab = PastelTerm.tabs.ids().map((t) => PastelTerm.tabs.get(t)).find((t) => t.update?.sessionId === id);
     out[id] = {
       tab: tab ? named(tab.element.querySelector('.tab-label')) : null,
-      panel: named(document.querySelector('#sessions-panel .session-row[data-session-id="' + id + '"] .session-name, #sessions-panel .closed-row[data-session-id="' + id + '"] .session-name')),
+      panel: named(document.querySelector('#board .board-card[data-session-id="' + id + '"] .board-name, #board .closed-row[data-session-id="' + id + '"] .session-name')),
       history: named(document.querySelector('#history-list .history-row[data-session-id="' + id + '"] .history-title-text')),
     };
   }
-  const every = [...document.querySelectorAll('#tab-strip .tab-label, #sessions-panel .session-name, #history-list .history-title-text, #reader-session')].map((e) => e.textContent);
+  const every = [...document.querySelectorAll('#tab-strip .tab-label, #board .board-name, #board .closed-row .session-name, #history-list .history-title-text, #reader-session')].map((e) => e.textContent);
   return { out, every };
 })()`;
 
@@ -60,14 +60,14 @@ const OVERFLOW = `(() => {
   const over = [];
   const doc = document.documentElement;
   if (doc.scrollWidth > window.innerWidth + 1) over.push({ id: 'page', by: doc.scrollWidth - window.innerWidth });
-  for (const s of ['#sessions-panel', '#history', '.history-list-pane', '#history-list', '#history-preview', '#reader-head', '.reader-context']) {
+  for (const s of ['#board', '#history', '.history-list-pane', '#history-list', '#history-preview', '#reader-head', '.reader-context']) {
     const e = document.querySelector(s);
     if (e && e.getClientRects().length && e.scrollWidth - e.clientWidth > 1) over.push({ id: s, by: e.scrollWidth - e.clientWidth });
   }
-  for (const label of document.querySelectorAll('#sessions-panel .session-name, #history-list .history-title-text, #reader-session, .history-preview-title')) {
+  for (const label of document.querySelectorAll('#board .board-name, #board .closed-row .session-name, #history-list .history-title-text, #reader-session, .history-preview-title')) {
     if (!label.getClientRects().length) continue;
     const box = label.getBoundingClientRect();
-    const row = (label.closest('.session-row, .closed-row, .history-row, .reader-context, .history-preview-title-row') ?? label.parentElement).getBoundingClientRect();
+    const row = (label.closest('.board-card, .closed-row, .history-row, .reader-context, .history-preview-title-row') ?? label.parentElement).getBoundingClientRect();
     if (box.right > row.right + 1) over.push({ id: label.className || label.id, text: label.textContent, by: Math.round(box.right - row.right) });
     if (label.scrollWidth > label.clientWidth + 1 && !label.title) over.push({ id: label.className || label.id, text: label.textContent, cut: 'no tooltip' });
   }
@@ -158,12 +158,10 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
       return OPEN.every((f) => ids.includes(f.id)) ? ids : null;
     }, 15000);
     check(tabsUp, `a tab follows each fixture session: ${JSON.stringify(tabsUp ?? await js('PastelTerm.tabs.ids()'))}`);
-    await js('PastelTerm.sessionsPanel.setOpen(true)');
-    await js(`PastelTerm.history.open().then(() => PastelTerm.history.select(${JSON.stringify(ORGANIZED.id)}))`);
-    // Earlier steps can leave History on Favorites or with a search typed: back to the full list.
-    await js("(() => { const s = document.getElementById('history-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('#history-tabs [data-list=\"all\"]').click(); })()");
+    await js('PastelTerm.sessionsPanel.setOpen(true)'); // the Sessions pill opens the Board
 
     // 1 Every surface shows the same label, cut the same way, with the full title on hover.
+    // Board and History are one view at a time now: the Board first, then History.
     const expected = (f: Fixture, organizer = f.organizer) => ({ text: sessionLabelText(fullTitle(f, organizer)), tip: fullTitle(f, organizer) });
     const surfacesAgree = async (f: Fixture, organizer = f.organizer, where: string[] = ['tab', 'panel', 'history']) => {
       const want = expected(f, organizer);
@@ -172,10 +170,20 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
       return where.every((w) => got[w]?.text === want.text && got[w]?.tip === want.tip) ? got : null;
     };
     for (const f of OPEN) {
-      const got = await waitFor(() => surfacesAgree(f), 8000);
-      check(got, `${f.claudeName} is "${expected(f).text}" in the tab, the panel and History: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
+      const got = await waitFor(() => surfacesAgree(f, f.organizer, ['tab', 'panel']), 8000);
+      check(got, `${f.claudeName} is "${expected(f).text}" in the tab and on the Board: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
     }
-    const closed = await waitFor(() => surfacesAgree(CLOSED, null, ['panel', 'history']), 6000);
+    const closedOnBoard = await waitFor(() => surfacesAgree(CLOSED, null, ['panel']), 6000);
+    check(closedOnBoard, `Board's Recently closed renames "${CLOSED.folder}" to its title: ${JSON.stringify(closedOnBoard ?? (await js(SURFACES)).out[CLOSED.id])}`);
+    await js(`PastelTerm.history.open().then(() => PastelTerm.history.select(${JSON.stringify(ORGANIZED.id)}))`);
+    // Earlier steps can leave History on Favorites or with a search typed: back to the full list.
+    await js("(() => { const s = document.getElementById('history-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('#history-tabs [data-list=\"all\"]').click(); })()");
+
+    for (const f of OPEN) {
+      const got = await waitFor(() => surfacesAgree(f, f.organizer, ['tab', 'history']), 8000);
+      check(got, `${f.claudeName} is "${expected(f).text}" in the tab and History: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
+    }
+    const closed = await waitFor(() => surfacesAgree(CLOSED, null, ['history']), 6000);
     check(closed, `Recently closed renames "${CLOSED.folder}" to its title, as History does: ${JSON.stringify(closed ?? (await js(SURFACES)).out[CLOSED.id])}`);
     check(expected(ORGANIZED).text === ORGANIZED.organizer, `organizer title wins: ${expected(ORGANIZED).text}`);
     check(expected(AI_TITLED).text.length <= 60 && expected(AI_TITLED).text.endsWith('…'), `a long title is cut at 60 with an ellipsis: ${expected(AI_TITLED).text}`);
@@ -237,8 +245,8 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     check(inHistory, `and History: ${JSON.stringify(inHistory ?? (await js(SURFACES)).out[UNTITLED.id])}`);
     // History already open when a session reaches the threshold: it re-lists on its own.
     reachThreshold(PROMPT_ONLY); // its tab relabels, which tells History to re-list
-    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, PROMPT_ONLY_TITLE), 8000);
-    check(live, `a session reaching the threshold while History is open renames its row, tab and panel row: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
+    const live = await waitFor(() => surfacesAgree(PROMPT_ONLY, PROMPT_ONLY_TITLE, ['tab', 'history']), 8000);
+    check(live, `a session reaching the threshold while History is open renames its row and tab: ${JSON.stringify(live ?? (await js(SURFACES)).out[PROMPT_ONLY.id])}`);
 
     // 3b Named once: a later organizer pass or ai-title renames nothing that already has a name, on any surface.
     writeOrganizer({ [ORGANIZED.id]: 'Organizer second pass', [AI_TITLED.id]: 'Organizer late title', [UNTITLED.id]: 'Untitled retitled', [PROMPT_ONLY.id]: 'Product names, retitled' });
@@ -250,10 +258,16 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
     await wait(800);
     const kept: [Fixture, string | null][] = [[ORGANIZED, ORGANIZED.organizer], [AI_TITLED, null], [UNTITLED, LATE_TITLE], [PROMPT_ONLY, PROMPT_ONLY_TITLE]];
     for (const [f, organizer] of kept) {
-      const got = await surfacesAgree(f, organizer);
+      const got = await surfacesAgree(f, organizer, ['tab', 'history']);
       check(got, `${f.claudeName} keeps "${expected(f, organizer).text}" after later titles: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
     }
     await js('PastelTerm.history.close()');
+    await js('PastelTerm.sessionsPanel.setOpen(true)'); // the Board draws only while open
+    for (const [f, organizer] of kept) {
+      const got = await waitFor(() => surfacesAgree(f, organizer, ['panel']), 4000);
+      check(got, `${f.claudeName} keeps "${expected(f, organizer).text}" on the Board: ${JSON.stringify(got ?? (await js(SURFACES)).out[f.id])}`);
+    }
+    await js('PastelTerm.sessionsPanel.setOpen(false)');
     await js(`PastelTerm.tabs.activate(${JSON.stringify(await tabOf(AI_TITLED.id))})`);
     const keptHead = await waitFor(async () => { const h = await readerHead(); return h.shown && h.text === expected(AI_TITLED).text ? h : null; }, 4000);
     check(keptHead, `reader header keeps the pinned name: ${JSON.stringify(keptHead ?? await readerHead())}`);
@@ -276,7 +290,7 @@ export async function sessionNamesCheck(kit: Kit, { win, openTab }: Pick<TabsDep
           const shots: NativeImage[] = [];
           const rect = (selector: string) => js(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }; })()`);
           if (look === 'newspaper') {
-            shots.push(await win.webContents.capturePage(await rect('#sessions-panel')));
+            shots.push(await win.webContents.capturePage(await rect('#board .board-grid')));
             shots.push(await win.webContents.capturePage(await rect('#tab-strip')));
           }
           await js('PastelTerm.sessionsPanel.setOpen(false)');

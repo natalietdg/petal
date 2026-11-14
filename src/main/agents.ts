@@ -23,6 +23,7 @@ export interface AgentSummary {
   updatedAt: number;
   toolCalls: number;
   step: string;
+  headless?: boolean; // a `claude -p` child session, not a Task subagent
 }
 
 export interface AgentsList {
@@ -136,6 +137,36 @@ export async function listAgents(dir: string, now = Date.now()): Promise<AgentsL
   }
   agents.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.updatedAt - a.updatedAt);
   return { agents, running: agents.filter((a) => a.status === 'running').length, total: files.length };
+}
+
+export interface HeadlessChild {
+  agentId: string; // childAgentId(sessionId)
+  name: string;
+  file: string; // its own transcript
+  live: boolean; // its process still runs
+}
+
+// A parent's headless children in the same shape as its subagents; a child that exited is finished.
+export async function listChildren(children: readonly HeadlessChild[], now = Date.now()): Promise<AgentSummary[]> {
+  const out: AgentSummary[] = [];
+  for (const child of children) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(child.file);
+    } catch {
+      continue; // no transcript yet
+    }
+    const d = await describe(child.file, stat.mtimeMs, stat.size, stat.birthtimeMs);
+    const status = child.live ? agentStatus(false, d.mtime, now) : 'finished';
+    out.push({ id: child.agentId, task: child.name, status, startedAt: d.startedAt, updatedAt: d.mtime, toolCalls: d.toolCalls, step: d.step, headless: true });
+  }
+  return out;
+}
+
+// Subagents and children in one list, in the listing's order.
+export function mergeAgents(list: AgentsList, children: readonly AgentSummary[]): AgentsList {
+  const agents = [...list.agents, ...children].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.updatedAt - a.updatedAt);
+  return { agents, running: agents.filter((a) => a.status === 'running').length, total: list.total + children.length };
 }
 
 export interface TimelineUpdate {

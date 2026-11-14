@@ -1,5 +1,5 @@
-// Sessions board (⌘⇧O, or Board in the Sessions panel): every open Claude session as a card, at a glance.
-// It rides the Sessions panel's 2s tick; the card model lives in shared/sessions-board.ts.
+// Board, the hub (⌘⇧O, the dock's Board or the Sessions pill): Waiting on you, every open session as a card,
+// Recently closed and Today. It rides the sessions 2s tick; the card model lives in shared/sessions-board.ts.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as sessionsPanel from './sessions-panel';
@@ -12,12 +12,14 @@ import * as reader from './reader';
 import * as distillCard from './distill-card';
 import * as testing from './testing';
 import * as codeReviewTask from './code-review-task';
+import * as waiting from './waiting';
+import * as workflow from './workflow';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
-import { screenIsAsking } from '../shared/prompt-answer';
 import { STATUS_KEYS, STATUS_TITLES } from '../shared/status-lines';
-import { agentsBadgeText, type SessionsView } from '../shared/ipc';
+import { type SessionsView } from '../shared/ipc';
+import { agentsBadge, type ChildRow } from '../shared/subsessions';
 import { TASK_STATUS_WORDS } from '../shared/tasks';
 import type { ActivityEvent } from '../shared/activity';
 import {
@@ -53,7 +55,18 @@ const branchSelect = el('select', 'board-branch');
 branchSelect.setAttribute('aria-label', 'Branch');
 branchSelect.addEventListener('change', () => { branchFilter = branchSelect.value || null; boardActivity.setBranch(branchFilter); render(true); });
 head.append(title, viewTabs, summary, branchSelect, filterRow);
-view.append(head, grid, boardActivity.element(), codeReviewTask.element());
+const today = el('section', 'board-today');
+today.setAttribute('aria-label', 'Today');
+const todayBody = el('div', 'board-today-body');
+today.append(el('h3', 'board-lane-title', 'Today'), todayBody);
+const closed = sessionsPanel.closedElement();
+// Headless runs whose parent is unknown or gone: one group at the bottom, never cards of their own.
+const orphansSection = el('section', 'board-headless');
+orphansSection.setAttribute('aria-label', 'Headless runs');
+const orphansList = el('div', 'board-headless-body');
+orphansSection.append(el('h3', 'board-lane-title', 'Headless runs'), orphansList);
+orphansSection.hidden = true;
+view.append(head, sessionsPanel.limitElement(), waiting.element(), grid, closed, today, orphansSection, boardActivity.element(), codeReviewTask.element());
 
 let filter: BoardFilter = 'all';
 let boardView: BoardView = 'sessions';
@@ -69,8 +82,9 @@ const closingIds = new Set<string>();
 
 export const isOpen = (): boolean => overlays.isOpen('board');
 
-// A question, permission prompt or Claude Code menu on the tab's screen, read the same way the prompt dock reads it.
-const isAsking = (tab: tabs.Tab): boolean => screenIsAsking(tabs.screenLines(tab));
+// Waiting on her, by the one shared needsYou(); covers sessions in every Petal window and their headless children.
+const isWaiting = (sessionId: string): boolean => Boolean(waiting.needOf(sessionId));
+const childrenOf = (sessionId: string): ChildRow[] => lastView?.rows?.find((r) => r.sessionId === sessionId)?.children ?? [];
 
 // This window's tabs with a live Claude first, then every other live session the panel lists.
 export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
@@ -90,11 +104,11 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
       name: update.label,
       place: update.repo ?? row?.board?.place ?? folderName(update.cwd),
       busy: update.busy,
-      asking: isAsking(tab),
+      asking: isWaiting(update.sessionId),
       updatedAt: lastUpdate(row?.updatedAt, digest.at),
       digest,
       conclusion: update.conclusion,
-      agents: row?.subagents.length ?? 0,
+      agents: (row?.subagents.length ?? 0) + (row?.children.length ?? 0),
       starred: favorites.isFavorite(update.sessionId),
     });
   }
@@ -108,11 +122,11 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
       name: row.name,
       place: row.board?.place ?? row.cwd,
       busy: row.status === 'busy',
-      asking: false, // only this window's screens can be read
+      asking: isWaiting(row.sessionId), // its own window reports its screen to main
       updatedAt: lastUpdate(row.updatedAt, digest.at),
       digest,
       conclusion: row.board?.conclusion ?? null,
-      agents: row.subagents.length,
+      agents: row.subagents.length + row.children.length,
       starred: favorites.isFavorite(row.sessionId),
     });
   }
@@ -125,7 +139,9 @@ function statusLine(card: BoardCard): HTMLSpanElement {
   status.append(el('span', 'board-dot'), el('span', 'board-status-word', STATUS_WORDS[card.status]));
   top.append(status);
   if ((card.status === 'idle' || card.status === 'concluded') && card.updatedAt) top.append(el('span', 'board-since', `· ${sessionsPanel.sinceText(card.updatedAt)}`));
-  if (card.agents) top.append(el('span', 'board-agents', agentsBadgeText(card.agents)));
+  const row = lastView?.rows?.find((r) => r.sessionId === card.sessionId);
+  const badge = agentsBadge(row?.subagents.length ?? 0, row?.children ?? []);
+  if (badge) top.append(el('span', 'board-agents', badge));
   if (card.starred) {
     const star = el('span', 'board-star');
     star.innerHTML = favorites.STAR_SVG;
@@ -145,6 +161,7 @@ function labelled(className: string, label: string, text: string): HTMLSpanEleme
 }
 
 function cardElement(card: BoardCard): HTMLLIElement {
+  const row = lastView?.rows?.find((r) => r.sessionId === card.sessionId);
   const item = el('li', 'board-item');
   const button = el('button', `board-card ${card.status}`);
   button.type = 'button';
@@ -152,6 +169,8 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (card.tabId) button.dataset.tabId = card.tabId;
   const name = sessionNameEl('span', 'board-name', card.name);
   button.append(statusLine(card), name, el('span', 'board-place', card.tabId ? `${card.place} · this window` : card.place));
+  const need = card.status === 'waiting' ? waiting.needOf(card.sessionId) : undefined;
+  if (need) button.append(el('span', `board-reason waiting-${need.kind}`, need.reason));
   if (card.digest.headline) button.append(el('span', 'board-headline', card.digest.headline));
   const lines = STATUS_KEYS.flatMap((key) => (card.digest.lines[key] ? [labelled(`board-line board-${key}`, STATUS_TITLES[key], card.digest.lines[key] ?? '')] : []));
   if (lines.length) {
@@ -177,6 +196,9 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
   const message = boardMessage.control(card);
   if (message) item.append(message);
+  const agents = row?.subagents ?? [];
+  const children = childrenOf(card.sessionId);
+  if (agents.length || children.length) item.append(sessionsPanel.agentList(card.sessionId, agents, children, (childId) => void openChild(card.sessionId, childId)));
   if (info?.task) item.append(reviewControl(card.sessionId, info.task.id, info.task.title));
   item.append(closeControl(card));
   if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId));
@@ -221,6 +243,25 @@ async function choose(card: BoardCard, confirmFork: boolean): Promise<void> {
   else if ('note' in result) notes.set(card.sessionId, result.note);
   else return close();
   render(true);
+}
+
+// "Open as session": she asked for this child in a tab, so it resumes without the "running elsewhere" question.
+// What came of it shows on the parent's card.
+async function openChild(parentId: string, childId: string): Promise<void> {
+  notes.set(parentId, 'Opening…');
+  render(true);
+  const result = await window.pastel.history.resume(childId, true);
+  notes.delete(parentId);
+  if (isIpcError(result)) notes.set(parentId, `Couldn’t open it: ${result.error}`);
+  else if ('note' in result) notes.set(parentId, result.note);
+  else if (!('confirm' in result)) return close();
+  render(true);
+}
+
+// Headless runs with no live parent, each opening its agent panel.
+function renderOrphans(orphans: readonly ChildRow[], on: boolean): void {
+  orphansSection.hidden = !on || !orphans.length;
+  orphansList.replaceChildren(...orphans.map((o) => sessionsPanel.agentList(o.sessionId, [], [o], (childId) => void openChild(childId, childId))));
 }
 
 // Code review for the card's task: every function its sessions changed, in place of the cards until Back.
@@ -363,7 +404,12 @@ function render(force = false): void {
   const sessionsView = boardView === 'sessions' && !codeReviewTask.isOpen();
   filterRow.hidden = !sessionsView;
   grid.hidden = !sessionsView;
-  const key = JSON.stringify([filter, boardView, branchFilter, cards, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  closed.hidden = !sessionsView;
+  today.hidden = !sessionsView;
+  waiting.setShown(sessionsView);
+  const agentRows = lastView?.rows?.map((r) => [r.subagents, r.children]);
+  const orphans = lastView?.orphans ?? [];
+  const key = JSON.stringify([filter, boardView, branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -372,6 +418,7 @@ function render(force = false): void {
   filterRow.replaceChildren(...filterButtons(cards));
   const empty = cards.length ? `Nothing ${FILTER_WORDS[filter].toLowerCase()} right now.` : lastView ? 'No Claude sessions are open.' : 'Looking for sessions…';
   grid.replaceChildren(...(shown.length ? shown.map(cardElement) : [el('li', 'board-empty', empty)]));
+  renderOrphans(orphans, sessionsView);
   if (focusedId) grid.querySelector<HTMLElement>(`.board-card[data-session-id="${CSS.escape(focusedId)}"]`)?.focus();
   else if (focusedFilter) filterRow.querySelector<HTMLElement>(`[data-filter="${focusedFilter}"]`)?.focus();
 }
@@ -395,6 +442,8 @@ export function open(): void {
   shownKey = '';
   boardActivity.show(boardView === 'activity');
   render(true);
+  waiting.refresh();
+  void workflow.showToday(todayBody); // once per open; Today changes slowly
   following = true;
   sessionsPanel.setBoardOpen(true); // fresh rows now, then every 2s while open
   (grid.querySelector<HTMLElement>('.board-card') ?? filterRow.querySelector<HTMLElement>('.board-filter') ?? view).focus();
@@ -443,5 +492,6 @@ new MutationObserver(() => {
 window.addEventListener('petal:open-board', open);
 window.addEventListener(stopClaude.CHANGED_EVENT, () => render(true));
 window.addEventListener(distillCard.CHANGED_EVENT, () => render(true));
+window.addEventListener(waiting.CHANGED_EVENT, () => render());
 window.pastel.onToggleBoard(toggle);
 byId('board-button').addEventListener('click', toggle);

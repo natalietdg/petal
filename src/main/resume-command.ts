@@ -22,3 +22,7 @@ export const resumeArgs = (sessionId: string): string => `--resume ${shellQuote(
 export const buildStartCommand = (prompt: string, claude = 'claude'): string => `${claude} -- ${typedQuote(prompt)}\r`;
 
 export const buildResumeCommand = (cwd: string, sessionId: string, claude = 'claude'): string => `cd ${shellQuote(cwd)} && ${claude} ${resumeArgs(sessionId)}\r`;
+
+// Add Session: a fresh claude in the folder she chose, so its memory and history belong to that folder; agent runs the whole session as it.
+export const buildStartInCommand = (cwd: string, claude = 'claude', agent: string | null = null): string =>
+  `cd ${shellQuote(cwd)} && ${claude}${agent ? ` --agent ${shellQuote(agent)}` : ''}\r`;

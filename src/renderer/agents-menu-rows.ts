@@ -8,6 +8,7 @@ export interface MenuRow {
   task: string;
   status: DotStatus;
   time: string; // "9:42 AM · 4m"
+  headless: boolean; // a `claude -p` child session
 }
 
 type Clock = (at: number) => string;
@@ -46,5 +47,6 @@ export function menuRows(agents: readonly AgentSummary[], now: number, clock: Cl
     task: agent.task,
     status: dotStatus(agent),
     time: `${clock(agent.startedAt)} · ${duration(agent, now)}`,
+    headless: agent.headless === true,
   }));
 }

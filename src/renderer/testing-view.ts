@@ -1,6 +1,7 @@
 // The Testing tab's pieces, built from data: a suite's stage strip, a stage's grouped results, history with its trend,
 // and what the project tests with. testing.ts owns the state and wires the handlers passed in here.
 import { el } from './dom';
+import * as advanced from './advanced';
 import { groupByFile, passRate, type SuiteRun, type StageConfig, type StackItem, type StageResult, type StageStatus, type TestCase } from '../shared/testing';
 import { chartRuns, resultText, runDuration, runTitle, runWhy, shortCommand, type HistoryDay, type RunRow } from '../shared/testing-history';
 
@@ -73,8 +74,17 @@ export type FixWhere = 'fixer' | 'session';
 export interface ResultHandlers { fixTest: (stage: StageResult, test: TestCase, where: FixWhere) => void; fixStage: (stage: StageResult, where: FixWhere) => void; fixEstimate?: (stage: StageResult) => string | null }
 
 // The send to the bug fix agent, with the paste into this session as a small link beside it.
+// Without Advanced there is no bug fix agent: one button pastes into this session.
 function fixActions(label: string, title: string, fix: (where: FixWhere) => void, stage: boolean, estimate: string | null = null): HTMLElement {
   const box = el('div', `tst-fix-actions${stage ? ' is-stage' : ''}`);
+  if (!advanced.isOn()) {
+    const ask = el('button', `tst-fix${stage ? ' tst-fix-stage' : ''}`, 'Ask Claude to fix it');
+    ask.type = 'button';
+    ask.title = 'Paste the failure into the Claude in this tab';
+    ask.addEventListener('click', () => fix('session'));
+    box.append(ask);
+    return box;
+  }
   const send = el('button', `tst-fix${stage ? ' tst-fix-stage' : ''}`, label);
   send.type = 'button';
   send.title = title;

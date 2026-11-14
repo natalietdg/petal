@@ -137,16 +137,17 @@ export interface LockHandlers { toggle: (on: boolean) => void; dismiss: () => vo
 
 // "Lock tests", a Keep or Restore question for each locked test weakened outside Claude, a red line for each one a
 // session weakened and Petal put back, and each edit the lock refused.
+// Without Advanced only the Keep or Restore questions show: a lock left on still needs her answer.
 export function lockBar(lock: LockView, restored: RestoredFlag[], names: { tester: string; fixer: string }, handlers: LockHandlers): HTMLElement {
   const box = el('div', 'tst-lock');
-  const label = el('label', 'tst-toggle tst-lock-toggle');
+  const label = el('label', 'tst-toggle tst-lock-toggle advanced-only');
   const box2 = el('input');
   box2.type = 'checkbox';
   box2.checked = lock.enabled && lock.hookPresent;
   box2.addEventListener('change', () => handlers.toggle(box2.checked));
   label.append(box2, el('span', null, 'Lock tests'), el('span', 'tst-muted', 'Any session may add or fix tests; none may delete, skip or weaken one. Adds one hook to your Claude settings, not the repo.'));
   box.append(label);
-  if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag', 'The lock’s hook is missing from your ~/.claude/settings.json. Turn the lock off and on again.'));
+  if (lock.enabled && !lock.hookPresent) box.append(el('p', 'tst-lock-flag advanced-only', 'The lock’s hook is missing from your ~/.claude/settings.json. Turn the lock off and on again.'));
   const asks = restored.filter((f) => f.by === 'unconfirmed');
   if (asks.length) {
     const list = el('ul', 'tst-lock-flags');
@@ -155,7 +156,7 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], names: { teste
   }
   const done = restored.filter((f) => f.by !== 'unconfirmed');
   if (done.length || lock.refusals.length) {
-    const list = el('ul', 'tst-lock-flags');
+    const list = el('ul', 'tst-lock-flags advanced-only');
     const lines = [
       ...done.slice(-5).map((flag) => ({ at: flag.at, text: `${restoredText(flag, names)} · ${flag.path} · ${when(flag.at)}` })),
       ...lock.refusals.map((refusal) => ({ at: refusal.at, text: `${refusal.text} · ${when(refusal.at)}` })),
@@ -165,7 +166,7 @@ export function lockBar(lock: LockView, restored: RestoredFlag[], names: { teste
       item.append(el('span', null, line.text));
       list.append(item);
     }
-    const dismiss = el('button', 'tst-link tst-lock-dismiss', 'Dismiss');
+    const dismiss = el('button', 'tst-link tst-lock-dismiss advanced-only', 'Dismiss');
     dismiss.type = 'button';
     dismiss.addEventListener('click', handlers.dismiss);
     box.append(list, dismiss);

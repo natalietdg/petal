@@ -1,0 +1,19 @@
+{
+  "pid": 41001,
+  "sessionId": "0f3c2a1e-5b7d-4c9e-8a1f-2d3e4f5a6b7c",
+  "cwd": "/Users/example/projects/demo-app",
+  "startedAt": 1763100000000,
+  "procStart": "Fri Nov 14 09:00:00 2026",
+  "version": "2.1.150",
+  "peerProtocol": 1,
+  "peerFeatures": [],
+  "kind": "interactive",
+  "entrypoint": "cli",
+  "pidDomain": "local",
+  "name": "demo-app",
+  "nameSource": "auto",
+  "nameSince": 1763100000000,
+  "status": "busy",
+  "updatedAt": 1763100600000,
+  "statusUpdatedAt": 1763100600000
+}

@@ -4,6 +4,7 @@
 import { el, isIpcError } from './dom';
 import { BUILTINS, MENTION_GROUPS, SLASH_GROUPS, applySlash, exactMatchIndex, filterSlash, slashQuery, type SlashItem, type SlashList } from '../shared/slash';
 import { applyMention, mentionQuery } from '../shared/mentions';
+import * as advanced from './advanced';
 
 interface Owner {
   input: HTMLTextAreaElement;
@@ -16,6 +17,8 @@ const MAX_HEIGHT = 380;
 const MIN_ABOVE = 220; // less room than this above the box: open below it
 const GAP = 6;
 const OFF: SlashList = { allowed: false, items: [] };
+const ADVANCED_SKILLS = new Set(['factory']); // shown only while Customize › Advanced is on; the skill stays installed
+const offered = (item: SlashItem): boolean => advanced.isOn() || !(item.kind === 'skill' && ADVANCED_SKILLS.has(item.name));
 
 const popup = el('div', 'slash-menu');
 popup.hidden = true;
@@ -105,7 +108,7 @@ function emptyText(): string {
 function render(): void {
   const list = fetched ?? OFF;
   const groups = mention ? MENTION_GROUPS : SLASH_GROUPS;
-  const matches = mention ? mentionMatches(list) : filterSlash([...list.items, ...BUILTINS], query);
+  const matches = mention ? mentionMatches(list) : filterSlash([...list.items.filter(offered), ...BUILTINS], query);
   shown = groups.flatMap(({ kind }) => matches.filter((m) => m.kind === kind));
   const exact = mention ? -1 : exactMatchIndex(shown, query);
   if (exact >= 0) active = exact;

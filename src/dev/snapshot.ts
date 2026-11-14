@@ -12,6 +12,8 @@ import { builtinMenusCheck } from './snapshot-builtin-menus';
 import { stopButtonCheck } from './snapshot-stop';
 import { printLookCheck } from './snapshot-print';
 import { bookLookCheck } from './snapshot-book';
+import { dividerDragCheck } from './snapshot-divider-snap';
+import { catAlertCheck } from './snapshot-cat-alert';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
@@ -111,7 +113,6 @@ export interface CaptureRequest {
   log: Log;
   theme: Theme;
   panelOpen: boolean;
-  expandedId?: string | null;
   name: string;
   scrollTo?: string | null;
 }
@@ -201,13 +202,12 @@ function panelSessionsFixture(ownSessionId: string | null): SessionFile[] {
   ];
 }
 
-// Waits until the page really shows the theme, panel and row state before capturing.
-async function verifiedCapture({ js, capture, log, theme, panelOpen, expandedId = null, name, scrollTo = null }: CaptureRequest): Promise<void> {
-  const want = { bg: hexToRgb(theme.reader.background), panelOpen, rowExpanded: Boolean(expandedId) };
+// Waits until the page really shows the theme and Board state (the Sessions pill opens the Board) before capturing.
+async function verifiedCapture({ js, capture, log, theme, panelOpen, name, scrollTo = null }: CaptureRequest): Promise<void> {
+  const want = { bg: hexToRgb(theme.reader.background), panelOpen };
   const probe = `(() => ({
     bg: getComputedStyle(document.getElementById('reader')).backgroundColor,
-    panelOpen: !document.getElementById('sessions-panel').hidden,
-    rowExpanded: !document.getElementById('sessions-panel').hidden && Boolean(document.querySelector('.session-detail')),
+    panelOpen: !document.getElementById('board').hidden,
   }))()`;
   const state = await waitFor(async () => {
     const now = await js(probe);
@@ -234,10 +234,7 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
   const busy = sessions.filter((s) => s.status === 'busy').length;
   const want = `Sessions · ${busy ? `${busy} busy · ` : ''}${sessions.length} open`;
   log(`${pill.startsWith(want) ? 'ok' : 'FAIL'} sessions pill counts the fixture sessions only: "${pill}", want "${want}"`);
-  log(`own row marked: ${await js("document.querySelector('.session-row.own .session-own')?.innerText ?? 'none'")}`);
-
-  const expandId = (sessions.find((s) => s.status === 'busy' && s.sessionId !== ownSessionId) ?? sessions[0]).sessionId;
-  log(`expanding row: ${sessions.find((s) => s.sessionId === expandId)?.name}`);
+  log(`Board cards for the fixture: ${await js("document.querySelectorAll('#board .board-card').length")}`);
 
   const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
   for (const id of themeIds) {
@@ -245,14 +242,9 @@ async function captureSessionsPanel({ js, capture, log, themes, applyTheme, ownS
     applyTheme(id, { persist: false });
     await panel('setOpen(false)');
     await verifiedCapture({ js, capture, log, theme, panelOpen: false, name: `pill-${id}` });
-    await panel('expandedIds.clear()');
     await panel('setOpen(true)');
     await verifiedCapture({ js, capture, log, theme, panelOpen: true, name: `panel-${id}` });
-    await panel(`expandedIds.add(${JSON.stringify(expandId)})`);
-    await panel('refresh()');
-    await verifiedCapture({ js, capture, log, theme, panelOpen: true, expandedId: expandId, name: `panel-row-${id}` });
   }
-  await panel('expandedIds.clear()');
   await panel('setOpen(false)');
   panelFixture.sessions = null;
   applyTheme('paleSky', { persist: false });
@@ -625,6 +617,18 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'scene-idle') {
     await sceneIdle({ win, js, log });
     return app.quit();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'cat-alert') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await catAlertCheck(kit).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'divider-drag') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await dividerDragCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'book-look') {

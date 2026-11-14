@@ -94,8 +94,8 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
   stylesFixture.opened = [];
 
   const showFormatting = async () => {
-    await js("PastelTerm.customize.open('formatting')");
-    return waitFor(() => js("document.querySelector('#customize-tabs [aria-selected=\"true\"]')?.dataset.section === 'formatting' && document.querySelector('#customize .cz-card') !== null"), 5000);
+    await js("PastelTerm.customize.open('claude')");
+    return waitFor(() => js("document.querySelector('#customize-tabs [aria-selected=\"true\"]')?.dataset.section === 'claude' && document.querySelector('#customize .cz-card') !== null"), 5000);
   };
   const expected = Object.entries(FILES).map(([file, text]) => ({
     file: path.join(stylesDir, file),

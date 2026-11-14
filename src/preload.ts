@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels } from './shared/ipc';
+import type { EventChannel, EventChannels, InvokeArgs, InvokeChannel, InvokeResult, SendChannel, SendChannels, RepoStartTarget } from './shared/ipc';
 import type { FlowTarget, TabId, TermSize } from './shared/types';
 import type { PromptAnswer } from './shared/prompt-answer';
 import type { BackfillDays, BackfillState } from './shared/library';
@@ -34,6 +34,11 @@ const api = {
     close: () => invoke('agents:close'),
     onTimeline: (callback: (update: EventChannels['agents:timeline']) => void) => subscribe('agents:timeline', callback),
   },
+  waiting: {
+    report: (signals: SendChannels['waiting:report'][0]) => send('waiting:report', signals),
+    onLane: (callback: (lane: EventChannels['waiting:lane']) => void) => subscribe('waiting:lane', callback),
+    onOpen: (callback: (need: EventChannels['waiting:open']) => void) => subscribe('waiting:open', callback),
+  },
   onTheme: (callback: (theme: EventChannels['theme:changed']) => void) => subscribe('theme:changed', callback),
   getCat: () => invoke('cat:get'),
   onCat: (callback: (catId: string) => void) => subscribe('cat:changed', callback),
@@ -42,6 +47,8 @@ const api = {
   getReading: () => invoke('reading:get'),
   claudeInstalled: (recheck = false) => invoke('claude:installed', { recheck }),
   claudePathTip: () => invoke('claude:path-tip'),
+  replyVisibility: () => invoke('claude:reply-visibility'),
+  resumeNotes: { latest: () => invoke('resume-notes:latest'), reveal: (stamp: string) => invoke('resume-notes:reveal', stamp) },
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize, startClaude = false) => send('pty:start', { tabId, cols, rows, startClaude }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),
@@ -87,6 +94,7 @@ const api = {
   onToggleHeaders: (callback: () => void) => subscribe('headers:toggle', callback),
   onTextSizeStep: (callback: (step: EventChannels['text-size:step']) => void) => subscribe('text-size:step', callback),
   onTextSizeChanged: (callback: (sizes: EventChannels['text-size:changed']) => void) => subscribe('text-size:changed', callback),
+  onAdvanced: (callback: (on: EventChannels['advanced:changed']) => void) => subscribe('advanced:changed', callback),
   onStopClaude: (callback: () => void) => subscribe('claude:stop', callback),
   onConclusionsChanged: (callback: () => void) => subscribe('history:conclusions', callback),
   onOpenCustomize: (callback: () => void) => subscribe('customize:open', callback),
@@ -166,6 +174,7 @@ const api = {
   testing: {
     detect: (tabId: TabId, root: string | null = null, session: string | null = null, picker = false) => invoke('testing:detect', { tabId, root, session, picker }),
     history: (tabId: TabId, root: string | null = null) => invoke('testing:history', { tabId, root }),
+    hasSuite: () => invoke('testing:has-suite'),
     saveSuite: (request: InvokeArgs<'testing:save-suite'>[0]) => invoke('testing:save-suite', request),
     seedSuite: (request: InvokeArgs<'testing:seed-suite'>[0]) => invoke('testing:seed-suite', request),
     undoSuite: (request: InvokeArgs<'testing:undo-suite'>[0]) => invoke('testing:undo-suite', request),
@@ -245,7 +254,9 @@ const api = {
   },
   repos: {
     list: (tabId: TabId) => invoke('repos:list', { tabId }),
-    open: (tabId: TabId, path: string) => invoke('repos:open', { tabId, path }),
+    open: (tabId: TabId, where: string | RepoStartTarget) => invoke('repos:open', typeof where === 'string' ? { tabId, path: where } : { tabId, target: where }),
+    start: (tabId: TabId, target: RepoStartTarget, agent: string | null = null) => invoke('repos:start', { tabId, target, agent }),
+    agents: () => invoke('repos:agents'),
   },
   flow: {
     get: (target: FlowTarget) => invoke('flow:get', { target }),

@@ -1,14 +1,10 @@
-// Customize sections Look (chips that call the same apply* functions as the menus, plus the tarot birthday) and Formatting (formatting guide, output styles, preview).
+// Customize sections Look (chips that call the same apply* functions as the menus) and Formatting (formatting guide, preview).
 import * as markdown from './markdown';
-import * as tarotReading from './tarot-reading';
 import * as textSize from './text-size';
 import { NO_PET, petWords, portrait, setSize } from './cat';
 import { el } from './dom';
-import { actionButton, card, field, keepConfig, note, page, save } from './customize-kit';
-import { outputStylesCard } from './customize-styles';
-import { petalSkillsCard } from './customize-skills';
+import { actionButton, card, note, page, save } from './customize-kit';
 import { formattingGuide } from './formatting-guide';
-import type { Config } from '../main/config-store';
 import type { Choice } from '../shared/types';
 import { PET_SIZE_CHOICES } from '../shared/pet-size';
 import { READER_PERCENT, TERMINAL_FONT, type SizeRange, type TextPane } from '../shared/text-size';
@@ -35,22 +31,6 @@ function chipGroup(label: string, choices: readonly Choice[], current: string, o
     group.append(chip);
   }
   return card(label, group);
-}
-
-// Saved in config.json only; the Tarot Room popover picks it up at once.
-function birthdayCard(): HTMLDivElement {
-  const input = el('input', 'cz-input cz-date');
-  Object.assign(input, { type: 'date', min: '1900-01-01', max: new Date().toLocaleDateString('en-CA'), value: page.state.config.tarot.birthdate });
-  const show = (config: Config): void => {
-    input.value = config.tarot.birthdate;
-    tarotReading.setBirthdate(config.tarot.birthdate);
-  };
-  // A half-typed date reads as '', so only a whole date saves; Clear is the way to remove it.
-  input.addEventListener('change', async () => { if (input.value) show(await save({ tarot: { birthdate: input.value } })); });
-  const clear = actionButton('Clear', async () => show(keepConfig(await window.pastel.config.reset('tarot.birthdate'), 'clear the birthday')), 'flow-button cz-birthday-clear');
-  const control = el('span', 'cz-birthday');
-  control.append(input, clear);
-  return card('Birthday', field('Date of birth', control, "For your Tarot Room reading. Kept in Petal's settings on this Mac, never sent anywhere."));
 }
 
 // − value + and Reset for one pane; the value follows ⌘= ⌘- ⌘0 and other windows while the card is on screen.
@@ -108,9 +88,8 @@ export function renderLook(): HTMLElement[] {
     chipGroup('Pet', choices.cats, look.cat, (id) => { look.cat = id; set.setCat(id); sizeNote.textContent = sizeNoteText(id); }, petPicture),
     chipGroup('Pet size', PET_SIZE_CHOICES, page.state.config.pet.size, async (id) => setSize((await save({ pet: { size: id } })).pet.size)),
     chipGroup('Scene', choices.scenes, look.scene, (id) => { look.scene = id; set.setScene(id); }),
-    birthdayCard(),
     sizeNote,
-    note('Also in the menus: Theme (⌘1–3), View for reading style (⌥⌘1–4), Pet and Pet › Scene.'),
+    note(`Also in the menus: Theme (⌘1–${choices.themes.length}), View for reading style (⌥⌘1–${choices.reading.length}), Pet and Pet › Scene.`),
   ];
 }
 
@@ -156,12 +135,12 @@ query → lowercase → match title or body → show
 1. Notes app design notes, search section`;
 
 // Petal ships petal-magazine.md; it lands in ~/.claude/output-styles only after the add action.
-export const MISSING_MAGAZINE = 'Petal’s magazine style (petal-magazine.md) isn’t in ~/.claude/output-styles yet. Use “Add Petal’s reply styles” under Output styles to add it.';
+export const MISSING_MAGAZINE = 'Petal’s magazine style (petal-magazine.md) isn’t in ~/.claude/output-styles yet. Use “Add Petal’s reply styles” under Customize › Claude setup to add it.';
 
 export function renderFormatting(): HTMLElement[] {
   const readingName = Object.fromEntries(page.state.choices.reading)[page.state.look.reading] ?? page.state.look.reading;
   const style = el('p', 'cz-note');
-  style.append('Claude Code output style: ', el('strong', null, page.state.outputStyle ?? 'default'), ' (from ~/.claude/settings.json; switch it under Output styles). ');
+  style.append('Claude Code output style: ', el('strong', null, page.state.outputStyle ?? 'default'), ' (from ~/.claude/settings.json; switch it under Claude setup). ');
   if (page.state.magazinePath) style.append('Magazine style: ', el('code', null, page.state.magazinePath), '.');
   else if (page.state.config.claudeFolder.choice === 'allowed') style.append(MISSING_MAGAZINE);
 
@@ -169,8 +148,6 @@ export function renderFormatting(): HTMLElement[] {
   column.append(markdown.render(PREVIEW));
   return [
     card('Formatting guide', note(`Each shape as Claude types it and how the reader shows it in ${readingName}, then what each colour means. Switch the reading style under Look to compare.`), formattingGuide(), style),
-    outputStylesCard(),
-    petalSkillsCard(),
     card(`Live preview · ${readingName}`, note('Switch the reading style under Look to see this change.'), column),
   ];
 }

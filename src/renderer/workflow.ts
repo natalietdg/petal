@@ -350,3 +350,18 @@ export async function show(id: TabId, body: HTMLElement): Promise<void> {
   // The load for `id` returned `id`'s data; TypeScript can't tie the two through TABS.
   body.replaceChildren(...draw(id, data as DataByTab[typeof id], token));
 }
+
+// Board's Today section: the same view Customize used to show, with its own token so the two never cancel each other.
+let todayDrawn = 0;
+export async function showToday(body: HTMLElement): Promise<void> {
+  const token = ++todayDrawn;
+  if (!body.childElementCount) body.replaceChildren(el('p', 'status', 'Loading…'));
+  let data: TodayData | IpcError;
+  try {
+    data = await window.pastel.workflow.today();
+  } catch (error) {
+    data = { error: error instanceof Error ? error.message : String(error) };
+  }
+  if (token !== todayDrawn) return;
+  body.replaceChildren(...('error' in data ? [el('p', 'wf-error', `Couldn’t load Today: ${data.error}`)] : renderToday(data)));
+}

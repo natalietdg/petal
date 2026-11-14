@@ -30,7 +30,9 @@ function rowButton(row: MenuRow): HTMLButtonElement {
   button.setAttribute('aria-label', `${row.task}, ${row.status}, ${row.time}`);
   const dot = el('span', `agents-dot ${row.status}`);
   dot.title = row.status;
-  button.append(dot, el('span', 'agents-menu-task', row.task), el('span', 'agents-menu-time', row.time));
+  const task = el('span', 'agents-menu-task', row.task);
+  if (row.headless) task.append(' ', el('span', 'agent-headless', 'headless')); // inside the task cell: the row is a 3-column grid
+  button.append(dot, task, el('span', 'agents-menu-time', row.time));
   button.tabIndex = -1;
   button.addEventListener('click', () => pick(row.id));
   return button;

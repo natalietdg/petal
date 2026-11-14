@@ -1,7 +1,10 @@
 // The pet's setup guide on a new install: cards over the reader (hello, pet, scene, folder, and past sessions when she has some), then a speech
 // bubble by the pet that points at the next thing until the first reply. Skip ends it; Help › Get started restarts it.
+// Its What's next card holds the Get started checklist, so every "help me start" path lands here.
 import * as overlays from './overlays';
 import * as consent from './consent';
+import * as repos from './repos';
+import { addAndUsePetalStyle, petalStyleActive } from './customize-styles';
 import * as getStarted from './get-started';
 import * as tabs from './tabs';
 import * as scenes from './scenes';
@@ -11,9 +14,12 @@ import { byId, el, focusTerminal, isIpcError } from './dom';
 import type { FolderChoice } from '../shared/claude-folder';
 import type { Choice } from '../shared/types';
 import type { PastSessionsSummary } from '../main/history';
+import { DEFAULT_PETAL_STYLE, PETAL_STYLE_CHOICES } from '../shared/petal-style-choices';
+import { TOKEN_TITLE } from '../shared/token-facts';
+import { tokenFacts } from './customize-start';
 import {
-  EXAMPLE_ASK, GUIDE_PETS, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
-  libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
+  EXAMPLE_ASK, GUIDE_PETS, WHATS_NEXT_LINE, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
+  libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, STYLE_LABELS, styleCost, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
 } from '../shared/pet-guide';
 
 const COPIED_MS = 1400;
@@ -48,6 +54,8 @@ let repliesAtStart = 0; // replies already there when the bubbles began, so a re
 let celebrateTimer: ReturnType<typeof setTimeout> | undefined;
 let past: PastSessionsSummary = { sessions: 0, projects: 0, newest: [] }; // History's count, read once the folder is allowed
 let buildLibrary = false; // the import card's checkbox
+let petalStyleOn = false; // a Petal reply style is already active, so the style card stays away
+let pickedStyle = DEFAULT_PETAL_STYLE; // the style card's pick
 
 const words = () => petWords(cat);
 const save = (stage: GuideStage) => window.pastel.config.save({ onboarding: { step: stage } });
@@ -62,6 +70,7 @@ function facts(): GuideFacts {
     sessionStarted: live.sessionStarted,
     replied: replyCount() > repliesAtStart,
     pastSessions: past.sessions,
+    petalStyleOn,
   };
 }
 
@@ -192,10 +201,39 @@ function consentBody(): HTMLElement {
   const list = el('ul', 'consent-reads');
   list.append(...consent.READS.map((line) => el('li', null, line)));
   more.append(el('summary', null, 'What exactly does Petal read and write?'), list,
-    el('p', 'consent-line', consent.WRITES_TITLE), consent.writesList(),
-    el('p', 'consent-line', 'Not now keeps the terminal working; the reader stays empty.'));
-  box.append(said, more);
+    el('p', 'consent-line', consent.WRITES_TITLE), consent.writesList());
+  box.append(said, el('p', 'pg-line pg-cost', consent.NOT_NOW_COST), more);
   return box;
+}
+
+// Petal's reply styles, one pick, with what the picked one costs per turn.
+function styleBody(): HTMLElement {
+  const box = el('div', 'pg-style');
+  const cost = el('p', 'pg-line pg-cost');
+  const costOf = (name: string) => styleCost(PETAL_STYLE_CHOICES.find((c) => c.name === name)?.tokens ?? 0);
+  cost.textContent = costOf(pickedStyle);
+  const result = el('p', 'pg-style-result');
+  result.setAttribute('aria-live', 'polite');
+  const picks = radioGroup('Reply style', 'pg-styles', PETAL_STYLE_CHOICES.map((choice) => {
+    const tile = radio(pickedStyle === choice.name, () => { pickedStyle = choice.name; repaintPicks(); }, 'pg-style-pick');
+    tile.dataset.style = choice.name;
+    tile.append(el('span', 'pg-style-name', choice.name.replace(/^Petal · /, '')), el('span', 'pg-style-line', choice.line));
+    return tile;
+  }));
+  const tokens = el('details', 'pg-more');
+  tokens.append(el('summary', null, TOKEN_TITLE), ...tokenFacts());
+  box.append(picks, cost, tokens, result);
+  return box;
+}
+
+// Use this style: the same add-then-switch Customize › Formatting does; a failure stays on the card.
+async function useStyle(): Promise<void> {
+  const result = view.querySelector<HTMLElement>('.pg-style-result');
+  const { ok, line } = await addAndUsePetalStyle(pickedStyle);
+  if (!ok) { if (result) result.textContent = line; return; }
+  petalStyleOn = true;
+  announce(line);
+  await advance('style');
 }
 
 // Past sessions, as History lists them: what the pet found, the newest three, and the Library option with its cost up front.
@@ -235,13 +273,14 @@ async function pickLibrary(on: boolean, confirm: HTMLElement): Promise<void> {
   confirm.textContent = isIpcError(plan) ? `Couldn’t count them: ${plan.error}` : 'skipped' in plan ? plan.skipped : libraryConfirm(plan);
 }
 
-const BODIES: Record<CardStep, () => HTMLElement> = { welcome: welcomeBody, pet: petBody, scene: sceneBody, consent: consentBody, import: importBody };
+const BODIES: Record<CardStep, () => HTMLElement> = { welcome: welcomeBody, pet: petBody, scene: sceneBody, consent: consentBody, style: styleBody, import: importBody };
 
 function renderCard(card: CardStep): void {
   const copy = cardCopy(card, words());
   const pane = el('div', 'pg-card');
   pane.dataset.step = card;
-  const { number, total } = cardCounter(card, folder, past.sessions);
+  view.dataset.card = card;
+  const { number, total } = cardCounter(card, folder, past.sessions, petalStyleOn);
   const dots = el('p', 'pg-dots');
   dots.append(...Array.from({ length: total }, (_, i) => el('span', i < number ? 'on' : null)), el('span', 'pg-dots-text', `Step ${number} of ${total}`));
   pane.append(dots, el('h1', 'pg-title', copy.title));
@@ -252,6 +291,8 @@ function renderCard(card: CardStep): void {
   const actions = el('div', 'pg-actions');
   if (card === 'consent') {
     actions.append(button('Allow', 'pg-primary pg-allow', () => void answerFolder('allowed')), button('Not now', 'pg-secondary pg-later', () => void answerFolder('declined')));
+  } else if (card === 'style') {
+    actions.append(button(STYLE_LABELS.use, 'pg-primary pg-use-style', () => void useStyle()), button(STYLE_LABELS.later, 'pg-secondary pg-later', () => void advance('style')));
   } else if (card === 'import') {
     actions.append(button(IMPORT_LABELS.show, 'pg-primary pg-show', () => void showInHistory()), button(IMPORT_LABELS.later, 'pg-secondary pg-later', () => void advance('import')));
   } else {
@@ -264,16 +305,18 @@ function renderCard(card: CardStep): void {
   if (card === 'pet' || card === 'scene') { borrowSceneStyles(); view.append(cornerPreview()); }
   pane.scrollTop = 0;
   // The folder card focuses itself, not Allow, so a stray Enter can't answer for her (as the old question did).
-  const focus = card === 'consent' ? view : view.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], .pg-next, .pg-show');
+  const focus = card === 'consent' ? view : view.querySelector<HTMLElement>('[role="radio"][aria-checked="true"], .pg-next, .pg-show, .pg-use-style');
   focus?.focus({ preventScroll: true });
   announce(card === 'import' ? `${copy.title}. ${importSaid(past)} ${copy.line}` : `${copy.title}. ${copy.line}`);
 }
 
 function repaintPicks(): void {
-  if (step === 'pet' || step === 'scene') {
+  if (step === 'pet' || step === 'scene' || step === 'style') {
     const focused = document.activeElement instanceof HTMLElement && view.contains(document.activeElement) ? document.activeElement.dataset : null;
     renderCard(step);
-    const again = focused?.pet ? view.querySelector<HTMLElement>(`[data-pet="${focused.pet}"]`) : focused?.scene ? view.querySelector<HTMLElement>(`[data-scene="${focused.scene}"]`) : null;
+    const again = focused?.pet ? view.querySelector<HTMLElement>(`[data-pet="${focused.pet}"]`)
+      : focused?.scene ? view.querySelector<HTMLElement>(`[data-scene="${focused.scene}"]`)
+      : focused?.style ? view.querySelector<HTMLElement>(`[data-style="${CSS.escape(focused.style)}"]`) : null;
     again?.focus({ preventScroll: true });
   }
 }
@@ -293,8 +336,14 @@ function pickScene(id: string): void {
 async function answerFolder(choice: FolderChoice): Promise<void> {
   folder = choice;
   await consent.setChoice(choice); // the same answer, saved in the same place, as the old question
+  await readStyle(); // output styles are only readable once the folder is allowed
   await countPast();
   await advance('consent');
+}
+
+async function readStyle(): Promise<void> {
+  const state = await window.pastel.config.get();
+  petalStyleOn = !isIpcError(state) && petalStyleActive(state);
 }
 
 // History's own count of her past sessions; read only with the folder allowed, so a declined folder never shows the card.
@@ -315,7 +364,7 @@ async function showInHistory(): Promise<void> {
 }
 
 async function advance(card: CardStep): Promise<void> {
-  const next = nextCard(card, folder, past.sessions);
+  const next = nextCard(card, folder, past.sessions, petalStyleOn);
   await show(next === 'bubbles' ? startBubbles() : next);
 }
 
@@ -327,8 +376,9 @@ function startBubbles(): BubbleStep {
 
 // ── The bubble ──
 
+// While she picks a folder in the session palette, the palette is the target, so no ring sits on Add Session.
 const target = (s: BubbleStep): HTMLElement | null => ({
-  'add-session': byId('add-session-button'),
+  'add-session': repos.isPickingSessionFolder() ? null : byId('add-session-button'),
   'type-claude': byId('terminal-pane'),
   'claude-setup': byId('terminal-pane'),
   ask: byId('composer'),
@@ -337,7 +387,7 @@ const target = (s: BubbleStep): HTMLElement | null => ({
 
 function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null } {
   const claudeFound = getStarted.currentFacts().claudeInstalled;
-  const copy = bubbleCopy(s, words(), { claudeFound, folder, startedItself });
+  const copy = bubbleCopy(s, words(), { claudeFound, folder, startedItself, pickingFolder: repos.isPickingSessionFolder() });
   const name = el('p', 'pb-name');
   name.append(petPicture(cat, 'pb-face'), el('span', null, words().name));
   const nodes: Node[] = [name, el('p', 'pb-say', copy.say)];
@@ -363,9 +413,9 @@ function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null }
     const done = button('Yay!', 'pb-done', finish);
     actions.append(done);
     focus = done;
-  } else actions.append(button('Skip setup', 'pb-skip', () => void skip()));
+  } else actions.append(button('All steps', 'pb-steps', () => void openSteps()), button('Skip setup', 'pb-skip', () => void skip()));
   nodes.push(actions);
-  if (s === 'add-session') focus ??= target(s); // the button she's meant to press, so Enter does it
+  if (s === 'add-session') focus ??= target(s); // the button she's meant to press, so Enter does it (none while the palette has the keys)
   if (s === 'ask') focus ??= byId('composer-input'); // the example is there, so Enter sends it
   return { nodes, focus };
 }
@@ -379,7 +429,7 @@ let shownKey = '';
 function paintBubble(force = false): void {
   if (!step || isCardStep(step)) return;
   const s = step;
-  const key = `${s}|${getStarted.currentFacts().claudeInstalled}|${folder}|${cat}|${startedItself}`;
+  const key = `${s}|${getStarted.currentFacts().claudeInstalled}|${folder}|${cat}|${startedItself}|${repos.isPickingSessionFolder()}`;
   if (!force && key === shownKey) { place(); return; }
   const changedStep = s !== shownBubble || key.split('|')[1] !== shownKey.split('|')[1]; // a new step, or claude just found
   shownBubble = s;
@@ -422,8 +472,11 @@ const visible = (box: DOMRect): boolean => box.width > 0 && box.height > 0;
 const overlaps = (a: DOMRect, b: { left: number; top: number; right: number; bottom: number }): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 // Beside the pet with its tail toward her, never over the thing it points at; the arrow sits by that thing.
+// Other views cover it; the session palette doesn't, since picking a folder is the Add Session step itself.
+const coveredByView = (): boolean => overlays.current() !== null && !(step === 'add-session' && repos.isPickingSessionFolder());
+
 function place(): void {
-  const hide = step === null || isCardStep(step) || overlays.current() !== null;
+  const hide = step === null || isCardStep(step) || coveredByView();
   if (hide) {
     bubble.hidden = true;
     pointer.hidden = true;
@@ -456,7 +509,7 @@ function place(): void {
   const box = (s: { left: number; top: number }) => ({ left: s.left, top: s.top, right: s.left + width, bottom: s.top + height });
   const pointsInto = shownBubble === 'type-claude' || shownBubble === 'claude-setup'; // the terminal is too big to stay off
   // Claude's own cards in the reader stay readable: she needs them to pick a style and sign in.
-  const cards = [...document.querySelectorAll<HTMLElement>('.menu-card, #prompt-dock > *')].map((card) => card.getBoundingClientRect()).filter(visible);
+  const cards = [...document.querySelectorAll<HTMLElement>('.menu-card, #prompt-dock > *, #repos .repos-card')].map((card) => card.getBoundingClientRect()).filter(visible);
   const clear = (s: { left: number; top: number }) => !cards.some((card) => overlaps(card, box(s))) && !overlaps(pet, box(s)) && !(goal && !pointsInto && overlaps(goal, box(s))) && !(replyBox && visible(replyBox) && overlaps(replyBox, box(s)));
   const spot = spots.find(clear) ?? spots[0];
   bubble.dataset.tail = spot.side;
@@ -513,7 +566,7 @@ async function show(next: GuideStep): Promise<void> {
     renderCard(next);
     return;
   }
-  if (overlays.isOpen('pet-guide')) {
+  if (overlays.isOpen('pet-guide') && !stepsUp()) { // a What's next card she opened stays up
     overlays.unlock('pet-guide');
     overlays.hide('pet-guide');
   }
@@ -546,15 +599,54 @@ function finish(): void {
   focusTerminal();
 }
 
+// ── What's next: the Get started checklist inside the guide ──
+
+const STEPS_CARD = 'whats-next';
+const stepsUp = (): boolean => overlays.isOpen('pet-guide') && view.dataset.card === STEPS_CARD;
+
+function renderSteps(): void {
+  const pane = el('div', 'pg-card pg-whats-next');
+  pane.dataset.step = STEPS_CARD;
+  view.dataset.card = STEPS_CARD;
+  const said = el('div', 'pg-said');
+  said.append(petPicture(cat, 'pg-said-pet'), el('p', 'pg-said-line', WHATS_NEXT_LINE));
+  pane.append(el('h1', 'pg-title', 'What’s next'), said, getStarted.checklist());
+  const footer = el('footer', 'pg-footer');
+  const actions = el('div', 'pg-actions');
+  const close = button('Close', 'pg-primary gs-close', closeSteps);
+  // While the bubble runs it already shows the way; otherwise the pet can walk her through from the start.
+  const more = step === null
+    ? button(`Show me with ${words().name}`, 'pg-secondary pg-show-me', () => void restart())
+    : button(`Back to ${words().name}`, 'pg-secondary pg-back', closeSteps);
+  actions.append(close, more);
+  footer.append(actions);
+  view.replaceChildren(pane, footer);
+  close.focus({ preventScroll: true });
+  announce(`What’s next. ${WHATS_NEXT_LINE}`);
+}
+
+// Customize › First steps, the reader's empty line, an older install's launch: the checklist, in the pet's frame.
+export async function openSteps(): Promise<void> {
+  if (step !== null && isCardStep(step)) return; // the setup cards are up; they lead to the same steps
+  if (savedStage === null) await loadState();
+  if (!overlays.show('pet-guide')) return;
+  renderSteps();
+}
+
+export function closeSteps(): void {
+  if (stepsUp()) overlays.hide('pet-guide');
+}
+
 // Skip setup, or Esc: the guide ends for good (Help › Get started brings it back).
-// Before the folder question is answered it still has to be asked once, so the old question follows.
+// Leaving the folder card saves no answer, so the folder question comes back next launch; from an earlier card it follows now.
+// On the What's next card, Esc only closes the card.
 export async function skip(): Promise<void> {
+  if (stepsUp()) { closeSteps(); return; }
   if (step === null) return;
   const wasConsent = step === 'consent';
   end('skipped');
   announce('Setup skipped. Help, Get started brings it back.');
-  if (wasConsent) await consent.setChoice('declined'); // Esc on the folder question always meant Not now
-  else if (folder === 'unasked') consent.open();
+  if (!wasConsent && folder === 'unasked') consent.open();
   focusTerminal();
 }
 
@@ -579,6 +671,7 @@ async function loadState(): Promise<GuideStage | null> {
   cat = state.look.cat;
   scene = state.look.scene;
   sceneChoices = state.choices.scenes;
+  petalStyleOn = petalStyleActive(state);
   return state.config.onboarding.step;
 }
 
@@ -611,7 +704,7 @@ export const endedHere = (): boolean => savedStage === 'done' || savedStage === 
 export const current = (): GuideStep | null => step;
 export const isOpen = (): boolean => step !== null;
 
-// Esc in a card or the bubble skips; Esc in the folder card is Not now as well (skip() saves it).
+// Esc in a card or the bubble skips; on the folder card it saves no answer (see skip()).
 view.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   event.stopPropagation();
@@ -627,7 +720,8 @@ byId('add-session-button').addEventListener('keydown', (event) => {
 });
 
 // She can move the pet, resize the window or open another view: the bubble follows, or waits while it's covered.
-const replace = (): void => { if (step && !isCardStep(step)) place(); };
+// paintBubble, not place: opening the session palette changes what the pet says.
+const replace = (): void => { if (step && !isCardStep(step)) paintBubble(); };
 window.addEventListener('resize', replace);
 new ResizeObserver(replace).observe(byId('reader-area'));
 new MutationObserver(replace).observe(byId('reader'), { attributes: true, attributeFilter: ['hidden'] });

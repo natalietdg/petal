@@ -41,3 +41,6 @@ export function waitingItems(sources: readonly WaitingSource[]): WaitingItem[] {
 
 // The button's count: only what waits on her, not what is running.
 export const waitingCount = (items: readonly WaitingItem[]): number => items.filter((item) => item.pill === 'Waiting on you').length;
+
+// Board's "Waiting on you" lane: only the open asks; running Doing lines already show on each card.
+export const laneItems = (items: readonly WaitingItem[]): WaitingItem[] => items.filter((item) => item.pill === 'Waiting on you');

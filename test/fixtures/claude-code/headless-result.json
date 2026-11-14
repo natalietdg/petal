@@ -1,0 +1,1 @@
+{"type": "result", "subtype": "success", "is_error": false, "duration_ms": 1200, "num_turns": 1, "result": "Here are the labels:\n```json\n{\"title\": \"Build speed\", \"tags\": [\"build\"]}\n```", "session_id": "5c4b3a29-1817-4e6d-9c5b-4a3b2c1d0e9f", "total_cost_usd": 0.001}

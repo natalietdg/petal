@@ -1,14 +1,14 @@
-// Docked monitor of every live Claude session. The reader stays pinned to this pty.
-// Each row can close its Claude after an inline confirm; recently closed ones can be reopened.
-import * as tabs from './tabs';
-import * as composer from './composer';
+// The Sessions pill and the session limit. The pill opens the Board, which shows every session as a card;
+// this puts the limit banner and Recently closed on the Board and runs the sessions tick others ride.
 import * as overlays from './overlays';
+import * as repos from './repos';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { sessionLabelText } from '../shared/session-label';
 import type { SessionRow, SubagentRow } from '../main/sessions-monitor';
+import { childAgentId, type ChildRow } from '../shared/subsessions';
 import type { ClosedSession } from '../main/closed-store';
-import { agentsBadgeText, closeNote, sessionsPillText, type SessionsView } from '../shared/ipc';
+import { closeNote, sessionsPillText, type SessionsView } from '../shared/ipc';
 import { limitReached, limitText, overLimit } from '../shared/session-limit';
 
 const OPEN_REFRESH_MS = 2000;
@@ -18,20 +18,27 @@ const AGENTS_SHOWN = 4;
 
 const pill = byId('sessions-pill');
 const addButton = byId('add-session-button');
-const panel = byId('sessions-panel');
-export const expandedIds = new Set<string>();
+const board = byId('board');
+// On the Board: the limit banner above the cards, Recently closed below them.
+const panel = el('div', 'sessions-panel');
+panel.id = 'sessions-panel';
+panel.hidden = true;
+const closedBox = el('div', 'board-closed');
+export const limitElement = (): HTMLElement => panel;
+export const closedElement = (): HTMLElement => closedBox;
+export const expandedIds = new Set<string>(); // kept for callers; Board cards show each session's digest instead
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-// Where the inline confirm is open ('row' or 'limit'), which session is closing, and per-session notes.
-let confirming: { sessionId: string; where: 'row' | 'limit' } | null = null;
-let closingId: string | null = null;
+// Whether the limit banner's inline confirm is open, and per-session notes.
+let confirming: { sessionId: string } | null = null;
 const notes = new Map<string, string>();
 // Set when Add Session was refused at the limit, so the panel shows why.
 let addBlocked = false;
-// Set while the Sessions board is open: it rides this tick for detailed rows with reply digests.
+// Set while the Board is open: it rides this tick for detailed rows with reply digests.
 let boardOpen = false;
 
-export const isOpen = (): boolean => !panel.hidden;
+// "Open" now means the Board is up; the pill and every setOpen go there.
+export const isOpen = (): boolean => !board.hidden;
 
 // "updated 5m ago"; with no verb, just "5m ago".
 export function sinceText(ms: number | null, verb = ''): string {
@@ -66,11 +73,9 @@ export const closeSession = async (sessionId: string): Promise<string | null> =>
 
 async function closeNow(sessionId: string): Promise<void> {
   confirming = null;
-  closingId = sessionId;
   notes.delete(sessionId);
   refresh();
   const note = await closeSession(sessionId);
-  closingId = null;
   if (note) notes.set(sessionId, note);
   refresh();
 }
@@ -88,15 +93,6 @@ function confirmLine(sessionId: string, question: string): HTMLParagraphElement 
   return line;
 }
 
-function rowDetail(row: SessionRow): HTMLDivElement {
-  const detail = el('div', 'session-detail');
-  const lines = row.recent.length ? row.recent : ['No recent activity'];
-  const recent = el('ul', 'session-recent');
-  detail.append(recent);
-  for (const line of lines) recent.append(el('li', '', line));
-  return detail;
-}
-
 // The agent panel's own show(), registered by agent-panel.ts; it imports this file, so this one cannot import it back.
 type OpenAgent = (sessionId: string, agentId: string) => void;
 let openAgent: OpenAgent | null = null;
@@ -107,21 +103,55 @@ function pickAgent(sessionId: string, agentId: string): void {
   openAgent?.(sessionId, agentId);
 }
 
-// Under every row with active agents, expanded or not: task · what it is doing now · when it last wrote.
-function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
+// Waiting's click on a stuck child: the agent panel on that child.
+export const openAgentFor = (sessionId: string, agentId: string): void => pickAgent(sessionId, agentId);
+
+function agentItem(sessionId: string, agentId: string): HTMLLIElement {
+  const item = el('li', 'session-agent opens-agent');
+  item.dataset.agentId = agentId;
+  item.title = 'Open what this agent is doing';
+  item.tabIndex = 0;
+  item.setAttribute('role', 'button');
+  item.addEventListener('click', (event) => { if (!(event.target as Element).closest('.agent-open-session')) pickAgent(sessionId, agentId); });
+  item.addEventListener('keydown', (event) => {
+    if (event.target !== item || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    pickAgent(sessionId, agentId);
+  });
+  return item;
+}
+
+// What a child row says after its name: what stopped it, or its latest step.
+export const childActivity = (child: ChildRow): string =>
+  child.ask ? 'Needs you' : child.status === 'stalled' ? 'Stalled' : child.status === 'finished' ? 'Finished' : child.step;
+
+// A headless child: name · headless · what it is doing · when, and "Open as session" to resume it into a tab on purpose.
+function childItem(sessionId: string, child: ChildRow, openAsSession: ((childId: string) => void) | null): HTMLLIElement {
+  const item = agentItem(sessionId, childAgentId(child.sessionId));
+  item.classList.add('agent-child', `agent-child-${child.ask ? 'waiting' : child.status}`);
+  item.append(
+    el('span', 'agent-task', child.name),
+    el('span', 'agent-headless', 'headless'),
+    el('span', 'agent-activity', `· ${childActivity(child)}`),
+    el('span', 'agent-since', `· ${sinceText(child.updatedAt)}`),
+  );
+  if (openAsSession) {
+    const open = el('button', 'session-link agent-open-session', 'Open as session');
+    open.type = 'button';
+    open.setAttribute('aria-label', `Open ${child.name} as a session`);
+    open.addEventListener('click', () => openAsSession(child.sessionId));
+    item.append(open);
+  }
+  return item;
+}
+
+// Under a Board card with active agents: task · what it is doing now · when it last wrote. Children waiting on her lead.
+export function agentList(sessionId: string, agents: SubagentRow[], children: readonly ChildRow[] = [], openAsSession: ((childId: string) => void) | null = null): HTMLUListElement {
   const list = el('ul', 'session-agents');
-  for (const agent of agents.slice(0, AGENTS_SHOWN)) {
-    const item = el('li', 'session-agent opens-agent');
-    item.dataset.agentId = agent.id;
-    item.title = 'Open what this agent is doing';
-    item.tabIndex = 0;
-    item.setAttribute('role', 'button');
-    item.addEventListener('click', () => pickAgent(sessionId, agent.id));
-    item.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      pickAgent(sessionId, agent.id);
-    });
+  const ordered = [...children].sort((a, b) => Number(Boolean(b.ask)) - Number(Boolean(a.ask)));
+  for (const child of ordered) list.append(childItem(sessionId, child, openAsSession));
+  for (const agent of agents.slice(0, Math.max(0, AGENTS_SHOWN - ordered.length))) {
+    const item = agentItem(sessionId, agent.id);
     item.append(
       el('span', 'agent-task', agent.task),
       el('span', 'agent-activity', `· ${agent.activity ?? 'Working'}`),
@@ -129,50 +159,9 @@ function agentList(sessionId: string, agents: SubagentRow[]): HTMLUListElement {
     );
     list.append(item);
   }
-  const more = agents.length - AGENTS_SHOWN;
+  const more = agents.length - Math.max(0, AGENTS_SHOWN - ordered.length);
   if (more > 0) list.append(el('li', 'session-agent agent-more', `+${more} more`));
   return list;
-}
-
-function renderRow(row: SessionRow): HTMLLIElement {
-  const item = el('li', `session-row${row.isOwn ? ' own' : ''}`);
-  item.dataset.sessionId = row.sessionId;
-  const head = el('button', 'session-head');
-  head.type = 'button';
-  head.setAttribute('aria-expanded', String(expandedIds.has(row.sessionId)));
-
-  const title = el('span', 'session-title');
-  title.append(sessionNameEl('span', 'session-name', row.name));
-  if (row.isOwn) title.append(el('span', 'session-own', 'this window'));
-  if (row.subagents.length) {
-    const badge = el('span', 'session-agents-badge', agentsBadgeText(row.subagents.length));
-    badge.title = 'Background agents active in the last 2 min';
-    title.append(badge);
-  }
-  title.append(el('span', `session-status ${row.status}`, row.status));
-
-  const meta = el('span', 'session-meta', [row.cwd, row.kind === 'bg' ? 'background' : '', sinceText(row.updatedAt, 'updated')].filter(Boolean).join(' · '));
-  head.append(title, meta);
-  if (row.activity) head.append(el('span', 'session-activity', row.activity));
-
-  head.addEventListener('click', () => {
-    if (expandedIds.has(row.sessionId)) expandedIds.delete(row.sessionId); else expandedIds.add(row.sessionId);
-    refresh();
-  });
-
-  // A sibling of the head button, never inside it.
-  const closing = closingId === row.sessionId;
-  const close = textButton(closing ? 'Closing…' : 'Close', 'session-link session-close', () => { confirming = { sessionId: row.sessionId, where: 'row' }; refresh(); });
-  close.disabled = closing;
-  close.setAttribute('aria-label', `Close ${row.name}`);
-  item.append(head, close);
-
-  if (confirming?.where === 'row' && confirming.sessionId === row.sessionId) item.append(confirmLine(row.sessionId, 'Close this Claude?'));
-  const note = notes.get(row.sessionId);
-  if (note) item.append(el('p', 'session-note', note));
-  if (row.subagents.length) item.append(agentList(row.sessionId, row.subagents));
-  if (expandedIds.has(row.sessionId)) item.append(rowDetail(row));
-  return item;
 }
 
 // Shown only when more are open than her limit. Suggests, never closes on its own.
@@ -184,10 +173,10 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
   const oldest = rows.find((r) => r.sessionId === view.oldestIdleId);
   if (!oldest) {
     banner.append(el('p', 'sessions-limit-hint', 'None of them are idle right now.'));
-  } else if (confirming?.where === 'limit' && confirming.sessionId === oldest.sessionId) {
+  } else if (confirming?.sessionId === oldest.sessionId) {
     banner.append(confirmLine(oldest.sessionId, `Close the oldest idle Claude, “${sessionLabelText(oldest.name)}”?`));
   } else {
-    banner.append(textButton('Close oldest idle', 'flow-button sessions-limit-close', () => { confirming = { sessionId: oldest.sessionId, where: 'limit' }; refresh(); }));
+    banner.append(textButton('Close oldest idle', 'flow-button sessions-limit-close', () => { confirming = { sessionId: oldest.sessionId }; refresh(); }));
   }
   return banner;
 }
@@ -222,35 +211,22 @@ function renderClosed(entry: ClosedSession): HTMLLIElement {
 
 function renderPanel(view: SessionsView): void {
   const rows = view.rows ?? [];
-  const list = el('ul', 'session-list');
-  list.append(...rows.map(renderRow));
-  const parts: HTMLElement[] = [el('p', 'sessions-heading', 'Claude sessions on this Mac')];
-  if ((addBlocked && limitReached(view)) || overLimit(view)) parts.push(limitBanner(view, rows));
-  parts.push(list);
-  if (view.closed?.length) {
-    const closed = el('ul', 'session-list closed-list');
-    closed.append(...view.closed.map(renderClosed));
-    parts.push(el('p', 'sessions-heading closed-heading', 'Recently closed'), closed);
-  }
-  const { scrollTop } = panel; // keep her place across refreshes
-  panel.replaceChildren(...parts);
-  panel.scrollTop = scrollTop;
+  const showLimit = (addBlocked && limitReached(view)) || overLimit(view);
+  panel.replaceChildren(...(showLimit ? [limitBanner(view, rows)] : []));
+  const closed = el('ul', 'session-list closed-list');
+  closed.append(...(view.closed ?? []).map(renderClosed));
+  closedBox.replaceChildren(...(view.closed?.length ? [el('h3', 'board-lane-title', 'Recently closed'), closed] : []));
 }
-
-// The panel may not grow past the reader pane, whatever the split.
-const area = byId('reader-area');
-new ResizeObserver(() => area.style.setProperty('--reader-area-height', `${area.clientHeight}px`)).observe(area);
 
 // auto: a timer tick, which leaves an open confirm alone so its buttons never move under her cursor.
 export async function refresh(auto = false): Promise<void> {
-  const open = isOpen();
-  const result = await window.pastel.getSessions({ detailed: open || boardOpen, expandedIds: [...expandedIds], board: boardOpen });
+  const result = await window.pastel.getSessions({ detailed: boardOpen, expandedIds: [...expandedIds], board: boardOpen });
   if (isIpcError(result)) {
     pill.replaceChildren(el('span', 'dot'), el('span', '', 'Sessions · unavailable'));
-    if (open) panel.replaceChildren(el('p', 'sessions-heading', `Couldn’t read Claude sessions: ${result.error}`));
+    if (boardOpen) panel.replaceChildren(el('p', 'sessions-heading', `Couldn’t read Claude sessions: ${result.error}`));
   } else {
     renderPill(result);
-    if (open && result.rows && !(auto && confirming)) renderPanel(result);
+    if (boardOpen && result.rows && !(auto && confirming)) renderPanel(result);
     for (const listener of viewListeners) listener(result);
   }
   schedule();
@@ -262,19 +238,23 @@ export const onView = (listener: (view: SessionsView) => void): void => { viewLi
 
 function schedule(): void {
   clearTimeout(timer);
-  timer = setTimeout(() => refresh(true), isOpen() || boardOpen ? OPEN_REFRESH_MS : COLLAPSED_REFRESH_MS);
+  timer = setTimeout(() => refresh(true), boardOpen ? OPEN_REFRESH_MS : COLLAPSED_REFRESH_MS);
 }
 
+// The Board calls this as it opens and closes; the pill and the limit banner follow it.
 export function setBoardOpen(open: boolean): void {
   boardOpen = open;
-  refresh();
-}
-
-export function setOpen(open: boolean): void {
   panel.hidden = !open;
   pill.setAttribute('aria-expanded', String(open));
   if (!open) { confirming = null; addBlocked = false; }
   refresh();
+}
+
+// Opens or closes the Board; kept so every old "open the Sessions panel" path still works.
+export function setOpen(open: boolean): void {
+  if (open && !isOpen()) window.dispatchEvent(new Event('petal:open-board'));
+  else if (open) void refresh(); // already up: show the limit note now
+  else overlays.hide('board');
 }
 
 // The one limit check for every path that starts a Claude: the limit note, or null when there's room.
@@ -282,21 +262,19 @@ export async function sessionLimitNote(): Promise<string | null> {
   return limitReached(await window.pastel.getSessions({ detailed: false, expandedIds: [] }));
 }
 
-// New-tab paths (Add Session, ⌘T, +): at her limit, open this panel with the note and report no room.
+// New-tab paths (Add Session, ⌘T, +): at her limit, open the Board with the note and report no room.
 export async function roomForSession(): Promise<boolean> {
   addBlocked = (await sessionLimitNote()) !== null;
   if (addBlocked) setOpen(true);
   return !addBlocked;
 }
 
-// A new tab the ⌘T way, then the reply box, so she can type the first message. At her limit, the panel says why instead.
+// Add Session asks where the new Claude should work, then opens its tab. At her limit, the Board says why instead.
 export async function addSession(): Promise<void> {
   if (!(await roomForSession())) return;
   const open = overlays.current();
-  if (open && open !== 'get-started') overlays.hide(open); // the checklist stays up while she follows it
-  if (isOpen()) setOpen(false);
-  tabs.create({ startClaude: true });
-  composer.focus();
+  if (open) overlays.hide(open);
+  repos.openForNewSession();
 }
 
 // Why a session can't start from History right now, or null; the action names what she tried.

@@ -1,12 +1,14 @@
 // Draws the Confirmed page: its sections of items, each a link back to its reply.
 import { el } from './dom';
 import { renderInline } from './markdown';
-import { SECTIONS, type ConfirmedGroups, type ConfirmedItem } from '../shared/confirmed';
+import { whoOf, type Who } from './ledger-actor';
+import { pageGroups, SECTIONS, type ConfirmedGroups, type ConfirmedItem, type LedgerMark } from '../shared/confirmed';
 import { replyImageUrl } from '../shared/reply-image-url';
 
 type Jump = (replyId: string | undefined) => void;
 
 const PILL_CLASS = { 'In progress': 'progress', 'Waiting on you': 'waiting' } as const;
+const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
 
 const fileName = (path: string): string => path.split('/').pop() || path;
 
@@ -28,8 +30,21 @@ function jumpRow(className: string, item: ConfirmedItem, onJump: Jump): HTMLLIEl
   return row;
 }
 
+// A ledger decision: who made it, its number, and whether a later one replaced it.
+function ledgerHead(mark: LedgerMark): HTMLDivElement {
+  const who = whoOf(mark.actor);
+  const head = el('div', 'confirmed-ledger');
+  head.append(el('span', `confirmed-actor actor-${who}`, `Decided by ${WHO[who]}`), el('span', 'confirmed-tag', `#${mark.n}`));
+  if (mark.recommended) head.append(el('span', 'confirmed-tag', 'Claude recommended'));
+  if (mark.superseded) head.append(el('span', 'confirmed-tag', 'later replaced'));
+  return head;
+}
+
 function itemRow(item: ConfirmedItem, onJump: Jump): HTMLLIElement {
-  const row = jumpRow('confirmed-item', item, onJump);
+  const open = item.pill === 'Waiting on you' ? ' confirmed-open' : '';
+  const replaced = item.ledger?.superseded ? ' confirmed-superseded' : '';
+  const row = jumpRow(`confirmed-item${open}${replaced}`, item, onJump);
+  if (item.ledger) row.append(ledgerHead(item.ledger));
   if (item.pill) row.append(el('span', `confirmed-pill confirmed-pill-${PILL_CLASS[item.pill]}`, item.pill));
   const text = el('div', 'confirmed-text');
   text.innerHTML = renderInline(item.text);
@@ -60,7 +75,9 @@ function screenTile(item: ConfirmedItem, cwd: string | null, onJump: Jump): HTML
   return tile;
 }
 
-export function render(container: HTMLElement, groups: ConfirmedGroups, cwd: string | null, onJump: Jump): void {
+// whenEmpty: what to show with nothing confirmed; the reader passes the reply-style offer when that's the cause.
+export function render(container: HTMLElement, confirmed: ConfirmedGroups, cwd: string | null, onJump: Jump, whenEmpty: HTMLElement | null = null): void {
+  const groups = pageGroups(confirmed);
   const sections = SECTIONS.flatMap(({ key, title, parts }) => {
     const shown = parts.filter((part) => groups[part.key].length);
     if (!shown.length) return [];
@@ -74,5 +91,5 @@ export function render(container: HTMLElement, groups: ConfirmedGroups, cwd: str
     }
     return [section];
   });
-  container.replaceChildren(...(sections.length ? sections : [el('p', 'confirmed-empty', 'Nothing confirmed yet in this session.')]));
+  container.replaceChildren(...(sections.length ? sections : [whenEmpty ?? el('p', 'confirmed-empty', 'Nothing confirmed yet in this session.')]));
 }

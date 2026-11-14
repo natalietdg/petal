@@ -364,7 +364,7 @@ const FOCUS = `(() => {
   return {
     on: document.getElementById('app').classList.contains('focus-mode'), level: PastelTerm.focusMode.level(), face: document.getElementById('focus-toggle').dataset.level,
     hidden: Object.fromEntries(['sessions-pill', 'history-button', 'add-session-button', 'reader-head', 'composer', 'prompt-dock', 'cat', 'reader-status-strip', 'reader-banners-bar', 'reader-conclusion-pin', 'notes-panel'].map((id) => [id, !shown(document.getElementById(id))])),
-    exit: shown(document.getElementById('focus-toggle')) && document.getElementById('focus-toggle').textContent === 'Exit focus', terminal: box('terminal-pane').height, reader: box('reader'), win: { width: innerWidth, height: innerHeight },
+    exit: shown(document.getElementById('focus-reply')) && document.getElementById('focus-reply').textContent === 'Exit focus', terminal: box('terminal-pane').height, reader: box('reader'), win: { width: innerWidth, height: innerHeight },
     layout: { rows: document.getElementById('app').style.gridTemplateRows, divider: box('divider').top, split: divider.getAttribute('aria-valuenow'), terminal: box('terminal-pane'), reader: box('reader'),
       cat: ['cat-docked', 'cat-in-reply', 'notes-open', 'banners-collapsed'].filter((c) => area.classList.contains(c)) },
   };
@@ -419,11 +419,11 @@ async function bannersAndFocusCheck(kit: Kit, win: BrowserWindow, fixture: strin
   for (let i = 0; i < 3; i++) await js("document.getElementById('divider').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))");
   await wait(300);
   const before = (await focus()).layout;
-  // One click is the headers level, the second only the reply.
+  // Minimise headers is one control, Only the reply the other.
   await js("document.getElementById('focus-toggle').click()");
   const first = await focus();
-  check(first.level === 'headers' && first.face === 'headers' && !first.on, `first click: headers minimised, not yet only the reply: ${JSON.stringify({ level: first.level, face: first.face })}`);
-  await js("document.getElementById('focus-toggle').click()");
+  check(first.level === 'headers' && first.face === 'headers' && !first.on, `Minimise headers: headers minimised, not yet only the reply: ${JSON.stringify({ level: first.level, face: first.face })}`);
+  await js("document.getElementById('focus-reply').click()");
   await wait(300);
   const on = await focus();
   const fills = Math.abs(on.reader.width - on.win.width) <= 3 && Math.abs(on.reader.height - on.win.height) <= 3 && on.reader.top <= 1 && on.reader.left <= 1;
@@ -440,15 +440,15 @@ async function bannersAndFocusCheck(kit: Kit, win: BrowserWindow, fixture: strin
   check(!off.on && off.level === 'normal' && JSON.stringify(off.layout) === JSON.stringify(before) && off.face === 'normal' && !off.exit,
     `Esc leaves Focus and restores the layout, divider included: ${JSON.stringify({ before, after: off?.layout })}`);
 
-  // The menu's ⌘⇧F sends focus:toggle; a third click (Exit focus) and a second toggle both leave.
+  // The menu's ⌘⇧F sends focus:toggle; Exit focus and a second toggle both leave.
   win.webContents.send('focus:toggle');
   check(await waitFor(async () => (await focus()).on || null, 2000), 'View > Focus: Only the Reply (⌘⇧F) goes straight to only the reply');
   win.webContents.send('focus:toggle');
   check(await waitFor(async () => !(await focus()).on || null, 2000), 'the same shortcut leaves it');
-  for (let i = 0; i < 3; i++) await js("document.getElementById('focus-toggle').click()");
+  for (let i = 0; i < 2; i++) await js("document.getElementById('focus-reply').click()"); // in, then Exit focus
   await wait(300);
   const exited = await focus();
-  check(!exited.on && exited.level === 'normal' && JSON.stringify(exited.layout) === JSON.stringify(before), `a third click (Exit focus) restores the layout: ${JSON.stringify(exited.layout)}`);
+  check(!exited.on && exited.level === 'normal' && JSON.stringify(exited.layout) === JSON.stringify(before), `Exit focus restores the layout: ${JSON.stringify(exited.layout)}`);
 
   for (let i = 0; i < 3; i++) await js("document.getElementById('divider').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))");
 }

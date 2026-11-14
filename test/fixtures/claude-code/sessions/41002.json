@@ -1,0 +1,11 @@
+{
+  "pid": 41002,
+  "sessionId": "7a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d",
+  "cwd": "/Users/example/projects/other",
+  "startedAt": 1763090000000,
+  "version": "2.1.150",
+  "kind": "bg",
+  "entrypoint": "cli",
+  "status": "idle",
+  "updatedAt": 1763090600000
+}

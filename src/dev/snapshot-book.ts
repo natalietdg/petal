@@ -34,7 +34,19 @@ export async function bookLookCheck(kit: Kit, win: BrowserWindow): Promise<void>
   })()`);
   check(shape.align === 'justify' && shape.indent !== '0px' && shape.gap === '0px' && shape.quote?.style === 'italic' && shape.quote?.border === '0px', `book page shape: ${JSON.stringify(shape)}`);
 
-  for (const id of ['paleSky', 'nightPastel']) {
+  // Margin notes: every section's rail sits on the left page, beside and level with its own text.
+  await js("document.getElementById('reader').scrollTop = 0"); // at rest; scrolled, sticky notes follow their section down
+  await wait(200);
+  const notes = await js(`(() => [...document.querySelectorAll('#latest .story-section:not(.folded) > .rail')].map((rail) => {
+    const r = rail.getBoundingClientRect();
+    const body = rail.parentElement.querySelector(':scope > .section-body').getBoundingClientRect();
+    const head = document.querySelector('#latest .story-head').getBoundingClientRect();
+    const h2 = rail.parentElement.querySelector(':scope > h2').getBoundingClientRect();
+    return { left: r.right <= body.left, level: Math.abs(r.top - h2.top) < 40, offset: Math.round(r.top - h2.top), clearOfHead: r.top >= head.bottom - 1, shown: r.height > 0 };
+  }))()`);
+  check(notes.length > 0 && notes.every((n: Record<string, boolean | number>) => n.left && n.level && n.clearOfHead && n.shown), `margin notes on the left page: ${JSON.stringify(notes)}`);
+
+  for (const id of ['paleSky', 'nightPastel', 'black']) {
     applyTheme(id, { persist: false });
     const want = themes[id].dark ? null : BOOK_PAPER;
     await wait(400);

@@ -46,14 +46,15 @@ function serviceRow(view: SessionPrsView, service: PrService): HTMLElement {
   const numbers = view.prs.filter((pr) => service.prUrls.includes(pr.url)).map((pr) => `PR ${pr.number}`).join(', ');
   const head = el('div', 'prs-service-head');
   head.append(el('strong', 'prs-service-name', service.repo), el('span', 'prs-muted', `${HOST_NAMES[service.host]} · ${numbers}`));
-  row.append(head);
+  const safety = el('div', 'prs-main-check advanced-only'); // "Is main safe for prod?" is an Advanced tool
+  row.append(head, safety);
   const check = latest(view.mainSafe[service.key], mainCheck(view.sessionId, service.key));
-  if (!service.localPath) row.append(el('p', 'prs-muted', 'No local copy of this repo in the session, so main can’t be checked here.'));
-  else if (check?.state === 'running') row.append(el('p', 'prs-muted prs-running', 'Checking main… this can take a few minutes.'));
+  if (!service.localPath) safety.append(el('p', 'prs-muted', 'No local copy of this repo in the session, so main can’t be checked here.'));
+  else if (check?.state === 'running') safety.append(el('p', 'prs-muted prs-running', 'Checking main… this can take a few minutes.'));
   else {
-    if (check?.state === 'done') row.append(verdictBlock(check.value));
-    if (check?.state === 'failed') row.append(el('p', 'prs-error', check.note));
-    row.append(button(check?.state === 'done' ? 'Check again' : 'Is main safe for prod?', () => void checkMain(view.sessionId, service.key)));
+    if (check?.state === 'done') safety.append(verdictBlock(check.value));
+    if (check?.state === 'failed') safety.append(el('p', 'prs-error', check.note));
+    safety.append(button(check?.state === 'done' ? 'Check again' : 'Is main safe for prod?', () => void checkMain(view.sessionId, service.key)));
   }
   return row;
 }
@@ -84,7 +85,12 @@ function currentOrder(view: SessionPrsView): Check<DeployOrder> | null {
   return latest(view.order, covers ? ran : null);
 }
 
+// The deploy order is an Advanced tool: every part carries advanced-only.
 export function orderSection(view: SessionPrsView): HTMLElement[] {
+  return orderParts(view).map((part) => { part.classList.add('advanced-only'); return part; });
+}
+
+function orderParts(view: SessionPrsView): HTMLElement[] {
   const heading = el('h3', 'prs-heading', 'Prod deploy order ');
   heading.append(el('span', 'prs-inferred', 'inferred'));
   const check = currentOrder(view);

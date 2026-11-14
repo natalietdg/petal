@@ -1,4 +1,4 @@
-// Get started and the folder question, on fixture state only: a stand-in ~/.claude with a sentinel, a faked install check,
+// Get started (the pet guide's What's next card) and the folder question, on fixture state only: a stand-in ~/.claude with a sentinel, a faked install check,
 // and the first tab's fixture swapped for an empty log, so each step ticks when the harness makes it true.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,6 +12,9 @@ import { send } from '../main/ipc';
 import { READING_CHOICES } from '../main/menu';
 import type { ActiveSession } from '../main/tab-session';
 import type { Kit } from './snapshot';
+import { pickHomeFolder } from './snapshot-add-session';
+import * as repoIndex from '../main/repo-index';
+import { buildStartInCommand } from '../main/resume-command';
 
 const INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash'; // code.claude.com/docs/en/setup
 const NARROW = 800;
@@ -32,9 +35,11 @@ const EXISTING_CONFIG = {
   pet: { size: 'normal' },
 };
 
+// open is 'whats-next' while the pet guide shows its checklist card.
 const STATE = `(() => {
-  const open = PastelTerm.overlays.current();
-  const view = document.getElementById('get-started');
+  const view = document.getElementById('pet-guide');
+  const current = PastelTerm.overlays.current();
+  const open = current === 'pet-guide' && view.dataset.card === 'whats-next' ? 'whats-next' : current;
   const list = view.querySelector('.gs-list');
   const steps = [...(list?.querySelectorAll('.gs-step') ?? [])].map((li) => ({ id: li.dataset.step, done: li.classList.contains('done'), badge: li.querySelector('.step-badge')?.textContent }));
   const status = document.getElementById('reader-status');
@@ -70,7 +75,7 @@ const CONSENT = `(() => {
 // Nothing in the open view sticks out sideways, at this window width.
 const OVERFLOW = `(() => {
   const view = document.getElementById(PastelTerm.overlays.current());
-  const pane = view.querySelector('.welcome-pane');
+  const pane = view.querySelector('.welcome-pane, .pg-card');
   const box = pane.getBoundingClientRect();
   const wide = [...pane.querySelectorAll('*')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > box.right + 1 || r.left < box.left - 1); });
   const code = pane.querySelector('.gs-command code');
@@ -167,7 +172,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   // 2. Not now: nothing under the folder is opened, by any reader, while the terminal still works.
   const probe = watchReads(home);
   await js("document.querySelector('#consent .consent-later').click()");
-  const checklistUp = await until((s) => s.open === 'get-started', 6000);
+  const checklistUp = await until((s) => s.open === 'whats-next', 6000);
   check(checklistUp && configStore.load().claudeFolder.choice === 'declined', `Not now saves "declined" and Get started follows: ${JSON.stringify({ open: checklistUp?.open, choice: configStore.load().claudeFolder.choice })}`);
   const readers = await js(`(async () => ({
     history: (await window.pastel.history.list()),
@@ -196,14 +201,17 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   check(/isn’t reading your Claude folder/.test(blocked.status) && blocked.statusAction === 'Allow reading your Claude folder',
     `Not now: the reader says so and offers Allow: ${JSON.stringify([blocked.status, blocked.statusAction])}`);
 
-  // 3. Add Session with Claude Code missing: a plain shell, nothing typed, the checklist stays up.
+  // 3. Add Session with Claude Code missing: the folder palette, then a shell that only enters the folder; no claude typed.
+  // The palette takes the checklist's place while it is up, so the checklist is closed afterwards.
   const startsBefore = claudeStarts.length;
   await js("document.getElementById('add-session-button').click()");
+  check(await pickHomeFolder(kit), 'Add Session asks for a folder before Claude Code is installed too');
   const plain = await until((s) => s.tabs.length === 2);
   await wait(2500);
   const plainId = plain?.tabs[1];
-  check(plainId && claudeStarts.length === startsBefore && !(await js(bufferText(plainId))).includes('petal-start-claude') && plain.open === 'get-started',
-    `Add Session without Claude Code types nothing and the checklist stays: ${JSON.stringify({ tabs: plain?.tabs, starts: claudeStarts.length - startsBefore, open: plain?.open })}`);
+  const plainBuffer = plainId ? await js(bufferText(plainId)) : '';
+  check(plainId && claudeStarts.length === startsBefore && !plainBuffer.includes('petal-start-claude') && plainBuffer.includes('petal-enter-folder') && plain.open === null,
+    `Add Session without Claude Code only enters the folder, no claude typed: ${JSON.stringify({ tabs: plain?.tabs, starts: claudeStarts.length - startsBefore, open: plain?.open })}`);
   if (plainId) await js(`PastelTerm.tabs.requestClose(${JSON.stringify(plainId)})`);
   await until((s) => s.tabs.length === 1);
   configStore.save({ getStarted: { done: [] } }); // the extra tab ticked Add Session; a fresh install hasn't
@@ -211,32 +219,32 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   await js('PastelTerm.getStarted.open()');
 
   // 4. Fresh: step 1 open with the install command and Copy, nothing ticked.
-  const fresh = await until((s) => s.open === 'get-started' && s.steps.length === 4);
+  const fresh = await until((s) => s.open === 'whats-next' && s.steps.length === 4);
   check(fresh && fresh.steps.map((s: { id: string }) => s.id).join() === STEP_IDS.join() && doneIds(fresh) === '' && fresh.command === INSTALL_COMMAND && fresh.copy === INSTALL_COMMAND,
     `fresh install: four steps, none ticked, step 1 shows the install command with Copy: ${JSON.stringify(fresh)}`);
   check(fresh && /Petal never sees your login/.test(fresh.privateLine ?? '') && fresh.checks.length === 0 && fresh.emDashes === 0,
     `steps have no Check lines and say Petal never sees the login: ${JSON.stringify({ privateLine: fresh?.privateLine, checks: fresh?.checks })}`);
   const bottom = await js(`(() => {
-    const view = document.getElementById('get-started');
-    const pane = view.querySelector('.welcome-pane');
+    const view = document.getElementById('pet-guide');
+    const pane = view.querySelector('.pg-card');
     pane.scrollTop = pane.scrollHeight;
     const last = [...pane.querySelectorAll('.gs-step')].at(-1).getBoundingClientRect();
-    const r = { gap: Math.round(view.querySelector('footer').getBoundingClientRect().top - last.bottom), intro: view.querySelector('.welcome-line').textContent };
+    const r = { gap: Math.round(view.querySelector('footer').getBoundingClientRect().top - last.bottom), intro: view.querySelector('.pg-said-line').textContent };
     pane.scrollTop = 0;
     return r;
   })()`);
-  check(bottom.gap >= 16 && bottom.intro === 'Four steps to your first reply.', `one-line intro; scrolled down, the last step clears the footer: ${JSON.stringify(bottom)}`);
+  check(bottom.gap >= 16 && bottom.intro.startsWith('Four steps from installing Claude Code'), `one-line intro; scrolled down, the last step clears the footer: ${JSON.stringify(bottom)}`);
   // History's Send is drawn off-screen here: it must match the reader's Send; Close is the quiet outline.
   const looks = await js(`(() => {
     const look = (b) => { const s = getComputedStyle(b); return [s.backgroundColor, s.color, s.borderRadius, s.fontWeight].join(' '); };
     const probe = document.createElement('button');
     probe.className = 'send-button history-reply-send';
     document.body.append(probe);
-    const r = { reader: look(document.getElementById('composer-send')), history: look(probe), close: getComputedStyle(document.querySelector('#get-started .gs-close')).backgroundColor };
+    const r = { reader: look(document.getElementById('composer-send')), history: look(probe), close: document.querySelector('#pet-guide .gs-close')?.textContent ?? null };
     probe.remove();
     return r;
   })()`);
-  check(looks.reader === looks.history && looks.close === 'rgba(0, 0, 0, 0)', `one Send style in the reader and History; Close is quiet: ${JSON.stringify(looks)}`);
+  check(looks.reader === looks.history && looks.close === 'Close', `one Send style in the reader and History; the card has Close: ${JSON.stringify(looks)}`);
   for (const id of Object.keys(themes)) {
     applyTheme(id, { persist: false });
     await wait(450);
@@ -260,7 +268,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
 
   // 5. Claude Code found: Check again ticks step 1.
   claudeFixture.installed = true;
-  await js("document.querySelector('#get-started .gs-recheck').click()");
+  await js("document.querySelector('#pet-guide .gs-recheck').click()");
   const found = await until((s) => s.steps[0]?.done === true);
   check(found && doneIds(found) === 'install' && found.command === null, `Check again with Claude Code installed ticks step 1 only: ${JSON.stringify(found && { done: doneIds(found), command: found.command })}`);
   await capture('get-started-claude-found');
@@ -277,15 +285,17 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   }, 8000);
   check(allowed && session?.state === 'live' && session.replies === 0, `Allow from the reader turns reading on; the fixture tab has a session and no reply yet: ${JSON.stringify(session)}`);
 
-  // Add Session with Claude Code installed: `claude` is sent to the new tab's shell (a no-op stands in for it here).
+  // Add Session with Claude Code installed: the new tab's shell enters the chosen folder and starts claude (a no-op stands in for it here).
   await js("document.getElementById('add-session-button').click()");
+  check(await pickHomeFolder(kit), 'Add Session asks for a folder');
   const second = await until((s) => s.tabs.length === 2);
   const secondId = second?.tabs[1];
   const typed = await waitFor(() => claudeStarts.find((s) => s.tabId === secondId) ?? null, 8000);
   const shown = secondId ? await waitFor(async () => ((await js(bufferText(secondId))).includes('petal-start-claude') || null), 8000) : null;
-  check(typed?.command === 'claude\r' && shown, `Add Session types claude into the new tab once its shell is ready: ${JSON.stringify({ typed, shown: Boolean(shown) })}`);
+  const wantStart = buildStartInCommand(repoIndex.scanRoot());
+  check(typed?.command === wantStart && shown, `Add Session types cd + claude into the new tab once its shell is ready: ${JSON.stringify({ typed, wantStart, shown: Boolean(shown) })}`);
   const hint = await until((s) => s.active === secondId && /Start here/.test(s.status));
-  check(hint && /No conversation yet\. Start here: click Add Session, and Claude starts in the new tab\./.test(hint.status) && hint.statusAction === 'Get started',
+  check(hint && /No conversation yet\. Start here: click Add Session and pick a folder\. Claude starts there in a new tab\./.test(hint.status) && hint.statusAction === 'First steps',
     `empty reader with no Claude points to the checklist: ${JSON.stringify(hint && [hint.status, hint.statusAction])}`);
   for (const [id, look] of [['paleSky', 'light'], ['nightPastel', 'dark']]) {
     applyTheme(id, { persist: false });
@@ -294,7 +304,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   }
   applyTheme('paleSky', { persist: false });
   await js("document.querySelector('#reader-status .status-action').click()");
-  const midway = await until((s) => s.open === 'get-started' && s.steps.length === 4);
+  const midway = await until((s) => s.open === 'whats-next' && s.steps.length === 4);
   check(midway && doneIds(midway) === 'install,add-session,sign-in', `a tab with a Claude session ticks Add Session and sign-in, not Ask: ${JSON.stringify(midway && doneIds(midway))}`);
   await capture('get-started-session');
 
@@ -330,14 +340,14 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   await waitFor(() => js("document.querySelector('#customize-body .cz-open-get-started') ? true : null"), 5000);
   await capture('get-started-customize');
   await js("document.querySelector('#customize-body .cz-open-get-started').click()");
-  const reopened = await until((s) => s.open === 'get-started' && s.allSet);
-  check(reopened, 'Customize › Get started › Open Get started reopens it, all set');
-  await js("document.querySelector('#get-started .gs-show-steps').click()");
+  const reopened = await until((s) => s.open === 'whats-next' && s.allSet);
+  check(reopened, 'Customize › First steps › Open the pet guide shows What’s next, all set');
+  await js("document.querySelector('#pet-guide .gs-show-steps').click()");
   const expanded = await until((s) => s.steps.length === 4 && s.steps.every((x: { done: boolean }) => x.done));
   check(expanded, 'Show the steps lists all four, ticked');
   await js('PastelTerm.overlays.hideCurrent()');
-  send(win.webContents, 'get-started:open'); // what Customize › Get started's button does
-  check(await until((s) => s.open === 'get-started'), 'Customize › Get started reopens it');
+  send(win.webContents, 'get-started:open'); // the snapshot-only channel; it lands in the pet guide too
+  check(await until((s) => s.open === 'whats-next'), 'get-started:open shows the pet guide’s What’s next');
   await js('PastelTerm.overlays.hideCurrent()');
 
   // 10. The Customize switch revokes and restores reading.
@@ -364,7 +374,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   configStore.save({ claudeFolder: { choice: 'unasked' }, getStarted: { done: [] }, welcome: { seen: true } });
   const waiting = await waitFor(async () => { const s = await js(STATE); return s.statusAction === 'Allow reading your Claude folder' ? s : null; }, 8000);
   check(waiting, `existing install, not yet answered: the reader offers Allow while the terminal keeps running: ${JSON.stringify(waiting?.status)}`);
-  await js(`(() => { const view = document.getElementById('get-started'); window.__gsFlash = false;
+  await js(`(() => { const view = document.getElementById('pet-guide'); window.__gsFlash = false;
     new MutationObserver(() => { if (!view.hidden) window.__gsFlash = true; }).observe(view, { attributes: true }); })()`);
   const shownOnLaunch = await js('PastelTerm.launchScreens.show()');
   const asked = await waitFor(async () => { const c = await js(CONSENT); return c.shown ? c : null; }, 5000);
@@ -380,7 +390,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
     `existing install: after Allow the checklist completes from History and never opens: ${JSON.stringify({ done: configStore.load().getStarted.done, flashed, open: await js('PastelTerm.overlays.current()') })}`);
   check((await js('PastelTerm.launchScreens.show()')) === false, 'existing install: the next launch opens nothing');
   await js('PastelTerm.getStarted.open()');
-  const existingSet = await until((s) => s.open === 'get-started' && s.allSet);
+  const existingSet = await until((s) => s.open === 'whats-next' && s.allSet);
   check(existingSet, 'existing install: Get started opened by hand reads "You’re all set"');
   await capture('get-started-existing-all-set');
   await js('PastelTerm.overlays.hideCurrent()');
@@ -418,7 +428,7 @@ export async function getStartedCheck(kit: Kit, { win, activeSession }: { win: B
   // With reading off, sign-in and ask are hand-ticked only, so Get started follows only while another step is open.
   await wait(800);
   const reopens = await js('PastelTerm.getStarted.reopensOnLaunch()');
-  const followed = (await js('PastelTerm.overlays.current()')) === (reopens ? 'get-started' : null);
+  const followed = (await js('PastelTerm.overlays.current()')) === (reopens ? 'pet-guide' : null);
   check(followed && configStore.load().claudeFolder.choice === 'declined',
     `existing config: Not now saves "declined" and Get started follows only for a step Petal can see: ${JSON.stringify({ open: await js('PastelTerm.overlays.current()'), done: configStore.load().getStarted.done, facts: await js('PastelTerm.getStarted.currentFacts()') })}`);
   await js('PastelTerm.overlays.hideCurrent()');

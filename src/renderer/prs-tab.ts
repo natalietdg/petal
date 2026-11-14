@@ -1,6 +1,7 @@
 // The reader's "PRs (N)" tab, under the pinned conclusion: every PR the session made or named, folded until clicked.
 // Hidden while the session has none.
 import { el } from './dom';
+import * as advanced from './advanced';
 import { onPrsChanged, prsFor } from './prs-data';
 import { panelParts } from './prs-panel';
 import { prsTabText, type SessionPrsView } from '../shared/session-prs';
@@ -42,7 +43,7 @@ function render(view: SessionPrsView | null): void {
   tabText.textContent = prsTabText(count);
   chevron.textContent = expanded ? '▾' : '▸';
   tab.setAttribute('aria-expanded', String(expanded));
-  tab.title = expanded ? 'Hide this session’s PRs' : 'Show this session’s PRs: services, main checks, deploy order and notes';
+  tab.title = expanded ? 'Hide this session’s PRs' : advanced.isOn() ? 'Show this session’s PRs: services, main checks, deploy order and notes' : 'Show this session’s PRs: services and notes';
   panel.hidden = !expanded;
   if (expanded) rebuildPanel(view);
   onPaint();
@@ -67,3 +68,4 @@ tab.addEventListener('click', () => {
   repaint();
 });
 onPrsChanged((sessionId) => { if (shown?.sessionId === sessionId) repaint(); });
+advanced.onChange(() => repaint()); // the tab's tooltip names the Advanced checks only while they show

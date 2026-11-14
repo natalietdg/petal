@@ -76,7 +76,7 @@ function writeScript(): void {
 // Turns the lock on or off for the project; null when done, else why not. On: the script goes in ~/.petal and the one
 // hook entry in her ~/.claude/settings.json. Off: the entry goes once no other repo has its lock on.
 export function setLock(root: string, on: boolean, claudeDir: string | null): string | null {
-  if (!claudeDir) return 'Petal isn’t reading your Claude folder, so it can’t add the lock’s hook. Allow it under Customize › Get started.';
+  if (!claudeDir) return 'Petal isn’t reading your Claude folder, so it can’t add the lock’s hook. Allow it under Customize › First steps.';
   const file = userSettings(claudeDir);
   const settings = readSettings(file);
   if (!settings.ok) return 'Your ~/.claude/settings.json isn’t valid JSON. Fix it first; Petal won’t write over it.';

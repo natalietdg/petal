@@ -18,6 +18,7 @@ import type { Factory } from './factory';
 import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
+import type { Need, SessionSignals } from './needs-you';
 import type { RepoEntry } from '../main/repo-scan';
 import type { SaveResult } from '../main/notes-store';
 import type { AgentsList, TimelineStart, TimelineUpdate } from '../main/agents';
@@ -64,7 +65,7 @@ import type { ExplainResult, ExplainTarget, ReviewSource, SessionSummary, TaskRe
 export type Guarded<T> = T | IpcError;
 
 export interface HistoryList {
-  sessions: (ListedSession & { name: string; hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string; conclusion: Conclusion | null })[];
+  sessions: (ListedSession & { name: string; hasFlow: boolean; organizer: OrganizerLabel | null; tags: string[]; notes: string; conclusion: Conclusion | null; parentId: string | null })[]; // parentId: a headless run's parent session
   tags: TagsData['tags'];
   organizing: boolean;
 }
@@ -126,6 +127,14 @@ export type ResumeResult =
   | { ok: true; newTab: true; command: string }
   | { ok: true; command: string }
   | { ok: true; tabId: TabId }; // a background reply: this window's tab already showing the session
+
+// The newest quit's resume notes (~/.petal/resume/<stamp>/), offered once on launch.
+export interface ResumeNotesSet {
+  stamp: string; // the folder name, e.g. 2026-10-29_14-05
+  when: string; // 2026-10-29 14:05
+  notes: number; // note files in it
+  sessions: { title: string; sessionId: string; running: boolean }[]; // empty for notes written before sessions.json
+}
 
 export type FlowView = (StoredFlow & { stale: boolean }) | { empty: true; creating: boolean };
 
@@ -197,6 +206,10 @@ export function updateNoteText(note: UpdateNote): string {
 
 export type RepoOpenResult = { note: string } | { ok: true; newTab: boolean; command: string };
 
+// Add Session's choice: an indexed repo, her home folder, or a folder she picks in a dialog.
+export type RepoStartTarget = { kind: 'repo'; path: string } | { kind: 'home' } | { kind: 'pick' };
+export type RepoStartResult = { note: string } | { ok: true };
+
 // renderer -> main, answered: ipcRenderer.invoke / ipcMain.handle. Every reply can be { error } (main/ipc-guard.ts).
 export interface InvokeChannels {
   'theme:get': { args: []; result: Guarded<Theme> };
@@ -205,6 +218,9 @@ export interface InvokeChannels {
   'reading:get': { args: []; result: Guarded<string> };
   'claude:installed': { args: [request?: { recheck?: boolean }]; result: Guarded<boolean> };
   'claude:path-tip': { args: []; result: Guarded<PathTip | null> }; // her shell's PATH lacks claude's folder
+  'claude:reply-visibility': { args: []; result: Guarded<string | null> }; // why Petal can't see replies, or null
+  'resume-notes:latest': { args: []; result: Guarded<ResumeNotesSet | null> }; // marks it shown
+  'resume-notes:reveal': { args: [stamp: string]; result: Guarded<boolean> };
   'update:status': { args: []; result: Guarded<UpdateStatus> };
   'update:restart': { args: []; result: Guarded<RestartResult> };
   'update:whats-new': { args: []; result: Guarded<Ok> };
@@ -269,6 +285,7 @@ export interface InvokeChannels {
   'prs:notes-save': { args: [request: { sessionId: string; url: string; notes: PrNotes }]; result: Guarded<PrNotesSaveResult> };
   // The Testing tab, for a tab's project: detect reads its files and skills; run opens a new tab after her click.
   'testing:detect': { args: [request: { tabId: TabId; root?: string | null; session?: string | null; picker?: boolean }]; result: Guarded<TestingState> };
+  'testing:has-suite': { args: []; result: Guarded<boolean> };
   'testing:history': { args: [request: { tabId: TabId; root?: string | null }]; result: Guarded<{ runs: PipelineRun[]; running: string[]; sessionTab: string | null; criteria: Criteria | null; seed: SuiteSeed | null; suite: RepoSuiteView; lock: LockView; agentNames: AgentNames; distillation: DistillRecord[]; loops: Record<string, LoopView>; tasks: Task[]; prds: Prd[]; sessionTaskId: string | null }> };
   // A task's loop: its testing agent and bug fix agent. Each role's open agent is reused (its brief is sent to it),
   // else started under a session id Petal picks. One brief starts or briefs that agent alone.
@@ -329,7 +346,7 @@ export interface InvokeChannels {
   'history:tag-delete': { args: [request: { name: string }]; result: Guarded<Ok> };
   'history:tag-rename': { args: [request: { from: string; to: string }]; result: Guarded<Ok> };
   // Her private notes for one Claude session; read and written only by Petal.
-  'notes:get': { args: [request: { sessionId: string }]; result: Guarded<{ text: string }> };
+  'notes:get': { args: [request: { sessionId: string }]; result: Guarded<{ text: string; prs: Record<string, PrNotes> }> }; // prs: its PR notes, by url
   'notes:save': { args: [request: { sessionId: string; text: string }]; result: Guarded<SaveResult> };
 
   'flow:get': { args: [request: { target: FlowTarget }]; result: Guarded<FlowView | null> };
@@ -339,7 +356,9 @@ export interface InvokeChannels {
   'flow:save-mermaid': { args: [request: FlowExportRequest]; result: Guarded<{ ok: boolean; canceled?: true; filePath?: string }> };
 
   'repos:list': { args: [request: { tabId: TabId }]; result: Guarded<ReposList> };
-  'repos:open': { args: [request: { tabId: TabId; path: string }]; result: Guarded<RepoOpenResult> };
+  'repos:open': { args: [request: { tabId: TabId; path?: string; target?: RepoStartTarget }]; result: Guarded<RepoOpenResult> }; // path: an indexed repo; target: any palette row
+  'repos:start': { args: [request: { tabId: TabId; target: RepoStartTarget; agent?: string | null }]; result: Guarded<RepoStartResult> };
+  'repos:agents': { args: []; result: Guarded<{ name: string; description: string }[]> }; // ~/.claude/agents, for Start as
 
   // The reply box's send: answered, so a send that never reached the pty can be taken back.
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
@@ -389,6 +408,8 @@ export interface SendChannels {
   'prompt:answer': [request: PromptAnswerRequest];
   'link:open': [url: string];
   'renderer:ready': [info: RendererInfo];
+  // This window's tabs as needsYou() reads them; main merges every window's report into one lane.
+  'waiting:report': [signals: SessionSignals[]];
   'look:theme': [id: string];
   'look:reading': [id: string];
   'look:cat': [id: string];
@@ -422,6 +443,7 @@ export interface EventChannels {
   'headers:toggle': void; // ⌘⇧H: the dock and reader header folded to a thin strip
   'text-size:step': TextStep; // ⌘= bigger, ⌘- smaller, ⌘0 actual size
   'text-size:changed': Config['text']; // saved in any window; every window follows
+  'advanced:changed': boolean; // Customize › Advanced switched in any window; every window follows
   'claude:stop': void; // ⌘.: Esc to the active tab's working Claude
   'history:conclusions': void; // a session's conclusion changed since History last listed it
   'customize:open': void;
@@ -443,6 +465,8 @@ export interface EventChannels {
   'update:ready': { version: string };
   'update:note': UpdateNote;
   'agents:timeline': TimelineUpdate & { agentId: string };
+  'waiting:lane': Need[]; // every window's waiting sessions, ranked; the lane, card status and dock count read it
+  'waiting:open': Need; // a waiting notification was clicked: show that session (and child)
   'activity:changed': void; // the activity feed gained or changed an event
   'coord:update': CoordView; // a session's task, branch or file clashes changed
   'code-review:changed': { sessionId: string }; // answers landed or a run started or ended, so open views repaint

@@ -26,7 +26,11 @@ export interface SessionFile {
   status?: string;
   name?: string;
   updatedAt?: number;
+  entrypoint?: string; // "cli" for a terminal session, "sdk-cli" for a headless `claude -p` child
 }
+
+// A headless `claude -p` run: shown under its parent's agents, never as its own card or tab.
+export const isHeadless = (session: { entrypoint?: unknown }): boolean => session.entrypoint === 'sdk-cli';
 
 export interface ClaudeSession extends SessionFile {
   transcript: string;

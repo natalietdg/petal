@@ -7,6 +7,7 @@ import * as notesPanel from './notes-panel';
 import { timeOf } from './format';
 import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
+import * as styleOffer from './style-offer';
 import { paintConclusion } from './conclusion-banner';
 import { infoFor, onInfo } from './conclusion-info';
 import * as banners from './reader-banners';
@@ -181,7 +182,7 @@ let lastUpdate: ShownUpdate | null = null;
 let claudeMissing = false;
 let claudeSetup = false; // a new user: Claude Code's first-run screens, not replies, are what's next
 let folderAllowed = true; // set at startup; off means no replies can arrive, whatever the state
-const GET_STARTED: EmptyAction = { label: 'Get started', event: 'petal:get-started' };
+const GET_STARTED: EmptyAction = { label: 'First steps', event: 'petal:get-started' }; // the checklist; Help › Get started is the pet guide
 const SHOW_TERMINAL: EmptyAction = { label: 'Show the terminal', event: 'petal:show-terminal' };
 const ALLOW_FOLDER: EmptyAction = { label: 'Allow reading your Claude folder', event: 'petal:allow-folder' };
 
@@ -206,7 +207,7 @@ export function update(shown: ShownUpdate): void {
   pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
   paintPinned();
   prsTab.paint(notesSession ?? null, `${replies.length}:${replies[0]?.id}:${replies[0]?.markdown.length ?? 0}:${waiting.length}`);
-  paintStrip(strip, replies.map((r) => r.markdown));
+  paintStrip(strip, replies.map((r) => r.markdown), replies.length && styleOffer.shouldOffer() ? stripOffer : null);
   banners.paint();
   repoLine.textContent = repo ?? '';
   repoLine.hidden = !repo;
@@ -227,7 +228,7 @@ export function update(shown: ShownUpdate): void {
   else if (empty === 'setting-up') showMessage('Claude Code is setting up in the terminal below. Pick your options there (arrow keys and Enter).', SHOW_TERMINAL);
   else if (empty === 'running') showLive(noticeLines(shown.notice, shown.tabId));
   else if (empty === 'not-installed') showMessage('Claude Code isn’t installed yet. Install it with this command:', GET_STARTED, setupHints.installSteps());
-  else if (empty === 'start') showMessage('No conversation yet. Start here: click Add Session, and Claude starts in the new tab.', GET_STARTED);
+  else if (empty === 'start') showMessage('No conversation yet. Start here: click Add Session and pick a folder. Claude starts there in a new tab.', GET_STARTED);
   if (empty || !newest) return;
   status.classList.remove('empty');
   status.textContent = state === 'ended'
@@ -317,16 +318,22 @@ export async function refreshFlow(): Promise<void> {
   flow.render(flowView, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
 }
 
+// Built once each, so a click's result line survives the reader's redraws.
+const stripOffer = styleOffer.offerLine(styleOffer.STRIP_CAUSE, 'status-offer');
+const confirmedOffer = styleOffer.offerLine(styleOffer.CONFIRMED_CAUSE, 'confirmed-empty');
+styleOffer.onChange(redraw);
+
 // Built from the replies already shown, so it follows them as they update.
 function refreshConfirmed(): void {
   const groups = confirmedItems(lastUpdate?.replies ?? [], (lastUpdate?.waiting ?? []).map((w) => w.prompt));
-  confirmed.render(confirmedView, groups, lastUpdate?.cwd ?? null, (replyId) => showReply([replyId]));
+  confirmed.render(confirmedView, groups, lastUpdate?.cwd ?? null, (replyId) => showReply([replyId]), styleOffer.shouldOffer() ? confirmedOffer : null);
 }
 
 const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed';
 
 export function setView(next: ReaderView): void {
   view = next;
+  if (view === 'confirmed') void styleOffer.refresh(); // she may have switched style in Customize since
   repliesView.hidden = view !== 'replies';
   flowView.hidden = view !== 'flow';
   confirmedView.hidden = view !== 'confirmed';

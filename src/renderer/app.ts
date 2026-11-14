@@ -24,7 +24,9 @@ import './planet-reading';
 import * as getStarted from './get-started';
 import * as consent from './consent';
 import * as launchScreens from './launch-screens';
+import { offerResumeNotes } from './reader-notice';
 import * as petGuide from './pet-guide';
+import * as dockSessions from './dock-sessions';
 import * as notesPanel from './notes-panel';
 import * as updatePill from './update-pill';
 import * as dockFit from './dock-fit';
@@ -46,6 +48,7 @@ import * as libraryAdd from './library-add';
 import * as testing from './testing';
 import * as stopClaude from './stop-claude';
 import * as textSize from './text-size';
+import * as advanced from './advanced';
 import themes from '../themes.json';
 import { byId, isIpcError } from './dom';
 import { quotePaths } from '../shared/quote-path';
@@ -54,7 +57,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, tarotReading, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, advanced, coord, boardActivity, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
@@ -90,14 +93,14 @@ async function start(): Promise<void> {
   };
 
   // The reader and the pet always follow the active tab, from its last update.
-  promptDock.hooks.askingChanged = (asking) => { reader.setAsking(asking); stopClaude.paintComposer(); };
+  promptDock.hooks.askingChanged = (asking) => { reader.setAsking(asking); cat.setAsking(asking !== null); stopClaude.paintComposer(); };
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     favorites.followReader(tab.id, update.sessionId);
     libraryAdd.follow(tab.id, update.sessionId);
-    cat.setBusy(update.busy);
+    cat.setBusy(update.busy, tab.id);
     readScreen(tab);
     stopClaude.paintComposer();
   };
@@ -114,7 +117,7 @@ async function start(): Promise<void> {
   const catchEscape = (tab: Tab) => tab.term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown' || event.key !== 'Escape') return true;
     if (sessionsPanel.isOpen()) sessionsPanel.setOpen(false);
-    else if (consent.isOpen()) void consent.decline(); // Esc there means Not now
+    else if (consent.isOpen()) void consent.defer(); // Esc closes it unanswered; it asks again next launch
     else if (overlays.isOpen('pet-guide')) void petGuide.skip(); // a setup card; the bubble leaves Esc to the shell and Claude
     else if (overlays.current()) overlays.hideCurrent();
     else if (sceneCards.anyOpen()) sceneCards.closeAll();
@@ -123,9 +126,9 @@ async function start(): Promise<void> {
     return false;
   });
 
-  // ⌘T and + open a tab meant for Claude, so her session limit applies.
-  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) tabs.create({ startClaude: true }); };
-  const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); petGuide.refresh(); };
+  // ⌘T and + ask where the new Claude should work, so her session limit applies and no session starts in home unasked.
+  const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) repos.openForNewSession(); };
+  const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); petGuide.refresh(); dockSessions.sync(); };
   tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
 
   window.pastel.onTheme((next) => {
@@ -143,6 +146,7 @@ async function start(): Promise<void> {
   const startup = orDefault(await window.pastel.config.get(), null, 'your settings');
   const folderAllowed = startup?.config.claudeFolder.choice === 'allowed';
   textSize.restore(startup?.config.text);
+  advanced.set(startup?.config.advanced.on ?? false);
   reader.setFolderAllowed(folderAllowed);
   history.setFolderAllowed(folderAllowed);
   sessionsBoard.setFolderAllowed(folderAllowed);
@@ -151,13 +155,15 @@ async function start(): Promise<void> {
   testing.setFolderAllowed(folderAllowed);
   window.pastel.onClaudeFolder((allowed) => { reader.setFolderAllowed(allowed); history.setFolderAllowed(allowed); sessionsBoard.setFolderAllowed(allowed); library.setFolderAllowed(allowed); libraryAdd.setFolderAllowed(allowed); testing.setFolderAllowed(allowed); history.rerender(); });
   window.addEventListener('petal:allow-folder', () => void consent.setChoice('allowed'));
-  window.addEventListener('petal:get-started', () => void getStarted.open());
+  window.addEventListener(getStarted.OPEN_EVENT, () => void petGuide.openSteps()); // the checklist lives in the pet guide
   window.addEventListener('petal:show-terminal', () => { layout.setTerminalMinimised(false); tabs.active()?.term.focus(); });
   window.pastel.onReading(setReading);
   cat.setCat(orDefault(await window.pastel.getCat(), 'mika', 'the pet'));
   window.pastel.onCat((id) => cat.setCat(id));
   cat.setScene(orDefault(await window.pastel.getScene(), 'none', 'the scene'));
   if (startupProblems.length) reader.showNotice(`Couldn’t read ${startupProblems.join(', ')}; using the defaults.`);
+  // Launch check: say plainly when Petal can't see replies, and why.
+  if (folderAllowed) void window.pastel.replyVisibility().then((problem) => { if (!isIpcError(problem) && problem) reader.showNotice(problem); });
   window.pastel.onScene((id) => cat.setScene(id));
   window.pastel.onReplies((update) => {
     tabs.setUpdate(update.tabId, update);
@@ -177,6 +183,7 @@ async function start(): Promise<void> {
     history.tabClosed(tabId);
     getStarted.refresh();
     petGuide.refresh();
+    dockSessions.sync();
   });
   window.pastel.onTabCommand((command) => {
     if (command.kind === 'new' && command.agent) tabs.create({ agent: true, id: command.tabId }); // Testing mounts it; History never adopts it
@@ -225,12 +232,11 @@ async function start(): Promise<void> {
     history.tabUpdated(tabId);
   });
   window.pastel.onOpenRepoPalette(() => repos.toggle());
-  // The header's Colour key and Help > Colour key: Customize › Formatting, scrolled to the colour labels.
+  // Help › Colour key: Customize › Formatting, scrolled to the colour labels.
   const openColourLabels = async () => {
     await customize.open('formatting');
     document.getElementById(COLOUR_LABELS_ID)?.scrollIntoView({ block: 'start' });
   };
-  byId('colour-key-button').addEventListener('click', () => void openColourLabels());
   window.pastel.onOpenColourKey(() => void openColourLabels());
   dockFit.init();
   headFit.init();
@@ -241,6 +247,7 @@ async function start(): Promise<void> {
   await getStarted.load();
   const firstRun = await launchScreens.show(); // over the first tab: the pet guide on a new install; else the folder question, then Get started
   window.pastel.reportReady({ fontsLoaded, renderer, cols: term.cols, rows: term.rows, firstRun });
+  void offerResumeNotes(); // the last quit's notes, once
 }
 
 start();

@@ -62,8 +62,9 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
 
   // ⌘O is a menu accelerator; main answers it with repos:palette to the focused window, sent directly here.
   send(contents, 'repos:palette');
-  const opened = await waitFor(async () => { const s = await state(); return s.open && s.rows.length === 4 ? s : null; }, 8000);
-  check(opened && !opened.reader && opened.branches.includes('a1b2c3d') && /this tab/.test(opened.hint), `⌘O opens the palette over the reader with 4 rows, branch chips, same-tab hint: ${JSON.stringify(opened)}`);
+  const opened = await waitFor(async () => { const s = await state(); return s.open && s.rows.length === 6 ? s : null; }, 8000);
+  check(opened && !opened.reader && opened.branches.includes('a1b2c3d') && /this tab/.test(opened.hint) && opened.rows.slice(-2).join() === 'Home folder,Other folder…',
+    `⌘O opens the same palette as Add Session: 4 repos, Home folder and Other folder…, branch chips, same-tab hint: ${JSON.stringify(opened)}`);
   for (const id of ['paleSky', 'nightPastel']) {
     applyTheme(id, { persist: false });
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `repos-palette-${id}` });
@@ -72,7 +73,7 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
 
   await type('adm');
   const filtered = await state();
-  check(filtered.rows[0] === 'admin-console' && filtered.rows.length === 1, `typing "adm" filters to admin-console: ${JSON.stringify(filtered.rows)}`);
+  check(filtered.rows[0] === 'admin-console' && filtered.rows.length === 3, `typing "adm" filters the repos to admin-console, folder rows stay: ${JSON.stringify(filtered.rows)}`);
   await type('code');
   await key('ArrowDown');
   const moved = await state();
@@ -91,6 +92,9 @@ export async function reposCheck(kit: Kit, { win, activeSession, openTab }: Tabs
 
   const rejected = await js(`window.pastel.repos.open(${JSON.stringify(fixtureTab.tabId)}, '/etc')`);
   check('note' in rejected && repoWrites.length === before + 1, `a path outside the index is refused, nothing typed: ${JSON.stringify(rejected)}`);
+  await js(`window.pastel.repos.open(${JSON.stringify(fixtureTab.tabId)}, { kind: 'home' })`);
+  const home = repoWrites[before + 1];
+  check(home?.command === `cd ${shellQuote(fakeHome)}\r` && !home.newTab, `Open Repo's Home folder row cd's this tab home: ${JSON.stringify(home)}`);
 
   send(contents, 'repos:palette');
   await waitFor(async () => (await state()).open || null, 5000);

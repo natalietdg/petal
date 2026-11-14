@@ -1,10 +1,10 @@
 // Get started: install to first reply as Steps rows that tick themselves from what Petal sees, or by her hand.
-// On launch for installs from before the pet guide until every step is done; Customize › Get started reopens it.
+// The rows show in the pet guide's What's next card (pet-guide.ts); on launch for older installs until every step is done.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
 import * as layout from './layout';
-import { byId, el, isIpcError } from './dom';
+import { el, isIpcError } from './dom';
 import { INSTALL_COMMAND, allDone, factsFrom, needsReopen, needsSetupRoom, sameSteps, stepStates, toggle, toSave, type LiveFacts, type StepId, type StepState } from '../shared/get-started';
 
 export { INSTALL_COMMAND };
@@ -12,7 +12,6 @@ export const SETUP_DOCS = 'https://code.claude.com/docs/en/setup';
 const COPIED_MS = 1400;
 export const UNSEEN_NOTE = 'Petal can’t see this while your Claude folder is off.';
 
-const view = byId('get-started');
 let saved: string[] = [];
 let installed = false;
 let pastSessions = false; // a conversation in History: an experienced user, all set from the first check
@@ -83,7 +82,7 @@ const STEPS: Record<StepId, StepCopy> = {
   install: { title: 'Install Claude Code', body: installBody },
   'add-session': {
     title: 'Click Add Session',
-    body: () => [para('Claude starts in the new tab by itself.')],
+    body: () => [para('Pick a folder for Claude to work in. Claude starts there in a new tab.')],
   },
   'sign-in': {
     title: 'First time only: sign in',
@@ -151,8 +150,8 @@ function repaint(all: StepState[]): void {
   }
 }
 
-// The overlay's checklist; it repaints with every change.
-function checklist(): HTMLElement {
+// The checklist, for the pet guide's What's next card; it repaints with every change.
+export function checklist(): HTMLElement {
   const box = el('div', 'prose gs-list');
   lists.add(box);
   paintList(box, states());
@@ -195,27 +194,12 @@ export async function load(): Promise<void> {
   refresh();
 }
 
-function render(): void {
-  const pane = el('div', 'welcome-pane gs-pane');
-  pane.append(
-    el('h1', 'welcome-title', 'Get started'),
-    para('Four steps to your first reply.', 'welcome-line'),
-    checklist(),
-  );
-  const footer = el('footer', 'welcome-footer');
-  const done = el('button', 'cz-quiet-button gs-close', 'Close');
-  done.type = 'button';
-  done.addEventListener('click', close);
-  footer.append(done, para('Customize › Get started brings this back.', 'welcome-note'));
-  view.replaceChildren(pane, footer);
-  done.focus({ preventScroll: true });
-}
+export const OPEN_EVENT = 'petal:get-started'; // app.ts opens the pet guide's What's next card
 
 export async function open(): Promise<void> {
   if (!loaded) await load();
   showSteps = false;
-  if (!overlays.show('get-started')) return;
-  render();
+  window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
 // On launch, after the folder question: only while a step Petal can tick is still open.
@@ -227,7 +211,7 @@ export async function openIfIncomplete(): Promise<boolean> {
   return true;
 }
 
-export const isOpen = (): boolean => overlays.isOpen('get-started');
-export function close(): void { overlays.hide('get-started'); }
+// Closes the What's next card; a locked setup card ignores it.
+export function close(): void { overlays.hide('pet-guide'); }
 
 window.pastel.onOpenGetStarted(() => open());

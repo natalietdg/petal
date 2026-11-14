@@ -20,7 +20,7 @@ const configFile = () => path.join(dir, 'config.json');
 describe('config-store defaults and load', () => {
   it('has twenty sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -67,7 +67,7 @@ describe('config-store defaults and load', () => {
 
   it('corrupt file -> defaults', () => {
     fs.writeFileSync(configFile(), '{not json');
-    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, background: { model: 'organizer' }, onboarding: { step: 'existing' } }); // a config file means a returning user
+    expect(config.load()).toEqual({ ...config.defaults(), welcome: { seen: true }, background: { model: 'organizer' }, onboarding: { step: 'existing' }, advanced: { on: true } }); // a config file means a returning user
   });
 
   it('a corrupt file is moved aside once and never overwritten by the next save', () => {
@@ -168,7 +168,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 
@@ -318,6 +318,29 @@ describe('first launch and the organizer migration', () => {
     expect(config.load().onboarding.step).toBe('scene');
     config.save({ onboarding: { step: 'skipped' } });
     expect(config.load().onboarding.step).toBe('skipped');
+  });
+
+  it('Advanced is off for a new install and on for a returning one, so she keeps every tool she had', () => {
+    expect(config.load().advanced.on).toBe(false);
+    fs.writeFileSync(configFile(), JSON.stringify({ welcome: { seen: true } }));
+    expect(config.load().advanced.on).toBe(true);
+  });
+
+  it('a saved Advanced choice wins over the migration; junk keeps the saved one', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ welcome: { seen: true }, advanced: { on: false } }));
+    expect(config.load().advanced.on).toBe(false);
+    config.save({ advanced: { on: 'yes' as unknown as boolean } });
+    expect(config.load().advanced.on).toBe(false);
+    config.save({ advanced: { on: true } });
+    expect(config.load().advanced.on).toBe(true);
+  });
+
+  it('the first-conclude warning starts unseen and stays seen once saved; junk keeps the saved value', () => {
+    expect(config.load().conclude.warned).toBe(false);
+    config.save({ conclude: { warned: true } });
+    expect(config.load().conclude.warned).toBe(true);
+    config.save({ conclude: { warned: 'no' as unknown as boolean } });
+    expect(config.load().conclude.warned).toBe(true);
   });
 
   it('saving welcome.seen sticks for the next launch', () => {

@@ -1,8 +1,10 @@
 // The empty reader's extra lines for an older Claude Code: the update hint, and "which log is this tab's".
-import { el } from './dom';
+// Also the launch card for the last quit's resume notes.
+import { el, isIpcError } from './dom';
 import { timeOf } from './format';
 import { oldClaudeHint, SHARED_FOLDER_LINE, UPDATE_COMMAND } from '../shared/reader-notice';
 import type { ReaderNotice, SessionChoice } from '../shared/types';
+import type { ResumeNotesSet } from '../shared/ipc';
 
 const COPIED_MS = 1600;
 
@@ -47,4 +49,58 @@ export function noticeLines(notice: ReaderNotice | null | undefined, tabId: stri
   }
   if (notice.oldVersion) lines.push(hintLine(notice.oldVersion));
   return lines.length ? lines : null;
+}
+
+// ── Where you left off: the newest quit's resume notes, offered once on launch ──
+
+const RESUME_ROWS = 5; // more are in the notes themselves
+
+async function resumeFromNote(sessionId: string, button: HTMLButtonElement): Promise<void> {
+  button.disabled = true;
+  let result = await window.pastel.history.resume(sessionId);
+  if (!isIpcError(result) && 'confirm' in result) {
+    result = window.confirm(result.confirm) ? await window.pastel.history.resume(sessionId, true) : { note: '' };
+  }
+  const note = isIpcError(result) ? `Couldn’t resume it: ${result.error}` : 'note' in result ? result.note : null;
+  button.textContent = note === null ? 'Opened' : 'Resume';
+  button.disabled = note === null;
+  if (note) button.title = note;
+}
+
+function sessionRow({ title, sessionId, running }: ResumeNotesSet['sessions'][number]): HTMLLIElement {
+  const row = el('li', 'resume-notice-row');
+  const resume = el('button', 'flow-button resume-notice-open', 'Resume');
+  resume.type = 'button';
+  resume.addEventListener('click', () => void resumeFromNote(sessionId, resume));
+  row.append(el('span', 'resume-notice-title', running ? `${title} (Claude was mid-reply)` : title), resume);
+  return row;
+}
+
+export function resumeCard(set: ResumeNotesSet): HTMLElement {
+  const card = el('div', 'status resume-notice');
+  card.setAttribute('role', 'status');
+  const count = set.notes === 1 ? 'a note' : `${set.notes} notes`;
+  card.append(el('p', 'resume-notice-line', `When Petal last quit (${set.when}) it saved ${count} on where each session stopped.`));
+  if (set.sessions.length) {
+    const list = el('ul', 'resume-notice-list');
+    list.append(...set.sessions.slice(0, RESUME_ROWS).map(sessionRow));
+    card.append(list);
+  }
+  const actions = el('div', 'resume-notice-actions');
+  const reveal = el('button', 'flow-button resume-notice-reveal', 'Show notes in Finder');
+  reveal.type = 'button';
+  reveal.addEventListener('click', () => void window.pastel.resumeNotes.reveal(set.stamp));
+  const dismiss = el('button', 'cz-quiet-button resume-notice-dismiss', 'Dismiss');
+  dismiss.type = 'button';
+  dismiss.addEventListener('click', () => card.remove());
+  actions.append(reveal, dismiss);
+  card.append(actions);
+  return card;
+}
+
+// Once per quit: main marks the set shown as it hands it over, so a second window or launch gets nothing.
+export async function offerResumeNotes(): Promise<void> {
+  const set = await window.pastel.resumeNotes.latest();
+  if (isIpcError(set) || !set) return;
+  document.querySelector('.reader-notice')?.after(resumeCard(set));
 }

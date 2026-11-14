@@ -75,12 +75,19 @@ export const portrait = (id: string): string => sittingSvg(ALL_CATS[isCatId(id) 
 const root = byId('cat');
 let current: Pet = CATS.mika;
 let busy = false;
+let asking = false; // a permission or question from Claude is on screen
 let scene = 'none';
 const petOff = (): boolean => root.dataset.cat === NO_PET;
 
+const status = (): string => {
+  if (asking) return 'Claude is waiting on you';
+  if (busy) return 'Claude is working';
+  if (root.classList.contains('done')) return 'Claude is done';
+  return 'Claude is resting';
+};
 const updateTip = () => {
   if (petOff()) return;
-  query(root, '.cat-tip').textContent = `${current.name} · ${busy ? 'Claude is working' : 'Claude is resting'}`;
+  query(root, '.cat-tip').textContent = `${current.name} · ${status()}`;
 };
 
 function render() {
@@ -94,6 +101,7 @@ function render() {
     + `<div class="cat-prop prop-${prop.name}">${propSvg(prop)}</div>`
     + `<div class="cat-sprite sitting">${sittingSvg(current)}</div>`
     + '<span class="cat-z">z</span>'
+    + '<span class="cat-alert" aria-hidden="true"></span>'
     + layers.front
     + '<span class="cat-tip" role="tooltip"></span>';
   updateTip();
@@ -108,15 +116,42 @@ const dozeLater = (): void => {
   dozeTimer = setTimeout(() => root.classList.remove('awake'), AWAKE_AFTER_WORK_MS);
 };
 
-export function setBusy(next: boolean): void {
-  const wasBusy = busy;
+// Done: a short check above her head when Claude finishes without asking anything.
+const DONE_SHOWN_MS = 8000;
+let doneTimer: ReturnType<typeof setTimeout> | undefined;
+function showDone(on: boolean): void {
+  clearTimeout(doneTimer);
+  root.classList.toggle('done', on);
+  if (on) doneTimer = setTimeout(() => { root.classList.remove('done'); updateTip(); }, DONE_SHOWN_MS);
+}
+
+// Waiting on you: she sits up and holds a "!" until the prompt leaves the screen.
+export function setAsking(next: boolean): void {
+  if (Boolean(next) === asking) return;
+  asking = Boolean(next);
+  root.classList.toggle('asking', asking);
+  if (petOff()) return;
+  if (asking) {
+    showDone(false);
+    clearTimeout(dozeTimer);
+    root.classList.add('awake');
+  } else if (!busy) dozeLater();
+  updateTip();
+}
+
+let busyTab: string | undefined; // a tab switch is not Claude finishing
+export function setBusy(next: boolean, tabId?: string): void {
+  const wasBusy = busy && tabId === busyTab;
+  busyTab = tabId;
   busy = Boolean(next);
   root.classList.toggle('busy', busy);
   if (petOff()) return; // no pet, no doze timer
   if (busy) {
+    showDone(false);
     clearTimeout(dozeTimer);
     root.classList.add('awake');
   } else if (wasBusy) {
+    if (!asking) showDone(true);
     dozeLater();
   }
   updateTip();

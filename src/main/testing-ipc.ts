@@ -22,7 +22,7 @@ import { NEW_SESSION } from '../shared/session-label';
 import { readClaudePipeline } from './testing-claude-pipeline';
 import { load as loadConfig } from './config-store';
 import { agentOf, allAgents, loopsOf } from './task-suites';
-import { suiteFile, suiteHome, syncSuite } from './repo-suite-store';
+import { anySuite, suiteFile, suiteHome, syncSuite } from './repo-suite-store';
 import { setAgentTitle } from './agent-titles';
 import { lockHookPresent, lockRefusals, loadManifest, refreshLock, upgradeLock } from './test-lock';
 import { agentName, agentTabTitle } from '../shared/agent-names';
@@ -626,6 +626,7 @@ function registerStateIpc({ sessions }: TestingIpcContext): void {
   });
 
   // The cheap refresh while the tab is open: runs only, Claude's new ones merged in.
+  handle('testing:has-suite', () => anySuite());
   handle('testing:history', async (event, { tabId, root: picked }) => {
     const none = { runs: [], running: [], sessionTab: null, criteria: null, seed: null, suite: NO_SUITE, lock: NO_LOCK, agentNames: {}, distillation: [], loops: {}, tasks: [], prds: [], sessionTaskId: null };
     if (!claudeFolderAllowed()) return none;

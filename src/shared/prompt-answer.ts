@@ -473,3 +473,10 @@ export function screenOffersEsc(screen: readonly string[]): boolean {
 // Claude has stopped on screen for her: any parsed prompt, or an Esc footer the parsers don't know.
 export const screenIsAsking = (screen: readonly string[]): boolean =>
   Boolean(parseQuestionPicker(screen) ?? parsePermissionPrompt(screen) ?? parseBuiltinMenu(screen)) || screenOffersEsc(screen);
+
+// What kind of stop is on screen: a permission prompt outranks a question or menu in needsYou().
+export type ScreenAsk = 'permission' | 'question';
+export function screenAsk(screen: readonly string[]): ScreenAsk | null {
+  if (parsePermissionPrompt(screen)) return 'permission';
+  return screenIsAsking(screen) ? 'question' : null;
+}

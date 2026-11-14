@@ -206,13 +206,14 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     fs.writeFileSync(screen, `${PERMISSION_SCREEN.join('\n')}\n`);
     ptyOf(waitTab ?? '')?.write(harnessLine(`clear; cat '${screen}'; read -r _`));
 
-    // 1 The Sessions chip's panel lists sessions only; the header's Board opens the board, titled Board to match.
+    // 1 The Sessions pill opens the Board (no separate row list); so does the header's Board, titled Board to match.
     await js("document.getElementById('sessions-pill').click()");
-    const panel = await waitFor(() => js("(() => { const p = document.getElementById('sessions-panel'); return !p.hidden ? [...p.querySelectorAll('button')].map((b) => b.textContent) : null; })()"), 5000);
-    check(panel && !panel.includes('Board') && !panel.includes('Add Session'), `the Sessions panel has no Board or Add Session button: ${JSON.stringify(panel)}`);
+    const fromPill = await waitFor(async () => ((await boardOpen()) && (await js("document.getElementById('sessions-pill').getAttribute('aria-expanded')")) === 'true' ? true : null), 5000);
+    check(fromPill, 'the Sessions pill opens the Board');
     await js("document.getElementById('sessions-pill').click()");
+    check(await waitFor(async () => !(await boardOpen()) || null, 3000), 'the Sessions pill again closes it');
     await js("document.getElementById('board-button').click()");
-    const opened = await waitFor(async () => ((await boardOpen()) && (await js("document.getElementById('sessions-panel').hidden")) ? true : null), 4000);
+    const opened = await waitFor(async () => ((await boardOpen()) ? true : null), 4000);
     const names = await js("({ button: document.querySelector('#board-button .dock-label').textContent, title: document.querySelector('#board .board-title').textContent, label: document.getElementById('board').getAttribute('aria-label') })");
     check(opened && names.button === 'Board' && names.title === 'Board' && names.label === 'Board', `the header's Board opens the board, and the page is called Board too: ${JSON.stringify(names)}`);
     const readerHidden = await js("({ reader: document.getElementById('reader').hidden, composer: document.getElementById('composer').hidden })");

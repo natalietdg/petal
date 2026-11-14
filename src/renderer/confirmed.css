@@ -1,10 +1,10 @@
 /* Confirmed: Verified, Decided, Done and In progress, each item a card that jumps to its reply. */
 #confirmed-view { font-family: var(--ui-font); color: var(--reader-fg); }
 
-.confirmed-verified { --ink: var(--next-ink); --wash: var(--next-wash); }
+/* Four colour codes only (LAUNCH.md §6): Decided keeps Decide's, In progress keeps Watch out's; Verified and Done are neutral. */
 .confirmed-decided { --ink: var(--decide-ink); --wash: var(--decide-wash); }
-.confirmed-done { --ink: var(--done-ink); --wash: var(--done-wash); }
 .confirmed-progress { --ink: var(--watch-ink); --wash: var(--watch-wash); }
+:is(.confirmed-verified, .confirmed-done) { --ink: var(--reader-fg); --wash: transparent; }
 
 .confirmed-group { margin: 0 0 30px; }
 .confirmed-title {
@@ -66,4 +66,20 @@
 .confirmed-pill-progress { background: var(--watch-pill); color: var(--watch-ink); }
 .confirmed-pill-waiting { background: var(--decide-pill); color: var(--decide-ink); }
 
+/* Decided: an open one waits on her (dashed, no wash); a ledger one names who decided; a replaced one is struck. */
+.confirmed-decided .confirmed-open { border-left-style: dashed; background: transparent; box-shadow: inset 0 0 0 1px var(--wash); }
+.confirmed-ledger { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; font: 600 12px var(--ui-font); }
+.confirmed-tag { color: var(--muted); }
+.confirmed-actor { padding: 0 8px; border-radius: 999px; }
+.actor-you { background: var(--decide-pill); color: var(--decide-ink); }
+.actor-claude { background: transparent; color: var(--reader-fg); box-shadow: inset 0 0 0 1px var(--rule); } /* neutral: not one of the four colour codes */
+.actor-external { background: var(--watch-pill); color: var(--watch-ink); }
+.confirmed-superseded { opacity: 0.62; }
+.confirmed-superseded .confirmed-text { text-decoration: line-through; text-decoration-thickness: 1px; }
+
 .confirmed-empty { margin: 18vh 0 0; color: var(--muted); font-size: 17px; text-align: center; }
+
+/* Empty because no Petal reply style is on: the cause, then Add. */
+.style-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; }
+.style-offer-result:empty { display: none; }
+.status-strip .style-offer { justify-content: flex-start; font-size: 13px; color: var(--muted); }

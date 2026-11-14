@@ -1,29 +1,5 @@
-/* Colour key: the header button that opens Customize › Formatting at the colour labels (app.ts). */
+/* Reader header row; the colour legend lives in Help › Colour key and Customize › Formatting. */
 
-/* View toggle on the left; the key's quiet button and the Notes toggle on the right, no taller than the toggle. */
+/* View toggle on the left; the Notes toggle on the right, no taller than the toggle. */
 .reader-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .reader-head-end { display: flex; align-items: center; gap: 10px; }
-.colour-key-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--muted);
-  font: 500 12px/1.4 var(--ui-font);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.colour-key-button:hover { color: var(--reader-fg); background: var(--code-bg); }
-/* Three dots in the theme's own callout colours. */
-.ck-dots {
-  width: 22px;
-  height: 6px;
-  background:
-    radial-gradient(circle at 3px 3px, var(--decide-ink) 2.6px, transparent 3px),
-    radial-gradient(circle at 11px 3px, var(--highlight) 2.6px, transparent 3px),
-    radial-gradient(circle at 19px 3px, var(--watch-ink) 2.6px, transparent 3px);
-}

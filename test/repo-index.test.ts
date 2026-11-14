@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as configStore from '../src/main/config-store';
 import * as repoIndex from '../src/main/repo-index';
-import { buildCdCommand, findIndexed, planRepoOpen, type RepoIndex } from '../src/main/repo-index';
+import { buildCdCommand, findIndexed, planRepoOpen, planRepoStart, type RepoIndex } from '../src/main/repo-index';
 import { removeTempDirs, tempDir, tmpLeftovers, useTempUserData } from './helpers';
 
 const index = (paths: string[]): RepoIndex => ({
@@ -32,6 +32,20 @@ describe('Open Repo path validation', () => {
 
   it('goes to a new tab when Claude is running in this one', () => {
     expect(planRepoOpen(indexed, '/Users/n/Code/petal', true)).toMatchObject({ newTab: true });
+  });
+});
+
+describe('planRepoStart', () => {
+  const indexed = index(['/Users/n/Code/petal']);
+  it('starts in an indexed repo, in home, or leaves the pick to the caller', () => {
+    expect(planRepoStart(indexed, { kind: 'repo', path: '/Users/n/Code/petal' }, '/Users/n')).toEqual({ cwd: '/Users/n/Code/petal' });
+    expect(planRepoStart(indexed, { kind: 'home' }, '/Users/n')).toEqual({ cwd: '/Users/n' });
+    expect(planRepoStart(indexed, { kind: 'pick' }, '/Users/n')).toBe('pick');
+  });
+  it('refuses a repo the scan never found, and anything that is not a target', () => {
+    for (const target of [{ kind: 'repo', path: '/etc' }, { kind: 'repo' }, { kind: 'elsewhere' }, '/Users/n', null, 42]) {
+      expect(planRepoStart(indexed, target, '/Users/n')).toHaveProperty('note');
+    }
   });
 });
 
@@ -91,14 +105,17 @@ describe('repo index cache', () => {
     expect(repoIndex.isScanning()).toBe(false);
   });
 
-  it('never scans the home folder until the Claude folder choice is allowed', () => {
+  it('the launch scan waits for the Claude folder answer; opening the palette scans anyway', async () => {
     useTempUserData();
     process.env.PASTEL_SNAPSHOT = '1';
     process.env.PASTEL_SNAPSHOT_DIR = tempDir('petal-snap-');
     for (const choice of ['unasked', 'declined'] as const) {
       configStore.save({ claudeFolder: { choice } });
-      repoIndex.refreshIfStale();
+      repoIndex.refreshOnLaunch();
       expect(repoIndex.isScanning()).toBe(false);
     }
+    repoIndex.refreshIfStale(); // the palette opening, folder still declined
+    expect(repoIndex.isScanning()).toBe(true);
+    await repoIndex.refresh();
   });
 });

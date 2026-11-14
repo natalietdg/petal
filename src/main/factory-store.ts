@@ -28,7 +28,7 @@ export interface FactoryState {
   follows: Follows;
 }
 
-export const FOLDER_OFF = 'Petal isn’t reading your Claude folder. Allow it under Customize › Get started.';
+export const FOLDER_OFF = 'Petal isn’t reading your Claude folder. Allow it under Customize › First steps.';
 
 export const globalJson = (claudeDir: string): string => path.join(claudeDir, 'petal-factory.json');
 export const skillFile = (claudeDir: string): string => path.join(claudeDir, 'skills', 'factory', 'SKILL.md');

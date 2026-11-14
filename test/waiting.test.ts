@@ -1,6 +1,6 @@
 // The Waiting inbox: open Decides and running Doing lines across sessions, newest first.
 import { describe, expect, it } from 'vitest';
-import { waitingCount, waitingItems, type WaitingSource } from '../src/shared/waiting';
+import { laneItems, waitingCount, waitingItems, type WaitingSource } from '../src/shared/waiting';
 import type { Reply } from '../src/shared/types';
 
 const reply = (id: string, markdown: string, timestamp: string | undefined, prompt = 'go'): Reply => ({ id, markdown, prompt, timestamp });
@@ -64,5 +64,17 @@ describe('waitingItems', () => {
     expect(items.map((i) => i.tabId)).toEqual(['t2', 't1']);
     expect(items[1]?.at).toBeNull();
     expect(waitingCount(items)).toBe(0);
+  });
+});
+
+describe('laneItems', () => {
+  it("keeps only what waits on her for Board's lane, and matches the badge count", () => {
+    const items = waitingItems([
+      source('t1', [reply('a1', '**Doing:** building the export\n\n**Decide:** CSV or JSON?', '2026-10-28T10:00:00.000Z')]),
+      source('t2', [reply('b1', '**Doing:** writing tests', '2026-10-28T11:00:00.000Z')]),
+    ]);
+    const lane = laneItems(items);
+    expect(lane.map((i) => [i.tabId, i.text])).toEqual([['t1', 'CSV or JSON?']]);
+    expect(lane).toHaveLength(waitingCount(items));
   });
 });

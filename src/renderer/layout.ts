@@ -1,5 +1,5 @@
 import { byId, el, isIpcError } from './dom';
-import { CLAUDE_SETUP_ROWS, READER_SPLIT, clampSplit, readerShareForRows } from '../shared/reader-split';
+import { CLAUDE_SETUP_ROWS, READER_FLOOR_BANDS, READER_SPLIT, clampSplit, readerShareForRows, splitFloor } from '../shared/reader-split';
 
 const app = byId('app');
 const divider = byId('divider');
@@ -14,8 +14,7 @@ let setupRoom = false; // a new user: Claude Code's first-run screens are on scr
 let rowPx = 33; // one terminal row at 16px × 1.5 in Petal's mono font; the terminal reports the real one
 let rowsShown = 0; // the terminal's rows when it last reported
 
-// The reader's fixed bands (dock, header, prompts, reply box); the split never squeezes the reader below them.
-const CHROME = ['sessions-dock', 'reader-head', 'prompt-dock', 'composer'].map(byId);
+const CHROME = READER_FLOOR_BANDS.map(byId);
 
 function chromeHeight(): number {
   return CHROME.reduce((sum, el) => sum + el.offsetHeight, 0);
@@ -24,7 +23,7 @@ function chromeHeight(): number {
 // Clamped to the bounds, and to the reader's fixed bands at this window height.
 function shownFraction(): number {
   const rows = app.clientHeight - divider.offsetHeight;
-  const chromeFloor = rows > 0 ? chromeHeight() / rows : 0;
+  const chromeFloor = splitFloor(chromeHeight(), rows);
   const wanted = setupRoom && !chosenSplit ? readerShareForRows(CLAUDE_SETUP_ROWS, paneSize(rows)) : readerFraction;
   return clampSplit(Math.max(chromeFloor, wanted));
 }
@@ -117,6 +116,7 @@ divider.addEventListener('pointerdown', (event) => {
     const box = app.getBoundingClientRect();
     const fraction = (move.clientY - box.top) / box.height;
     snapped = fraction >= SNAP_MINIMISED;
+    if (!snapped && isTerminalMinimised()) setTerminalMinimised(false); // dragging the folded strip up reopens it
     setSplit(fraction);
     moved = true;
   };
@@ -157,7 +157,7 @@ divider.addEventListener('keydown', (event) => {
   saveSplit();
 });
 
-// A band growing (a prompt, a longer reply box) or the window shrinking re-checks the floor.
+// A band growing (a longer reply box) or the window shrinking re-checks the floor.
 const observer = new ResizeObserver(applySplit);
 for (const el of [app, ...CHROME]) observer.observe(el);
 applySplit();

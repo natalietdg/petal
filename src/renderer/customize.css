@@ -16,6 +16,8 @@
 .customize-body { display: flex; flex-direction: column; gap: 18px; }
 /* Workflow tabs space their own blocks with margins, as they did on their own page. */
 .customize-body.customize-body-workflow { display: block; }
+/* Claude setup's Setup half keeps those block margins inside the flex column. */
+.cz-setup-slot { display: block; }
 
 .cz-card { padding: 14px 16px 14px; border: 1px solid var(--rule); border-radius: 14px; }
 .cz-card-title { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
@@ -197,7 +199,6 @@
   font: 14px var(--ui-font);
 }
 .cz-number { width: 7em; justify-self: start; }
-.cz-birthday { display: flex; align-items: center; gap: 10px; justify-self: start; }
 /* Text size: − value + Reset, the value wide enough that the buttons never shift. */
 .cz-size-control { display: flex; align-items: center; gap: 8px; justify-self: start; }
 .cz-size-step { min-width: 34px; font-size: 16px; line-height: 1; }
@@ -266,3 +267,6 @@ select.cz-input { justify-self: start; }
 /* The preview is too narrow for Editorial's margin rail: keep sidebars and pull quotes in the text flow. */
 [data-reading] .cz-preview .story-section { display: block; }
 [data-reading] .cz-preview .story-section > .section-body, [data-reading] .cz-preview .story-section > .rail { display: contents; }
+
+.cz-token-list { margin: 4px 0 8px; padding-left: 1.2em; font-size: 0.92em; line-height: 1.45; }
+.cz-token-list li { margin: 0 0 4px; }

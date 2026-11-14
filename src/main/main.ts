@@ -3,8 +3,10 @@ import path from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { buildMenu } from './menu';
 import { registerHistoryIpc } from './history-ipc';
+import { registerResumeNotesIpc } from './resume-notes-ipc';
 import { registerSessionsIpc } from './sessions-ipc';
 import { registerAgentsIpc } from './agents-ipc';
+import { registerNeedsYou } from './needs-you-hub';
 import { claudeFixture, folderFixture, freshInstallRun, isSnapshotRun, userDataDir } from './snapshot-mode';
 import * as configStore from './config-store';
 import { offscreenWindowOptions, showOffscreen } from './snapshot-window';
@@ -32,6 +34,8 @@ import * as repoIndex from './repo-index';
 import * as history from './history';
 import { claudePath } from './claude-cli';
 import { claudeLaunch } from './claude-launch';
+import { allowedClaudeHome } from './claude-folder';
+import { replyVisibilityProblem } from './reply-visibility';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
@@ -45,8 +49,8 @@ const WINDOW_HEIGHT = 900;
 // Snapshot runs keep their settings and stored flows in a scratch userData, never hers.
 if (isSnapshotRun()) app.setPath('userData', userDataDir());
 // Snapshot runs start with reading ~/.claude set by the fixture (on), so only the consent check sees the screen,
-// and as an install from before the pet guide, so only the pet-onboarding run sees it.
-if (isSnapshotRun() && !freshInstallRun()) configStore.save({ claudeFolder: { choice: folderFixture.choice }, onboarding: { step: 'existing' } });
+// and as an install from before the pet guide, so only the pet-onboarding run sees it; like any returning install, Advanced is on.
+if (isSnapshotRun() && !freshInstallRun()) configStore.save({ claudeFolder: { choice: folderFixture.choice }, onboarding: { step: 'existing' }, advanced: { on: true } });
 
 // Every window's reader and Customize follow her folder choice.
 let folderAllowed = configStore.load().claudeFolder.choice === 'allowed';
@@ -64,6 +68,14 @@ configStore.onChange((config) => {
   if (now === textSizes) return;
   textSizes = now;
   for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'text-size:changed', config.text);
+});
+
+// Customize › Advanced saved in one window shows or hides the power tools in every window.
+let advancedOn = configStore.load().advanced.on;
+configStore.onChange((config) => {
+  if (config.advanced.on === advancedOn) return;
+  advancedOn = config.advanced.on;
+  for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'advanced:changed', advancedOn);
 });
 
 registerReplyImageScheme(); // schemes must be registered before app ready
@@ -178,15 +190,18 @@ function registerIpc(): void {
   registerSessionInfoIpc({ sessions });
   registerSessionPrsIpc({ sessions });
   registerFactoryIpc({ activeSession });
+  registerResumeNotesIpc();
   registerLookIpc();
   registerTabIpc();
 
   handle('claude:installed', async (_event, request) => (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath({ recheck: request?.recheck === true }))));
 
   handle('claude:path-tip', async () => (await claudeLaunch()).tip);
+  handle('claude:reply-visibility', () => replyVisibilityProblem(allowedClaudeHome()));
 
   registerSessionsIpc({ activeSession });
   registerAgentsIpc({ activeSession });
+  registerNeedsYou();
 
   on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
@@ -214,7 +229,7 @@ app.whenReady().then(() => {
   registerIpc();
   refreshMenu();
   const win = createWindow();
-  repoIndex.refreshIfStale(); // in the background, so ⌘O opens on a fresh list
+  repoIndex.refreshOnLaunch(); // in the background, so ⌘O opens on a fresh list
   // The organizer starts the same way in snapshot runs, so they prove the default; its passes never call Claude there.
   organizer.start({ openSessionIds });
   coord.start(sessions, { tabLabel: tabLabelOf }); // tasks, file clashes and the activity feed across live sessions

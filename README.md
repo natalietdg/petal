@@ -1,6 +1,8 @@
 # Petal
 
-A calm, readable pastel terminal for Claude Code. Electron + TypeScript, macOS.
+The terminal stays. The reply becomes a page.
+
+Petal is a reader for Claude Code: Claude runs in a normal terminal, and each reply opens as a page you can read. Electron + TypeScript, macOS.
 
 ## Build
 

@@ -140,7 +140,7 @@ export async function loopSignalsCheck(kit: Kit, win: BrowserWindow): Promise<vo
     check(trimmed?.taskId === OTHER_TASK && unit?.status === 'failed' && unit.output.startsWith(trimmedNote()) && unit.output.length < 6000, `a huge log is read from its last 2 MB: ${JSON.stringify(unit && { status: unit.status, head: unit.output.slice(0, 60), length: unit.output.length })}`);
 
     // The Notifications switch in Customize › Sessions: on by default; off, testing:notify records nothing.
-    await js("PastelTerm.customize.open('sessions')");
+    await js("PastelTerm.customize.open('organizer')");
     const toggle = await waitFor(() => js("(() => { const b = document.querySelector('#customize-body .cz-testing-notify'); return b ? { checked: b.checked, label: b.closest('label')?.textContent ?? '' } : null; })()"), 5000) as { checked: boolean; label: string } | null;
     check(toggle?.checked === true && toggle.label.includes('Notify me when a testing agent needs me, a fix lands or a loop finishes') && configStore.load().testing.notify, `the notifications switch shows, on by default: ${JSON.stringify(toggle)}`);
     await js("document.querySelector('#customize-body .cz-testing-notify').click()");

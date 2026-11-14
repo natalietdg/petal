@@ -245,16 +245,30 @@
   [data-reading="book"] #latest > * { grid-column: 2; }
   [data-reading="book"] #latest > .prose { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-content: start; }
   [data-reading="book"] #latest > .prose > * { grid-column: 2; }
-  /* Left page: the chapter title, pinned while its reply scrolls past. */
+  /* Left page: the chapter title at the top; the opening lines run beside it on the right page. */
   [data-reading="book"] #latest > .prose > .story-head {
     grid-column: 1;
-    grid-row: 1 / span 400;
+    grid-row: 1 / span 6; /* spans the opening rows; empty ones collapse to nothing */
     align-self: start;
-    position: sticky;
-    top: 24px;
     margin: 0;
     padding-right: 8px;
   }
+  /* Margin notes: each section spans the spread; its sidebars and pull quotes sit on the left page beside it. */
+  [data-reading="book"] #latest > .prose > .story-section { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: start; }
+  [data-reading="book"] #latest > .prose > .story-section > h2 { grid-column: 2; grid-row: 1; }
+  [data-reading="book"] #latest > .prose > .story-section > .section-body { grid-column: 2; grid-row: 2; }
+  [data-reading="book"] #latest > .prose > .story-section:not(.folded) > .section-body { display: block; }
+  [data-reading="book"] #latest > .prose > .story-section:not(.folded) > .rail {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    position: sticky; /* follows its section down the page, then stops at the section's end */
+    top: 24px;
+    padding-right: 8px;
+  }
+  [data-reading="book"] #latest .rail blockquote:first-child { margin-top: 0.2em; }
+  [data-reading="book"] #latest .rail blockquote.pull-quote { margin-left: 0; font-size: 2.1em; }
+  [data-reading="book"] #latest .rail blockquote.sidebar { font-size: 0.85em; }
   [data-reading="book"] #latest > .prose > .story-head .headline { font-size: clamp(3.2em, 4.6vw, 5em); line-height: 0.92; }
   [data-reading="book"] #latest > .prose > .story-head .headline.headline-long { font-size: clamp(2.8em, 3.8vw, 4em); }
   [data-reading="book"] #latest > .prose > .story-head .headline.headline-very-long { font-size: clamp(2.2em, 2.9vw, 3em); }

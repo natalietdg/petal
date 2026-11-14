@@ -30,6 +30,7 @@ export interface SessionRecord {
   messages: number;
   messagesExact: boolean; // big logs are only sampled, so the count is a lower bound
   prompts?: number; // her own prompts, a lower bound on big logs; fixtures leave it out
+  headless?: boolean; // a `claude -p` run: hidden in History unless she shows all, nested under its parent
 }
 
 export interface ListedSession extends SessionRecord {
@@ -102,6 +103,7 @@ function buildRecord(file: string, stat: fs.Stats): SessionRecord {
     messages,
     messagesExact: head.covered,
     prompts: promptCount(head.covered ? head.entries : [...head.entries, ...tail.entries]),
+    headless: head.entries.some((e) => e.entrypoint === 'sdk-cli'),
   };
 }
 

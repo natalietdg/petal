@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes, testing notifications. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes, testing notifications, Advanced. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -62,6 +62,10 @@ export interface Config {
   text: { terminalFontSize: number; readerPercent: number };
   // OS notifications from the Testing loop (needs you, fix landed, loop finished); the dock badge and lanes show regardless.
   testing: { notify: boolean };
+  // Advanced: Factory, Tasks, the testing loop and other power tools. UI only; hooks and skills in ~/.claude stay as they are.
+  advanced: { on: boolean };
+  // Conclude closes the tab after its summary; the first time, Petal asks first. True once she said Close.
+  conclude: { warned: boolean };
 }
 
 type Section = keyof Config;
@@ -103,6 +107,8 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   updates: { lastNotifiedVersion: '', lastSeenVersion: '' },
   text: { terminalFontSize: TERMINAL_FONT.initial, readerPercent: READER_PERCENT.initial },
   testing: { notify: true },
+  advanced: { on: false },
+  conclude: { warned: false },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -174,6 +180,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const up = raw.updates ?? {};
   const tx = raw.text ?? {};
   const te = raw.testing ?? {};
+  const ad = raw.advanced ?? {};
+  const cc = raw.conclude ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -216,6 +224,8 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
       readerPercent: sizeOr(tx.readerPercent, READER_PERCENT, b.text.readerPercent),
     },
     testing: { notify: boolOr(te.notify, b.testing.notify) },
+    advanced: { on: boolOr(ad.on, b.advanced.on) },
+    conclude: { warned: boolOr(cc.warned, b.conclude.warned) },
   };
 }
 
@@ -232,6 +242,7 @@ function migratedBase(): Config {
   // Haiku is for new installs; someone who used Petal before keeps background runs on the organizer's model until she picks.
   if (base.welcome.seen) base.background.model = 'organizer';
   if (base.welcome.seen) base.onboarding.step = 'existing'; // the pet guide is for new installs only
+  base.advanced.on = base.welcome.seen; // returning users keep every tool they had; new installs start simple
   return base;
 }
 

@@ -5,6 +5,7 @@ import { actionButton, card, note, page } from './customize-kit';
 import type { OutputStyle, StyleSwitch } from '../main/output-styles';
 import type { PetalStyles } from '../main/petal-styles';
 import type { CustomizeState } from '../shared/ipc';
+import { isPetalStyleFile } from '../shared/petal-style-choices';
 
 // The open style survives redraws (a theme change re-renders the section).
 let openFile: string | null = null;
@@ -36,6 +37,20 @@ export function petalStyleNotes({ styles }: PetalStyles): string[] {
     return [];
   });
 }
+
+// Adds Petal's styles if they're missing, then makes `name` the active one. The setup card and the reader's empty states use this.
+export async function addAndUsePetalStyle(name: string): Promise<{ ok: boolean; line: string }> {
+  const state = await window.pastel.config.get();
+  if (!isIpcError(state) && state.petalStyles.installable) {
+    const added = await window.pastel.config.addPetalStyles();
+    if (isIpcError(added)) return { ok: false, line: `Couldn’t add Petal’s reply styles: ${added.error}` };
+  }
+  const result = await window.pastel.config.useStyle(name);
+  return isIpcError(result) ? { ok: false, line: `Couldn’t switch: ${result.error}` } : { ok: true, line: switchedLines(result).join(' ') };
+}
+
+// True when the active output style is one of Petal's own files.
+export const petalStyleActive = (state: CustomizeState): boolean => state.outputStyles.styles.some((s) => s.active && isPetalStyleFile(s.file));
 
 async function addPetalStyles(button: HTMLButtonElement): Promise<void> {
   button.disabled = true;

@@ -13,7 +13,7 @@ const launchState = `(() => ({
   welcome: Boolean(PastelTerm.welcome || document.querySelector('.welcome-cat, .welcome-styles')),
   reader: !document.getElementById('reader').hidden,
   reopens: PastelTerm.getStarted.reopensOnLaunch(),
-  emDashes: (document.getElementById('get-started').innerText.match(/—/g) ?? []).length,
+  emDashes: (document.getElementById('pet-guide').innerText.match(/—/g) ?? []).length,
 }))()`;
 
 async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Promise<void> {
@@ -25,23 +25,23 @@ async function captureBoth({ capture, applyTheme, wait }: Kit, name: string): Pr
   applyTheme('paleSky', { persist: false });
 }
 
-// The run's fresh launch is an older install that hasn't finished setup: Get started comes up, never the old welcome screen.
-// What the welcome offered beyond that, Petal's reply styles, stays reachable in Customize › Formatting.
+// The run's fresh launch is an older install that hasn't finished setup: the pet guide's What's next comes up, never the old welcome screen.
+// What the welcome offered beyond that, Petal's reply styles, stays reachable in Customize › Claude setup.
 export async function launchCheck(kit: Kit): Promise<void> {
   const { js, log, waitFor } = kit;
   const first = await js(launchState);
-  const expected = first.reopens ? 'get-started' : null;
+  const expected = first.reopens ? 'pet-guide' : null; // Get started's checklist lives in the pet guide now
   log(`${first.open === expected && !first.welcome && first.emDashes === 0 ? 'ok' : 'FAIL'} launch opens Get started exactly while setup is unfinished, no welcome screen: ${JSON.stringify(first)}`);
-  if (first.open === 'get-started') await captureBoth(kit, 'launch-get-started');
+  if (first.open === 'pet-guide') await captureBoth(kit, 'launch-get-started');
   await js('PastelTerm.getStarted.close()');
   const closed = await js(launchState);
   log(`${closed.open === null && closed.reader ? 'ok' : 'FAIL'} closing Get started shows the reader: ${JSON.stringify({ open: closed.open, reader: closed.reader })}`);
 
-  await js("PastelTerm.customize.open('formatting')");
-  await waitFor(() => js("document.querySelector('#customize-body .cz-preview') ? true : null"), 5000);
+  await js("PastelTerm.customize.open('claude')");
+  await waitFor(() => js("document.querySelector('#customize-body .cz-card') ? true : null"), 5000);
   const installable = (await js('window.pastel.config.get()')).petalStyles?.installable === true;
   const button = await js("document.querySelector('#customize-body .cz-petal-add')?.textContent ?? null");
-  log(`${(button === 'Add Petal’s reply styles') === installable ? 'ok' : 'FAIL'} Customize › Formatting offers Petal's reply styles while some are missing: ${JSON.stringify({ installable, button })}`);
+  log(`${(button === 'Add Petal’s reply styles') === installable ? 'ok' : 'FAIL'} Customize › Claude setup offers Petal's reply styles while some are missing: ${JSON.stringify({ installable, button })}`);
   await js('PastelTerm.customize.close()');
 }
 
@@ -70,7 +70,7 @@ const setupState = `(() => {
 async function showSetup({ js, waitFor, wait }: Kit, ready: string): Promise<{ [key: string]: unknown }> {
   await js('PastelTerm.customize.close()');
   await js('PastelTerm.customize.open()');
-  await js(`document.querySelector('#customize-tabs button[data-section="setup"]').click()`);
+  await js(`document.querySelector('#customize-tabs button[data-section="claude"]').click()`);
   await waitFor(async () => ((await js(ready)) ? true : null), 15000);
   await wait(400);
   return js(setupState);

@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readSessionFile, transcriptPath, sessionsDir, type SessionFile } from './claude-session';
+import { childRow, group, readChild } from './subsessions';
+import type { SubsessionLink } from './subsession-links';
+import type { ChildRow } from '../shared/subsessions';
 import { claudeFolderAllowed } from './claude-folder';
 import { recentActivity } from './activity';
 import { readHead } from './jsonl-window';
@@ -44,12 +47,14 @@ export interface SessionRow {
   activity: string | undefined;
   recent: (string | undefined)[];
   subagents: SubagentRow[];
+  children: ChildRow[]; // headless claude -p runs it started, live or finished in the last 2 min
   board?: BoardDetail; // only while the Sessions board is open
 }
 
 export interface SessionsSnapshot {
   counts: SessionCounts;
   rows?: SessionRow[];
+  orphans?: ChildRow[]; // live headless runs with no live parent: Board's "Headless runs"
 }
 
 export interface SnapshotOptions {
@@ -167,16 +172,40 @@ export function oldestIdle(sessions: readonly SessionFile[]): SessionFile | null
   return oldest;
 }
 
+const mtimeOf = (file: string): number | null => {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return null;
+  }
+};
+
+// A child shows while it runs, and for SUBAGENT_WINDOW_MS after, like a subagent; the agents panel keeps every one.
+function childRows(known: readonly SubsessionLink[], liveById: ReadonlyMap<string, SessionFile>, now: number): ChildRow[] {
+  return known.flatMap((link) => {
+    const live = liveById.get(link.childId) ?? null;
+    const file = readChild(link, live, mtimeOf);
+    if (!file || (!live && now - file.mtime >= SUBAGENT_WINDOW_MS)) return [];
+    return [childRow(file, now)];
+  });
+}
+
 // Collapsed pill needs counts only (agents by stat); the open panel reads jsonl tails.
 export function snapshot(
   { detailed, expandedIds = [], ownSessionId = null, nameOf = (s) => sessionTitle({ cwd: s.cwd }) }: SnapshotOptions,
   sessions: SessionFile[] = liveSessions(),
   subagentsDirOf: SubagentsDirOf = subagentsDir,
+  known: readonly SubsessionLink[] = [],
+  now = Date.now(),
 ): SessionsSnapshot {
   if (!claudeFolderAllowed()) sessions = []; // fixture sessions too: their logs are read below
+  const liveById = new Map(sessions.map((s) => [s.sessionId, s]));
+  const { top, childrenOf, orphans } = group(sessions, known);
+  sessions = top; // headless runs are agents of their parent, never sessions of their own
   const busy = sessions.filter((s) => s.status === 'busy').length;
   if (!detailed) {
-    const agents = sessions.reduce((sum, s) => sum + activeSubagentFiles(subagentsDirOf(s)).length, 0);
+    const children = sessions.reduce((sum, s) => sum + (childrenOf.get(s.sessionId) ?? []).filter((l) => liveById.has(l.childId)).length, 0);
+    const agents = children + sessions.reduce((sum, s) => sum + activeSubagentFiles(subagentsDirOf(s)).length, 0);
     return { counts: { total: sessions.length, busy, agents } };
   }
 
@@ -197,9 +226,11 @@ export function snapshot(
       activity: recent.at(-1)?.text ?? '',
       recent: expanded.has(s.sessionId) ? recent.map((a) => a.text).reverse() : [],
       subagents: files.map(describeSubagent),
+      children: childRows(childrenOf.get(s.sessionId) ?? [], liveById, now),
     };
   });
   pruneCache(seen);
-  const agents = rows.reduce((sum, row) => sum + row.subagents.length, 0);
-  return { counts: { total: sessions.length, busy, agents }, rows };
+  const agents = rows.reduce((sum, row) => sum + row.subagents.length + row.children.length, 0);
+  const orphanRows = childRows(orphans.map((s) => ({ childId: s.sessionId, parentId: '', cwd: s.cwd, name: nameOf(s), at: now })), liveById, now);
+  return { counts: { total: sessions.length, busy, agents }, rows, orphans: orphanRows };
 }

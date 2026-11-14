@@ -34,6 +34,7 @@ export interface TranscriptEntry {
   isCompactSummary?: boolean; // the summary Claude Code writes after /compact, logged as a user entry
   imagePasteIds?: unknown; // her turn's "[Image #n]" numbers, in the order their source notes follow
   cwd?: unknown;
+  entrypoint?: unknown; // "cli" in a terminal, "sdk-cli" for a headless `claude -p` run
   aiTitle?: string;
   customTitle?: string; // a 'custom-title' entry: her /rename
   origin?: { kind?: string; handback?: boolean; from?: string }; // another agent's message arrives as a meta user entry, kind 'peer'; from: the sender's agent id

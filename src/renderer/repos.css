@@ -74,3 +74,8 @@
 
 .repos-status { margin: 8px 4px 0; font-size: 12px; color: var(--muted); }
 .repos-status:empty { display: none; }
+
+/* Start as: plain Claude or one of her agents, session mode only. */
+.repos-start-as { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.repos-start-as[hidden] { display: none; }
+.repos-agent { flex: 1; min-width: 0; font: inherit; color: var(--reader-fg); }

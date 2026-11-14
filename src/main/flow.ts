@@ -7,25 +7,19 @@ import { contentItems, isAgentMessage, isUserTurn, promptText, commandText, trim
 import { assistantText } from './replies';
 import { parseEntry, type TranscriptEntry } from './transcript-entry';
 import { counters } from './snapshot-mode';
+import { auditRows, type AuditRow } from '../shared/confirmed';
 import type { OutcomeLabel } from '../shared/types';
+
+export type { AuditRow };
 
 const LABELS: Record<string, OutcomeLabel> = { 'done': 'done', 'decide': 'decide', 'watch out': 'watch', 'next': 'next', 'why': 'why' };
 const CALLOUT = /^\s*(?:[-*]\s+)?\*\*(done|decide|watch out|next|why):?\*\*:?\s*(.+)$/i;
 const HEADLINE = /^\s*\*\*(.+?)\*\*/;
-const AUDIT = /^\s*#(\d+)\s*\|\s*([^|]+?)\s*\|\s*(ACTION|DECISION)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*(?:\|.*)?$/;
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 
 export interface Outcome {
   label: OutcomeLabel;
   text: string;
-}
-
-export interface AuditRow {
-  n: number;
-  date: string;
-  kind: string;
-  actor: string;
-  what: string;
 }
 
 export interface StateChange {
@@ -68,18 +62,6 @@ function newStep(prompt: string, index: number): RawStep {
   return { index, label: trimTo(prompt, 70), replies: [], replyIds: [], files: new Set() };
 }
 
-// Audit ledger lines only count inside fenced code blocks.
-function auditLines(text: string): AuditRow[] {
-  const rows: AuditRow[] = [];
-  let inFence = false;
-  for (const line of text.split('\n')) {
-    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
-    const match = inFence && AUDIT.exec(line);
-    if (match) rows.push({ n: Number(match[1]), date: match[2], kind: match[3], actor: match[4], what: match[5] });
-  }
-  return rows;
-}
-
 function callouts(text: string): Outcome[] {
   return text.split('\n').flatMap((line) => {
     const match = CALLOUT.exec(line);
@@ -109,7 +91,7 @@ function titleFrom(headline: string | undefined): string | null {
 function summarise(step: RawStep): FlowStep {
   const lastReply = step.replies.at(-1) ?? '';
   const outcomes = step.replies.flatMap(callouts);
-  const audit = step.replies.flatMap(auditLines);
+  const audit = step.replies.flatMap(auditRows);
   const headline = HEADLINE.exec(lastReply)?.[1];
   const visible = outcomes.filter((o) => o.label !== 'why');
   return {

@@ -53,6 +53,7 @@ export interface GuideRow {
   gesture?: string;
   does: string;
   accelerators?: readonly string[]; // menu accelerators the row stands for
+  advanced?: boolean; // shown only while Customize › Advanced is on
 }
 
 export interface GuideGroup {
@@ -75,7 +76,7 @@ export const GUIDE: readonly GuideGroup[] = [
       menuRow('Sessions board', ACCEL.board),
       menuRow('Focus, level 1: headers minimised', ACCEL.minimiseHeaders),
       menuRow('Focus, level 2: only the reply', ACCEL.focus),
-      { gesture: 'Click the Focus control at the dock’s end', does: 'Headers minimised, then only the reply, then the full layout' },
+      { gesture: 'Click Minimise headers or Only the reply at the dock’s end', does: 'Each turns its level on, a second click turns it off' },
       menuRow('Settings (Customize)', ACCEL.settings),
       menuRow('Open a repo', ACCEL.openRepo),
       keyRow('Fold History’s list (History open)', 'CmdOrCtrl+\\'),
@@ -127,7 +128,7 @@ export const GUIDE: readonly GuideGroup[] = [
     rows: [
       { word: 'conclude', does: 'Pins the Conclusion / Result / Impact banner, then ends the session after the reply' },
       { word: 'conclude: note', does: 'Pins the banner with your note; the session stays open' },
-      { word: '/factory', does: 'Follows the stations you set in Customize › Factory' },
+      { word: '/factory', does: 'Follows the stations you set in Customize › Factory', advanced: true },
       { word: 'Doing: · Recommend: · Next:', does: 'Lines Claude starts this way show in the status strip' },
     ],
   },

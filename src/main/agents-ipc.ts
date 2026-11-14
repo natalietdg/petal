@@ -2,7 +2,10 @@
 import path from 'node:path';
 import type { WebContents } from 'electron';
 import { handle, send } from './ipc';
-import { AgentTimeline, agentFile, isAgentId, listAgents, type AgentsList } from './agents';
+import { AgentTimeline, agentFile, isAgentId, listAgents, listChildren, mergeAgents, type AgentsList, type HeadlessChild } from './agents';
+import * as subsessionLinks from './subsession-links';
+import { isHeadless, transcriptPath } from './claude-session';
+import { childAgentId, childIdOf } from '../shared/subsessions';
 import * as sessionsMonitor from './sessions-monitor';
 import { sessionTitleFor } from './session-title';
 import { isSnapshotRun, panelFixture } from './snapshot-mode';
@@ -30,6 +33,24 @@ export function agentsDir(sessionId: string, own: FollowedSession | null | undef
 
 const NONE: AgentsList = { agents: [], running: 0, total: 0 };
 
+// A parent's headless children from the stored links; the transcript path is always built here, never taken from a window.
+export function headlessChildren(parentId: string): HeadlessChild[] {
+  if (!claudeFolderAllowed() || isSnapshotRun()) return [];
+  const live = new Set(panelSessions().map((s) => s.sessionId));
+  return subsessionLinks.childrenOf(subsessionLinks.load(), parentId).map((link) => ({
+    agentId: childAgentId(link.childId),
+    name: link.name,
+    file: transcriptPath({ cwd: link.cwd, sessionId: link.childId }),
+    live: live.has(link.childId),
+  }));
+}
+
+// An orphan headless run is opened as its own parent: only while it is live and headless.
+function orphanFile(childId: string): string | null {
+  const live = claudeFolderAllowed() ? panelSessions().find((s) => s.sessionId === childId && isHeadless(s)) : undefined;
+  return live ? transcriptPath(live) : null;
+}
+
 // The reader's session agents, for the header chip and the list.
 export async function ownAgents(own: FollowedSession | null | undefined): Promise<AgentsList> {
   const dir = own ? agentsDir(own.sessionId, own) : null;
@@ -49,15 +70,21 @@ export function registerAgentsIpc({ activeSession }: { activeSession: ActiveSess
     const id = typeof sessionId === 'string' && sessionId ? sessionId : own?.sessionId ?? null;
     const dir = id ? agentsDir(id, own) : null;
     const sessionLabel = id ? sessionTitleFor(id, { cwd: id === own?.sessionId ? own.cwd : null }) : null;
-    return { sessionId: id, sessionLabel, ...(dir ? await listAgents(dir) : NONE) };
+    const subagents = dir ? await listAgents(dir) : NONE;
+    const children = id ? await listChildren(headlessChildren(id)) : [];
+    return { sessionId: id, sessionLabel, ...mergeAgents(subagents, children) };
   });
 
   handle('agents:open', async (event, { sessionId, agentId }) => {
     const contents = event.sender;
     stopTimeline(contents);
-    const dir = typeof sessionId === 'string' ? agentsDir(sessionId, activeSession(contents.id)?.feed.session) : null;
-    if (!dir || !isAgentId(agentId)) return { missing: true as const };
-    const timeline = new AgentTimeline(agentFile(dir, agentId), (update) => {
+    if (typeof sessionId !== 'string' || !isAgentId(agentId)) return { missing: true as const };
+    const childId = childIdOf(agentId);
+    const child = childId ? headlessChildren(sessionId).find((c) => c.agentId === agentId) : null;
+    const dir = childId ? null : agentsDir(sessionId, activeSession(contents.id)?.feed.session);
+    const file = child?.file ?? (childId === sessionId ? orphanFile(childId) : null) ?? (dir ? agentFile(dir, agentId) : null);
+    if (!file) return { missing: true as const };
+    const timeline = new AgentTimeline(file, (update) => {
       if (!contents.isDestroyed()) send(contents, 'agents:timeline', { agentId, ...update });
     });
     timelines.set(contents.id, timeline);

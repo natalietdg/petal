@@ -7,6 +7,7 @@ import { dayLabel, list, openNote, search, state, titleOf, type Session } from '
 import { doResume, hoverPreview } from './history-preview';
 import * as favorites from './favorites';
 import { listedFor } from '../shared/favorites';
+import { historyRows } from '../shared/subsessions';
 import { conclusionGist } from '../shared/conclusion';
 
 const STATUSES = new Set(['done', 'in progress', 'blocked']);
@@ -104,12 +105,20 @@ export function renderList(): void {
   const haystack = (s: Session) => `${titleOf(s)} ${s.title} ${s.firstPrompt} ${s.organizer?.project ?? ''} ${s.notes ?? ''} ${s.conclusion ? conclusionGist(s.conclusion) : ''}`.toLowerCase();
   const snippets = found.query === query ? found.snippets : new Map<string, string>();
   const listed = listedFor(state.sessions, favorites.ids(), state.listKind);
-  const byWords = new Set(listed.filter((s) => !query || haystack(s).includes(query)));
-  const shown = listed.filter((s) => byWords.has(s) || snippets.has(s.sessionId));
+  const nodes = historyRows(listed, state.showHeadless);
+  const nested = new Set(nodes.filter((n) => n.nested).map((n) => n.session.sessionId));
+  const order = nodes.map((n) => n.session);
+  const byWords = new Set(order.filter((s) => !query || haystack(s).includes(query)));
+  const shown = order.filter((s) => byWords.has(s) || snippets.has(s.sessionId));
   // Sessions arrive newest first.
   if (state.sort === 'title') shown.sort(byTitle);
   const matchFor = (s: Session) => (byWords.has(s) ? null : { snippet: snippets.get(s.sessionId) ?? '', query });
-  list.replaceChildren(...shown.map((s) => row(s, matchFor(s))));
+  list.replaceChildren(...shown.map((s) => {
+    const item = row(s, matchFor(s));
+    if (nested.has(s.sessionId) && state.sort === 'recent') item.classList.add('history-row-nested');
+    if (s.headless) item.append(el('span', 'agent-headless', 'headless'));
+    return item;
+  }));
   if (!state.folderAllowed) {
     list.append(folderOffNote());
     return;

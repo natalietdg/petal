@@ -84,10 +84,10 @@ popup.addEventListener('keydown', (event) => {
 window.addEventListener('resize', close);
 new MutationObserver(() => { if (byId('board').hidden) close(); }).observe(byId('board'), { attributes: true, attributeFilter: ['hidden'] });
 
-// The card's "Message…": only for another session in this window, never the one she is in.
+// The card's "Message…": only for another session in this window, never the one she is in, and only with 2+ sessions.
 export function control(card: { tabId: string | null; name: string }): HTMLButtonElement | null {
   const { tabId } = card;
-  if (!tabId || tabId === tabs.active()?.id) return null;
+  if (!tabId || tabId === tabs.active()?.id || !mentions.isOn()) return null;
   const button = el('button', 'board-message-open', 'Message…');
   button.type = 'button';
   button.title = `Send ${card.name} a message from this session`;

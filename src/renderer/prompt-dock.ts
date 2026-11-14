@@ -158,14 +158,35 @@ function reviewBody(page: ReviewPage): HTMLElement {
   return group;
 }
 
-function buildCard(): void {
+// Which control had focus, by class and text; finds its twin in a rebuilt card.
+function focusedControl(): { className: string; text: string } | null {
+  const active = document.activeElement;
+  return active instanceof HTMLElement && card.contains(active) ? { className: active.className, text: active.textContent ?? '' } : null;
+}
+
+function refocus(control: { className: string; text: string }): void {
+  const twin = [...card.querySelectorAll<HTMLElement>('button, input')].find(
+    (node) => node.className === control.className && (node.textContent ?? '') === control.text,
+  );
+  twin?.focus({ preventScroll: true });
+}
+
+// A redraw of the same question (options scrolling in the terminal) keeps the dock's scroll and focus.
+function buildCard(samePage: boolean): void {
+  const scrollTop = dock.scrollTop;
+  const focused = samePage ? focusedControl() : null;
   card.replaceChildren();
   card.hidden = !picker;
   if (!picker) return;
   if (picker.tabs.length) card.append(tabStrip(picker));
   card.append(picker.page === 'question' ? questionBody(picker) : reviewBody(picker), navRow(picker));
   lockCard();
+  if (!samePage) return;
+  dock.scrollTop = scrollTop;
+  if (focused) refocus(focused);
 }
+
+const pageId = (page: QuestionPicker | null): string => (page ? `${page.page}:${page.page === 'question' ? page.question : ''}` : '');
 
 // Updates disabled state in place, so focus and typed text survive.
 function lockCard(): void {
@@ -317,10 +338,11 @@ export function readScreen(screenTab: TabId, lines: readonly string[]): void {
   const nextPickerKey = nextPicker ? JSON.stringify(nextPicker) : '';
   if (nextPickerKey !== pickerKey || (!nextPicker && !card.hidden)) {
     if (!nextPicker) drafts.clear();
+    const samePage = picker !== null && pageId(picker) === pageId(nextPicker);
     picker = nextPicker;
     pickerKey = nextPickerKey;
     pickerSent = false;
-    buildCard();
+    buildCard(samePage);
   }
 
   const next = parsePermissionPrompt(lines);

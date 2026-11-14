@@ -1,7 +1,7 @@
 {
   "name": "pastel-term",
   "version": "1.1.9",
-  "description": "Petal: a calm, readable pastel terminal for Claude Code",
+  "description": "Petal: a reader for Claude Code. The terminal stays. The reply becomes a page.",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

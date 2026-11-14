@@ -6,8 +6,11 @@
 #app.focus-mode #reader-area #reader { margin-right: 0; }
 #app.focus-mode #reader:focus { outline: none; } /* focused only so Space and arrows scroll it */
 
-/* The dock leaves the flow and keeps only the Focus control, as the way back over the reader's top right corner. */
+/* The dock leaves the flow and keeps only Only the reply (now Exit focus), as the way back over the reader's top right corner. */
 #app.focus-mode #sessions-dock { position: absolute; top: 10px; right: 22px; padding: 0; gap: 0; border-radius: 999px; background: var(--reader-bg); }
-#app.focus-mode #sessions-dock > :not(#focus-toggle) { display: none !important; }
-#app.focus-mode .focus-toggle { gap: 6px; padding: 4px 8px; font: 500 12px/1.4 var(--ui-font); letter-spacing: 0.02em; white-space: nowrap; }
-#app.focus-mode .focus-toggle .dock-icon { font-size: 14px; }
+#app.focus-mode #sessions-dock > :not(#focus-reply) { display: none !important; }
+#app.focus-mode .focus-reply { gap: 6px; padding: 4px 8px; font: 500 12px/1.4 var(--ui-font); letter-spacing: 0.02em; white-space: nowrap; }
+#app.focus-mode .focus-reply .dock-icon { font-size: 14px; }
+
+/* Minimise headers while its level is on: shown pressed, like the hover look. */
+.focus-toggle[aria-pressed="true"] { color: var(--reader-fg); background: var(--code-bg); }

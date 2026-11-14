@@ -1,11 +1,11 @@
-// The pet's setup guide for a new install: four cards (five with past sessions to import), then speech-bubble steps that follow
+// The pet's setup guide for a new install: four cards (plus the reply-style card and past sessions to import when they apply), then speech-bubble steps that follow
 // what Petal sees until the first reply.
 import type { FolderChoice } from './claude-folder';
 import { rangeText, type BackfillPlan } from './library';
 import { estimateText } from './library-cost';
 export { INSTALL_COMMAND } from './get-started';
 
-export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent', 'import'] as const;
+export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent', 'style', 'import'] as const;
 export const BUBBLE_STEPS = ['add-session', 'type-claude', 'claude-setup', 'ask', 'celebrate'] as const;
 export type CardStep = (typeof CARD_STEPS)[number];
 export type BubbleStep = (typeof BUBBLE_STEPS)[number];
@@ -27,6 +27,7 @@ export interface GuideFacts {
   sessionStarted: boolean; // past Claude Code's first-run screens
   replied: boolean;
   pastSessions: number; // History's count of her earlier Claude Code sessions; 0 until the folder is allowed and read
+  petalStyleOn?: boolean; // a Petal reply style is already the active output style
 }
 
 // Which bubble shows: the furthest thing Petal has seen happen.
@@ -41,26 +42,41 @@ export function bubbleStep(facts: GuideFacts): BubbleStep {
 // The import card shows only when the folder was allowed and History found sessions from before Petal.
 export const showsImport = (folder: FolderChoice, pastSessions: number): boolean => folder === 'allowed' && pastSessions > 0;
 
-// The card after this one; the folder card only while the question is unanswered, then the bubbles take over.
-export function nextCard(step: CardStep, folder: FolderChoice, pastSessions = 0): CardStep | 'bubbles' {
-  const after = CARD_STEPS.slice(CARD_STEPS.indexOf(step) + 1);
-  const next = after.find((card) => (card === 'consent' ? folder === 'unasked' : card === 'import' ? showsImport(folder, pastSessions) : true));
-  return next ?? 'bubbles';
+// The reply-style card writes ~/.claude, so it needs the folder allowed; it stays away once a Petal style is on.
+export const showsStyle = (folder: FolderChoice, petalStyleOn = false): boolean => folder === 'allowed' && !petalStyleOn;
+
+function cardApplies(card: CardStep, folder: FolderChoice, pastSessions: number, petalStyleOn: boolean): boolean {
+  if (card === 'consent') return folder === 'unasked';
+  if (card === 'style') return showsStyle(folder, petalStyleOn);
+  if (card === 'import') return showsImport(folder, pastSessions);
+  return true;
 }
 
-// The folder question has been answered by the import card, so there is no going back to it.
-export const previousCard = (step: CardStep): CardStep | null => (step === 'import' ? null : CARD_STEPS[CARD_STEPS.indexOf(step) - 1] ?? null);
+// The card after this one; the folder card only while the question is unanswered, then the bubbles take over.
+export function nextCard(step: CardStep, folder: FolderChoice, pastSessions = 0, petalStyleOn = false): CardStep | 'bubbles' {
+  const after = CARD_STEPS.slice(CARD_STEPS.indexOf(step) + 1);
+  return after.find((card) => cardApplies(card, folder, pastSessions, petalStyleOn)) ?? 'bubbles';
+}
 
-// "Step N of M": four cards, five once the import card is known to show.
-export function cardCounter(step: CardStep, folder: FolderChoice, pastSessions: number): { number: number; total: number } {
-  const counted = CARD_STEPS.filter((card) => card !== 'import' || step === 'import' || showsImport(folder, pastSessions));
+// The style and import cards come after the folder question is answered, so there is no going back to it.
+export const previousCard = (step: CardStep): CardStep | null => (step === 'import' || step === 'style' ? null : CARD_STEPS[CARD_STEPS.indexOf(step) - 1] ?? null);
+
+// "Step N of M": four cards, more once the style or import card is known to show.
+export function cardCounter(step: CardStep, folder: FolderChoice, pastSessions: number, petalStyleOn = false): { number: number; total: number } {
+  const optional = (card: CardStep): boolean => card === 'style' || card === 'import';
+  const counted = CARD_STEPS.filter((card) => !optional(card) || card === step || cardApplies(card, folder, pastSessions, petalStyleOn));
   return { number: counted.indexOf(step) + 1, total: counted.length };
 }
 
 // A launch with this saved stage: the step to show, or null when the guide is over or predates this install.
 export function resumeAt(stage: GuideStage, facts: GuideFacts): GuideStep | null {
   if (isEnded(stage)) return null;
-  if (stage === 'consent' && facts.folderChoice !== 'unasked') return nextCard('consent', facts.folderChoice, facts.pastSessions) === 'import' ? 'import' : bubbleStep(facts);
+  const after = (card: CardStep): GuideStep => {
+    const next = nextCard(card, facts.folderChoice, facts.pastSessions, facts.petalStyleOn);
+    return next === 'bubbles' ? bubbleStep(facts) : next;
+  };
+  if (stage === 'consent' && facts.folderChoice !== 'unasked') return after('consent');
+  if (stage === 'style' && !showsStyle(facts.folderChoice, facts.petalStyleOn)) return after('style');
   if (stage === 'import' && !showsImport(facts.folderChoice, facts.pastSessions)) return bubbleStep(facts);
   return isCardStep(stage) ? stage : bubbleStep(facts);
 }
@@ -97,6 +113,9 @@ export const personality = (id: string, pet: PetWords): string => PERSONALITIES[
 
 export const EXAMPLE_ASK = 'what’s in this folder?';
 
+// The What's next card: the Get started checklist, said by the pet.
+export const WHATS_NEXT_LINE = 'Four steps from installing Claude Code to your first reply. I tick each one off when I see it happen.';
+
 export interface CardCopy {
   title: string;
   line: string;
@@ -108,6 +127,7 @@ export function cardCopy(step: CardStep, pet: PetWords): CardCopy {
     case 'pet': return { title: 'Pick your pet', line: `${pet.name} will show you around. ${capital(pet.they)} sits in the corner while you work.` };
     case 'scene': return { title: 'Pick a scene', line: `Where should ${pet.name} hang out? ${capital(pet.they)} tries each one on in the corner.` };
     case 'consent': return { title: 'One quick question', line: 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' };
+    case 'style': return { title: 'How should Claude write?', line: 'A Petal reply style makes Claude’s replies easy to read here: the answer first, then the detail.' };
     case 'import': return { title: 'Import your past sessions', line: 'They’re in History, up top. Press ⌘Y any time to open it.' };
   }
 }
@@ -124,6 +144,12 @@ export const libraryConfirm = (plan: BackfillPlan): string => plan.sessions
   ? `Reads ${count(plan.sessions, 'session', 'sessions')} ${rangeText(plan.days)}: about ${count(plan.calls, 'Claude call', 'Claude calls')}, on your plan. ${estimateText(plan.estimate)}`
   : `Nothing new to read ${rangeText(plan.days)}.`;
 
+// Under the style picks: what a style costs, in plain words. tokens is the picked style's size.
+export const styleCost = (tokens: number): string =>
+  `This style adds about ${tokens.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Formatting.`;
+
+export const STYLE_LABELS = { use: 'Use this style', later: 'Not now' } as const;
+
 export const IMPORT_LABELS = { show: 'Show them in History', later: 'Not now', library: 'Also build my Library from them' } as const;
 
 export interface BubbleCopy {
@@ -132,10 +158,13 @@ export interface BubbleCopy {
 }
 
 // startedItself: Add Session typed `claude` for her (it was installed when the tab opened).
-export function bubbleCopy(step: BubbleStep, pet: PetWords, { claudeFound, folder, startedItself = false }: { claudeFound: boolean; folder: FolderChoice; startedItself?: boolean }): BubbleCopy {
+// pickingFolder: the "Start a session in…" palette is open, so the pet talks about the folder.
+export function bubbleCopy(step: BubbleStep, pet: PetWords, { claudeFound, folder, startedItself = false, pickingFolder = false }: { claudeFound: boolean; folder: FolderChoice; startedItself?: boolean; pickingFolder?: boolean }): BubbleCopy {
   const blind = blindToClaude(step, folder) ? `${pet.name} can’t see Claude’s replies while your Claude folder is off.` : null;
   switch (step) {
-    case 'add-session': return { say: 'Click Add Session', note: `It’s up top, in the ring. ${pet.name} will open a new tab for Claude.` };
+    case 'add-session': return pickingFolder
+      ? { say: 'Pick where Claude works. Home is fine.', note: 'Press Enter on a folder. Claude starts there in a new tab.' }
+      : { say: 'Click Add Session', note: `It’s up top, in the ring. Then pick a folder, and ${pet.name} opens a new tab for Claude there.` };
     case 'type-claude':
       if (typeClaudeHelp(claudeFound) === 'install') return { say: 'Claude Code isn’t installed yet', note: 'Paste this in the terminal below and press Enter, then click Check again.' };
       return startedItself

@@ -5,20 +5,29 @@ import { assignSlugs, deliverySummary, type Delivery, type MentionTarget } from 
 import { parseMentionLine, resolveMentionName } from '../shared/mention-line';
 import type { SlashItem } from '../shared/slash';
 import { screenIsAsking } from '../shared/prompt-answer';
+import { mentionsOn } from '../shared/dock-visibility';
 
 // Last session name per tab, so a tab whose Claude exited still shows by name as "not running".
 const lastNames = new Map<string, string>();
 window.pastel.onReplies((update) => { if (update.sessionId && update.label) lastNames.set(update.tabId, update.label); });
 
-// Every other tab here that has had a Claude session; slugs are unique in this window.
-export function targets(exceptTabId: string | null = tabs.active()?.id ?? null): MentionTarget[] {
-  const open = tabs.ids().flatMap((tabId) => {
+// Every tab here that has had a Claude session.
+function sessionTabs(): Omit<MentionTarget, 'slug'>[] {
+  return tabs.ids().flatMap((tabId) => {
     const update = tabs.get(tabId)?.update;
     const name = update?.sessionId ? update.label : lastNames.get(tabId);
-    if (tabId === exceptTabId || !update || !name || (update.state !== 'live' && update.state !== 'ended')) return [];
+    if (!update || !name || (update.state !== 'live' && update.state !== 'ended')) return [];
     return [{ tabId, name, place: update.repo, running: update.state === 'live' && Boolean(update.sessionId) }];
   });
-  return assignSlugs(open);
+}
+
+// Mentions, the To line and Message show only with two or more sessions in this window.
+export const isOn = (): boolean => mentionsOn(sessionTabs().length);
+
+// Every other tab here that has had a Claude session; slugs are unique in this window. None while mentions are off.
+export function targets(exceptTabId: string | null = tabs.active()?.id ?? null): MentionTarget[] {
+  const open = sessionTabs();
+  return mentionsOn(open.length) ? assignSlugs(open.filter((t) => t.tabId !== exceptTabId)) : [];
 }
 
 // The "@" picker's Sessions group.
@@ -71,7 +80,7 @@ export async function send(from: string | null, to: readonly string[], text: str
 const sentFromReplies = new Map<string, string>(); // reply id + target -> the summary shown after sending
 
 export function replyAction(reply: { id?: string; markdown: string }, fromTabId: string | null): HTMLElement | null {
-  const line = parseMentionLine(reply.markdown);
+  const line = isOn() ? parseMentionLine(reply.markdown) : null;
   if (!line) return null;
   const box = el('div', 'reply-mention');
   const target = resolveMentionName(line.name, targets(fromTabId));

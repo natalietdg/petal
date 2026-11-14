@@ -1,7 +1,7 @@
 // History: this past week's Claude sessions. Replaces the reader while open; Esc or Cmd+Y goes back.
 // The list and preview live in history-*.ts; this is the overlay shell that opens, refreshes and wires them.
 import * as overlays from './overlays';
-import { hooks, list, listTabs, search, sortToggle, state, view, type PreviewMode, type SortBy } from './history-state';
+import { headlessToggle, hooks, list, listTabs, search, sortToggle, state, view, type PreviewMode, type SortBy } from './history-state';
 import { renderList } from './history-list';
 import { renderPreview, repaintConclusion, repaintTitle } from './history-preview';
 import * as reply from './history-reply';
@@ -65,6 +65,11 @@ listTabs.addEventListener('click', (event) => {
   if (kind === 'all' || kind === 'favorites') setListKind(kind);
 });
 favorites.onChange(() => { if (isOpen()) renderList(); });
+headlessToggle.addEventListener('click', () => {
+  state.showHeadless = !state.showHeadless;
+  headlessToggle.setAttribute('aria-pressed', String(state.showHeadless));
+  renderList();
+});
 
 button.addEventListener('click', toggle);
 search.addEventListener('input', renderList);

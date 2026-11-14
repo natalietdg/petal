@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { buildResumeCommand, resumeArgs, shellQuote } from '../src/main/resume-command';
+import { buildStartInCommand, buildResumeCommand, resumeArgs, shellQuote } from '../src/main/resume-command';
 
 // What a POSIX shell actually sees after parsing the quoted word.
 const throughShell = (quoted: string): string => execFileSync('/bin/sh', ['-c', `printf '%s' ${quoted}`], { encoding: 'utf8' });
@@ -118,3 +118,12 @@ while time.time() < deadline:
     done, _ = os.waitpid(pid, os.WNOHANG)
     if done: break
 `;
+
+describe('buildStartInCommand', () => {
+  it('enters the quoted folder, then starts claude, and submits', () => {
+    expect(buildStartInCommand("/Users/n/it's here")).toBe("cd '/Users/n/it'\\''s here' && claude\r");
+    expect(buildStartInCommand('/Users/n', "'/opt/claude'")).toBe("cd '/Users/n' && '/opt/claude'\r");
+    expect(buildStartInCommand('/Users/n', 'claude', 'terse')).toBe("cd '/Users/n' && claude --agent 'terse'\r");
+    expect(buildStartInCommand('/Users/n', 'claude', "x'; rm -rf ~")).toBe("cd '/Users/n' && claude --agent 'x'\\''; rm -rf ~'\r");
+  });
+});

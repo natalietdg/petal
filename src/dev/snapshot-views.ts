@@ -66,13 +66,15 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
       steps: document.querySelectorAll('#flow-view .flow-step').length,
       quietRows: [...document.querySelectorAll('#flow-view .flow-quiet')].map((b) => b.textContent),
       waiting: document.querySelectorAll('#flow-view .flow-step.waiting').length,
-      actors: [...document.querySelectorAll('#flow-view .flow-actor')].map((a) => a.className.split(' ')[1]),
       finalNext: document.querySelector('#flow-view .flow-final')?.innerText ?? null,
-      decisions: [...document.querySelectorAll('#flow-view .flow-step .flow-decision')].map((d) => d.querySelector('.flow-actor').textContent + ' | ' + d.querySelector('.flow-decision-what').textContent),
+      flowDecisions: document.querySelectorAll('#flow-view .flow-decision').length,
       decisionsTab: Boolean(document.querySelector('#reader-head .view-toggle [data-view="decisions"], #decisions-view')),
     })`);
     log(`fixture flow ${id}: ${JSON.stringify(shape)}`);
-    log(`${shape.decisions.some((d: string) => d.startsWith('Decided by you')) && !shape.decisionsTab ? 'ok' : 'FAIL'} decisions shown on their step cards, no Decisions tab ${id}: ${JSON.stringify(shape.decisions)}`);
+    await js("PastelTerm.reader.setView('confirmed')");
+    const decided = await js("[...document.querySelectorAll('#confirmed-view .confirmed-decided .confirmed-actor')].map((a) => a.textContent)") as string[];
+    await js("PastelTerm.reader.setView('flow')");
+    log(`${shape.flowDecisions === 0 && decided.includes('Decided by you') && !shape.decisionsTab ? 'ok' : 'FAIL'} decisions shown in Confirmed › Decided, none on Flow cards, no Decisions tab ${id}: ${JSON.stringify(decided)}`);
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `flow-${id}` });
     const source = await exportAndPreview(kit, '#flow-view', `flow-export-${id}`, themes[id]);
     if (id === 'paleSky') {
@@ -451,7 +453,7 @@ async function echoCheck(kit: Kit, session: TabSession, echoedAtOnce: string[]):
 export async function customizeScreens(kit: Kit): Promise<void> {
   const { js, waitFor, log, wait, themes, applyTheme, verifiedCapture } = kit;
   const menuChecked = (label: string) => Menu.getApplicationMenu()?.items.flatMap((m): MenuItem[] => m.submenu?.items ?? []).find((i) => i.label === label)?.checked;
-  const sections = ['look', 'formatting', 'sessions', 'organizer', 'prompts', 'hook'];
+  const sections = ['look', 'formatting', 'claude', 'organizer', 'prompts', 'hook', 'advanced'];
   for (const id of THEMES) {
     applyTheme(id, { persist: false });
     await js("PastelTerm.customize.open('look')");
@@ -521,7 +523,7 @@ export async function errorRepliesCheck(kit: Kit): Promise<void> {
   log(`${reply.resolved && /Unknown setting/.test(reply.r?.error ?? '') ? 'ok' : 'FAIL'} invoke failure resolves as { error }: ${JSON.stringify(reply)}`);
 }
 
-// Sessions panel Close / Recently closed / over-limit, on fixture sessions only. Close goes through sessions:close,
+// Board Close / Recently closed / over-limit (the Sessions pill opens the Board), on fixture sessions only. Close goes through sessions:close,
 // which reads the real session files, finds none of these ids, and so never signals anything.
 export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   const { js, wait, waitFor, log, themes, applyTheme, verifiedCapture } = kit;
@@ -545,19 +547,21 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   await js('window.__confirms = 0; window.confirm = () => { window.__confirms += 1; return false; }; true');
   const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
   const state = () => js(`(() => {
+    const b = document.getElementById('board');
     const p = document.getElementById('sessions-panel');
+    const items = [...b.querySelectorAll('.board-item')].filter((i) => i.querySelector('.board-card')?.dataset.sessionId?.startsWith('f1f1f1f1'));
     return {
       pill: document.getElementById('sessions-pill').innerText.replace(/\\s+/g, ' ').trim(),
       pillOver: document.getElementById('sessions-pill').classList.contains('over-limit'),
-      rows: [...p.querySelectorAll('.session-row')].map((r) => r.dataset.sessionId),
-      closeControls: p.querySelectorAll('.session-row > .session-close').length,
-      closeInsideHead: p.querySelectorAll('.session-head .session-close, button button').length,
-      confirm: [...p.querySelectorAll('.session-confirm')].map((c) => c.innerText.replace(/\\s+/g, ' ').trim()),
+      rows: items.map((i) => i.querySelector('.board-card').dataset.sessionId),
+      closeControls: items.filter((i) => i.querySelector(':scope > .board-close')).length,
+      closeInsideHead: b.querySelectorAll('.board-card .board-close, button button').length,
+      confirm: [...b.querySelectorAll('.session-confirm, .board-close-confirm')].map((c) => c.innerText.replace(/\\s+/g, ' ').trim()),
       banner: p.querySelector('.sessions-limit-text')?.textContent ?? null,
       oldestButton: Boolean(p.querySelector('.sessions-limit-close')),
-      closedHeading: p.querySelector('.closed-heading')?.textContent ?? null,
-      closed: [...p.querySelectorAll('.closed-row')].map((r) => r.dataset.sessionId),
-      notes: [...p.querySelectorAll('.session-note')].map((n) => n.textContent),
+      closedHeading: b.querySelector('.board-closed .board-lane-title')?.textContent ?? null,
+      closed: [...b.querySelectorAll('.closed-row')].map((r) => r.dataset.sessionId),
+      notes: [...b.querySelectorAll('.session-note, .board-note')].map((n) => n.textContent),
       windowConfirms: window.__confirms,
     };
   })()`);
@@ -566,16 +570,16 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   const waitState = (test: (s: any) => boolean, ms = 6000) => waitFor(async () => { const s = await state(); return test(s) ? s : null; }, ms);
   const click = (selector: string) => js(`document.querySelector(${JSON.stringify(selector)}).click()`);
 
-  await panel('expandedIds.clear()');
+  await js('PastelTerm.sessionsBoard.resetFilters()');
   await panel('setOpen(true)');
   const shown = await waitState((s) => s.rows.length === 4 && s.closed.length === 2);
-  check(shown && shown.closeControls === 4 && shown.closeInsideHead === 0, `every row has its own Close beside the head, no nested buttons: ${JSON.stringify(shown)}`);
+  check(shown && shown.closeControls === 4 && shown.closeInsideHead === 0, `every card has its own Close under it, no nested buttons: ${JSON.stringify(shown)}`);
   check(shown && shown.pillOver && shown.pill.endsWith('4 open your limit is 2') && shown.banner === '4 open, your limit is 2' && shown.oldestButton,
     `over the limit: pill and banner say "4 open, your limit is 2", Close oldest idle offered: ${JSON.stringify({ pill: shown?.pill, banner: shown?.banner })}`);
   check(shown && shown.closedHeading === 'Recently closed' && shown.closed.join() === [fake(9), fake(8)].join(),
     `Recently closed lists the closed ones newest first, minus the one live again: ${JSON.stringify(shown?.closed)}`);
 
-  await click(`.session-row[data-session-id="${fake(2)}"] > .session-close`);
+  await click(`.board-item:has(> .board-card[data-session-id="${fake(2)}"]) > .board-close`);
   const asking = await waitState((s) => s.confirm.length === 1);
   check(asking && asking.confirm[0] === 'Close this Claude? Yes · No' && asking.windowConfirms === 0, `Close asks inline, not with window.confirm: ${JSON.stringify(asking?.confirm)} windowConfirms=${asking?.windowConfirms}`);
   await wait(2500); // a timer refresh must leave the open confirm in place
@@ -585,7 +589,7 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: true, name: `sessions-close-confirm-${id}` });
   }
   applyTheme('paleSky', { persist: false });
-  await click('.session-confirm .session-no');
+  await click('.board-close-confirm .session-no');
   const dismissed = await waitState((s) => s.confirm.length === 0);
   check(dismissed && dismissed.rows.length === 4, 'No dismisses the confirm and closes nothing');
 
@@ -617,14 +621,14 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   await click(`.closed-row[data-session-id="${fake(9)}"] .closed-reopen`);
   const reopened = await waitState((s) => s.notes.some((n: string) => /no longer on disk/.test(n)));
   check(reopened, `Reopen goes through history:resume (fixture id has no transcript, so it says so): ${JSON.stringify(reopened?.notes)}`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: true, name: 'sessions-closed-paleSky', scrollTo: '.closed-heading' });
+  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: true, name: 'sessions-closed-paleSky', scrollTo: '.board-closed' });
 
   panelFixture.sessions = null;
   await panel('setOpen(false)');
 }
 
 // Background agents on fixture sessions, with fake subagent transcripts in the scratch dir (never ~/.claude):
-// pill count, per-row badge, the compact list (max 4, "+N more"), and idle agents left out.
+// pill count, per-card badge on the Board, the compact list (max 4, "+N more"), and idle agents left out.
 export async function sessionsAgentsCheck(kit: Kit): Promise<void> {
   const { js, log, waitFor, themes, applyTheme, verifiedCapture } = kit;
   const check = (ok: unknown, what: string) => log(`${ok ? 'ok' : 'FAIL'} sessions agents: ${what}`);
@@ -664,18 +668,17 @@ export async function sessionsAgentsCheck(kit: Kit): Promise<void> {
   const panel = (code: string) => js(`PastelTerm.sessionsPanel.${code}`);
   const text = (sel: string) => `(document.querySelector(${JSON.stringify(sel)})?.innerText ?? '').replace(/\\s+/g, ' ').trim()`;
   const state = () => js(`(() => {
-    const p = document.getElementById('sessions-panel');
-    const row = (id) => p.querySelector('.session-row[data-session-id="' + id + '"]');
+    const p = document.getElementById('board');
+    const row = (id) => p.querySelector('.board-item:has(> .board-card[data-session-id="' + id + '"])');
     const agents = (id) => [...(row(id)?.querySelectorAll('.session-agent') ?? [])].map((a) => a.innerText.replace(/\\s+/g, ' ').trim());
     return {
       pill: ${text('#sessions-pill')},
       pillOver: document.getElementById('sessions-pill').classList.contains('over-limit'),
-      badges: [${[1, 2, 3].map((n) => `row(${JSON.stringify(fake(n))})?.querySelector('.session-agents-badge')?.textContent ?? null`).join(', ')}],
+      badges: [${[1, 2, 3].map((n) => `row(${JSON.stringify(fake(n))})?.querySelector('.board-agents')?.textContent ?? null`).join(', ')}],
       agents1: agents(${JSON.stringify(fake(1))}),
       agents2: agents(${JSON.stringify(fake(2))}),
       agents3: agents(${JSON.stringify(fake(3))}),
-      listInsideHead: p.querySelectorAll('.session-head .session-agents').length,
-      expanded: p.querySelectorAll('.session-detail').length,
+      listInsideHead: p.querySelectorAll('.board-card .session-agents').length,
     };
   })()`);
   // any: the probe's shape is built in the script above.
@@ -687,11 +690,11 @@ export async function sessionsAgentsCheck(kit: Kit): Promise<void> {
   const collapsed = await waitState((s) => s.pill.includes('agents'));
   check(collapsed?.pill === 'Sessions · 1 busy · 3 open · 6 agents', `collapsed pill counts agents across sessions (idle one left out): ${JSON.stringify(collapsed?.pill)}`);
 
-  await panel('expandedIds.clear()');
+  await js('PastelTerm.sessionsBoard.resetFilters()');
   await panel('setOpen(true)');
   const open = await waitState((s) => s.agents1.length > 0);
   check(open && open.badges.join() === '5 agents,1 agent,' && open.badges[2] === null, `row badges: ${JSON.stringify(open?.badges)}`);
-  check(open && open.expanded === 0 && open.listInsideHead === 0, 'agent lists show on collapsed rows, outside the head button');
+  check(open && open.listInsideHead === 0, 'agent lists show under each card, outside the card button');
   check(open && open.agents1.length === 5 && open.agents1[4] === '+1 more', `max 4 per row, then "+N more": ${JSON.stringify(open?.agents1)}`);
   check(open && open.agents1[0] === 'Show background agents in Sessions · Reading sessions-monitor.ts · just now',
     `task from the Agent description, latest step, age: ${JSON.stringify(open?.agents1[0])}`);
@@ -705,12 +708,6 @@ export async function sessionsAgentsCheck(kit: Kit): Promise<void> {
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: true, name: `sessions-agents-${id}` });
   }
   applyTheme('paleSky', { persist: false });
-
-  await panel(`expandedIds.add(${JSON.stringify(fake(1))})`);
-  await panel('refresh()');
-  const expanded = await waitState((s) => s.expanded === 1);
-  check(expanded && expanded.agents1.length === 5, 'an expanded row keeps its agent list beside the recent-activity detail');
-  await panel('expandedIds.clear()');
 
   configStore.save({ sessions: { maxOpen: 2 } });
   await panel('refresh()');

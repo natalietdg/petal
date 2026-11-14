@@ -286,19 +286,19 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   check(capped && capped.more === `+${total - AGENTS_LISTED} more` && cappedChip.text === `Agents · ${total}`, `past the cap: ${JSON.stringify(capped && { rows: capped.rows.length, more: capped.more, chip: cappedChip.text })}`);
   await key('Escape');
 
-  // 9. Sessions panel entry: another session's agent row opens in the panel.
+  // 9. Board entry (the Sessions pill opens it): another session's agent, listed under its card, opens in the panel.
   const root = path.join(path.dirname(dir), 'panel-agents');
   const otherId = 'a9a9a9a9-0000-4000-8000-00000000aa01';
   writeAgentsFixture(path.join(root, otherId));
   panelFixture.subagentsRoot = root;
   panelFixture.sessions = [{ pid: 0, sessionId: otherId, cwd: '/tmp/petal-fixture/agents', kind: 'interactive', status: 'busy', name: 'Agents elsewhere', updatedAt: Date.now() }];
   await js('PastelTerm.sessionsPanel.setOpen(true)');
-  const row = `#sessions-panel .session-row[data-session-id="${otherId}"] .session-agent[data-agent-id="${RUNNING_ID}"]`;
-  check(await waitFor(() => js(`Boolean(document.querySelector('${row}'))`), 5000), 'Sessions panel lists the other session\'s agent');
+  const row = `#board .board-item:has(> .board-card[data-session-id="${otherId}"]) .session-agent[data-agent-id="${RUNNING_ID}"]`;
+  check(await waitFor(() => js(`Boolean(document.querySelector('${row}'))`), 5000), 'the Board card lists the other session\'s agent');
   await js(`document.querySelector('${row}').click()`);
   const fromPanel = await waitFor(async () => { const p = await panel(); return p.open && p.steps.length === 2 && p.title === 'Tidy the print styles' ? p : null; }, 5000);
-  check(fromPanel?.id === RUNNING_ID && (await js("document.getElementById('sessions-panel').hidden")), `clicking it closes Sessions and opens the agent panel: ${JSON.stringify(fromPanel?.title)}`);
-  check(fromPanel && !(await menu()).open && !(await js("document.getElementById('agent-panel').hidden")), 'the Sessions row and the header menu open the same agent panel');
+  check(fromPanel?.id === RUNNING_ID && (await js("document.getElementById('sessions-panel').hidden")), `clicking it closes the Board and opens the agent panel: ${JSON.stringify(fromPanel?.title)}`);
+  check(fromPanel && !(await menu()).open && !(await js("document.getElementById('agent-panel').hidden")), 'the Board card and the header menu open the same agent panel');
   await js('PastelTerm.agentPanel.hide()');
   await js('PastelTerm.sessionsPanel.setOpen(true)');
   await waitFor(() => js(`Boolean(document.querySelector('${row}'))`), 5000);
@@ -306,7 +306,7 @@ export async function agentsCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   check(keyable.focused && keyable.role === 'button', `an agent row takes keyboard focus as a button: ${JSON.stringify(keyable)}`);
   await key('Enter');
   const byEnter = await waitFor(async () => { const p = await panel(); return p.open && p.id === RUNNING_ID && p.steps.length ? p : null; }, 5000);
-  check(byEnter && (await js("document.getElementById('sessions-panel').hidden")), 'Enter on a Sessions agent row opens the agent panel too');
+  check(byEnter && (await js("document.getElementById('sessions-panel').hidden")), 'Enter on a Board agent row opens the agent panel too');
   await js('PastelTerm.agentPanel.hide()');
 
   panelFixture.sessions = null;

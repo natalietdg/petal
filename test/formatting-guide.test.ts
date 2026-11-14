@@ -13,6 +13,7 @@ const NOT_A_SHAPE: Record<string, string> = {
   'prose': 'the root of every rendered reply',
   'callout': 'shared by every label callout; each label has its own row',
   'pill': "a callout's label chip, checked in each callout row",
+  'advanced-only': 'visibility switch (Customize › Advanced) on Station, Loop and Task rows, not a look',
   'rail': 'layout wrapper for quotes in a section; Customize keeps quotes in the flow',
   'headline-long': 'automatic size step of the headline',
   'headline-very-long': 'automatic size step of the headline',

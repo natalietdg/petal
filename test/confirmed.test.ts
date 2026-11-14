@@ -1,6 +1,6 @@
 // The Confirmed page: which lines of a session's replies land in Verified, Decided, Done and In progress.
 import { describe, expect, it } from 'vitest';
-import { confirmedCount, confirmedItems, type ConfirmedReply } from '../src/shared/confirmed';
+import { auditRows, confirmedCount, confirmedItems, pageGroups, type ConfirmedReply } from '../src/shared/confirmed';
 
 const reply = (id: string, markdown: string, prompt = 'go'): ConfirmedReply => ({ id, markdown, prompt });
 
@@ -84,5 +84,47 @@ describe('confirmedItems', () => {
 
   it('leaves a prose "Done:" alone; only the bold label counts', () => {
     expect(confirmedItems([reply('r1', 'Done: this is just a sentence.')]).done).toEqual([]);
+  });
+});
+
+const ledger = (...rows: string[]): string => ['**Logged.**', '', '```', ...rows, '```'].join('\n');
+
+describe('auditRows', () => {
+  it('reads ledger rows only inside fenced code', () => {
+    const markdown = ['#1 | 2026-10-14 | DECISION | Natalie | outside', ledger('#2 | 2026-10-14 | ACTION | Claude | ran it | src/a.ts')].join('\n');
+    expect(auditRows(markdown)).toEqual([{ n: 2, date: '2026-10-14', kind: 'ACTION', actor: 'Claude', what: 'ran it' }]);
+  });
+});
+
+describe('ledger decisions under Decided', () => {
+  it('lists DECISION rows with their marks and keeps ACTION rows off', () => {
+    const groups = confirmedItems([reply('r1', ledger('#1 | 2026-10-14 | ACTION | Claude | x', '#2 | 2026-10-14 | DECISION | Natalie | ship it'))]);
+    expect(groups.decided).toEqual([{ text: 'Ship it', context: 'Logged.', replyId: 'r1', ledger: { n: 2, actor: 'Natalie', recommended: false, superseded: false } }]);
+  });
+
+  it('marks a row a later one supersedes, across replies', () => {
+    const groups = confirmedItems([
+      reply('r2', ledger('#7 | 2026-10-15 | DECISION | Natalie | Use Postgres (supersedes #3)')),
+      reply('r1', ledger('#3 | 2026-10-14 | DECISION | Natalie | Use Redis')),
+    ]);
+    expect(groups.decided.map((d) => [d.ledger?.n, d.ledger?.superseded])).toEqual([[7, false], [3, true]]);
+  });
+
+  it('notes a Claude recommendation and drops it from the text', () => {
+    const groups = confirmedItems([reply('r1', ledger('#4 | 2026-10-14 | DECISION | Natalie | Keep the flag (Claude recommended, she approved)'))]);
+    expect(groups.decided[0]).toMatchObject({ text: 'Keep the flag', ledger: { recommended: true } });
+  });
+});
+
+describe('pageGroups', () => {
+  it('moves open Decides from In progress to the top of Decided, leaving Doing in progress', () => {
+    const groups = confirmedItems([
+      reply('r2', '**Doing:** building\n\n**Decide:** Maple or Birch?'),
+      reply('r1', '**Decide:** ship today?', 'yes'),
+    ]);
+    const page = pageGroups(groups);
+    expect(page.decided.map((d) => [d.text, d.pill ?? d.answer])).toEqual([['Maple or Birch?', 'Waiting on you'], ['Ship today?', 'go']]);
+    expect(page.progress.map((d) => d.pill)).toEqual(['In progress']);
+    expect(groups.progress.map((d) => d.pill)).toEqual(['In progress', 'Waiting on you']);
   });
 });

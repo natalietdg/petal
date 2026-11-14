@@ -82,7 +82,7 @@ export async function shortcutsCheck(kit: Kit, win: BrowserWindow): Promise<void
 
   // Customize › Get started has a small Shortcuts link.
   await js("PastelTerm.customize.open('start')");
-  check(await waitFor(() => js("document.querySelector('#customize-body .cz-open-shortcuts') ? true : null"), 5000), 'Customize › Get started has a Shortcuts link');
+  check(await waitFor(() => js("document.querySelector('#customize-body .cz-open-shortcuts') ? true : null"), 5000), 'Customize › First steps has a Shortcuts link');
   await js("document.querySelector('#customize-body .cz-open-shortcuts').click()");
   check(await waitFor(async () => ((await state()).current === 'shortcuts' || null), 3000), 'the link opens the guide');
   await js('PastelTerm.shortcuts.close()');

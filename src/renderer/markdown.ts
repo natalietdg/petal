@@ -60,11 +60,11 @@ const statusBlock: TokenizerAndRendererExtension = {
   },
   renderer(token) {
     const rows = (token.rows as StatusRow[]).map((row) => row.key === 'station'
-      ? `<div class="status-row status-station"><span class="status-chip">Station</span>${stationBarHtml(row.station)}</div>`
+      ? `<div class="status-row status-station advanced-only"><span class="status-chip">Station</span>${stationBarHtml(row.station)}</div>`
       : row.key === 'loop'
-      ? `<div class="status-row status-station status-loop"><span class="status-chip">Loop</span>${loopBarHtml(row.loop)}</div>`
+      ? `<div class="status-row status-station status-loop advanced-only"><span class="status-chip">Loop</span>${loopBarHtml(row.loop)}</div>`
       : row.key === 'task'
-      ? `<div class="status-row status-task"><span class="status-chip">Task</span><span class="status-text">${escapeHtml(row.task.title)} · ${TASK_STATE_WORDS[row.task.state]}</span></div>`
+      ? `<div class="status-row status-task advanced-only"><span class="status-chip">Task</span><span class="status-text">${escapeHtml(row.task.title)} · ${TASK_STATE_WORDS[row.task.state]}</span></div>`
       : `<div class="status-row status-${row.key}"><span class="status-chip">${STATUS_TITLES[row.key]}</span><span class="status-text">${this.parser.parseInline(row.tokens)}</span></div>`);
     return `<div class="status-block">${rows.join('')}</div>`;
   },

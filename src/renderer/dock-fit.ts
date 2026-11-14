@@ -12,7 +12,6 @@ const ROW_TOLERANCE_PX = 4; // same as the snapshot's dock check
 const STEPS = ['fit-snug', 'fit-tight', 'fit-icons']; // cumulative classes, loosest first; sessions.css styles each
 const ICONS = 'fit-icons';
 const dock = byId('sessions-dock');
-const panel = byId('sessions-panel'); // lives inside the dock; its rows changing never moves the buttons
 let shrinkable: Shrinkable | null = null;
 let queued = false;
 
@@ -56,9 +55,7 @@ function schedule(): void {
 }
 
 // A button shown, hidden, added or relabelled (the Sessions pill's count) can change what fits.
-const watcher = new MutationObserver((records) => {
-  if (records.some((r) => !panel.contains(r.target))) schedule();
-});
+const watcher = new MutationObserver(schedule);
 
 const fits = (): boolean => (shrinkable ? shrinkable.tryForms(isOneRow) : isOneRow());
 

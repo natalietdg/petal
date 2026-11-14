@@ -6,6 +6,7 @@ import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as composer from './composer';
 import * as agentTerms from './agent-terms';
+import * as advanced from './advanced';
 import { byId, el, isIpcError } from './dom';
 import { OPEN_TEST_RUN_EVENT } from './conclusion-banner';
 import { historyList, stackList, stageResults, suiteStrip, trend, type FixWhere } from './testing-view';
@@ -85,6 +86,8 @@ function zone(label: string, ...children: HTMLElement[]): HTMLElement {
 const suiteZone = zone('Suite', head, confirmBox, changeBox, filterBox, strip, editor, results);
 const scenariosZone = zone('Scenarios & bugs', el('h3', 'tst-zone-title', 'Scenarios & bugs'), criteriaBox);
 const agentsZone = zone('Agents', el('h3', 'tst-zone-title', 'Agents'), pickerBox, loopPanel.element); // the lanes follow, below
+scenariosZone.classList.add('advanced-only'); // scenarios, manual checks, ADO copy and the bug queue are Advanced tools
+agentsZone.classList.add('advanced-only'); // the task picker, test loop and its agents' lanes too
 main.append(suiteZone, scenariosZone, agentsZone);
 body.append(main, side);
 view.append(title, note, body);
@@ -172,9 +175,10 @@ function drawChange(): void {
 function drawFilters(): void {
   filterBox.replaceChildren();
   const p = suite();
-  filterBox.hidden = !data?.project || (!p && !criteria) || draft !== null;
+  filterBox.hidden = !data?.project || (!p && !(criteria && advanced.isOn())) || draft !== null;
   if (filterBox.hidden) return;
-  filterBox.append(filterBar(levels, criteria ? ticketsOf(criteria) : [], ticket, {
+  const tickets = criteria && advanced.isOn() ? ticketsOf(criteria) : []; // ticket chips filter the Advanced scenarios
+  filterBox.append(filterBar(levels, tickets, ticket, {
     level: (level) => { if (!levels.delete(level)) levels.add(level); selectedStage = null; drawAll(); filterBox.querySelector<HTMLElement>(`.tst-chip.is-${level}`)?.focus(); },
     ticket: (next) => { ticket = next; drawAll(); },
     runTicket: ticket && !taskRunning() ? () => void runScenarios({ ticket: ticket as string }) : null,
@@ -446,7 +450,7 @@ const fixHandlers = {
   fixStage: (stage: StageResult, where: FixWhere) => fix(stage, null, where),
   fixEstimate: (stage: StageResult): string | null => {
     const task = shownTask();
-    if (!task) return null;
+    if (!task || !advanced.isOn()) return null; // the estimate is the bug fix agent's
     const prompt = buildFixPrompt({ stage: stage.name, command: stage.command, tests: stage.tests, output: stage.output });
     return agentEstimateText(agentTokens(buildSentFixerBrief({ taskId: task.id, taskTitle: task.title, bugName: stage.name, prompt }).length, FIX_TURNS));
   },
@@ -494,7 +498,8 @@ async function chooseSession(sessionId: string): Promise<void> {
 
 // Each Claude session's distillation goes under that session's newest row in History, once. The loop's testing agent
 // shows its live rounds too, and its threads are asked through main, which resumes it when no claude runs it.
-function historyExtras(): (row: RunRow) => HTMLElement | null {
+function historyExtras(): ((row: RunRow) => HTMLElement | null) | undefined {
+  if (!advanced.isOn()) return undefined; // distillation is an Advanced tool
   const groups = new Map(bySession(taskDistillation()).map((g) => [g.sessionId, g.records]));
   const tester = loopDistillation();
   if (tester.sessionId) groups.set(tester.sessionId, tester.distill);
@@ -854,6 +859,7 @@ window.pastel.testing.onRunUpdate(({ run: updated }) => {
 // A Loop line or a busy flip in the testing agent's terminal shows at once, not on the next poll.
 window.pastel.onReplies((update) => { if (isOpen() && data && update.tabId === agents.testerHost()) queueMicrotask(drawLoop); });
 byId('testing-button').addEventListener('click', toggle);
+advanced.onChange(() => { if (isOpen()) drawAll(); }); // rows built from advanced.isOn() redraw when it flips
 // A run named in a conclusion's This session line: open Testing on it, when it is this project's.
 window.addEventListener(OPEN_TEST_RUN_EVENT, (event) => void openRun(String((event as CustomEvent<string>).detail ?? '')));
 export async function openRun(runId: string): Promise<void> {

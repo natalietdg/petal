@@ -54,7 +54,7 @@ export function petalSkillsCard(): HTMLDivElement {
     list.append(...petalSkills.skills.map(skillRow));
     children.push(list);
   } else {
-    children.push(el('p', 'cz-empty', 'Allow Petal to read your Claude folder under Get started to install these.'));
+    children.push(el('p', 'cz-empty', 'Allow Petal to read your Claude folder under Customize › First steps to install these.'));
   }
   if (petalSkills.installable) {
     const anyMissing = petalSkills.skills.some((s) => s.state === 'missing');

@@ -9,6 +9,9 @@ import { handle } from './ipc';
 import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
 import { agentCloses, concludeCloses, isSnapshotRun } from './snapshot-mode';
 import { boardDetails } from './sessions-board';
+import { resolveLinks } from './subsessions';
+import { isHeadless } from './claude-session';
+import * as needsYouHub from './needs-you-hub';
 import type { ActiveSession } from './tab-session';
 import type { ConcludedSession } from './reader-feed';
 import type { AgentCloseResult } from '../shared/ipc';
@@ -23,19 +26,21 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
   handle('sessions:snapshot', async (event, { detailed, expandedIds, board }) => {
     const live = panelSessions();
     const own = activeSession(event.sender.id)?.feed.session;
-    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId, nameOf }, live, subagentsDirOf);
+    const known = isSnapshotRun() ? [] : await resolveLinks(live);
+    const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId, nameOf }, live, subagentsDirOf, known);
+    if (base.rows) needsYouHub.setChildren(base.rows, base.orphans ?? []);
     const { maxOpen } = configStore.load().sessions;
     const { running, total } = await ownAgents(own);
     const here = { running, total };
     if (!detailed) return { ...base, maxOpen, here };
-    const details = board ? await boardDetails(live) : null;
+    const details = board ? await boardDetails(live.filter((s) => !isHeadless(s))) : null;
     return {
       ...base,
       rows: details ? base.rows?.map((row) => ({ ...row, board: details.get(row.sessionId) })) : base.rows,
       maxOpen,
       here,
       closed: closedStore.reopenable(live.map((s) => s.sessionId)).map((c) => ({ ...c, title: nameOf(c), cwd: sessionsMonitor.shortCwd(c.cwd) })),
-      oldestIdleId: sessionsMonitor.oldestIdle(live)?.sessionId ?? null,
+      oldestIdleId: sessionsMonitor.oldestIdle(live.filter((s) => !isHeadless(s)))?.sessionId ?? null,
     };
   });
 

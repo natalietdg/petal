@@ -95,5 +95,3 @@
 @keyframes tr-eye { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.35; } }
 
 /* The birthday lines under the day's reading (tarot-reading.ts); the tip and popover themselves are in scene-card.css. */
-.tarot-popover .tarot-birth { margin-top: 8px; font-size: 12px; font-style: italic; }
-.tarot-popover .tarot-birth + .tarot-birth { margin-top: 2px; }

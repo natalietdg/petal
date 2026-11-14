@@ -4,6 +4,7 @@ import { spawnShell } from './pty';
 import { ReaderFeed, type ReplyFinished } from './reader-feed';
 import { closeConcluded } from './sessions-ipc';
 import { shouldCloseConcludedTab } from './conclude-tab';
+import { confirmConcludeClose } from './conclude-confirm';
 import { foregroundJobIn } from './updater';
 import * as responseHook from './response-hook';
 import * as organizer from './session-organizer';
@@ -107,7 +108,7 @@ function relabelTabs(): void {
   if (changed) for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'session:titles');
 }
 
-const claudeInstalled = async (): Promise<boolean> =>
+export const claudeInstalled = async (): Promise<boolean> =>
   (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath()));
 
 // Add Session's `claude`, typed only when Claude Code is installed, so a missing one never prints an error.
@@ -198,6 +199,7 @@ function closeSession({ pty, feed }: TabSession): void {
 // Her "conclude" closes that tab's claude, then the tab itself once its shell is idle; pty exit removes it as usual.
 async function concludeTab(session: TabSession, target: ConcludedSession): Promise<void> {
   harvest(session.feed.session);
+  if (!(await confirmConcludeClose(session.contentsId, stripTabsOf(session.contentsId).length))) return; // first conclude asks
   if (!(await closeConcluded(target))) return;
   await new Promise((resolve) => setTimeout(resolve, SHELL_SETTLE_MS));
   if (!sessions.has(tabKey(session.contentsId, session.tabId))) return;

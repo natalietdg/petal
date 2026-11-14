@@ -1,11 +1,11 @@
-// On quit, a resume note per open tab in ~/.petal/resume/<stamp>/ plus index.md. Bounded in time, never throws into quit.
+// On quit, a resume note per open tab in ~/.petal/resume/<stamp>/ plus index.md and sessions.json. Bounded in time, never throws into quit.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { petalDir } from './petal-home';
 import { repoBranch, repoRoot } from './repo-label';
 import { tabLabel } from './tabs';
-import { buildIndex, buildResumeNote, folderStamp, NO_GIT, noteFileName, type IndexEntry, type ResumeGit, type ResumeSession } from './resume-notes-text';
+import { buildIndex, buildResumeNote, folderStamp, NO_GIT, notedSessions, noteFileName, type IndexEntry, type ResumeGit, type ResumeSession } from './resume-notes-text';
 import type { TabSession, TabSessions } from './tab-session';
 
 export const BUDGET_MS = 3000; // the longest quit waits for the notes
@@ -14,6 +14,7 @@ const WRITE_RESERVE_MS = 500; // kept back from git for writing the files
 const CLOSING_CAPTURE_MS = 10_000; // a last-window capture older than this belongs to a close that didn't quit
 
 export const resumeRoot = (): string => path.join(petalDir(), 'resume');
+export const SESSIONS_FILE = 'sessions.json';
 
 // What one tab showed at this moment; synchronous, so it can run while a window is closing.
 export function captureTab(tab: TabSession): ResumeSession {
@@ -86,6 +87,7 @@ export async function writeResumeNotes(tabs: readonly ResumeSession[], { root = 
     await fs.writeFile(path.join(dir, file), buildResumeNote({ ...session, sessionId: session.sessionId }, git));
   }));
   await fs.writeFile(path.join(dir, 'index.md'), buildIndex(entries, now));
+  await fs.writeFile(path.join(dir, SESSIONS_FILE), JSON.stringify(notedSessions(entries), null, 2)); // what the next launch lists
   return { dir, files: entries.flatMap((e) => (e.file ? [e.file] : [])), ms: Date.now() - started };
 }
 

@@ -43,13 +43,15 @@ function step(now: number): void {
 
 const cat = document.getElementById('cat');
 let blurredAt: number | null = document.hasFocus() ? null : performance.now();
+let activeAt = performance.now(); // last input or Claude busy/idle change
 
-// Hidden, nothing looping, or left in the background while Claude rests: no ticks at all.
+// Hidden, nothing looping, left in the background or idle while Claude rests: no ticks at all.
 function wanted(now: number): boolean {
   return clockShouldRun({
     visible: document.visibilityState === 'visible',
     loops: looping().length,
     unfocusedMs: blurredAt === null ? 0 : now - blurredAt,
+    idleMs: now - activeAt,
     working: cat?.classList.contains('busy') ?? false,
   });
 }
@@ -82,9 +84,12 @@ function tickSoon(): void {
 document.addEventListener('animationstart', tickSoon);
 document.addEventListener('animationcancel', relist); // a cancelled animation must never be written again; the next tick stops if none are left
 // Busy/idle keeps an animation's name but can swap its timing (h-glow 3.6s -> 1.8s) with no event: re-read it.
-const forget = (): void => { held = new WeakMap(); relist(); refresh(); };
+const forget = (): void => { held = new WeakMap(); relist(); activeAt = performance.now(); refresh(); };
 if (cat) new MutationObserver(forget).observe(cat, { attributes: true, attributeFilter: ['class'] });
 document.addEventListener('visibilitychange', refresh);
 window.addEventListener('blur', () => { blurredAt = performance.now(); });
-window.addEventListener('focus', () => { blurredAt = null; refresh(); });
+window.addEventListener('focus', () => { blurredAt = null; activeAt = performance.now(); refresh(); });
+// Any input wakes a clock the idle limit stopped; while it runs, this is one assignment.
+const wake = (): void => { activeAt = performance.now(); if (!timer) refresh(); };
+for (const type of ['keydown', 'pointerdown', 'pointermove', 'wheel']) window.addEventListener(type, wake, { capture: true, passive: true });
 refresh();

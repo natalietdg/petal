@@ -22,7 +22,7 @@ function flowSection(view: SessionPrsView): HTMLElement[] {
   const caption = !order
     ? 'Propose a deploy order to draw how the services depend on each other.'
     : order.links.length ? 'Arrows point from a service to the one it depends on. Inferred, like the order.' : 'The reviewer found no dependencies between these services.';
-  return [el('h3', 'prs-heading', 'How they connect'), flowHost, el('p', 'prs-muted', caption)];
+  return [el('h3', 'prs-heading', 'How they connect'), flowHost, el('p', `prs-muted${order ? '' : ' advanced-only'}`, caption)]; // the no-order caption points at the Advanced deploy order
 }
 
 function prCard(view: SessionPrsView, pr: SessionPr): HTMLElement {

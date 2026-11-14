@@ -1,6 +1,6 @@
 // The repo index behind Open Repo: the last scan of the home folder, kept in <userData>/repos.json.
 // Reads answer from the cache at once and start a background rescan when it is older than 10 minutes.
-// No scan runs until the Claude folder choice is "allowed": a fresh Mac never sees folder prompts unasked.
+// The launch scan waits for the Claude folder answer, so a fresh Mac sees no folder prompts unasked; opening the palette scans either way.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,11 +58,16 @@ export function refresh(): Promise<RepoIndex> {
 
 export const isScanning = (): boolean => running !== null;
 
+// The palette calls this when she opens it; the repo scan never reads ~/.claude, so it needs no folder answer.
 export function refreshIfStale(now = Date.now()): void {
-  if (!claudeFolderAllowed()) return;
   const index = current();
   if (index && now - index.scannedAt < STALE_AFTER_MS) return;
   refresh().catch((error: Error) => console.error('[petal] repo scan failed:', error));
+}
+
+// On launch, before she has asked for anything: only with the folder allowed.
+export function refreshOnLaunch(): void {
+  if (claudeFolderAllowed()) refreshIfStale();
 }
 
 // Only a folder the scan itself found can be opened; the renderer's string is never trusted.
@@ -72,6 +77,17 @@ export const findIndexed = (index: RepoIndex | null, requested: unknown): RepoEn
 export const buildCdCommand = (dir: string): string => `cd ${shellQuote(dir)}\r`;
 
 export type RepoOpenPlan = { note: string } | { command: string; newTab: boolean };
+
+// Where Add Session's new claude starts. 'pick' leaves the folder dialog to the caller; a repo must be one the scan found.
+export type RepoStartPlan = { note: string } | { cwd: string } | 'pick';
+export function planRepoStart(index: RepoIndex | null, target: unknown, home: string): RepoStartPlan {
+  const kind = typeof target === 'object' && target !== null ? (target as { kind?: unknown }).kind : undefined;
+  if (kind === 'home') return { cwd: home };
+  if (kind === 'pick') return 'pick';
+  if (kind !== 'repo') return { note: 'Nothing chosen.' };
+  const repo = findIndexed(index, (target as { path?: unknown }).path);
+  return repo ? { cwd: repo.path } : { note: 'That folder isn’t in the repo index. Reopen the list to rescan.' };
+}
 
 // Typed into this tab's shell, or into a new tab's when Claude is running here (it would read the line as a prompt).
 export function planRepoOpen(index: RepoIndex | null, requested: unknown, claudeLive: boolean): RepoOpenPlan {

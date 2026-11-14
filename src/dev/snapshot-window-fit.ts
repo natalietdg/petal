@@ -34,8 +34,8 @@ const FIT = `(() => {
   checkIn('reader area', document.getElementById('reader-area'));
   checkIn('header row', document.querySelector('#reader-head .reader-head-row'));
   checkIn('sessions chip', document.getElementById('sessions-pill'));
-  checkIn('sessions panel', document.getElementById('sessions-panel'));
-  for (const b of document.querySelectorAll('#sessions-panel .session-status')) checkIn('panel badge', b, true); // rows scroll inside the panel
+  checkIn('board', document.getElementById('board'));
+  for (const b of document.querySelectorAll('#board .board-status')) checkIn('card status', b, true); // cards scroll inside the Board
   checkIn('notes panel', document.getElementById('notes-panel'));
   checkIn('agent panel', document.getElementById('agent-panel'));
   checkIn('history', document.getElementById('history'));
@@ -71,7 +71,7 @@ export async function windowFitCheck(kit: Kit, win: BrowserWindow): Promise<void
   const saved = { ...panelFixture };
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
-  // Each surface on its own: the reader with the Sessions panel open, Notes open, History open.
+  // Each surface on its own: the Board (the Sessions pill opens it), Notes open, History open.
   const STATES: [string, string, string][] = [
     ['panel open', 'PastelTerm.sessionsPanel.setOpen(true)', 'PastelTerm.sessionsPanel.setOpen(false)'],
     ['Notes open', 'PastelTerm.notesPanel.setOpen(true)', 'PastelTerm.notesPanel.setOpen(false)'],

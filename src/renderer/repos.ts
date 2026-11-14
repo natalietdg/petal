@@ -1,14 +1,23 @@
 // Open Repo (⌘O): a palette over the reader that fuzzy-finds a git repo in her home folder and cd's the tab into it.
 // Main does the typing; when Claude is running in the tab, main opens a new tab for it instead.
+// Add Session opens the same palette in session mode: Enter starts a new claude in a new tab in the chosen folder.
+// Both modes show the same search, rows and footer; only the hint line, Start as and what Enter does differ.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
-import * as consent from './consent';
 import { byId, el, isIpcError } from './dom';
 import { matchesAnyName, rankRepos } from '../shared/repo-match';
-import type { ReposList } from '../shared/ipc';
+import type { ReposList, RepoStartTarget } from '../shared/ipc';
 import type { TabId } from '../shared/types';
 
 type Repo = ReposList['repos'][number];
+// Two rows under the repos in both modes: home, and a folder chosen in a dialog.
+interface Extra { kind: 'home' | 'pick'; name: string; shortPath: string; branch: null }
+type Row = Repo | Extra;
+const EXTRAS: Extra[] = [
+  { kind: 'home', name: 'Home folder', shortPath: '~', branch: null },
+  { kind: 'pick', name: 'Other folder…', shortPath: 'choose in Finder', branch: null },
+];
+type Mode = 'open' | 'session';
 
 const MAX_ROWS = 50;
 const RESCAN_POLL_MS = 1500;
@@ -17,25 +26,32 @@ const view = byId('repos');
 const card = el('div', 'repos-card');
 const search = el('input', 'repos-search');
 search.type = 'text';
-search.placeholder = 'Open a repo…';
+search.placeholder = 'Find a repo or folder…';
 search.setAttribute('aria-label', 'Search repos');
 search.spellcheck = false;
 const hint = el('p', 'repos-hint');
+// Session mode only: plain Claude, or one of her agents in ~/.claude/agents (claude --agent <name>).
+const startAs = el('label', 'repos-start-as');
+const agentPick = el('select', 'repos-agent');
+startAs.append(el('span', null, 'Start as'), agentPick);
+startAs.hidden = true;
 const list = el('div', 'repos-list');
 list.setAttribute('role', 'listbox');
 const status = el('p', 'repos-status');
-card.append(search, hint, list, status);
+card.append(search, startAs, hint, list, status);
 view.append(card);
 
 let repos: Repo[] = [];
-let shown: Repo[] = [];
+let shown: Row[] = [];
+let mode: Mode = 'open';
 let selected = 0;
 let tabId: TabId | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const isOpen = (): boolean => overlays.isOpen('repos');
+export const isPickingSessionFolder = (): boolean => isOpen() && mode === 'session';
 
-function row(repo: Repo, index: number): HTMLButtonElement {
+function row(repo: Row, index: number): HTMLButtonElement {
   const button = el('button', 'repos-row');
   button.type = 'button';
   button.setAttribute('role', 'option');
@@ -50,17 +66,13 @@ function row(repo: Repo, index: number): HTMLButtonElement {
 }
 
 function render(): void {
-  shown = rankRepos(search.value, repos).slice(0, MAX_ROWS);
+  shown = [...rankRepos(search.value, repos).slice(0, MAX_ROWS), ...EXTRAS];
   selected = Math.min(selected, Math.max(shown.length - 1, 0));
   list.replaceChildren(...shown.map(row));
   list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 
-const FOLDER_OFF = 'Petal finds your repos once it can read your Claude folder. Allow it under Customize › Get started.';
-
-// folderAllowed: no scan runs until she allows the Claude folder, so an empty list then means "not yet", not "none".
-function describe(result: ReposList, folderAllowed: boolean): string {
-  if (!result.repos.length && !folderAllowed) return FOLDER_OFF;
+function describe(result: ReposList): string {
   if (!result.repos.length) return result.scanning ? 'Looking for repos in your home folder…' : 'No git repos found in your home folder.';
   const count = `${result.repos.length} repo${result.repos.length === 1 ? '' : 's'}`;
   return result.scanning ? `${count} · rescanning…` : count;
@@ -69,34 +81,57 @@ function describe(result: ReposList, folderAllowed: boolean): string {
 async function load(): Promise<void> {
   clearTimeout(pollTimer);
   if (!tabId) return;
-  const [result, folderChoice] = await Promise.all([window.pastel.repos.list(tabId), consent.choice()]);
+  const result = await window.pastel.repos.list(tabId);
   if (!isOpen()) return;
   if (isIpcError(result)) {
     status.textContent = `Couldn’t list repos: ${result.error}`;
     return;
   }
   repos = result.repos;
-  hint.textContent = result.claudeLive ? 'Claude is running in this tab, so the repo opens in a new tab.' : 'Enter switches this tab’s shell into the repo.';
-  hint.classList.toggle('new-tab', result.claudeLive);
-  status.textContent = describe(result, folderChoice === 'allowed');
+  hint.textContent = mode === 'session' ? SESSION_HINT : result.claudeLive ? 'Claude is running in this tab, so the folder opens in a new tab.' : 'Enter switches this tab’s shell into that folder.';
+  hint.classList.toggle('new-tab', mode === 'session' || result.claudeLive);
+  status.textContent = describe(result);
   render();
   if (result.scanning) pollTimer = setTimeout(load, RESCAN_POLL_MS);
 }
 
-async function choose(repo: Repo | undefined): Promise<void> {
-  if (!repo || !tabId) return;
-  const result = await window.pastel.repos.open(tabId, repo.path);
+const targetOf = (row: Row): RepoStartTarget => ('kind' in row ? { kind: row.kind } : { kind: 'repo', path: row.path });
+
+async function choose(row: Row | undefined): Promise<void> {
+  if (!row || !tabId) return;
+  const target = targetOf(row);
+  const result = mode === 'session' ? await window.pastel.repos.start(tabId, target, agentPick.value || null) : await window.pastel.repos.open(tabId, target);
   if (isIpcError(result)) status.textContent = `Couldn’t open it: ${result.error}`;
   else if ('note' in result) status.textContent = result.note;
   else close();
 }
 
-export function open(query = ''): void {
+const SESSION_HINT = 'Enter starts Claude in a new tab, in that folder.';
+
+// Lists her agents each time the palette opens, so a file added a minute ago is there.
+async function loadAgents(): Promise<void> {
+  const agents = await window.pastel.repos.agents();
+  const options = [el('option', null, 'Claude')];
+  options[0].value = '';
+  if (!isIpcError(agents)) for (const agent of agents) {
+    const option = el('option', null, agent.description ? `${agent.name} · ${agent.description}` : agent.name);
+    option.value = agent.name;
+    options.push(option);
+  }
+  agentPick.replaceChildren(...options);
+  startAs.hidden = mode !== 'session' || options.length === 1;
+}
+
+export function open(query = '', nextMode: Mode = 'open'): void {
+  mode = nextMode;
   tabId = tabs.active()?.id ?? null;
   if (!overlays.show('repos')) return;
   search.value = query;
   selected = 0;
   status.textContent = '';
+  hint.textContent = mode === 'session' ? SESSION_HINT : ''; // session mode's hint does not wait on the list
+  startAs.hidden = true;
+  if (mode === 'session') void loadAgents();
   render();
   search.focus();
   search.select();
@@ -109,6 +144,9 @@ export function close(): void {
 }
 
 export const toggle = (): void => (isOpen() ? close() : open());
+
+// Add Session: she picks the folder every time, so no session is born in home by accident.
+export const openForNewSession = (): void => open('', 'session');
 
 // The reply box's `checkout <name>`: only a name some repo actually matches opens the palette.
 export async function offers(forTab: TabId, query: string): Promise<boolean> {

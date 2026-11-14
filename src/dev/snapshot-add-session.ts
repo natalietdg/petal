@@ -1,7 +1,21 @@
-// Add Session, from the dock and the tab strip's +: one more tab, shown, reply box focused; at her limit, no tab and the limit note.
+// Add Session, from the dock and the tab strip's +: the folder palette, then one more tab, shown; at her limit, no tab and the limit note.
 import * as configStore from '../main/config-store';
 import { panelFixture } from '../main/snapshot-mode';
 import type { Kit } from './snapshot';
+
+// The Repos palette in session mode, as Add Session opens it.
+const PALETTE = `(() => ({
+  open: !document.getElementById('repos').hidden,
+  hint: document.querySelector('#repos .repos-hint')?.textContent ?? null,
+  rows: [...document.querySelectorAll('#repos .repos-row .repos-name')].map((r) => r.textContent),
+}))()`;
+
+// Add Session asks where the session should work; this answers "Home folder" the way she would, and returns what the palette showed.
+export async function pickHomeFolder({ js, waitFor }: Pick<Kit, 'js' | 'waitFor'>): Promise<{ open: boolean; hint: string | null; rows: string[] } | null> {
+  const palette = await waitFor(async () => { const s = await js(PALETTE); return s.open ? s : null; }, 5000);
+  if (palette) await js("[...document.querySelectorAll('#repos .repos-row')].find((r) => r.querySelector('.repos-name').textContent === 'Home folder').click()");
+  return palette;
+}
 
 const STATE = `(() => {
   const t = PastelTerm.tabs;
@@ -36,11 +50,16 @@ export async function addSessionCheck(kit: Kit): Promise<void> {
   const opened: string[] = [];
 
   await js("document.getElementById('add-session-button').click()");
+  const palette = await waitFor(async () => { const s = await js(PALETTE); return s.open ? s : null; }, 5000);
+  check(palette?.hint === 'Enter starts Claude in a new tab, in that folder.' && palette.rows.slice(-2).join() === 'Home folder,Other folder…',
+    `dock click opens the folder palette in session mode, home and other folder last: ${JSON.stringify(palette)}`);
+  await capture('add-session-palette');
+  await pickHomeFolder(kit);
   const fromDock = await waitState((s) => s.ids.length === start.ids.length + 1);
   const dockTab = fromDock?.ids.at(-1);
   check(start.dockLabel === 'Add Session', `dock button labelled "Add Session": ${JSON.stringify(start.dockLabel)}`);
-  check(fromDock && fromDock.active === dockTab && fromDock.shown.join() === dockTab && fromDock.focused === 'composer-input',
-    `dock click: tabs ${start.ids.length} -> ${fromDock?.ids.length}, new tab active and shown, reply box focused: ${JSON.stringify(fromDock)}`);
+  check(fromDock && fromDock.active === dockTab && fromDock.shown.join() === dockTab && !(await js(PALETTE)).open,
+    `Home folder: tabs ${start.ids.length} -> ${fromDock?.ids.length}, new tab active and shown, palette closed: ${JSON.stringify(fromDock)}`);
   if (dockTab) opened.push(dockTab);
   await capture('add-session-dock');
 
@@ -53,6 +72,7 @@ export async function addSessionCheck(kit: Kit): Promise<void> {
   await js('PastelTerm.sessionsPanel.setOpen(false)');
   const before = (await js(STATE)).ids.length;
   await js("document.querySelector('#tab-strip .tab-new').click()");
+  check(await pickHomeFolder(kit), '+ click opens the folder palette too');
   const fromPlus = await waitState((s) => s.ids.length === before + 1);
   const plusTab = fromPlus?.ids.at(-1);
   const plusTitle = await js("document.querySelector('#tab-strip .tab-new').title");

@@ -146,3 +146,40 @@ export function buildIndex(entries: readonly IndexEntry[], at: Date): string {
   });
   return [`# Open in Petal at ${localTime(at)}`, '', ...(rows.length ? rows : ['No tabs were open.'])].join('\n') + '\n';
 }
+
+// ── Reading them back on launch ──
+
+// A quit folder's name, as folderStamp writes it.
+export const STAMP_PATTERN = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}$/;
+
+// The newest quit folder newer than the one last shown, or null. Stamps sort as time.
+export function newestUnseen(names: readonly string[], lastShown: string | null): string | null {
+  const newest = names.filter((name) => STAMP_PATTERN.test(name)).sort().at(-1) ?? null;
+  return newest && (!lastShown || newest > lastShown) ? newest : null;
+}
+
+// "2026-10-29_14-05" as "2026-10-29 14:05".
+export const stampTime = (stamp: string): string => stamp.replace('_', ' ').replace(/-(\d{2})$/, ':$1');
+
+// One resumable session in sessions.json, written beside index.md.
+export interface NotedSession {
+  title: string;
+  sessionId: string;
+  cwd: string | null;
+  running: boolean;
+  file: string;
+}
+
+export const notedSessions = (entries: readonly IndexEntry[]): NotedSession[] => entries.flatMap(({ session, file }) =>
+  session.sessionId && file ? [{ title: session.title, sessionId: session.sessionId, cwd: session.cwd, running: session.running, file }] : []);
+
+// sessions.json as read back from disk: well-formed rows only; anything else is an empty list.
+export function parseNotedSessions(raw: unknown): NotedSession[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((row): NotedSession[] => {
+    if (!row || typeof row !== 'object') return [];
+    const { title, sessionId, cwd, running, file } = row as Record<string, unknown>;
+    if (typeof title !== 'string' || typeof sessionId !== 'string' || typeof file !== 'string') return [];
+    return [{ title, sessionId, cwd: typeof cwd === 'string' ? cwd : null, running: running === true, file }];
+  });
+}

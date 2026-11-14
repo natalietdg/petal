@@ -1,88 +1,145 @@
-// Waiting inbox: every open tab's open Decide and running Doing line, from the replies each tab already holds.
-// The count follows reply updates; the open panel also redraws on a slow tick so "5m ago" stays true.
+// Board's "Waiting on you" lane, read through the one shared needsYou() (shared/needs-you.ts).
+// This window reports its tabs (screen prompt, open Decide) to main; main merges every window and headless child
+// into one ranked lane, sends it back, sets the dock badge and notifies. The lane and the dock Board count draw it.
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
-import { byId, el } from './dom';
+import * as sessionsPanel from './sessions-panel';
+import { byId, el, isIpcError } from './dom';
 import { renderInline } from './markdown';
 import { sinceText } from './sessions-panel';
 import { sessionNameEl } from './session-name';
-import { waitingCount, waitingItems, type WaitingItem, type WaitingSource } from '../shared/waiting';
+import { screenAsk, type ScreenAsk } from '../shared/prompt-answer';
+import { laneItems, waitingItems } from '../shared/waiting';
+import { badgeCount, type Need, type OpenDecide, type SessionSignals } from '../shared/needs-you';
+import { childAgentId } from '../shared/subsessions';
 
-const TICK_MS = 5000;
-const PILL_CLASS = { 'In progress': 'progress', 'Waiting on you': 'waiting' } as const;
+const SCREEN_TICK_MS = 2000; // screens are only readable here, so this window watches its own
+export const CHANGED_EVENT = 'petal:waiting-changed';
 
-const view = byId('waiting');
-const button = byId('waiting-button');
-const buttonLabel = button.querySelector('.dock-label') ?? button;
-const summary = el('p', 'waiting-summary');
+const badge = byId('board-button').querySelector<HTMLElement>('.dock-badge') ?? el('span', 'dock-badge');
+const lane = el('section', 'waiting-lane');
+lane.id = 'waiting';
+lane.setAttribute('aria-label', 'Waiting on you');
 const list = el('ul', 'waiting-list');
 list.setAttribute('aria-label', 'Waiting on you');
-const head = el('header', 'waiting-head');
-head.append(el('h2', 'waiting-title', 'Waiting'), summary);
-view.tabIndex = -1; // focusable, so Esc reaches the overlay with no row to focus
-view.append(head, list);
+lane.append(el('h3', 'waiting-title', 'Waiting on you'), list);
+lane.hidden = true;
 
-let items: WaitingItem[] = [];
+let needs: Need[] = [];
+let shown = true; // Board's Sessions view; Activity and Code review hide the lane
 let queued = false;
-let ticker: ReturnType<typeof setInterval> | undefined;
+let reportedKey = '';
+const askSeen = new Map<string, { ask: ScreenAsk; since: number }>(); // by tab: when its prompt first showed
 
-export const isOpen = (): boolean => overlays.isOpen('waiting');
-export const shownItems = (): readonly WaitingItem[] => items;
+// The lane element, placed by the Board above its cards.
+export const element = (): HTMLElement => lane;
+export const isOpen = (): boolean => overlays.isOpen('board');
+export const shownItems = (): readonly Need[] => needs;
+export const count = (): number => badgeCount(needs);
+// The Board's card status reads this, so a card and the lane never disagree.
+export const needOf = (sessionId: string): Need | undefined => needs.find((n) => n.sessionId === sessionId);
 
-function sources(): WaitingSource[] {
-  return tabs.ids().flatMap((tabId) => {
-    const update = tabs.get(tabId)?.update;
-    return update ? [{ tabId, title: update.label, replies: update.replies, waiting: update.waiting }] : [];
+function openDecide(tabId: string, title: string, update: NonNullable<tabs.Tab['update']>): OpenDecide | null {
+  const item = laneItems(waitingItems([{ tabId, title, replies: update.replies, waiting: update.waiting }]))[0];
+  return item ? { text: item.text, replyId: item.replyId, at: item.at } : null;
+}
+
+// One signal per tab with a Claude session; children are added by main, which sees them.
+function signals(now = Date.now()): SessionSignals[] {
+  return tabs.ids().flatMap((tabId): SessionSignals[] => {
+    const tab = tabs.get(tabId);
+    const update = tab?.update;
+    if (!tab || !update?.sessionId) { askSeen.delete(tabId); return []; }
+    const ask = update.state === 'live' ? screenAsk(tabs.screenLines(tab)) : null;
+    const seen = askSeen.get(tabId);
+    if (!ask) askSeen.delete(tabId);
+    else if (seen?.ask !== ask) askSeen.set(tabId, { ask, since: now });
+    return [{
+      sessionId: update.sessionId,
+      tabId,
+      windowId: null, // main stamps the window
+      title: update.label,
+      ask,
+      askSince: ask ? askSeen.get(tabId)?.since ?? now : null,
+      decide: openDecide(tabId, update.label, update),
+      children: [],
+    }];
   });
 }
 
-function jump(item: WaitingItem): void {
-  close();
-  tabs.activate(item.tabId);
-  const { replyId } = item;
-  if (replyId) setTimeout(() => reader.showReply([replyId]), 0); // after the tab's replies are on screen
+// Sends only when something changed; main answers with the merged lane.
+export function refresh(): void {
+  const next = signals();
+  const key = JSON.stringify(next);
+  if (key === reportedKey) return;
+  reportedKey = key;
+  window.pastel.waiting.report(next);
 }
 
-function row(item: WaitingItem): HTMLLIElement {
-  const li = el('li', `waiting-row waiting-row-${PILL_CLASS[item.pill]}`);
+// A session in this window: its tab (and reply, or the child's agent panel). Elsewhere: History's resume, which focuses its window.
+export async function openNeed(need: Need): Promise<void> {
+  close();
+  if (need.here && need.tabId && tabs.get(need.tabId)) {
+    tabs.activate(need.tabId);
+    const { replyId, childSessionId } = need;
+    if (childSessionId) sessionsPanel.openAgentFor(need.sessionId, childAgentId(childSessionId));
+    else if (replyId) setTimeout(() => reader.showReply([replyId]), 0); // after the tab's replies are on screen
+    return;
+  }
+  if (need.childSessionId && !need.tabId) {
+    sessionsPanel.openAgentFor(need.sessionId, childAgentId(need.childSessionId)); // a parent outside Petal: its child still opens
+    return;
+  }
+  const result = await window.pastel.history.resume(need.sessionId, false);
+  if (isIpcError(result)) console.error('[petal] could not open the waiting session:', result.error);
+}
+
+function row(need: Need): HTMLLIElement {
+  const li = el('li', `waiting-row waiting-row-waiting waiting-${need.kind}`);
   li.tabIndex = 0;
   li.setAttribute('role', 'button');
-  li.dataset.tabId = item.tabId;
-  li.addEventListener('click', (event) => { if (!(event.target as Element).closest('a[href]')) jump(item); });
+  if (need.tabId) li.dataset.tabId = need.tabId;
+  li.dataset.sessionId = need.sessionId;
+  li.addEventListener('click', (event) => { if (!(event.target as Element).closest('a[href]')) void openNeed(need); });
   li.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    jump(item);
+    void openNeed(need);
   });
   const text = el('div', 'waiting-text');
-  text.innerHTML = renderInline(item.text);
-  for (const img of text.querySelectorAll('img')) img.replaceWith(img.alt); // never loads a raw src
+  if (need.text) {
+    text.innerHTML = renderInline(need.text);
+    for (const img of text.querySelectorAll('img')) img.replaceWith(img.alt); // never loads a raw src
+  } else text.textContent = need.reason;
   const meta = el('p', 'waiting-meta');
-  meta.append(sessionNameEl('span', 'waiting-session', item.title));
-  const ago = sinceText(item.at);
+  meta.append(sessionNameEl('span', 'waiting-session', need.title));
+  if (!need.here) meta.append(el('span', 'waiting-where', 'other window'));
+  const ago = sinceText(need.since);
   if (ago) meta.append(el('span', 'waiting-ago', ago));
-  li.append(el('span', `waiting-pill waiting-pill-${PILL_CLASS[item.pill]}`, item.pill), text, meta);
+  li.append(text, meta);
   return li;
 }
 
-function renderList(): void {
-  const asks = waitingCount(items);
-  const running = items.length - asks;
-  summary.textContent = items.length ? `${asks} waiting on you · ${running} in progress` : '';
-  list.replaceChildren(...items.map(row));
-  if (!items.length) list.append(el('li', 'waiting-empty', 'Nothing waiting on you.'));
+function renderLane(): void {
+  lane.hidden = !shown || !needs.length;
+  list.replaceChildren(...needs.map(row));
 }
 
-export function refresh(): void {
-  items = waitingItems(sources());
-  const count = waitingCount(items);
-  buttonLabel.textContent = count ? `Waiting (${count})` : 'Waiting';
-  button.classList.toggle('has-waiting', count > 0);
-  if (isOpen()) renderList();
+function renderBadge(): void {
+  const n = count();
+  badge.textContent = n ? String(n) : '';
+  badge.hidden = !n;
+  badge.title = n ? `${n} waiting on you` : '';
 }
 
-// One refresh per burst of updates, after app.ts has stored them on their tabs.
+// Board's Sessions view shows the lane; its other views hide it.
+export function setShown(on: boolean): void {
+  shown = on;
+  renderLane();
+}
+
+// One report per burst of updates, after app.ts has stored them on their tabs.
 function schedule(): void {
   if (queued) return;
   queued = true;
@@ -92,23 +149,20 @@ function schedule(): void {
   }, 0);
 }
 
-export function open(): void {
-  if (!overlays.show('waiting')) return;
-  refresh();
-  renderList();
-  clearInterval(ticker);
-  ticker = setInterval(() => { if (isOpen()) refresh(); else clearInterval(ticker); }, TICK_MS);
-  (list.querySelector<HTMLElement>('.waiting-row') ?? view).focus();
-}
-
-export function close(): void {
-  overlays.hide('waiting');
-  clearInterval(ticker);
-}
-
+// Waiting now lives on the Board: open and close are the Board's.
+export const open = (): void => { window.dispatchEvent(new Event('petal:open-board')); };
+export const close = (): void => overlays.hide('board');
 export const toggle = (): void => (isOpen() ? close() : open());
 
+window.pastel.waiting.onLane((next) => {
+  needs = next;
+  renderBadge();
+  if (isOpen()) renderLane();
+  window.dispatchEvent(new Event(CHANGED_EVENT));
+});
+window.pastel.waiting.onOpen((need) => void openNeed({ ...need, here: true }));
 window.pastel.onReplies(schedule);
 window.pastel.onTabLabel(schedule);
 window.pastel.onTabClosed(schedule);
-button.addEventListener('click', toggle);
+setInterval(refresh, SCREEN_TICK_MS); // a prompt appearing or leaving the screen
+schedule();

@@ -27,6 +27,14 @@
 .notes-editor[hidden], .notes-rendered[hidden] { display: none; }
 .notes-empty { font-family: var(--ui-font); }
 
+/* PR notes, read-only here; edited in the PRs tab. */
+.notes-prs { flex: none; max-height: 40%; overflow-y: auto; font: 500 13px/1.45 var(--ui-font); }
+.notes-prs[hidden] { display: none; }
+.notes-prs-title { margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.notes-pr + .notes-pr { margin-top: 8px; }
+.notes-pr-name { margin: 0; font-weight: 600; }
+.notes-pr-field { margin: 2px 0 0; white-space: pre-wrap; color: var(--reader-fg); }
+
 /* ---------- The side panel: beside the replies (and History's preview), scrolling on its own ---------- */
 :root { --notes-width: 320px; }
 .notes-panel {

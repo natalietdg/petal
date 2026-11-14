@@ -3,6 +3,13 @@ export const READER_SPLIT = { min: 0.2, max: 0.85, initial: 0.65 } as const;
 
 export const clampSplit = (fraction: number): number => Math.min(READER_SPLIT.max, Math.max(READER_SPLIT.min, fraction));
 
+// The reader's fixed bands (dock, header, reply box); the split never squeezes the reader below them.
+// Not the prompt dock: its card follows the terminal's rows, so sizing the terminal from it loops.
+export const READER_FLOOR_BANDS = ['sessions-dock', 'reader-head', 'composer'] as const;
+
+// The smallest reader share that still fits the fixed bands.
+export const splitFloor = (bandsPx: number, totalPx: number): number => (totalPx > 0 ? bandsPx / totalPx : 0);
+
 // Claude Code's first-run screens (welcome, theme, sign-in) need this many rows; fewer and they scroll off the top.
 export const CLAUDE_SETUP_ROWS = 24;
 

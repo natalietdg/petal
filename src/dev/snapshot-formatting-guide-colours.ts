@@ -172,13 +172,8 @@ const STATE = `(() => {
   };
 })()`;
 
-// The header button, measured with Customize closed so the header is on screen.
-const HEAD = `(() => ({
-  buttonHeight: Math.round(document.getElementById('colour-key-button').getBoundingClientRect().height),
-  toggleHeight: Math.round(document.querySelector('#reader-head .view-toggle').getBoundingClientRect().height),
-}))()`;
-
-const clickButton = "document.getElementById('colour-key-button').dispatchEvent(new MouseEvent('click', { bubbles: true }))";
+// The colour key left the reader header; Help › Colour key is the way in.
+const noHeaderButton = "!document.getElementById('colour-key-button')";
 const escape = "document.getElementById('customize').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))";
 const customizeClosed = "document.getElementById('customize').hidden";
 
@@ -241,10 +236,10 @@ export async function colourLabelsCheck(kit: Kit, win: BrowserWindow): Promise<v
           `${look} ${theme}: ${neutral.found}/${neutral.total} uncoded treatments use only ink and paper ${JSON.stringify(neutral.base)}${neutral.accents.length ? ` accents: ${JSON.stringify(neutral.accents)}` : ''}`);
       }
 
-      // Then the guide: the header button opens Customize › Formatting at the colour labels.
-      await js(clickButton);
+      // Then the guide: Help › Colour key opens Customize › Formatting at the colour labels.
+      win.webContents.send('colour-key:open');
       const state = await waitFor(async () => { const s = await js(STATE); return s.shown ? s : null; }, 3000);
-      check(state, `${look} ${theme}: header button opens Formatting at the colour labels`);
+      check(state, `${look} ${theme}: Help › Colour key opens Formatting at the colour labels`);
       const keys: string[] = state?.keys ?? [];
       const wantKeys = lifestyle ? lifestyleKeys : expectedKeys;
       check(JSON.stringify(keys) === JSON.stringify(wantKeys) && state?.lookHead.length === (lifestyle ? 1 : 0),
@@ -264,9 +259,8 @@ export async function colourLabelsCheck(kit: Kit, win: BrowserWindow): Promise<v
   await js("window.pastel.look.setReading('newspaper')");
   await wait(250);
 
-  const head = await js(HEAD);
-  check(head.buttonHeight <= head.toggleHeight, `button (${head.buttonHeight}px) is no taller than the view toggle (${head.toggleHeight}px)`);
-  await js(clickButton);
+  check(await js(noHeaderButton), 'the reader header has no Colour key button');
+  win.webContents.send('colour-key:open');
   const opened = await waitFor(async () => { const s = await js(STATE); return s.shown ? s : null; }, 3000);
   check(opened && opened.meanings.length === expectedKeys.length && !/[–—]/.test(opened.text), `every row has a meaning line and the copy has no em dashes: ${JSON.stringify(opened?.meanings)}`);
   await js(escape);

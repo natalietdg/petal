@@ -68,21 +68,9 @@
   .sessions-pill.has-busy .dot { animation: none; }
 }
 
-.sessions-panel {
-  position: absolute;
-  top: calc(100% + 10px); /* under the band, even when it wraps */
-  right: 20px;
-  width: min(480px, calc(100vw - 40px));
-  max-height: calc(var(--reader-area-height, 60vh) - 80px);
-  overflow-y: auto;
-  overflow-anchor: none;
-  padding: 14px 8px 8px;
-  border: 1px solid var(--rule);
-  border-radius: 16px;
-  background: var(--reader-bg);
-  color: var(--reader-fg);
-  box-shadow: 0 12px 32px rgba(20, 30, 60, 0.14);
-}
+/* On the Board, above the cards: only the limit banner, when she is over or at her limit. */
+.sessions-panel { max-width: 760px; }
+.sessions-panel:empty { display: none; }
 
 .sessions-heading {
   margin: 0 12px 8px;
@@ -93,81 +81,30 @@
 
 .session-list { list-style: none; margin: 0; padding: 0; }
 
-.session-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.session-head:hover,
-.session-row.own .session-head { background: var(--code-bg); }
-
-.session-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
 .session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.session-own,
-.session-status {
-  flex-shrink: 0;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+.session-meta { font-size: 13px; color: var(--muted); }
 
-.session-own { background: var(--next-pill); color: var(--next-ink); }
-.session-status { margin-left: auto; }
-.session-status.busy { background: var(--decide-pill); color: var(--decide-ink); }
-.session-status.idle { color: var(--muted); }
-
-.session-meta,
-.session-activity { font-size: 13px; color: var(--muted); }
-.session-activity { color: var(--reader-fg); }
-
-.session-detail { padding: 2px 12px 10px 24px; font-size: 13px; color: var(--muted); }
-.session-recent { margin: 4px 0; padding-left: 1em; }
-.session-recent li + li { margin-top: 3px; }
-
-/* Active background agents, listed under the row whether or not it is expanded. */
-.session-agents-badge {
-  flex-shrink: 0;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--next-pill);
-  color: var(--next-ink);
-  font-size: 11px;
-  font-weight: 600;
-}
-.session-agents { min-width: 0; list-style: none; margin: 0 12px 8px 24px; padding: 0; font-size: 13px; }
+/* Active background agents, listed under their Board card. */
+.session-agents { min-width: 0; list-style: none; margin: 6px 0 0 4px; padding: 0; font-size: 13px; }
 .session-agent { display: flex; gap: 6px; min-width: 0; padding: 2px 0; color: var(--muted); }
 .session-agent + .session-agent { border-top: 1px dashed var(--rule); }
 .agent-task { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--reader-fg); }
 .agent-activity { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-since { flex-shrink: 0; }
 .agent-more { font-style: italic; }
+/* A headless `claude -p` child: a quiet tag, and its state in the Decide ink when it needs her. */
+.agent-headless { flex: none; padding: 0 6px; border: 1px solid var(--rule); border-radius: 999px; font-size: 11px; color: var(--muted); }
+.agent-child-waiting .agent-activity { color: var(--decide-ink); font-weight: 600; }
+.agent-child-stalled .agent-activity { font-style: italic; }
+.agent-open-session { flex: none; font-size: 12px; }
 
-/* Close sits beside the head button, never inside it; confirm, note and detail wrap to full width below. */
-.session-row,
+/* A Recently closed row: name and Reopen side by side, its note full width below. */
 .closed-row {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
 }
-.session-row > .session-head { flex: 1; min-width: 0; }
-.session-row > .session-confirm,
-.session-row > .session-note,
-.session-row > .session-detail,
-.session-row > .session-agents,
 .closed-row > .session-note { flex-basis: 100%; }
 
 .session-link {
@@ -183,7 +120,6 @@
 }
 .session-link:hover { color: var(--reader-fg); }
 .session-link:disabled { cursor: default; text-decoration: none; }
-.session-close { margin: 10px 8px 0 0; }
 
 .session-confirm {
   display: flex;
@@ -222,7 +158,6 @@
   font-size: 12px;
 }
 
-.closed-heading { margin-top: 14px; }
 .closed-row { align-items: center; gap: 8px; padding: 6px 12px; }
 .closed-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-size: 15px; font-weight: 600; }
 .closed-text .session-meta { font-weight: 400; }
@@ -275,3 +210,6 @@
 .update-pill.as-dot:not([hidden], .noting) { width: 12px; height: 12px; padding: 0; overflow: hidden; font-size: 0; border-radius: 50%; background: var(--done-ink); }
 /* The cat docks in the header row; with the row gone she waits for it (her corner place is unaffected). */
 #app.headers-min #reader-area.cat-docked :is(#cat, .scene-tip, .scene-popover) { display: none; }
+
+/* Board, Waiting, Testing and Library wait for a second session (dock-sessions.ts). */
+.dock-button[hidden] { display: none; }

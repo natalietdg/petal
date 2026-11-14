@@ -154,17 +154,18 @@ export async function lessonsCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     check(back, 'Esc goes back to the dial');
     await js('PastelTerm.library.close()');
 
-    // Customize › Organizer: the switch and the model setting show and save; the call line sits under them.
+    // Customize › Claude setup holds the Learn switch; Organizer › Library holds the model and the call line.
+    await js("PastelTerm.customize.open('claude')");
+    const learnOn = await waitFor(() => js(`(() => { const f = [...document.querySelectorAll('.cz-field')].find((x) => x.textContent.startsWith('Learn lessons from sessions')); return f ? f.querySelector('input').checked : null; })()`), 5000);
     await js("PastelTerm.customize.open('organizer')");
     const setting = await waitFor(() => js(`(() => {
       const select = document.getElementById('cz-background-model');
       if (!select) return null;
-      const learn = [...document.querySelectorAll('.cz-field')].find((f) => f.textContent.startsWith('Learn lessons from sessions'));
-      return { options: [...select.options].map((o) => o.textContent), value: select.value, learn: learn?.querySelector('input')?.checked ?? null, calls: document.querySelector('.cz-background-calls')?.textContent ?? '' };
+      return { options: [...select.options].map((o) => o.textContent), value: select.value, calls: document.querySelector('.cz-background-calls')?.textContent ?? '' };
     })()`), 5000);
     check(setting && JSON.stringify(setting.options) === JSON.stringify(['Haiku', 'Sonnet', `Same as organizer (${configStore.load().organizer.model})`]) && setting.value === 'haiku',
       `the model setting offers Haiku, Sonnet, Same as organizer, on Haiku: ${JSON.stringify(setting)}`);
-    check(setting && setting.learn === true && /^Background work used \d+ calls? today$/.test(setting.calls), `the Learn switch shows on and the call line shows: ${JSON.stringify(setting?.calls)}`);
+    check(setting && learnOn === true && /^Background work used \d+ calls? today$/.test(setting.calls), `the Learn switch shows on and the call line shows: ${JSON.stringify(setting?.calls)}`);
     await js("(() => { const s = document.getElementById('cz-background-model'); s.value = 'sonnet'; s.dispatchEvent(new Event('change', { bubbles: true })); })()");
     const savedModel = await waitFor(() => configStore.load().background.model === 'sonnet', 3000);
     check(savedModel, `choosing Sonnet saves it: ${configStore.load().background.model}`);

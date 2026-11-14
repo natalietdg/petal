@@ -20,6 +20,7 @@ import { TranscriptIndex } from './history-search';
 import { registerTagsIpc } from './tags-ipc';
 import { registerFlowIpc } from './flow-ipc';
 import { registerHandoffIpc } from './handoff-ipc';
+import * as subsessionLinks from './subsession-links';
 import type { ActiveSession, OpenTab, TabSessions } from './tab-session';
 import type { Theme } from '../shared/types';
 
@@ -45,6 +46,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     const tags = tagsStore.load();
     const notes = notesStore.searchable();
     const listed = listedNow();
+    const links = subsessionLinks.load();
     void conclusions.refreshAll(listed, announceConclusions); // logs that grew are read in the background
     void transcripts.refresh(listed.map((s) => s.file)); // so her first search finds the index warm
     return {
@@ -56,6 +58,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
         tags: tags.sessions[s.sessionId]?.tags ?? [],
         notes: notes[s.sessionId] ?? '',
         conclusion: conclusions.stored(s.sessionId),
+        parentId: s.headless ? subsessionLinks.parentOf(links, s.sessionId) : null,
       })),
       tags: tags.tags, // { [name]: { color } }, for the filter bar and suggestions
       organizing: organizer.isRunning(),
@@ -131,7 +134,7 @@ export function registerHistoryIpc({ sessions, activeSession, openTab, currentTh
     return { ok: true, command };
   });
 
-  handle('notes:get', (_event, { sessionId }) => ({ text: notesStore.read(sessionId) }));
+  handle('notes:get', (_event, { sessionId }) => ({ text: notesStore.read(sessionId), prs: notesStore.readPrNotes(sessionId) }));
   handle('notes:save', (_event, { sessionId, text }) => notesStore.save(sessionId, text));
 
   registerTagsIpc();

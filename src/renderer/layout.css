@@ -87,8 +87,11 @@ html, body {
 
 #app.reader-only #divider {
   height: 0;
-  overflow: hidden;
+  overflow: visible; /* keeps the 10px ::before reach, so a drag up can reopen the terminal */
 }
 
 #app.reader-only #terminal { display: none; }
 #app.reader-only #tab-strip { padding-bottom: 8px; }
+
+/* Customize › Advanced off: the power tools leave the UI (renderer/advanced.ts). */
+:root[data-advanced="off"] .advanced-only { display: none !important; }

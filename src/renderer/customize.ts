@@ -5,31 +5,36 @@ import * as workflow from './workflow';
 import { byId, el, isIpcError } from './dom';
 import { body, errorLine, page, summary, tabsBar } from './customize-kit';
 import { renderFormatting, renderLook } from './customize-look';
-import { renderFlowTitles, renderHandoff, renderOrganizer } from './customize-prompts';
+import { lessonsCard, renderFlowTitles, renderHandoff, renderOrganizer } from './customize-prompts';
 import { renderHook } from './customize-hook';
-import { renderSessions } from './customize-sessions';
+import { sessionCards } from './customize-sessions';
 import { renderStart } from './customize-start';
+import { renderAdvanced } from './customize-advanced';
+import { outputStylesCard } from './customize-styles';
+import { petalSkillsCard } from './customize-skills';
+import * as advanced from './advanced';
 
-type SettingsId = 'look' | 'formatting' | 'sessions' | 'organizer' | 'prompts' | 'hook' | 'start';
-type SectionId = SettingsId | workflow.TabId;
+type SettingsId = 'look' | 'formatting' | 'claude' | 'organizer' | 'prompts' | 'hook' | 'start' | 'advanced';
+type WorkflowSection = Exclude<workflow.TabId, 'today' | 'setup'>; // Today lives on the Board; Setup inside Claude setup
+type SectionId = SettingsId | WorkflowSection;
+interface Section { id: SectionId; name: string; summary: string; advancedOnly?: boolean }
 
 const button = byId('customize-button');
 
 // Workflow tabs carry their own one-line summary, so theirs is empty and the line hides.
-const workflowSection = (id: workflow.TabId): { id: SectionId; name: string; summary: string } => ({ id, name: workflow.TABS.find((t) => t.id === id)?.name ?? id, summary: '' });
-const SECTIONS: { id: SectionId; name: string; summary: string }[] = [
-  { id: 'look', name: 'Look', summary: 'Theme, reading style, text size, pet and pet size, scene and your tarot birthday. Changes apply at once and tick the same menu items.' },
-  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, what each colour means, and the Claude Code output styles that ask for them.' },
-  workflowSection('setup'), // beside Formatting: both show the output style Claude answers in
-  { id: 'sessions', name: 'Sessions', summary: 'How many Claude sessions can be open before the Sessions panel suggests closing one.' },
-  { id: 'organizer', name: 'Organizer', summary: 'Optional background agents: one titles, files and tags your recent sessions for History; one builds your Library and lessons from them. All are off by default and use your Claude plan.' },
-  { id: 'prompts', name: 'Prompts', summary: 'The prompt that turns each step of a session into the state changes on the Flow view, and what Send to Claude writes when one session hands its history to another.' },
+const workflowSection = (id: WorkflowSection): Section => ({ id, name: workflow.TABS.find((t) => t.id === id)?.name ?? id, summary: '', advancedOnly: true });
+const SECTIONS: Section[] = [
+  { id: 'look', name: 'Look', summary: 'Theme, reading style, text size, pet and pet size, and scene. Changes apply at once and tick the same menu items.' },
+  { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, and what each colour means.' },
+  { id: 'claude', name: 'Claude setup', summary: 'What Petal adds to Claude Code: the output style Claude answers in, Petal’s skills, lessons, and your CLAUDE.md, agents and skills.' },
+  { id: 'organizer', name: 'Organizer', summary: 'How many sessions can be open, and optional background agents that title, file and tag your sessions and build your Library. The agents are off by default and use your Claude plan.' },
+  { id: 'prompts', name: 'Prompts', summary: 'The prompt that turns each step of a session into the state changes on the Flow view, and what Send to Claude writes when one session hands its history to another.', advancedOnly: true },
   { id: 'hook', name: 'Response hook', summary: 'A shell command of yours that runs each time Claude finishes a reply.' },
-  { id: 'start', name: 'Get started', summary: 'The Get started steps, and whether Petal may read your Claude folder.' },
-  workflowSection('today'),
+  { id: 'start', name: 'First steps', summary: 'Whether Petal may read your Claude folder, what it costs in tokens, and the setup guide.' },
   workflowSection('time'),
   workflowSection('handoffs'),
   workflowSection('factory'),
+  { id: 'advanced', name: 'Advanced', summary: 'Power tools for many sessions, test loops and releases. Off for new installs.' },
 ];
 
 for (const s of SECTIONS) {
@@ -37,14 +42,23 @@ for (const s of SECTIONS) {
   b.type = 'button';
   b.dataset.section = s.id;
   b.setAttribute('role', 'tab');
+  if (s.advancedOnly) b.classList.add('advanced-only');
   tabsBar.append(b);
 }
 
 let section: SectionId = 'look';
 
+// Claude setup: Petal's own cards, then the Setup tab (CLAUDE.md, agents, skills), which loads on its own.
+const setupSlot = el('div', 'cz-setup-slot');
+const renderClaudeSetup = (): HTMLElement[] => {
+  void workflow.show('setup', setupSlot);
+  return [outputStylesCard(), petalSkillsCard(), lessonsCard(), setupSlot];
+};
 const renderPrompts = (): HTMLElement[] => [...renderFlowTitles(), ...renderHandoff()];
-const RENDER: Record<SettingsId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, sessions: renderSessions, organizer: renderOrganizer, prompts: renderPrompts, hook: renderHook, start: renderStart };
-page.redraw = () => { if (!workflow.isTabId(section)) body.replaceChildren(...RENDER[section]()); };
+const renderOrganizerSection = (): HTMLElement[] => [...sessionCards(), ...renderOrganizer()];
+const RENDER: Record<SettingsId, () => HTMLElement[]> = { look: renderLook, formatting: renderFormatting, claude: renderClaudeSetup, organizer: renderOrganizerSection, prompts: renderPrompts, hook: renderHook, start: renderStart, advanced: renderAdvanced };
+const isWorkflowSection = (id: SectionId): id is WorkflowSection => workflow.isTabId(id);
+page.redraw = () => { if (!isWorkflowSection(section)) body.replaceChildren(...RENDER[section]()); };
 
 export async function show(id: SectionId = section): Promise<void> {
   section = id;
@@ -52,8 +66,8 @@ export async function show(id: SectionId = section): Promise<void> {
   summary.textContent = SECTIONS.find((s) => s.id === id)?.summary ?? '';
   summary.hidden = !summary.textContent;
   errorLine.hidden = true;
-  body.classList.toggle('customize-body-workflow', workflow.isTabId(id));
-  if (workflow.isTabId(id)) return workflow.show(id, body);
+  body.classList.toggle('customize-body-workflow', isWorkflowSection(id));
+  if (isWorkflowSection(id)) return workflow.show(id, body);
   workflow.cancel();
   try {
     const result = await window.pastel.config.get();
@@ -67,10 +81,13 @@ export async function show(id: SectionId = section): Promise<void> {
   }
 }
 
+// An Advanced section asked for while Advanced is off opens Look instead.
+const reachable = (id: SectionId): SectionId => (SECTIONS.find((s) => s.id === id)?.advancedOnly && !advanced.isOn() ? 'look' : id);
+
 export async function open(id?: SectionId): Promise<void> {
   if (!overlays.show('customize')) return;
   workflow.reset();
-  await show(id ?? section);
+  await show(reachable(id ?? section));
   tabsBar.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
 }
 
@@ -81,6 +98,10 @@ export const toggle = (): Promise<void> | void => (isOpen() ? close() : open());
 button.addEventListener('click', () => toggle());
 window.pastel.onOpenCustomize(() => (isOpen() ? close() : open()));
 const isSectionId = (value: string | undefined): value is SectionId => SECTIONS.some((s) => s.id === value);
+// Advanced switched off while one of its sections is open: back to Look.
+advanced.onChange((on) => {
+  if (!on && isOpen() && SECTIONS.find((s) => s.id === section)?.advancedOnly) void show('look');
+});
 tabsBar.addEventListener('click', (event) => {
   const id = (event.target as HTMLElement).dataset.section;
   if (isSectionId(id)) show(id);

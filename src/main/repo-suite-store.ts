@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeFileDurable } from './atomic-file';
-import { prepareRepoDir, repoDir } from './petal-home';
+import { prepareRepoDir, repoDir, reposRoot } from './petal-home';
 import { repoDirShown } from './petal-repos';
 import * as store from './testing-store';
 import {
@@ -35,6 +35,15 @@ export function suiteHome(root: string): string {
 
 // The repo's folder in Petal, keyed by its main checkout.
 export const suiteDir = (home: string): string => repoDir(home);
+
+// Read-only: does any repo have a saved suite? The dock shows Testing only then.
+export function anySuite(root = reposRoot()): boolean {
+  try {
+    return fs.readdirSync(root).some((key) => fs.existsSync(path.join(root, key, SUITE_NAME)));
+  } catch {
+    return false; // no ~/.petal/repos yet
+  }
+}
 export const suiteFile = (home: string): string => path.join(suiteDir(home), SUITE_NAME);
 export const prepareSuiteDir = (home: string): string => prepareRepoDir(home);
 

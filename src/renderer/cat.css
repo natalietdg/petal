@@ -170,6 +170,27 @@
   85%, 100% { opacity: 0; transform: translate(6px, -10px); }
 }
 
+/* Waiting on you: a "!" above her head that hops a few times then holds. Done: a check that fades after 8s (cat.ts). */
+.cat-alert {
+  display: none;
+  position: absolute;
+  bottom: calc(var(--cat-sprite-h, 60px) + 2px);
+  right: 10px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  font: 700 13px/16px var(--ui-font);
+  text-align: center;
+}
+#cat.asking .cat-alert, #cat.done .cat-alert { display: block; }
+#cat.asking .cat-alert::before { content: '!'; }
+#cat.done:not(.asking) .cat-alert::before { content: '✓'; }
+#cat.asking .cat-alert { color: var(--reader-bg); background: var(--link); animation: alert-hop 0.9s steps(2) 6; }
+#cat.done:not(.asking) .cat-alert { color: var(--reader-fg); background: var(--code-bg, var(--rule)); }
+#cat.asking .cat-z, #cat.done .cat-z { display: none; }
+#cat.asking .sitting { animation: none; } /* sits still, looking at you */
+@keyframes alert-hop { 50% { transform: translateY(-4px); } }
+
 /* Awake: the tail flicks between two frames; the left ear twitches now and then. Asleep, nothing loops. */
 #cat.awake .tail-down { animation: tail-flick 1.4s steps(1) infinite; }
 #cat.awake .tail-up { animation: tail-flick 1.4s steps(1) infinite reverse; }
@@ -290,7 +311,7 @@
 
 /* Static frames only: tail up, ear still, z shown. */
 @media (prefers-reduced-motion: reduce) {
-  #cat *, .tail-up, .tail-down, .ear-left, .ear-right, .paw-left, .paw-right, .wings, .cat-z, .eyes-open, .eyes-closed { animation: none !important; }
+  #cat *, .tail-up, .tail-down, .ear-left, .ear-right, .paw-left, .paw-right, .wings, .cat-z, .cat-alert, .eyes-open, .eyes-closed { animation: none !important; }
   .eyes-closed { opacity: 0; }
   .tail-down { opacity: 0; }
   .cat-z { opacity: 1; }

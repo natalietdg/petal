@@ -15,6 +15,7 @@ export const state = {
   previewMode: 'replies' as PreviewMode,
   sort: 'recent' as SortBy,
   listKind: 'all' as HistoryListKind,
+  showHeadless: false, // `claude -p` runs: hidden until she asks, then nested under their parent
   folderAllowed: true, // off: main lists nothing, so the list says why and offers Allow
 };
 
@@ -40,6 +41,7 @@ view.innerHTML = `
         <button type="button" data-sort="recent" aria-selected="true">Recent</button>
         <button type="button" data-sort="title" aria-selected="false">A–Z</button>
       </div>
+      <button id="history-headless" class="history-headless-toggle" type="button" aria-pressed="false" title="Show headless claude -p runs under the session that started them">Headless runs</button>
       <button class="history-list-toggle" type="button" aria-expanded="true" aria-label="Hide the session list" title="Hide the list (⌘\\)">‹</button>
     </div>
     <div id="history-list" class="history-list"></div>
@@ -58,6 +60,7 @@ export const notesAside = query(view, '#history-notes');
 export const openNote = query(view, '#history-open-note');
 export const sortToggle = query(view, '#history-sort');
 export const listTabs = query(view, '#history-tabs');
+export const headlessToggle = query<HTMLButtonElement>(view, '#history-headless');
 export const railTitle = query(view, '.history-rail-title');
 
 // Main's pinned name (session-title.ts), so History, the tabs and the Sessions panel call a session the same thing.

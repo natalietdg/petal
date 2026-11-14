@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUBBLE_STEPS, CARD_STEPS, GUIDE_PETS, INSTALL_COMMAND, blindToClaude, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isGuideStage,
-  libraryConfirm, nextCard, personality, previousCard, resumeAt, showsImport, stageToSave, typeClaudeHelp, type GuideFacts, type PetWords,
+  libraryConfirm, nextCard, personality, previousCard, resumeAt, showsImport, showsStyle, stageToSave, styleCost, typeClaudeHelp, type GuideFacts, type PetWords,
 } from '../src/shared/pet-guide';
 import { CATS } from '../src/renderer/cat-art';
 
@@ -15,11 +15,12 @@ describe('the cards', () => {
     expect(nextCard('welcome', 'unasked')).toBe('pet');
     expect(nextCard('pet', 'unasked')).toBe('scene');
     expect(nextCard('scene', 'unasked')).toBe('consent');
-    expect(nextCard('consent', 'allowed')).toBe('bubbles');
+    expect(nextCard('consent', 'allowed')).toBe('style');
+    expect(nextCard('consent', 'allowed', 0, true)).toBe('bubbles');
   });
 
   it('skip the folder question when it was answered before', () => {
-    expect(nextCard('scene', 'allowed')).toBe('bubbles');
+    expect(nextCard('scene', 'allowed', 0, true)).toBe('bubbles');
     expect(nextCard('scene', 'declined')).toBe('bubbles');
   });
 
@@ -31,15 +32,15 @@ describe('the cards', () => {
 
 describe('the import card', () => {
   it('follows the folder card only when the folder was allowed and past sessions were found', () => {
-    expect(nextCard('consent', 'allowed', 5)).toBe('import');
-    expect(nextCard('consent', 'allowed', 0)).toBe('bubbles');
+    expect(nextCard('consent', 'allowed', 5, true)).toBe('import');
+    expect(nextCard('consent', 'allowed', 0, true)).toBe('bubbles');
     expect(nextCard('consent', 'declined', 5)).toBe('bubbles');
     expect(nextCard('import', 'allowed', 5)).toBe('bubbles');
     expect(showsImport('unasked', 5)).toBe(false);
   });
 
   it('a restart with the folder already allowed goes from the scene card straight to it', () => {
-    expect(nextCard('scene', 'allowed', 3)).toBe('import');
+    expect(nextCard('scene', 'allowed', 3, true)).toBe('import');
     expect(nextCard('scene', 'unasked', 3)).toBe('consent');
   });
 
@@ -51,15 +52,15 @@ describe('the import card', () => {
   it('keeps Step N of M right: four cards, five once the import card shows', () => {
     expect(cardCounter('welcome', 'unasked', 0)).toEqual({ number: 1, total: 4 });
     expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 4, total: 4 });
-    expect(cardCounter('import', 'allowed', 5)).toEqual({ number: 5, total: 5 });
-    expect(cardCounter('pet', 'allowed', 5)).toEqual({ number: 2, total: 5 }); // a restart that knows it will show
+    expect(cardCounter('import', 'allowed', 5, true)).toEqual({ number: 5, total: 5 });
+    expect(cardCounter('pet', 'allowed', 5, true)).toEqual({ number: 2, total: 5 }); // a restart that knows it will show
     expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 3, total: 4 });
   });
 
   it('resumes there only while it still applies', () => {
     expect(resumeAt('import', { ...ALLOWED, pastSessions: 4 })).toBe('import');
     expect(resumeAt('import', ALLOWED)).toBe('add-session');
-    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4 })).toBe('import');
+    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4, petalStyleOn: true })).toBe('import');
   });
 
   it('says what it found, in the pet’s words, with the Library cost before anything starts', () => {
@@ -69,6 +70,36 @@ describe('the import card', () => {
     expect(libraryConfirm({ days: 30, sessions: 5, calls: 7, estimate: { read: 31_234, write: 4200, calls: 7 } }))
       .toBe('Reads 5 sessions from the last 30 days: about 7 Claude calls, on your plan. About 31,000 tokens to read, 4,200 to write.');
     expect(libraryConfirm({ days: 30, sessions: 0, calls: 0, estimate: { read: 0, write: 0, calls: 0 } })).toBe('Nothing new to read from the last 30 days.');
+  });
+});
+
+describe('the reply-style card', () => {
+  it('follows the folder card only with the folder allowed and no Petal style on yet', () => {
+    expect(showsStyle('allowed')).toBe(true);
+    expect(showsStyle('allowed', true)).toBe(false);
+    expect(showsStyle('declined')).toBe(false);
+    expect(nextCard('consent', 'allowed', 5)).toBe('style');
+    expect(nextCard('style', 'allowed', 5)).toBe('import');
+    expect(nextCard('style', 'allowed', 0)).toBe('bubbles');
+    expect(previousCard('style')).toBeNull();
+  });
+
+  it('counts itself in Step N of M once it will show', () => {
+    expect(cardCounter('style', 'allowed', 0)).toEqual({ number: 5, total: 5 });
+    expect(cardCounter('import', 'allowed', 5)).toEqual({ number: 6, total: 6 });
+    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 3, total: 4 });
+  });
+
+  it('resumes past itself once a Petal style is on', () => {
+    expect(resumeAt('style', ALLOWED)).toBe('style');
+    expect(resumeAt('style', { ...ALLOWED, petalStyleOn: true })).toBe('add-session');
+    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4 })).toBe('style');
+  });
+
+  it('says the cost per turn plainly, with no em dash', () => {
+    expect(cardCopy('style', MIKI).title).toBe('How should Claude write?');
+    expect(styleCost(1900)).toBe('This style adds about 1,900 tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Formatting.');
+    expect(styleCost(1900)).not.toContain('—');
   });
 });
 
@@ -104,7 +135,8 @@ describe('resume and skip', () => {
   });
 
   it('a folder question answered elsewhere moves on to the bubbles', () => {
-    expect(resumeAt('consent', ALLOWED)).toBe('add-session');
+    expect(resumeAt('consent', { ...ALLOWED, petalStyleOn: true })).toBe('add-session');
+    expect(resumeAt('consent', ALLOWED)).toBe('style'); // the reply-style card first, when no Petal style is on
   });
 
   it('a relaunch mid-bubbles follows what Petal sees now, not what was saved', () => {
@@ -176,6 +208,13 @@ describe('copy', () => {
       expect(line, id).toMatch(pet.pronoun === 'he' ? /\bhis\b/ : /\bher\b/);
     }
     expect(personality('someone-local', MIKA)).toBe('Mika keeps you company.');
+  });
+
+  it('over the session palette, the pet talks about the folder, not the button', () => {
+    const picking = bubbleCopy('add-session', MIKI, { claudeFound: true, folder: 'allowed', pickingFolder: true });
+    expect(picking.say).toBe('Pick where Claude works. Home is fine.');
+    expect(picking.note).not.toContain('—');
+    expect(bubbleCopy('add-session', MIKI, { claudeFound: true, folder: 'allowed' }).note).toContain('pick a folder');
   });
 
   it('with the Claude folder off, the pet says it can’t see Claude instead of pretending to wait', () => {

@@ -51,10 +51,10 @@ async function headersCheck(kit: Kit, win: BrowserWindow): Promise<void> {
   await js('PastelTerm.focusMode.restore()');
   check(await js('PastelTerm.focusMode.level()') === 'headers', 'a config re-read brings it back minimised');
 
-  // A second click is the reply-only level, never saved; ⌘⇧H from there goes back to the headers level.
-  await js("document.getElementById('focus-toggle').click()");
+  // Only the reply is its own control, never saved; ⌘⇧H from there goes back to the headers level.
+  await js("document.getElementById('focus-reply').click()");
   const second = await js("({ level: PastelTerm.focusMode.level(), toggle: document.getElementById('focus-toggle').dataset.level })");
-  check(second.level === 'focus' && second.toggle === 'focus' && configStore.load().reader.headersMinimised, `second click: only the reply, headers level still saved: ${JSON.stringify(second)}`);
+  check(second.level === 'focus' && second.toggle === 'focus' && configStore.load().reader.headersMinimised, `Only the reply: only the reply, headers level still saved: ${JSON.stringify(second)}`);
   win.webContents.send('headers:toggle'); // View > Focus: Minimise Headers (⌘⇧H)
   check(await waitFor(async () => (await js('PastelTerm.focusMode.level()')) === 'headers' || null, 2000), '⌘⇧H from only the reply goes to the headers level');
 

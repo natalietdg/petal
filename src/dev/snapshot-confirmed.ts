@@ -47,6 +47,10 @@ const OLDEST = [
   '**Conclusion:** the toolbar is simpler.',
   '**Result:** the colour picker moved from the toolbar into Settings.',
   '**Impact:** one less button on the main screen.',
+  '',
+  '```',
+  '#1 | 2026-10-28 | DECISION | Natalie | colour picker moves into Settings (Claude recommended it)',
+  '```',
 ].join('\n');
 
 const sampleUpdate = (screen: string) => ({
@@ -58,7 +62,7 @@ const sampleUpdate = (screen: string) => ({
   ],
 });
 
-const EXPECTED = { screens: 1, features: 1, facts: 2, decided: 1, done: 2, progress: 2 };
+const EXPECTED = { screens: 1, features: 1, facts: 2, decided: 3, done: 2, progress: 1 }; // the open Decide sits in Decided
 
 // Group titles in order, item counts, and the pills with their painted colours.
 const MEASURE = `(() => {
@@ -69,6 +73,8 @@ const MEASURE = `(() => {
   const thumbs = [...view.querySelectorAll('.confirmed-screens img.confirmed-thumb')];
   const pill = (cls) => { const p = view.querySelector('.' + cls); return p ? { text: p.textContent, bg: getComputedStyle(p).backgroundColor } : null; };
   const answer = view.querySelector('.confirmed-decided .confirmed-answer');
+  const firstDecided = view.querySelector('.confirmed-decided .confirmed-item');
+  const actor = view.querySelector('.confirmed-decided .confirmed-actor');
   return {
     titles: groups.map((g) => g.querySelector('.confirmed-title').textContent),
     subtitles: [...view.querySelectorAll('.confirmed-verified .confirmed-subtitle')].map((h) => h.textContent),
@@ -77,6 +83,8 @@ const MEASURE = `(() => {
     counts: { screens: part('screens'), features: part('features'), facts: part('facts'), decided: count('decided'), done: count('done'), progress: count('progress') },
     progressPill: pill('confirmed-pill-progress'), waitingPill: pill('confirmed-pill-waiting'),
     answer: answer ? answer.textContent : null,
+    openFirst: Boolean(firstDecided && firstDecided.classList.contains('confirmed-open') && firstDecided.querySelector('.confirmed-pill-waiting')),
+    actor: actor ? actor.textContent : null,
     codeInText: view.querySelectorAll('.confirmed-verified .confirmed-text code').length,
     fencedDone: view.textContent.includes('never listed'),
     visible: !view.hidden && view.getBoundingClientRect().height > 100,
@@ -130,7 +138,7 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
     await wait(300);
     check(await showSample(), `${theme} sample shown`);
     await waitFor(() => js("[...document.querySelectorAll('#confirmed-view img.confirmed-thumb')].every((t) => t.complete)"), 5000);
-    const m = await js(MEASURE) as { titles: string[]; subtitles: string[]; thumbs: { natural: number; width: number; height: number }[]; capitalised: boolean; counts: Record<string, number>; progressPill: { text: string; bg: string } | null; waitingPill: { text: string; bg: string } | null; answer: string | null; codeInText: number; fencedDone: boolean; visible: boolean };
+    const m = await js(MEASURE) as { titles: string[]; subtitles: string[]; thumbs: { natural: number; width: number; height: number }[]; capitalised: boolean; counts: Record<string, number>; progressPill: { text: string; bg: string } | null; waitingPill: { text: string; bg: string } | null; answer: string | null; openFirst: boolean; actor: string | null; codeInText: number; fencedDone: boolean; visible: boolean };
     log(`confirmed ${theme}: ${JSON.stringify(m)}`);
     check(m.visible, `${theme} Confirmed page is visible`);
     check(m.titles.join(',') === 'Verified,Decided,Done,In progress', `${theme} four groups in order`);
@@ -141,6 +149,8 @@ export async function confirmedCheck(kit: Kit, win: BrowserWindow): Promise<void
     check(m.progressPill?.text === 'In progress' && m.progressPill.bg !== 'rgba(0, 0, 0, 0)', `${theme} In progress pill shows with a fill`);
     check(m.waitingPill?.text === 'Waiting on you' && m.waitingPill.bg !== m.progressPill?.bg, `${theme} Waiting on you pill has its own fill`);
     check(m.answer === 'You: yes, keep one backup', `${theme} decision shows her answer`);
+    check(m.openFirst, `${theme} the open Decide leads Decided with its Waiting on you pill`);
+    check(m.actor === 'Decided by you', `${theme} a ledger decision names who decided`);
     check(m.codeInText === 1, `${theme} inline code renders in an item`);
     check(!m.fencedDone, `${theme} a label inside a code fence is not listed`);
     resizeOffscreen(win, WIDTH, TALL_HEIGHT); // tall enough for all four groups

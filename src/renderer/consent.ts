@@ -1,5 +1,5 @@
-// First launch, before Petal reads anything under ~/.claude: may it? Allow or Not now; Esc counts as Not now.
-// Customize › Get started changes the answer later; the reader offers Allow while it's off.
+// First launch, before Petal reads anything under ~/.claude: may it? Allow or Not now; Esc asks again next launch.
+// Customize › First steps changes the answer later; the reader offers Allow while it's off.
 import * as overlays from './overlays';
 import { byId, el, isIpcError } from './dom';
 import type { FolderChoice } from '../shared/claude-folder';
@@ -23,6 +23,9 @@ export const WRITES = [
 
 export const WRITES_TITLE = 'What Petal writes in ~/.claude, only when you ask';
 
+// What Not now costs, said before she picks it.
+export const NOT_NOW_COST = 'Not now: the terminal works as usual, but the reader stays empty and no replies show. You can allow it later in Customize › First steps.';
+
 export function writesList(): HTMLElement {
   const list = el('ul', 'consent-reads consent-writes');
   list.append(...WRITES.map((line) => el('li', null, line)));
@@ -39,8 +42,9 @@ export async function setChoice(next: FolderChoice): Promise<void> {
   await window.pastel.config.save({ claudeFolder: { choice: next } });
 }
 
-async function answer(next: FolderChoice): Promise<void> {
-  await setChoice(next);
+// next null: closed without an answer, so the question stays "unasked" and comes back next launch.
+async function answer(next: FolderChoice | null): Promise<void> {
+  if (next) await setChoice(next);
   overlays.unlock('consent');
   overlays.hide('consent');
   const then = answered;
@@ -55,12 +59,12 @@ function render(): void {
   pane.append(
     el('h1', 'welcome-title', 'Read your Claude folder?'),
     el('p', 'welcome-tagline', 'Petal shows Claude’s replies by reading what Claude Code saves in ~/.claude on this Mac.'),
+    el('p', 'welcome-note consent-cost', NOT_NOW_COST),
     el('h2', 'welcome-label', 'What Petal reads'),
     list,
     el('p', 'consent-line', 'Everything stays on this Mac. Nothing is uploaded.'),
     el('h2', 'welcome-label', WRITES_TITLE),
     writesList(),
-    el('p', 'welcome-note', 'Not now keeps the terminal working as usual; the reader stays empty. You can change this in Customize › Get started.'),
   );
   const footer = el('footer', 'welcome-footer');
   const allow = el('button', 'welcome-start consent-allow', 'Allow');
@@ -81,10 +85,10 @@ export function open(then: (() => void) | null = null): void {
   render();
 }
 
-// Esc anywhere in it answers Not now, so the launch screens behind it still follow.
-export const decline = (): Promise<void> => answer('declined');
+// Esc closes it without answering: nothing is saved, the launch screens behind it still follow, and it asks again next launch.
+export const defer = (): Promise<void> => answer(null);
 view.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') void decline();
+  if (event.key === 'Escape') void defer();
 }, true);
 
 export const isOpen = (): boolean => overlays.isOpen('consent');

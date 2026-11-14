@@ -1,5 +1,5 @@
 /* Get started and the folder question: the shared overlay frame (welcome.css), the reader's Steps rows (reader.css). */
-#get-started, #consent {
+#consent {
   position: absolute;
   inset: 0;
   display: flex;
@@ -8,7 +8,7 @@
   color: var(--reader-fg);
   font-family: var(--ui-font);
 }
-#get-started[hidden], #consent[hidden] { display: none; }
+#consent[hidden] { display: none; }
 
 /* UI-sized steps, in every reading look: the badges keep their em maths, the text stays the frame's size. */
 .gs-list { font-size: 15px; line-height: 1.45; font-family: var(--ui-font); }
@@ -42,3 +42,12 @@
 /* The reader's empty line can carry one button. */
 .status.empty .status-action { margin-top: 14px; font-size: 14px; }
 #consent:focus { outline: none; } /* focused so Esc reaches it, not to be tabbed to */
+
+/* The last quit's resume notes, once on launch, under the reader notice (reader-notice.ts). */
+.resume-notice { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; font: 14px/1.45 var(--ui-font); }
+.resume-notice-line { margin: 0 0 8px; }
+.resume-notice-list { margin: 0 0 10px; padding: 0; list-style: none; }
+.resume-notice-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.resume-notice-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resume-notice-row .resume-notice-open { flex: none; }
+.resume-notice-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

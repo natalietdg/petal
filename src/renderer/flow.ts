@@ -1,8 +1,6 @@
-// Renders a session's "flow of outcomes": step cards on a thin line, each with the decisions logged during it, plus the Mermaid export bar.
+// Renders a session's "flow of outcomes": step cards on a thin line, plus the Mermaid export bar. Decisions live in Confirmed.
 import * as diagrams from './diagrams';
 import { el, isIpcError } from './dom';
-import { decisionsByStep, hasDecision, type StepDecision } from './flow-decisions';
-import type { Who } from './ledger-actor';
 import type { FlowStep, Outcome, StateChange } from '../main/flow';
 import type { FlowView, Guarded } from '../shared/ipc';
 import type { FlowTarget } from '../shared/types';
@@ -22,7 +20,6 @@ interface ExportBar extends HTMLDivElement {
 }
 
 const TITLES: Record<string, string> = { done: 'Done', decide: 'Decide', watch: 'Watch out', next: 'Next', why: 'Why' };
-const WHO: Record<Who, string> = { you: 'you', claude: 'Claude', external: 'someone else' };
 const CREATING_RECHECK_MS = 3000;
 
 function outcomeLine({ label, text }: Outcome): HTMLParagraphElement {
@@ -43,19 +40,8 @@ function changeRow({ what, from, to }: StateChange): HTMLDivElement {
   return row;
 }
 
-// One ledger decision on its step: who made it, its number, and whether a later one replaced it.
-function decisionRow(decision: StepDecision): HTMLDivElement {
-  const row = el('div', `flow-decision${decision.superseded ? ' superseded' : ''}`);
-  const head = el('div', 'flow-decision-head');
-  head.append(el('span', `flow-actor actor-${decision.who}`, `Decided by ${WHO[decision.who]}`), el('span', 'flow-decision-tag', `#${decision.n}`));
-  if (decision.recommended) head.append(el('span', 'flow-decision-tag', 'Claude recommended'));
-  if (decision.superseded) head.append(el('span', 'flow-decision-tag', 'later replaced'));
-  row.append(head, el('p', 'flow-decision-what', decision.what));
-  return row;
-}
-
-// A step card lists what changed and what was decided; the conversation itself lives in Replies.
-function stepCard(step: FlowStep, onJump: FlowOptions['onJump'], decisions: StepDecision[] = []): HTMLElement {
+// A step card lists what changed; the conversation lives in Replies, decisions in Confirmed.
+function stepCard(step: FlowStep, onJump: FlowOptions['onJump']): HTMLElement {
   const card = el('article', `flow-step${step.waitingOnYou ? ' waiting' : ''}`);
   card.append(el('span', 'flow-dot'));
   const head = el('button', 'flow-step-head');
@@ -64,7 +50,6 @@ function stepCard(step: FlowStep, onJump: FlowOptions['onJump'], decisions: Step
   head.addEventListener('click', () => onJump(step));
   card.append(head);
   for (const change of step.changes ?? []) card.append(changeRow(change));
-  if (decisions.length) card.append(...decisions.map(decisionRow));
   if (step.waitingOnYou) {
     const decide = step.outcomes.filter((o) => o.label === 'decide').at(-1);
     card.append(el('span', 'flow-waiting', 'waiting on you'), ...(decide ? [outcomeLine(decide)] : []));
@@ -72,8 +57,8 @@ function stepCard(step: FlowStep, onJump: FlowOptions['onJump'], decisions: Step
   return card;
 }
 
-// Steps that changed and decided nothing are just talk: they fold away.
-const foldsAway = (step: FlowStep): boolean => !hasDecision(step) && (step.quiet || (!(step.changes?.length) && !step.waitingOnYou));
+// Steps that changed nothing are just talk: they fold away.
+const foldsAway = (step: FlowStep): boolean => step.quiet || (!(step.changes?.length) && !step.waitingOnYou);
 
 // Runs of quiet steps fold into one "N quiet steps" row that expands on click.
 function quietRun(steps: FlowStep[], onJump: FlowOptions['onJump']): HTMLButtonElement {
@@ -191,7 +176,6 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
     container.replaceChildren(stale, el('p', 'status empty', 'No steps in this session yet.'));
     return;
   }
-  const decisions = decisionsByStep(flow.steps);
   const line = el('div', 'flow-line');
   let quiet: FlowStep[] = [];
   const flushQuiet = () => {
@@ -201,7 +185,7 @@ export function render(container: HTMLElement, flow: FlowResult, options: FlowOp
   for (const step of flow.steps) {
     if (foldsAway(step)) { quiet.push(step); continue; }
     flushQuiet();
-    line.append(stepCard(step, onJump, decisions.get(step)));
+    line.append(stepCard(step, onJump));
   }
   flushQuiet();
   if (flow.finalNext) {

@@ -21,7 +21,7 @@ import type { StyleSwitch } from './output-styles';
 import type { CustomizeState } from '../shared/ipc';
 import type { Choice } from '../shared/types';
 
-const FOLDER_OFF = 'Petal isn’t reading your Claude folder. Allow it under Customize › Get started.';
+const FOLDER_OFF = 'Petal isn’t reading your Claude folder. Allow it under Customize › First steps.';
 
 // Her ~/.claude once she allows reading it; snapshot runs read and write a stand-in when the harness sets one.
 function claudeDir(): string | null {

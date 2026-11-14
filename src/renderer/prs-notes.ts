@@ -1,6 +1,7 @@
 // Her notes on one PR under fixed headers, saved as she types. Each editor is built once per session and PR
 // and reused, so a repaint while she types never takes her cursor away.
 import { el, isIpcError } from './dom';
+import { PR_NOTES_SAVED_EVENT } from './notes';
 import { PR_NOTE_FIELDS, PR_NOTE_LABELS, emptyNotes, type PrNoteField, type PrNotes } from '../shared/session-prs';
 
 const SAVE_DELAY_MS = 500;
@@ -24,6 +25,7 @@ function build(sessionId: string, url: string, saved: PrNotes): HTMLElement {
     const notes = Object.fromEntries(PR_NOTE_FIELDS.map((field) => [field, fields.get(field)?.value ?? ''])) as PrNotes;
     const result = await window.pastel.prs.saveNotes({ sessionId, url, notes });
     status.textContent = isIpcError(result) ? result.error : 'note' in result ? result.note : 'Saved';
+    if (!isIpcError(result) && 'ok' in result) window.dispatchEvent(new CustomEvent(PR_NOTES_SAVED_EVENT, { detail: sessionId }));
   };
   for (const field of PR_NOTE_FIELDS) {
     const id = `prs-note-${field}-${editors.size}`;

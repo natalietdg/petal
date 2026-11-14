@@ -59,7 +59,7 @@ const MEASURE = `(() => {
   const head = document.getElementById('reader-head').getBoundingClientRect();
   const drawer = [...document.querySelectorAll('#notes-panel, #agent-panel')].find((p) => p.getClientRects().length > 0);
   const strip = document.querySelector('#reader-head .status-strip');
-  const key = document.getElementById('colour-key-button').getBoundingClientRect();
+  const key = [...document.querySelectorAll('#reader-head .reader-head-end > *')].find((e) => e.getClientRects().length)?.getBoundingClientRect() ?? slot; // first header control right of her
   const toggle = document.querySelector('#reader-head .view-toggle').getBoundingClientRect();
   const below = Math.min(...['prompt-dock', 'composer'].map((id) => document.getElementById(id).getBoundingClientRect().top));
   return {
@@ -76,7 +76,7 @@ const MEASURE = `(() => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Measure = any;
 
-// Her corner beside the text, or her slot in the header bar left of Colour key: her docked height, inside the bar's row, above the strip.
+// Her corner beside the text, or her slot in the header bar left of the first header control: her docked height, inside the bar's row, above the strip.
 const inGutter = (m: Measure, want: number): boolean => !m.docked && Math.abs(m.cat.width - want) <= 1 && Math.abs(m.cat.height - want) <= 1
   && m.cat.left > m.textRight && m.cat.bottom <= m.viewBottom;
 const inBar = (m: Measure, dock: number): boolean => m.docked && Math.abs(m.cat.height - dock) <= 1 && Math.abs(m.bar.height - dock) <= 1

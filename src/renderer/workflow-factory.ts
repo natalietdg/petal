@@ -69,7 +69,7 @@ function followsLine(state: FactoryState): string {
     case 'global': return 'Claude follows the global factory.';
     case 'foreign': return `A factory skill you wrote already exists at ${state.skill.file}. Petal won’t overwrite it, so Claude follows yours.`;
     case 'none': return state.folderOff
-      ? 'Petal isn’t reading your Claude folder, so Claude can’t pick up a factory. Allow it under Customize › Get started.'
+      ? 'Petal isn’t reading your Claude folder, so Claude can’t pick up a factory. Allow it under Customize › First steps.'
       : 'Claude isn’t following a factory yet. Save once to hand it these stations.';
   }
 }

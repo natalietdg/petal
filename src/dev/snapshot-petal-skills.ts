@@ -94,7 +94,7 @@ export async function petalSkillsCheck(kit: Kit, win: BrowserWindow): Promise<vo
   testingFixture.claudeDir = claudeDir;
 
   const showFormatting = async () => {
-    await js("PastelTerm.customize.open('formatting')");
+    await js("PastelTerm.customize.open('claude')");
     return waitFor(() => js(SKILLS_CARD), 5000);
   };
   const scrollToSkills = () => js("document.querySelector('#customize .cz-skills').closest('.cz-card').scrollIntoView({ block: 'start' })");

@@ -12,11 +12,9 @@
       <section id="history" hidden></section>
       <section id="customize" hidden></section>
       <section id="repos" hidden aria-label="Open Repo"></section>
-      <section id="get-started" hidden aria-label="Get started"></section>
       <section id="pet-guide" hidden tabindex="-1" aria-label="Set up Petal"></section>
       <section id="consent" hidden tabindex="-1" aria-label="Read your Claude folder?"></section>
       <section id="board" hidden aria-label="Board"></section>
-      <section id="waiting" hidden aria-label="Waiting on you"></section>
       <section id="shortcuts" hidden aria-label="Keyboard shortcuts"></section>
       <section id="library" hidden aria-label="Library"></section>
       <section id="testing" hidden aria-label="Testing"></section>
@@ -25,13 +23,11 @@
         <button id="library-button" class="dock-button" type="button" aria-pressed="false" title="Domain knowledge from your sessions"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5.5A1.5 1.5 0 0 1 5.5 4H9v15H5.5A1.5 1.5 0 0 0 4 20.5"/><path d="M9 4h4v15H9"/><path d="M14.5 5.2l3.4-.9 3.1 13.6-3.4.9z"/></svg><span class="dock-label">Library</span></button>
         <button id="testing-button" class="dock-button" type="button" aria-pressed="false" title="Run this project's test pipeline and see results"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.8 18.2A1.8 1.8 0 0 0 6.4 21h11.2a1.8 1.8 0 0 0 1.6-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg><span class="dock-label">Testing</span></button>
         <button id="history-button" class="dock-button" type="button" aria-pressed="false"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span class="dock-label">History</span></button>
-        <button id="board-button" class="dock-button dock-mini" type="button" aria-pressed="false" title="Every open session at a glance (⌘⇧O)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span class="dock-label">Board</span></button>
-        <button id="waiting-button" class="dock-button dock-mini" type="button" aria-pressed="false" title="What every open session is waiting on you for"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.5-7.5A1.5 1.5 0 0 1 7.9 4.5h8.2a1.5 1.5 0 0 1 1.4 1L20 13v5.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="dock-label">Waiting</span></button>
+        <button id="board-button" class="dock-button dock-mini" type="button" aria-pressed="false" title="Every open session, what waits on you, and today (⌘⇧O)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg><span class="dock-label">Board</span><span class="dock-badge" hidden></span></button>
         <button id="add-session-button" class="dock-button add-session" type="button" title="New tab (⌘T)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="dock-label">Add Session</span></button>
         <button id="update-pill" class="update-pill" type="button" hidden></button>
         <button id="sessions-pill" class="sessions-pill" type="button" aria-expanded="false"></button>
         <button id="focus-toggle" class="focus-toggle" type="button" data-level="normal" aria-label="Minimise the headers" title="Minimise the headers (⌘⇧H)"><svg class="dock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
-        <div id="sessions-panel" class="sessions-panel" hidden></div>
       </aside>
       <header id="reader-head">
         <div class="reader-head-column">
@@ -46,7 +42,6 @@
               <button type="button" data-view="confirmed" aria-selected="false">Confirmed</button>
             </div>
             <div class="reader-head-end">
-              <button type="button" id="colour-key-button" class="colour-key-button" title="What the colours in a reply mean"><span class="ck-dots" aria-hidden="true"></span><span class="head-label">Colour key</span></button>
               <button id="agents-chip" class="agents-chip" type="button" hidden></button>
               <button id="reader-star" class="fav-star reader-star" type="button" hidden></button>
               <button id="notes-toggle" class="notes-toggle" type="button" aria-pressed="false" title="Your notes for this session, beside the replies"><svg class="dock-icon head-icon-only" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg><span class="head-label">Notes</span></button>

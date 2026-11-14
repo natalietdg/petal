@@ -1,4 +1,4 @@
-// Shortcuts guide: every key, word and gesture, drawn from shared/shortcuts.ts. ⌘/, Help › Keyboard Shortcuts or Customize › Get started open it.
+// Shortcuts guide: every key, word and gesture, drawn from shared/shortcuts.ts. ⌘/, Help › Keyboard Shortcuts or Customize › First steps open it.
 import * as overlays from './overlays';
 import { byId, el } from './dom';
 import { GUIDE, type GuideRow } from '../shared/shortcuts';
@@ -33,7 +33,7 @@ function render(): void {
     section.dataset.group = group.title;
     const list = el('dl', 'sc-list');
     for (const row of group.rows) {
-      const item = el('div', 'sc-row');
+      const item = el('div', row.advanced ? 'sc-row advanced-only' : 'sc-row');
       item.append(trigger(row), el('dd', 'sc-does', row.does));
       list.append(item);
     }

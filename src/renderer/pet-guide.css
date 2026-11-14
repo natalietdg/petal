@@ -84,6 +84,22 @@
 .pg-pet-line { font-size: 12.5px; line-height: 1.3; color: var(--muted); }
 .pg-pet[aria-checked="true"] .pg-pet-line { color: var(--reader-fg); }
 
+/* Reply styles: the pet tiles' frame, text only. */
+.pg-styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; margin: 10px 3px 12px; }
+.pg-style-pick {
+  display: flex; flex-direction: column; gap: 4px; margin: 3px; padding: 12px 10px; border: none; border-radius: 0;
+  background: var(--reader-bg); color: inherit; font: inherit; text-align: left; cursor: pointer;
+  --pg-line: var(--rule);
+  box-shadow: 0 -3px 0 0 var(--pg-line), 0 3px 0 0 var(--pg-line), -3px 0 0 0 var(--pg-line), 3px 0 0 0 var(--pg-line);
+}
+.pg-style-pick:hover { --pg-line: var(--muted); }
+.pg-style-pick[aria-checked="true"] { --pg-line: var(--link); background: var(--pg-wash); }
+.pg-style-pick:focus-visible { outline: 3px dashed var(--link); outline-offset: 6px; }
+.pg-style-name { font-weight: 700; font-size: 15px; }
+.pg-style-line { font-size: 12.5px; line-height: 1.3; color: var(--muted); }
+.pg-cost { font-size: 0.95em; color: var(--muted); }
+.pg-style-result:empty { display: none; }
+
 /* Scene thumbnails: the scene at half size, with her sitting in it. */
 .pg-scenes { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 12px; margin: 8px 3px 3px; }
 .pg-scene { padding: 8px 6px; }
@@ -230,3 +246,6 @@
 
 /* While the pet guides a new user, the reader's old empty-state line and its Get started button step aside. */
 body.pet-guide-on #reader-status.empty { visibility: hidden; }
+
+/* What's next: the Get started checklist under the pet's line (rows styled in get-started.css). */
+.pg-whats-next .gs-list { margin-top: 6px; max-width: 34em; }
