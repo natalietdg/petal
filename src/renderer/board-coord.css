@@ -1,23 +1,12 @@
-/* The Board's Activity tab, task and clash lines on cards, and the reader's clash notice.
+/* The Board's "Since you last looked" line and branch filter, task and clash lines on cards, and the reader's clash notice.
    Colours come from the theme's label pairs (ink on pill), which check-contrast.mjs holds at 4.5:1. */
 
-/* Sessions / Activity switch and the branch filter, in the board's head. */
-.board-views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--rule); border-radius: 999px; }
-.board-view {
-  padding: 3px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  font: 600 13px var(--ui-font);
-  cursor: pointer;
-}
-.board-view[aria-selected="true"] { background: var(--code-bg); color: var(--reader-fg); }
-.board-view:focus-visible,
-.board-branch:focus-visible,
-.activity-session:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
-.board-branch,
-.activity-session {
+/* One line under the title: what changed since the Board was last opened. */
+.board-since { flex-basis: 100%; margin: 0; font: 14px/1.45 var(--ui-font); color: var(--muted); overflow-wrap: anywhere; }
+.board-since[hidden] { display: none; }
+/* The branch filter, in the board's head. */
+.board-branch:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.board-branch {
   max-width: 220px;
   padding: 3px 8px;
   border: 1px solid var(--rule);
@@ -28,8 +17,7 @@
 }
 .board-branch[hidden],
 .board-filters[hidden],
-.board-grid[hidden],
-.board-activity[hidden] { display: none; }
+.board-grid[hidden] { display: none; }
 
 /* A card's task pill: Given, Working, Blocked and Done take the theme's label pairs. */
 .board-task .board-label {
@@ -59,35 +47,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Activity: filters, then one row per event, newest first. */
-.activity-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
-.activity-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.activity-row { min-width: 0; }
-.activity-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--rule);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.activity-item:hover { background: var(--code-bg); }
-.activity-item:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
-.activity-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; color: var(--muted); }
-.activity-badge { flex: none; padding: 0 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule); font: 600 11px/1.6 var(--ui-font); letter-spacing: 0.04em; text-transform: uppercase; }
-.activity-badge.clash { background: var(--watch-pill); box-shadow: none; color: var(--watch-ink); }
-.activity-time { flex: none; }
-.activity-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.activity-text { min-width: 0; overflow: hidden; font-size: 14px; overflow-wrap: anywhere; }
-.activity-detail { min-width: 0; overflow: hidden; font: 12px var(--mono-font); color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-
 /* The reader's clash line, under the status strip. */
 .clash-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; margin-top: 8px; font: 13px/1.45 var(--ui-font); color: var(--reader-fg); }
 .clash-notice[hidden] { display: none; }

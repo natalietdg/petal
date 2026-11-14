@@ -1,6 +1,6 @@
-// File clashes and Activity (PASTEL_SNAPSHOT_MODE=clashes): clash chips for two sessions editing one file, the reader's
+// File clashes and the activity feed (PASTEL_SNAPSHOT_MODE=clashes): clash chips for two sessions editing one file, the reader's
 // clash line and heads-up, a task held by a fixture session (given through the store, as Testing does) shown on its card
-// as Task lines move it, and the Activity feed in order with its filters. Contrast and overflow everywhere.
+// as Task lines move it, the feed in order, and the Board's "Since you last looked" line. Contrast and overflow everywhere.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -37,9 +37,11 @@ const CARD_EXTRAS = `[...document.querySelectorAll('#board .board-card')].map((c
   id: c.dataset.sessionId, task: c.querySelector('.board-task .board-text')?.textContent ?? null, taskClass: c.querySelector('.board-task')?.className ?? null,
   clash: c.querySelector('.board-clash')?.textContent ?? null,
 }))`;
-const ACTIVITY = `[...document.querySelectorAll('#board .activity-item')].map((b) => ({ id: b.dataset.id, kind: b.dataset.kind, text: b.querySelector('.activity-text')?.textContent ?? '', who: b.querySelector('.activity-who')?.textContent ?? '', at: Date.parse(b.querySelector('time')?.dateTime ?? '') }))`;
+// The feed as main keeps it (the Board shows it as one "Since you last looked" line, not a list).
+const ACTIVITY = `window.pastel.activity.list().then((events) => events.map((e) => ({ id: e.id, kind: e.kind, text: e.text, who: [e.sessionName, e.toSessionName ? 'to ' + e.toSessionName : null, e.repo, e.branch].filter(Boolean).join(' · '), at: e.at })))`;
+const SINCE = "PastelTerm.sessionsBoard.filters().since";
 
-// Page, board and every card and activity item: nothing sideways at this width.
+// Page, board, every card and the since line: nothing sideways at this width.
 const OVERFLOW = `(() => {
   const over = [];
   const doc = document.documentElement;
@@ -47,7 +49,7 @@ const OVERFLOW = `(() => {
   const board = document.getElementById('board');
   if (board.scrollWidth - board.clientWidth > 1) over.push({ id: '#board', by: board.scrollWidth - board.clientWidth });
   const box = board.getBoundingClientRect();
-  for (const e of board.querySelectorAll('.board-head, .board-card, .activity-filters, .activity-item, .board-clash, .board-task')) {
+  for (const e of board.querySelectorAll('.board-head, .board-card, .board-since, .board-clash, .board-task')) {
     if (!e.getClientRects().length) continue;
     const r = e.getBoundingClientRect();
     if (r.right > box.right + 1 || r.left < box.left - 1) over.push({ id: e.className, right: Math.round(r.right), box: Math.round(box.right) });
@@ -64,7 +66,7 @@ const CONTRAST = `(() => {
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
   const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length >= 3 && (c[3] ?? 1) > 0.5) return c; } return [255, 255, 255]; };
   const out = [];
-  for (const sel of ['.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-view', '.activity-badge', '.activity-text', '.activity-who', '.activity-detail', '.clash-chip', '.clash-text', '.clash-headsup']) {
+  for (const sel of ['.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-since', '.clash-chip', '.clash-text', '.clash-headsup']) {
     for (const e of document.querySelectorAll(sel)) {
       if (!e.getClientRects().length) continue;
       const fg = rgb(getComputedStyle(e).color);
@@ -146,10 +148,10 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     const names: Record<string, string> = await js(`Object.fromEntries(PastelTerm.tabs.ids().map((t) => [PastelTerm.tabs.get(t).update?.sessionId, PastelTerm.tabs.get(t).update?.label]))`);
     const nameOf = (f: Fixture) => names[f.id] ?? '';
 
-    // 1 The Board opens on Sessions; no Tasks section or Give task under the cards.
+    // 1 The Board shows its cards with no view tabs; no Tasks section or Give task under the cards.
     await openBoard();
-    const views = await waitFor(async () => ((await extras(LOGIN)) ? js("[...document.querySelectorAll('#board .board-view')].map((b) => b.textContent + ':' + b.getAttribute('aria-selected'))") : null), 5000);
-    check(JSON.stringify(views) === JSON.stringify(['Sessions:true', 'Activity:false']), `under the Sessions view: ${JSON.stringify(views)}`);
+    const tabsShown = await waitFor(async () => ((await extras(LOGIN)) ? js("document.querySelectorAll('#board .board-view').length") : null), 5000);
+    check(tabsShown === 0, `no Sessions/Activity tabs: ${tabsShown}`);
     check(!(await js("document.querySelector('#board .board-tasks, #board .board-give, #board .task-row')")), 'no task list or Give task on the Board');
 
     // 2 A task given to the login session through the store (as Testing does) shows on its card; Task lines move it.
@@ -194,56 +196,44 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     recordActivity({ id: 'test:run-snapshot', kind: 'test', sessionId: null, sessionName: null, branch: 'main', repo: 'shop', text: 'Tests passed in shop: 42 passed', detail: ['Unit: passed'], target: { runId: 'run-snapshot' } });
     recordActivity({ kind: 'library', sessionId: DOCS.id, sessionName: nameOf(DOCS), branch: null, repo: null, text: `Library: 1 note added from ${nameOf(DOCS)}` });
     recordActivity({ kind: 'message', sessionId: API.id, sessionName: nameOf(API), branch: 'feature-x', repo: 'api', toSessionId: LOGIN.id, toSessionName: nameOf(LOGIN), text: 'Coupons change the cart total too; rebase after mine lands.' });
-    await openBoard();
-    await js("document.querySelector('#board .board-view[data-view=\"activity\"]').click()");
     const kinds = ['task', 'edits', 'test', 'conclusion', 'library', 'clash', 'message'];
     const concluded = `${nameOf(DOCS)} concluded: The cart API is documented.`; // the coord tick records it a moment later
     const listed = await waitFor(async () => { const items: { kind: string; text: string }[] = await js(ACTIVITY); return kinds.every((k) => items.some((i) => i.kind === k)) && items.some((i) => i.text === concluded) ? items : null; }, 8000);
     const items: { id: string; kind: string; text: string; who: string; at: number }[] = listed ?? await js(ACTIVITY);
-    check(listed, `Activity lists every kind: ${JSON.stringify(kinds.map((k) => [k, items.filter((i) => i.kind === k).length]))}`);
+    check(listed, `the feed records every kind: ${JSON.stringify(kinds.map((k) => [k, items.filter((i) => i.kind === k).length]))}`);
     check(items.every((i, n) => n === 0 || (items[n - 1]?.at ?? 0) >= i.at), `newest first: ${JSON.stringify(items.map((i) => `${i.kind}@${new Date(i.at).toISOString().slice(11, 19)}`))}`);
     const texts = items.map((i) => i.text);
     for (const want of [`Gave “Fix the cart total” to ${nameOf(LOGIN)}`, `${nameOf(LOGIN)} started “Fix the cart total”`, `${nameOf(LOGIN)} finished “Fix the cart total”`, `${nameOf(LOGIN)} and ${nameOf(DOCS)} both edited src/cart.ts`, `${nameOf(DOCS)} concluded: The cart API is documented.`, `${nameOf(DOCS)} edited 2 files`]) {
-      check(texts.includes(want), `Activity has "${want}"`);
+      check(texts.includes(want), `the feed has "${want}"`);
     }
     const finished = items.findIndex((i) => i.text.includes('finished “Fix')), started = items.findIndex((i) => i.text.includes('started “Fix')), gave = items.findIndex((i) => i.text.startsWith('Gave “Fix'));
     check(finished < started && started < gave, `task given, then claimed, then done, read newest first: ${JSON.stringify({ finished, started, gave })}`);
     check(items.find((i) => i.kind === 'edits' && i.text.includes(nameOf(API)))?.who.includes('feature-x'), 'items carry the session’s branch');
-    await capture('activity');
 
-    // 5 Filters: kind, session and branch; each one narrows the list to exactly its items.
-    const press = async (selector: string) => { await js(`document.querySelector(${JSON.stringify(selector)}).click()`); await settle(); return (await js(ACTIVITY)) as typeof items; };
-    const edits = await press('#board .activity-kind[data-kind="edits"]');
-    check(edits.length === items.filter((i) => i.kind === 'edits').length && edits.every((i) => i.kind === 'edits'), `Edits filter: ${edits.length}`);
-    await press('#board .activity-kind[data-kind="all"]');
-    await js(`(() => { const s = document.querySelector('#board .activity-session'); s.value = ${JSON.stringify(DOCS.id)}; s.dispatchEvent(new Event('change')); })()`);
-    await settle();
-    const docsOnly: typeof items = await js(ACTIVITY);
-    check(docsOnly.length > 0 && docsOnly.every((i) => i.text.includes(nameOf(DOCS)) || i.who.includes(nameOf(DOCS))), `session filter keeps that session's items: ${JSON.stringify(docsOnly.map((i) => i.text))}`);
-    await js("(() => { const s = document.querySelector('#board .activity-session'); s.value = ''; s.dispatchEvent(new Event('change')); })()");
+    // 5 The branch filter narrows the Board's cards.
+    await openBoard();
     await js("(() => { const s = document.querySelector('#board .board-branch'); s.value = 'feature-x'; s.dispatchEvent(new Event('change')); })()");
     await settle();
-    const featureOnly: typeof items = await js(ACTIVITY);
-    check(featureOnly.length >= 2 && featureOnly.every((i) => i.who.includes('feature-x')), `branch filter on Activity: ${JSON.stringify(featureOnly.map((i) => i.text))}`);
-    await js("document.querySelector('#board .board-view[data-view=\"sessions\"]').click()");
-    await settle();
     const featureCards: string[] = await js("[...document.querySelectorAll('#board .board-card')].map((c) => c.dataset.sessionId)");
-    check(JSON.stringify(featureCards) === JSON.stringify([API.id]), `the same branch filter on the Board's cards: ${JSON.stringify(featureCards)}`);
+    check(JSON.stringify(featureCards) === JSON.stringify([API.id]), `the branch filter on the Board's cards: ${JSON.stringify(featureCards)}`);
     await js("(() => { const s = document.querySelector('#board .board-branch'); s.value = ''; s.dispatchEvent(new Event('change')); })()");
 
-    // 6 Clicking an item jumps: a Task line's item to its tab and reply, a test run to Testing.
-    await js("document.querySelector('#board .board-view[data-view=\"activity\"]').click()");
-    await settle();
-    const doneItem = (await js(ACTIVITY) as typeof items).find((i) => i.text.includes('finished “Fix'));
-    await js(`document.querySelector('#board .activity-item[data-id="${doneItem?.id}"]').click()`);
-    const jumped = await waitFor(async () => { const s = await js("({ active: PastelTerm.tabs.active()?.id, open: PastelTerm.overlays.current(), flash: Boolean(document.querySelector('#reader .flash')) })"); return s.active === loginTab && s.open === null ? s : null; }, 4000);
-    check(jumped, `a task item opens its session's tab and reply: ${JSON.stringify(jumped)}`);
+    // 6 No Activity tab; "Since you last looked" counts what was recorded after the previous open, by kind.
+    check(!(await js("Boolean(document.querySelector('#board .board-view, #board .board-activity'))")), 'the Board has no Activity tab');
+    await js('PastelTerm.sessionsBoard.close()');
+    await wait(300);
+    recordActivity({ kind: 'message', sessionId: API.id, sessionName: nameOf(API), branch: 'feature-x', repo: 'api', toSessionId: DOCS.id, toSessionName: nameOf(DOCS), text: 'Cart docs need the coupon field.' });
+    recordActivity({ kind: 'library', sessionId: DOCS.id, sessionName: nameOf(DOCS), branch: null, repo: null, text: `Library: 1 note added from ${nameOf(DOCS)}` });
+    await wait(1100); // the feed and config saves land
     await openBoard();
-    await js("document.querySelector('#board .board-view[data-view=\"activity\"]').click()");
-    await settle();
-    await js("document.querySelector('#board .activity-item[data-id=\"test:run-snapshot\"]').click()");
-    check(await waitFor(() => js("PastelTerm.overlays.current() === 'testing' || null"), 4000), 'a test run item opens Testing');
-    await js('PastelTerm.testing.close()');
+    const line = await waitFor(() => js(SINCE), 4000) as string | null;
+    check(line === 'Since you last looked, just now: 1 Library update · 1 message.', `since line counts only the new items: ${JSON.stringify(line)}`);
+    await capture('since-last-looked');
+    await js('PastelTerm.sessionsBoard.close()');
+    await wait(300);
+    await openBoard();
+    const quiet = await waitFor(() => js(SINCE), 4000) as string | null;
+    check(quiet === 'Nothing new since you last looked, just now.', `reopened with nothing new: ${JSON.stringify(quiet)}`);
 
     // 7 Survives a restart: the capped list is in userData/activity.json.
     flushActivity();
@@ -251,7 +241,7 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     const persisted = JSON.parse(fs.readFileSync(userData, 'utf8')) as { version: number; events: { kind: string }[] };
     check(persisted.version === 1 && persisted.events.length >= items.length && persisted.events.length <= 500, `activity.json keeps ${persisted.events.length} events (cap 500)`);
 
-    // 8 Contrast in 3 themes x 4 reading styles, Sessions and Activity views, and the reader's clash line.
+    // 8 Contrast in 3 themes x 4 reading styles, the Board and the reader's clash line.
     await openBoard();
     for (const [themeId] of Object.entries(themes)) {
       applyTheme(themeId, { persist: false });
@@ -260,13 +250,10 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
         await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
         const low: { sel: string; ratio: number }[] = [];
         let counted = 0;
-        for (const boardView of ['sessions', 'activity']) {
-          await js(`document.querySelector('#board .board-view[data-view="${boardView}"]').click()`);
-          await wait(200);
-          const pairs: { sel: string; cls: string; ratio: number }[] = await js(CONTRAST);
-          counted += pairs.length;
-          low.push(...pairs.filter((p) => p.ratio < 4.5));
-        }
+        await wait(200);
+        const pairs: { sel: string; cls: string; ratio: number }[] = await js(CONTRAST);
+        counted += pairs.length;
+        low.push(...pairs.filter((p) => p.ratio < 4.5));
         await js('PastelTerm.sessionsBoard.close()');
         await js(`PastelTerm.tabs.activate(${JSON.stringify(loginTab)})`);
         await wait(200);
@@ -280,15 +267,12 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
     applyTheme('paleSky', { persist: false });
     await js("window.pastel.look.setReading('newspaper')");
 
-    // 9 No overflow at 800, 1200 and 1600, in Sessions and Activity.
+    // 9 No overflow at 800, 1200 and 1600.
     for (const width of WIDTHS) {
       check(await sizeTo(width), `${width}px window sized`);
-      for (const boardView of ['sessions', 'activity']) {
-        await js(`document.querySelector('#board .board-view[data-view="${boardView}"]').click()`);
-        await wait(250);
-        const over = await js(OVERFLOW);
-        check(over.length === 0, `${width}px ${boardView}: nothing sideways ${JSON.stringify(over)}`);
-      }
+      await wait(250);
+      const over = await js(OVERFLOW);
+      check(over.length === 0, `${width}px Board: nothing sideways ${JSON.stringify(over)}`);
       await js('PastelTerm.sessionsBoard.close()');
       await js(`PastelTerm.tabs.activate(${JSON.stringify(loginTab)})`);
       await wait(200);
@@ -297,7 +281,6 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
       await openBoard();
     }
     check(await sizeTo(1280), 'back to 1280px');
-    await js("document.querySelector('#board .board-view[data-view=\"sessions\"]').click()");
   } finally {
     applyTheme('paleSky', { persist: false });
     await js("window.pastel.look.setReading('newspaper')");

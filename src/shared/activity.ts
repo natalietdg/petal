@@ -1,5 +1,5 @@
 // The shared activity feed: one list of what every open session did, newest first, capped.
-// Main records events (main/activity-feed.ts); the Board's Activity tab lists and filters them.
+// Main records events (main/activity-feed.ts); the Board's "Since you last looked" line counts them.
 
 export type ActivityKind = 'task' | 'edits' | 'test' | 'conclusion' | 'library' | 'clash' | 'message';
 export const ACTIVITY_KINDS: readonly ActivityKind[] = ['task', 'edits', 'test', 'conclusion', 'library', 'clash', 'message'];

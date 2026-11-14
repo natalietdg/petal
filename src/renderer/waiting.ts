@@ -27,7 +27,7 @@ lane.append(el('h3', 'waiting-title', 'Waiting on you'), list);
 lane.hidden = true;
 
 let needs: Need[] = [];
-let shown = true; // Board's Sessions view; Activity and Code review hide the lane
+let shown = true; // the Board's cards; Code review hides the lane
 let queued = false;
 let reportedKey = '';
 const askSeen = new Map<string, { ask: ScreenAsk; since: number }>(); // by tab: when its prompt first showed

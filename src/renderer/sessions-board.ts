@@ -7,10 +7,7 @@ import * as favorites from './favorites';
 import * as stopClaude from './stop-claude';
 import * as boardMessage from './board-message';
 import * as coord from './coord';
-import * as boardActivity from './board-activity';
-import * as reader from './reader';
 import * as distillCard from './distill-card';
-import * as testing from './testing';
 import * as codeReviewTask from './code-review-task';
 import * as waiting from './waiting';
 import * as workflow from './workflow';
@@ -21,7 +18,7 @@ import { STATUS_KEYS, STATUS_TITLES } from '../shared/status-lines';
 import { type SessionsView } from '../shared/ipc';
 import { agentsBadge, type ChildRow } from '../shared/subsessions';
 import { TASK_STATUS_WORDS } from '../shared/tasks';
-import type { ActivityEvent } from '../shared/activity';
+import { sinceLine } from '../shared/since-last-looked';
 import {
   BOARD_FILTERS, EMPTY_DIGEST, FILTER_WORDS, STATUS_WORDS, boardSections, digestReplies, filterCards, lastUpdate, matchesFilter, repoGroupOf, sortCards, toCard,
   type BoardCard, type BoardFilter, type BoardSource, type RepoGroup,
@@ -29,7 +26,7 @@ import {
 
 const view = byId('board');
 const head = el('header', 'board-head');
-const title = el('h2', 'board-title', 'Board'); // matches the header button; the Sessions and Activity tabs say which view
+const title = el('h2', 'board-title', 'Board'); // matches the header button
 const summary = el('p', 'board-summary');
 const filterRow = el('div', 'board-filters');
 filterRow.setAttribute('role', 'group');
@@ -37,24 +34,13 @@ filterRow.setAttribute('aria-label', 'Show');
 view.tabIndex = -1; // focusable, so Esc reaches the overlay with no card to focus
 const grid = el('ul', 'board-grid');
 grid.setAttribute('aria-label', 'Open Claude sessions');
-// Sessions (cards) or Activity (the shared feed); one branch filter for both.
-type BoardView = 'sessions' | 'activity';
-const viewTabs = el('div', 'board-views');
-viewTabs.setAttribute('role', 'tablist');
-viewTabs.setAttribute('aria-label', 'Board view');
-const viewButtons = (['sessions', 'activity'] as const).map((id) => {
-  const b = el('button', 'board-view', id === 'sessions' ? 'Sessions' : 'Activity');
-  b.type = 'button';
-  b.dataset.view = id;
-  b.setAttribute('role', 'tab');
-  b.addEventListener('click', () => setView(id));
-  return b;
-});
-viewTabs.append(...viewButtons);
+// One line on what the activity feed recorded since the Board was last opened; worked out once per open.
+const since = el('p', 'board-since');
+since.hidden = true;
 const branchSelect = el('select', 'board-branch');
 branchSelect.setAttribute('aria-label', 'Branch');
-branchSelect.addEventListener('change', () => { branchFilter = branchSelect.value || null; boardActivity.setBranch(branchFilter); render(true); });
-head.append(title, viewTabs, summary, branchSelect, filterRow);
+branchSelect.addEventListener('change', () => { branchFilter = branchSelect.value || null; render(true); });
+head.append(title, summary, branchSelect, filterRow, since); // since wraps to its own line under the title row
 const today = el('section', 'board-today');
 today.setAttribute('aria-label', 'Today');
 const todayBody = el('div', 'board-today-body');
@@ -66,10 +52,9 @@ orphansSection.setAttribute('aria-label', 'Headless runs');
 const orphansList = el('div', 'board-headless-body');
 orphansSection.append(el('h3', 'board-lane-title', 'Headless runs'), orphansList);
 orphansSection.hidden = true;
-view.append(head, sessionsPanel.limitElement(), waiting.element(), grid, closed, today, orphansSection, boardActivity.element(), codeReviewTask.element());
+view.append(head, sessionsPanel.limitElement(), waiting.element(), grid, closed, today, orphansSection, codeReviewTask.element());
 
 let filter: BoardFilter = 'all';
-let boardView: BoardView = 'sessions';
 let branchFilter: string | null = null;
 let lastView: SessionsView | null = null;
 let folderAllowed = true;
@@ -347,36 +332,20 @@ async function closeCard(sessionId: string): Promise<void> {
   render(true);
 }
 
-// An Activity item: its tab here (and reply), Testing for a run, else the session as a card click opens it.
-function jump(event: ActivityEvent): void {
-  if (event.target?.runId) {
-    close();
-    void testing.open();
-    return;
-  }
-  const source = event.sessionId ? sources(lastView?.rows).find((s) => s.sessionId === event.sessionId) : null;
-  if (!source) return;
-  if (source.tabId && tabs.get(source.tabId)) {
-    close();
-    tabs.activate(source.tabId);
-    const replyId = event.target?.replyId;
-    if (replyId) setTimeout(() => reader.showReply([replyId]), 0);
-    return;
-  }
-  setView('sessions');
-  void choose(toCard(source), false);
-}
-
-function setView(next: BoardView): void {
-  boardView = next;
-  boardActivity.show(next === 'activity');
-  render(true);
+// The line compares against the previous open, then this open becomes the one the next line compares against.
+async function paintSince(): Promise<void> {
+  const [state, events] = await Promise.all([window.pastel.config.get(), window.pastel.activity.list()]);
+  if (isIpcError(state) || isIpcError(events)) { since.hidden = true; return; }
+  const lastLooked = state.config.board.lastLooked;
+  const line = sinceLine(events, lastLooked, sessionsPanel.sinceText(lastLooked));
+  since.textContent = line ?? '';
+  since.hidden = !line;
+  await window.pastel.config.save({ board: { lastLooked: Date.now() } });
 }
 
 function branchOptions(cards: readonly BoardCard[]): void {
   const branches = new Set<string>();
   for (const card of cards) { const b = coord.session(card.sessionId)?.branch; if (b) branches.add(b); }
-  for (const e of boardActivity.all()) if (e.branch) branches.add(e.branch);
   if (branchFilter) branches.add(branchFilter);
   const options = [['', 'All branches'], ...[...branches].sort().map((b) => [b, b])];
   const key = JSON.stringify(options);
@@ -432,8 +401,7 @@ function render(force = false): void {
   const cards = all.filter(onBranch);
   const shown = filterCards(cards, filter);
   const stops = cards.map((c) => (c.tabId ? stopClaude.phaseOf(c.tabId) : 'hidden'));
-  for (const b of viewButtons) b.setAttribute('aria-selected', String(b.dataset.view === boardView));
-  const sessionsView = boardView === 'sessions' && !codeReviewTask.isOpen();
+  const sessionsView = !codeReviewTask.isOpen();
   filterRow.hidden = !sessionsView;
   grid.hidden = !sessionsView;
   closed.hidden = !sessionsView;
@@ -441,7 +409,7 @@ function render(force = false): void {
   waiting.setShown(sessionsView);
   const agentRows = lastView?.rows?.map((r) => [r.subagents, r.children]);
   const orphans = lastView?.orphans ?? [];
-  const key = JSON.stringify([filter, boardView, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  const key = JSON.stringify([filter, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -478,7 +446,7 @@ grid.addEventListener('keydown', (event) => {
 export function open(): void {
   if (!overlays.show('board')) return;
   shownKey = '';
-  boardActivity.show(boardView === 'activity');
+  void paintSince();
   render(true);
   waiting.refresh();
   void workflow.showToday(todayBody); // once per open; Today changes slowly
@@ -494,13 +462,11 @@ export function close(): void {
 export const toggle = (): void => (isOpen() ? close() : open());
 
 // Snapshot harness: what the Board shows, and back to its defaults between steps.
-export const filters = () => ({ filter, boardView, branchFilter, activity: boardActivity.filterState() });
+export const filters = () => ({ filter, branchFilter, since: since.hidden ? null : since.textContent });
 export function resetFilters(): void {
   filter = 'all';
-  boardView = 'sessions';
   branchFilter = null;
   shownKey = '';
-  boardActivity.resetFilters();
 }
 
 // Follows her folder choice; Allow fills an open board on the next tick.
@@ -515,7 +481,6 @@ sessionsPanel.onView((next) => {
 });
 favorites.onChange(() => render());
 coord.onChange(() => render());
-boardActivity.init(jump);
 // The overlay can close by Esc or by another view opening: stop asking for digests then.
 new MutationObserver(() => {
   if (!view.hidden || !following) return;

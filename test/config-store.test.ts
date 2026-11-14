@@ -20,7 +20,7 @@ const configFile = () => path.join(dir, 'config.json');
 describe('config-store defaults and load', () => {
   it('has twenty sections with the documented defaults', () => {
     const d = config.defaults();
-    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude']);
+    expect(Object.keys(d)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude', 'board']);
     expect(d.layout).toEqual({ splits: {}, terminalMinimised: false });
     expect(d.history).toEqual({ listCollapsed: false, favorites: [] });
     expect(d.pet).toEqual({ size: 'normal' });
@@ -168,7 +168,7 @@ describe('config-store save validation', () => {
 
   it('ignores unknown sections and keys', () => {
     const c = config.save({ organizer: { perPass: 3 }, ...({ bogus: { x: 1 } } as object) });
-    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude']);
+    expect(Object.keys(c)).toEqual(['organizer', 'flowTitles', 'responseHook', 'sessions', 'tarot', 'welcome', 'notesPanel', 'layout', 'history', 'reader', 'pet', 'getStarted', 'onboarding', 'claudeFolder', 'library', 'lessons', 'background', 'updates', 'text', 'testing', 'advanced', 'conclude', 'board']);
     expect(Object.keys(c.organizer)).toEqual(['enabled', 'intervalMinutes', 'perPass', 'model', 'prompt']);
   });
 

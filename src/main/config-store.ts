@@ -1,4 +1,4 @@
-// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes, testing notifications, Advanced. Look stays in settings.json.
+// Her customisations in <userData>/config.json: organizer, flow titles, response hook, sessions, tarot birthday, first run, Library, lessons, background model, update versions seen, text sizes, testing notifications, Advanced, when the Board was last opened. Look stays in settings.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -66,6 +66,8 @@ export interface Config {
   advanced: { on: boolean };
   // Conclude closes the tab after its summary; the first time, Petal asks first. True once she said Close.
   conclude: { warned: boolean };
+  // When the Board was last opened (ms since epoch, 0 before the first), for its "Since you last looked" line.
+  board: { lastLooked: number };
 }
 
 type Section = keyof Config;
@@ -109,6 +111,7 @@ const DEFAULTS: Readonly<Config> = Object.freeze({
   testing: { notify: true },
   advanced: { on: false },
   conclude: { warned: false },
+  board: { lastLooked: 0 },
 });
 
 const configFile = () => path.join(app.getPath('userData'), 'config.json');
@@ -182,6 +185,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
   const te = raw.testing ?? {};
   const ad = raw.advanced ?? {};
   const cc = raw.conclude ?? {};
+  const bd = raw.board ?? {};
   return {
     organizer: {
       enabled: boolOr(o.enabled, b.organizer.enabled),
@@ -226,6 +230,7 @@ function validate(raw: ConfigPatch = {}, base: Config = DEFAULTS): Config {
     testing: { notify: boolOr(te.notify, b.testing.notify) },
     advanced: { on: boolOr(ad.on, b.advanced.on) },
     conclude: { warned: boolOr(cc.warned, b.conclude.warned) },
+    board: { lastLooked: intIn(bd.lastLooked, 0, Number.MAX_SAFE_INTEGER, b.board.lastLooked) },
   };
 }
 

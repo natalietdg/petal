@@ -37,7 +37,6 @@ import * as favorites from './favorites';
 import * as sessionsBoard from './sessions-board';
 import * as waiting from './waiting';
 import * as coord from './coord';
-import * as boardActivity from './board-activity';
 import * as clashNotice from './clash-notice';
 import * as focusMode from './focus-mode';
 import * as readerBanners from './reader-banners';
@@ -57,7 +56,7 @@ import type { Guarded } from '../shared/ipc';
 import type { ReaderUpdate, Theme } from '../shared/types';
 
 // Debug and test handle: the snapshot run drives the page through window.PastelTerm via executeJavaScript.
-const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, advanced, coord, boardActivity, clashNotice };
+const debugHandle = { theme: themeKit, reader, tabs, sessionsPanel, scenes, cat, diagrams, history, composer, workflow, customize, overlays, promptDock, repos, updatePill, dockFit, headFit, getStarted, consent, launchScreens, petGuide, notesPanel, agentsMenu, agentPanel, favorites, sessionsBoard, waiting, focusMode, readerBanners, layout, shortcuts, readerFind, library, libraryAdd, testing, stopClaude, textSize, advanced, coord, clashNotice };
 export type DebugHandle = typeof debugHandle;
 window.PastelTerm = debugHandle;
 
