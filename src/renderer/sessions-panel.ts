@@ -178,6 +178,8 @@ function limitBanner(view: SessionsView, rows: SessionRow[]): HTMLDivElement {
   } else {
     banner.append(textButton('Close oldest idle', 'flow-button sessions-limit-close', () => { confirming = { sessionId: oldest.sessionId }; refresh(); }));
   }
+  const note = oldest && notes.get(oldest.sessionId); // why a Yes didn't close it; the banner is its only place now
+  if (note) banner.append(el('p', 'session-note', note));
   return banner;
 }
 
