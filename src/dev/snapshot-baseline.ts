@@ -27,7 +27,7 @@ const PAGE_STATE = `(() => {
     split: document.getElementById('divider').getAttribute('aria-valuenow'),
     reading: document.documentElement.dataset.reading ?? null,
     readerView: P.reader.currentView(),
-    board: P.sessionsBoard.filters(),
+    board: (({ filter, branchFilter }) => ({ filter, branchFilter }))(P.sessionsBoard.filters()), // not "since": its age text moves with the clock
     testing: P.testing.leftovers(),
     text: P.textSize.current(),
   };
