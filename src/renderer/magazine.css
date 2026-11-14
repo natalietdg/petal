@@ -39,6 +39,7 @@
   font-variant-caps: all-small-caps;
   letter-spacing: 0.18em;
   font-size: calc(14px * var(--reader-scale));
+  overflow-wrap: anywhere; /* a long cwd breaks instead of pushing the History preview sideways at 800px */
 }
 [data-reading="editorial"] .status::before,
 [data-reading="editorial"] .status::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
