@@ -10,7 +10,7 @@ const SHOWS = [
   'The test lock',
   'PRs deploy order and “Is main safe for prod?”',
   'Scenarios, manual checks, the bug queue and Azure DevOps bug copy',
-  'Customize › Prompts, Time, Handoffs and Factory',
+  'Customize › Prompts, Response hook, Time, Handoffs and Factory',
 ];
 
 export function renderAdvanced(): HTMLElement[] {
