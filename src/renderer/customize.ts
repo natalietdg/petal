@@ -28,7 +28,7 @@ const SECTIONS: Section[] = [
   { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, and what each colour means.' },
   { id: 'claude', name: 'Claude setup', summary: 'What Petal adds to Claude Code: the output style Claude answers in, Petal’s skills, lessons, and your CLAUDE.md, agents and skills.' },
   { id: 'organizer', name: 'Organizer', summary: 'How many sessions can be open, and optional background agents that title, file and tag your sessions and build your Library. The agents are off by default and use your Claude plan.' },
-  { id: 'prompts', name: 'Prompts', summary: 'The prompt that turns each step of a session into the state changes on the Flow view, and what Send to Claude writes when one session hands its history to another.', advancedOnly: true },
+  { id: 'prompts', name: 'Prompts', summary: 'The prompt that turns each step of a session into the state changes on History’s Flow view, and what Send to Claude writes when one session hands its history to another.', advancedOnly: true },
   { id: 'hook', name: 'Response hook', summary: 'A shell command of yours that runs each time Claude finishes a reply.', advancedOnly: true },
   { id: 'start', name: 'First steps', summary: 'Whether Petal may read your Claude folder, what it costs in tokens, and the setup guide.' },
   workflowSection('time'),

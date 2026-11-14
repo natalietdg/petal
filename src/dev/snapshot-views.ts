@@ -44,48 +44,55 @@ async function exportAndPreview(kit: Kit, containerSelector: string, name: strin
   return js(`document.querySelector('${containerSelector} .flow-export').lastSource`);
 }
 
-// Flow for this window's (fixture) session, plus its exported chart.
+// The reader's contents rail for this window's (fixture) session, then its stored flow and chart through the flow IPC
+// (the reader has no Flow tab; History's Flow mode still draws flows, checked in realSessionFlow).
+const RAIL = `(() => {
+  const rail = document.querySelector('#replies-view .contents-rail');
+  const column = document.querySelector('#reader .reader-column');
+  const reader = document.getElementById('reader');
+  return {
+    exists: Boolean(rail),
+    shown: Boolean(rail && !rail.hidden && rail.getBoundingClientRect().width > 0),
+    items: rail ? [...rail.querySelectorAll('.contents-rail-item')].map((b) => b.textContent) : [],
+    replies: document.querySelectorAll('#reader [data-reply-id]').length,
+    gutter: Math.round(column.getBoundingClientRect().left - reader.getBoundingClientRect().left),
+    overlapsText: rail && !rail.hidden ? rail.getBoundingClientRect().right > document.getElementById('latest').getBoundingClientRect().left : false,
+    flowTab: Boolean(document.querySelector('#reader-head .view-toggle [data-view="flow"], #flow-view')),
+  };
+})()`;
+
 export async function fixtureFlow(kit: Kit): Promise<void> {
   const { js, waitFor, log, themes, applyTheme, verifiedCapture, outDir } = kit;
   applyTheme('paleSky', { persist: false });
+  await js("PastelTerm.reader.setView('replies')");
+  for (const id of THEMES) {
+    applyTheme(id, { persist: false });
+    const rail = await js(RAIL);
+    const roomy = rail.gutter >= 200;
+    log(`${!rail.flowTab && rail.exists && rail.shown === (roomy && rail.replies >= 2) && rail.items.length === rail.replies && !rail.overlapsText ? 'ok' : 'FAIL'} contents rail ${id}, no Flow tab: ${JSON.stringify(rail)}`);
+    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `contents-rail-${id}` });
+  }
+  await js("document.querySelector('#replies-view .contents-rail-item')?.click()");
+  log(`${await js("Boolean(document.querySelector('.flash'))") ? 'ok' : 'FAIL'} rail click jumps to its reply: view=${await js('PastelTerm.reader.currentView()')}`);
+
   const before = counters.flowExtractions;
-  await js("PastelTerm.reader.setView('flow')");
-  const empty = await waitFor(() => js("Boolean(document.querySelector('#flow-view .flow-empty'))"), 10000);
-  log(`${empty && counters.flowExtractions === before ? 'ok' : 'FAIL'} no stored flow: empty state shown, jsonl extractions ${counters.flowExtractions - before}`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-empty-paleSky' });
-  await js("document.querySelector('#flow-view .flow-empty .flow-button').click()");
-  await waitFor(() => js("document.querySelectorAll('#flow-view .flow-step').length"), 100_000); // Haiku titling can take up to claude-cli's 90s
+  const current = "{ kind: 'current' }";
+  const empty = await js(`window.pastel.flow.get(${current})`);
+  log(`${empty && 'empty' in empty && counters.flowExtractions === before ? 'ok' : 'FAIL'} no stored flow yet, jsonl extractions ${counters.flowExtractions - before}`);
+  await js(`window.pastel.flow.create(${current})`);
+  await waitFor(async () => ((await js(`window.pastel.flow.get(${current})`))?.steps?.length ? true : null), 100_000); // Haiku titling can take up to claude-cli's 90s
   const file = flowStore.fileFor('fixture');
   const stored = flowStore.load('fixture');
   log(`${stored ? 'ok' : 'FAIL'} created: ${file} exists=${Boolean(file && fs.existsSync(file))} keys=${stored && Object.keys(stored).join(',')} steps=${stored?.steps.length} under ~/.claude=${file?.includes('/.claude/')}`);
-  for (const id of THEMES) {
-    applyTheme(id, { persist: false });
-    await js("PastelTerm.reader.setView('flow')");
-    await waitFor(() => js("document.querySelectorAll('#flow-view .flow-step').length"), 10000);
-    const shape = await js(`({
-      steps: document.querySelectorAll('#flow-view .flow-step').length,
-      quietRows: [...document.querySelectorAll('#flow-view .flow-quiet')].map((b) => b.textContent),
-      waiting: document.querySelectorAll('#flow-view .flow-step.waiting').length,
-      finalNext: document.querySelector('#flow-view .flow-final')?.innerText ?? null,
-      flowDecisions: document.querySelectorAll('#flow-view .flow-decision').length,
-      decisionsTab: Boolean(document.querySelector('#reader-head .view-toggle [data-view="decisions"], #decisions-view')),
-    })`);
-    log(`fixture flow ${id}: ${JSON.stringify(shape)}`);
-    await js("PastelTerm.reader.setView('confirmed')");
-    const decided = await js("[...document.querySelectorAll('#confirmed-view .confirmed-decided .confirmed-actor')].map((a) => a.textContent)") as string[];
-    await js("PastelTerm.reader.setView('flow')");
-    log(`${shape.flowDecisions === 0 && decided.includes('Decided by you') && !shape.decisionsTab ? 'ok' : 'FAIL'} decisions shown in Confirmed › Decided, none on Flow cards, no Decisions tab ${id}: ${JSON.stringify(decided)}`);
-    await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `flow-${id}` });
-    const source = await exportAndPreview(kit, '#flow-view', `flow-export-${id}`, themes[id]);
-    if (id === 'paleSky') {
-      const file = path.join(outDir, 'fixture-flow.mmd');
-      fs.writeFileSync(file, source ?? '');
-      log(`fixture .mmd written: ${file}; equals the stored mermaid: ${source === flowStore.load('fixture')?.mermaid.latest.source}`);
-    }
-  }
-  // Click a step: it must land on that reply in Replies view.
-  await js("document.querySelector('#flow-view .flow-step:last-of-type .flow-step-head').click()");
-  log(`jump to reply: view=${await js('PastelTerm.reader.currentView()')} flashed=${await js("Boolean(document.querySelector('.flash'))")}`);
+  const chart = await js(`window.pastel.flow.mermaid(${current}, false).then(async (r) => ({ source: r?.source ?? '', valid: r ? await PastelTerm.diagrams.validate(r.source) : false }))`);
+  log(`${chart.valid ? 'ok' : 'FAIL'} fixture flow exports a valid Mermaid chart`);
+  const mmd = path.join(outDir, 'fixture-flow.mmd');
+  fs.writeFileSync(mmd, chart.source);
+  log(`fixture .mmd written: ${mmd}; equals the stored mermaid: ${chart.source === flowStore.load('fixture')?.mermaid.latest.source}`);
+
+  await js("PastelTerm.reader.setView('confirmed')");
+  const decided = await js("[...document.querySelectorAll('#confirmed-view .confirmed-decided .confirmed-actor')].map((a) => a.textContent)") as string[];
+  log(`${decided.includes('Decided by you') ? 'ok' : 'FAIL'} decisions shown in Confirmed › Decided: ${JSON.stringify(decided)}`);
   await js("PastelTerm.reader.setView('replies')");
   applyTheme('paleSky', { persist: false });
 }
@@ -235,32 +242,29 @@ export async function openFromHistory(kit: Kit, { pty, feed, transcript, session
 }
 
 
-// Second launch on the same userData: the stored flow shows without parsing, then goes stale on new lines.
+// Second launch on the same userData: the stored flow loads without parsing, then goes stale on new lines (read through the flow IPC).
 export async function flowRelaunch(kit: Kit, { fixtureFile, realSessionId }: { fixtureFile: string; realSessionId: string }): Promise<void> {
   const { js, wait, waitFor, log, themes, applyTheme, verifiedCapture } = kit;
   applyTheme('paleSky', { persist: false });
   const before = counters.flowExtractions;
-  await js("PastelTerm.reader.setView('flow')");
-  const steps = await waitFor(() => js("document.querySelectorAll('#flow-view .flow-step').length || null"), 15000);
-  log(`${steps && counters.flowExtractions === before ? 'ok' : 'FAIL'} relaunch: stored flow rendered (${steps} cards), jsonl extractions ${counters.flowExtractions - before}, stale note ${await js("Boolean(document.querySelector('#flow-view .flow-stale:not(:empty)'))")}`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-relaunch-paleSky' });
+  const getFlow = () => js("window.pastel.flow.get({ kind: 'current' })");
+  const loaded = await waitFor(async () => (await getFlow())?.steps?.length ? await getFlow() : null, 15000);
+  const steps = loaded?.steps.length ?? 0;
+  log(`${steps && counters.flowExtractions === before ? 'ok' : 'FAIL'} relaunch: stored flow loaded (${steps} steps), jsonl extractions ${counters.flowExtractions - before}, stale ${loaded?.stale}`);
 
   assertFixtureOutsideClaude(fixtureFile);
   const line = (fields: Record<string, unknown>) => `${JSON.stringify({ isSidechain: false, timestamp: new Date().toISOString(), ...fields })}\n`;
   fs.appendFileSync(fixtureFile, line({ type: 'user', uuid: 'fixture-u9', message: { role: 'user', content: 'add a stored flow' } })
     + line({ type: 'assistant', uuid: 'fixture-a9', message: { role: 'assistant', content: [{ type: 'text', text: '**Flows are now stored.**\n\n**Done:** flows save to userData and load instantly' }] } }));
-  const stale = await waitFor(() => js("document.querySelector('#flow-view .flow-stale')?.innerText.includes('continued') || null"), 15000);
-  log(`${stale && counters.flowExtractions === before ? 'ok' : 'FAIL'} after append: stale note shown, nothing auto-updated (extractions ${counters.flowExtractions - before})`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-stale-paleSky' });
+  const stale = await waitFor(async () => (await getFlow())?.stale || null, 15000);
+  log(`${stale && counters.flowExtractions === before ? 'ok' : 'FAIL'} after append: flow marked stale, nothing auto-updated (extractions ${counters.flowExtractions - before})`);
 
-  await js("document.querySelector('#flow-view .flow-stale .flow-button').click()");
+  await js("window.pastel.flow.create({ kind: 'current' })");
   const updated = await waitFor(async () => {
-    const state = await js("({ cards: document.querySelectorAll('#flow-view .flow-step').length, stale: Boolean(document.querySelector('#flow-view .flow-stale:not(:empty)')) })");
-    return state.cards > (steps ?? 0) && !state.stale ? state : null;
+    const flow = await getFlow();
+    return flow?.steps?.length > steps && !flow.stale ? { steps: flow.steps.length, stale: flow.stale } : null;
   }, 15000);
   log(`${updated ? 'ok' : 'FAIL'} update: ${JSON.stringify(updated)}; stored steps ${flowStore.load('fixture')?.steps.length}`);
-  await verifiedCapture({ ...kit, theme: themes.paleSky, panelOpen: false, name: 'flow-updated-paleSky' });
-  await js("PastelTerm.reader.setView('replies')");
 
   await js('PastelTerm.history.open()');
   await wait(1500);

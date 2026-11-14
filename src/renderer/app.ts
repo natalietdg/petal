@@ -136,7 +136,6 @@ async function start(): Promise<void> {
     tabs.applyTheme(next);
     reader.rerender();
     history.rerender();
-    if (reader.currentView() === 'flow') reader.refreshFlow();
   });
   const setReading = (id: string) => { document.documentElement.dataset.reading = id; };
   setReading(orDefault(await window.pastel.getReading(), 'newspaper', 'the reading style'));

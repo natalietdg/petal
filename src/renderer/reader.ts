@@ -1,5 +1,5 @@
 import * as diagrams from './diagrams';
-import * as flow from './flow';
+import * as contentsRail from './contents-rail';
 import * as confirmed from './confirmed';
 import { byId, query } from './dom';
 import { setSessionName } from './session-name';
@@ -25,7 +25,7 @@ import { conclusionIsLatest, type Conclusion } from '../shared/conclusion';
 import { emptyLine } from '../shared/reader-empty';
 import { confirmedItems } from '../shared/confirmed';
 
-export type ReaderView = 'replies' | 'flow' | 'confirmed';
+export type ReaderView = 'replies' | 'confirmed';
 type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
 
 const latest = byId('latest');
@@ -38,7 +38,6 @@ const strip = createStrip();
 strip.id = 'reader-status-strip';
 query(byId('reader-head'), '.reader-head-column').append(strip);
 let latestId: string | null | undefined = null;
-const FLOW_REFRESH_DELAY_MS = 1500; // let a burst of reply updates settle before redrawing the flow
 const FLASH_MS = 1600;
 // The conversation reads top to bottom: earlier turns first, the newest reply last.
 status.before(older);
@@ -174,6 +173,7 @@ function showMessage(html: string, action: EmptyAction | null = null, extra: HTM
   }
   latest.replaceChildren();
   older.replaceChildren();
+  contentsRail.paint([]);
   latestId = null;
 }
 
@@ -244,8 +244,8 @@ export function update(shown: ShownUpdate): void {
   latest.dataset.replyId = newest.id;
   placeChildren(older, [...rest].reverse().map(olderTurn)); // oldest first
   drawDiagrams(rendered);
+  contentsRail.paint([...older.children, latest] as HTMLElement[]);
   bringIntoView(newest.id);
-  if (view === 'flow') scheduleFlowRefresh();
 }
 
 // An older Claude Code may add an update hint, or ask which log is this tab's (then the running line goes).
@@ -263,8 +263,8 @@ function showOpenTurn(open: OpenTurn, replies: Reply[], writing: HTMLElement[]):
   latest.replaceChildren(...open.bubbles, ...writing);
   delete latest.dataset.replyId;
   placeChildren(older, [...replies].reverse().map(olderTurn)); // oldest first
+  contentsRail.paint([...older.children] as HTMLElement[]);
   bringIntoView(open.id);
-  if (view === 'flow') scheduleFlowRefresh();
 }
 
 // The streaming reply's own Stop, at the end of its header line.
@@ -275,7 +275,7 @@ function appendStop(): void {
 
 // Switching tabs lands at the end of the newest reply; a new turn in the same tab lands at its start.
 let switchedTab = false;
-const PIN_TO_END_MS = 2000; // long enough for diagrams and images to settle; later jumps (find, Flow) are left alone
+const PIN_TO_END_MS = 2000; // long enough for diagrams and images to settle; later jumps (find, the contents rail) are left alone
 let pinnedUntil = 0;
 function bringIntoView(id: string | undefined): void {
   if (switchedTab) {
@@ -292,12 +292,6 @@ for (const type of ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const) {
   scroller.addEventListener(type, () => { pinnedUntil = 0; }, { passive: true });
 }
 
-let flowTimer: ReturnType<typeof setTimeout> | undefined;
-const scheduleFlowRefresh = (): void => {
-  clearTimeout(flowTimer);
-  flowTimer = setTimeout(refreshFlow, FLOW_REFRESH_DELAY_MS);
-};
-
 // Links open in the default browser, never inside the app.
 scroller.addEventListener('click', (event) => {
   const link = (event.target as Element).closest<HTMLAnchorElement>('a[href]');
@@ -306,17 +300,11 @@ scroller.addEventListener('click', (event) => {
   window.pastel.openLink(link.href);
 });
 
-// Replies | Flow | Confirmed toggle for this window's session.
+// Replies | Confirmed toggle for this window's session.
 const repliesView = byId('replies-view');
-const flowView = byId('flow-view');
 const confirmedView = byId('confirmed-view');
 const toggles = [...document.querySelectorAll<HTMLButtonElement>('#reader-head .view-toggle button')];
 let view: ReaderView = 'replies';
-
-export async function refreshFlow(): Promise<void> {
-  const result = await window.pastel.flow.get({ kind: 'current' });
-  flow.render(flowView, result, { target: { kind: 'current' }, onJump: (step) => showReply(step.replyIds) });
-}
 
 // Built once each, so a click's result line survives the reader's redraws.
 const stripOffer = styleOffer.offerLine(styleOffer.STRIP_CAUSE, 'status-offer');
@@ -329,16 +317,14 @@ function refreshConfirmed(): void {
   confirmed.render(confirmedView, groups, lastUpdate?.cwd ?? null, (replyId) => showReply([replyId]), styleOffer.shouldOffer() ? confirmedOffer : null);
 }
 
-const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'flow' || value === 'confirmed';
+const isView = (value: string | undefined): value is ReaderView => value === 'replies' || value === 'confirmed';
 
 export function setView(next: ReaderView): void {
   view = next;
   if (view === 'confirmed') void styleOffer.refresh(); // she may have switched style in Customize since
   repliesView.hidden = view !== 'replies';
-  flowView.hidden = view !== 'flow';
   confirmedView.hidden = view !== 'confirmed';
   for (const button of toggles) button.setAttribute('aria-selected', String(button.dataset.view === view));
-  if (view === 'flow') refreshFlow();
   if (view === 'confirmed') refreshConfirmed();
 }
 
@@ -364,8 +350,9 @@ function followNotesSession({ tabId, sessionId: live = null }: ShownUpdate): voi
 for (const button of toggles) {
   button.addEventListener('click', () => { if (isView(button.dataset.view)) setView(button.dataset.view); });
 }
+contentsRail.mount(repliesView, (replyId) => showReply([replyId]));
 
-// Jump from a flow step or a Confirmed item to its reply; only the newest 20 replies are kept on screen.
+// Jump from the contents rail or a Confirmed item to its reply; only the newest 20 replies are kept on screen.
 export function showReply(replyIds: readonly (string | undefined)[]): void {
   setView('replies');
   const target = [...replyIds].reverse().map((id) => document.querySelector<HTMLElement>(`[data-reply-id="${CSS.escape(String(id))}"]`)).find(Boolean);

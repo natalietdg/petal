@@ -1,0 +1,32 @@
+/* Replies view's contents rail (contents-rail.ts): in the left gutter, beside the column, sticky while the replies scroll. */
+#replies-view { position: relative; }
+.contents-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(100% + var(--reading-pad-start) - 24px); /* its right edge 24px into the column's left gutter */
+  width: 168px;
+  font: 13px/1.35 var(--ui-font);
+}
+.contents-rail[hidden] { display: none; }
+.contents-rail-title,
+.contents-rail-list { position: sticky; }
+.contents-rail-title { top: 16px; margin: 0 0 6px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+.contents-rail-list { top: 38px; margin: 0; padding: 0; list-style: none; max-height: calc(100vh - 260px); overflow-y: auto; }
+.contents-rail-item {
+  display: block;
+  width: 100%;
+  padding: 4px 0 4px 10px;
+  border: 0;
+  border-left: 2px solid var(--rule);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.contents-rail-item:hover,
+.contents-rail-item:focus-visible { color: var(--reader-fg); border-left-color: var(--reader-fg); }
+.contents-rail-item[aria-current="true"] { color: var(--reader-fg); font-weight: 600; }
+/* Book's left page carries the margin notes (#790); the rail stays out of it. contents-rail.ts hides it too. */
+[data-reading="book"] .contents-rail { display: none; }

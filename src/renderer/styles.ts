@@ -38,6 +38,7 @@ import './scenes/planetarium.css';
 import './scenes/tarot.css';
 import './scenes/scene-card.css';
 import './flow.css';
+import './contents-rail.css';
 import './confirmed.css';
 import './history.css';
 import './favorites.css';
