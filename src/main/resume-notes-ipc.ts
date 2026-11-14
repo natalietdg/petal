@@ -1,25 +1,37 @@
-// On launch: the newest quit's resume notes, offered once in the reader; Show in Finder reveals them.
+// On launch: the newest quit's resume notes, offered once in the reader with each session's "Where it stopped".
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { shell } from 'electron';
 import { handle } from './ipc';
 import { isSnapshotRun } from './snapshot-mode';
 import { resumeRoot, SESSIONS_FILE } from './resume-notes';
-import { newestUnseen, parseNotedSessions, STAMP_PATTERN, stampTime } from './resume-notes-text';
+import { newestUnseen, parseNotedSessions, readNote, stampTime, stoppedText } from './resume-notes-text';
 import type { ResumeNotesSet } from '../shared/ipc';
 
 const SHOWN_FILE = 'last-shown'; // the stamp last offered, so each quit's notes show once
 
 const readText = (file: string): Promise<string | null> => fs.readFile(file, 'utf8').then((text) => text, () => null);
 
-async function readSessions(dir: string): Promise<ResumeNotesSet['sessions']> {
-  const raw = await readText(path.join(dir, SESSIONS_FILE));
-  if (raw === null) return []; // notes from before sessions.json: Show in Finder still works
+function parseListed(raw: string): ReturnType<typeof parseNotedSessions> {
   try {
-    return parseNotedSessions(JSON.parse(raw)).map(({ title, sessionId, running }) => ({ title, sessionId, running }));
+    return parseNotedSessions(JSON.parse(raw));
   } catch {
-    return [];
+    return []; // a half-written sessions.json lists nothing
   }
+}
+
+// The listed rows from sessions.json; older quits without it are read from the notes themselves.
+async function readSessions(dir: string, notes: readonly string[]): Promise<ResumeNotesSet['sessions']> {
+  const raw = await readText(path.join(dir, SESSIONS_FILE));
+  if (raw !== null) {
+    return Promise.all(parseListed(raw).map(async ({ title, sessionId, running, file }) =>
+      ({ title, sessionId, running, stopped: stoppedText((await readText(path.join(dir, path.basename(file)))) ?? '') })));
+  }
+  const read = await Promise.all(notes.map(async (file) => {
+    const text = (await readText(path.join(dir, file))) ?? '';
+    const note = readNote(text);
+    return note ? [{ ...note, stopped: stoppedText(text) }] : [];
+  }));
+  return read.flat();
 }
 
 // The newest quit folder not offered before, marked as offered now; null when there is none or it holds no notes.
@@ -32,14 +44,9 @@ export async function takeLatest(root = resumeRoot()): Promise<ResumeNotesSet | 
   const dir = path.join(root, stamp);
   const notes = (await fs.readdir(dir).catch(() => [] as string[])).filter((name) => name.endsWith('.md') && name !== 'index.md');
   if (!notes.length) return null; // only shells were open: nothing to resume
-  return { stamp, when: stampTime(stamp), notes: notes.length, sessions: await readSessions(dir) };
+  return { stamp, when: stampTime(stamp), notes: notes.length, sessions: await readSessions(dir, notes) };
 }
 
 export function registerResumeNotesIpc(): void {
   handle('resume-notes:latest', () => (isSnapshotRun() ? null : takeLatest())); // keeps a fake home's quits out of every capture
-  handle('resume-notes:reveal', (_event, stamp) => {
-    if (typeof stamp !== 'string' || !STAMP_PATTERN.test(stamp)) return false; // a folder name, never a path
-    shell.showItemInFolder(path.join(resumeRoot(), stamp, 'index.md'));
-    return true;
-  });
 }

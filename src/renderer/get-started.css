@@ -47,7 +47,12 @@
 .resume-notice { margin: 16px 0 22px; padding: 16px 18px; border: 1px solid var(--rule); border-radius: 10px; color: var(--reader-fg); font: 14px/1.5 var(--ui-font); }
 .resume-notice-line { margin: 0 0 12px; }
 .resume-notice-list { margin: 0 0 10px; padding: 0; list-style: none; }
-.resume-notice-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.resume-notice-row { padding: 4px 0; }
+.resume-notice-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.resume-notice-stopped { display: none; margin: 6px 0 10px; padding-left: 12px; border-left: 2px solid var(--rule); white-space: pre-wrap; font-size: 13px; opacity: 0.85; }
+.resume-notice-extra { display: none; }
+.resume-notice.is-open .resume-notice-extra { display: block; }
+.resume-notice.is-open .resume-notice-stopped { display: block; }
 .resume-notice-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resume-notice-row .resume-notice-open { flex: none; }
 .resume-notice-actions { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }

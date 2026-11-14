@@ -53,7 +53,7 @@ export function noticeLines(notice: ReaderNotice | null | undefined, tabId: stri
 
 // ── Where you left off: the newest quit's resume notes, offered once on launch ──
 
-const RESUME_ROWS = 5; // more are in the notes themselves
+const RESUME_ROWS = 5; // the rest appear on Show notes
 
 async function resumeFromNote(sessionId: string, button: HTMLButtonElement): Promise<void> {
   button.disabled = true;
@@ -67,12 +67,14 @@ async function resumeFromNote(sessionId: string, button: HTMLButtonElement): Pro
   if (note) button.title = note;
 }
 
-function sessionRow({ title, sessionId, running }: ResumeNotesSet['sessions'][number]): HTMLLIElement {
-  const row = el('li', 'resume-notice-row');
+function sessionRow({ title, sessionId, running, stopped }: ResumeNotesSet['sessions'][number], index: number): HTMLLIElement {
+  const row = el('li', index < RESUME_ROWS ? 'resume-notice-row' : 'resume-notice-row resume-notice-extra');
+  const head = el('div', 'resume-notice-head');
   const resume = el('button', 'flow-button resume-notice-open', 'Resume');
   resume.type = 'button';
   resume.addEventListener('click', () => void resumeFromNote(sessionId, resume));
-  row.append(el('span', 'resume-notice-title', running ? `${title} (Claude was mid-reply)` : title), resume);
+  head.append(el('span', 'resume-notice-title', running ? `${title} (Claude was mid-reply)` : title), resume);
+  row.append(head, el('p', 'resume-notice-stopped', stopped || 'No prompts yet.'));
   return row;
 }
 
@@ -83,13 +85,17 @@ export function resumeCard(set: ResumeNotesSet): HTMLElement {
   card.append(el('p', 'resume-notice-line', `When Petal last quit (${set.when}) it saved ${count} on where each session stopped.`));
   if (set.sessions.length) {
     const list = el('ul', 'resume-notice-list');
-    list.append(...set.sessions.slice(0, RESUME_ROWS).map(sessionRow));
+    list.append(...set.sessions.map(sessionRow));
     card.append(list);
   }
   const actions = el('div', 'resume-notice-actions');
-  const reveal = el('button', 'cz-quiet-button resume-notice-reveal', 'Show notes in Finder');
+  const reveal = el('button', 'cz-quiet-button resume-notice-reveal', 'Show notes');
   reveal.type = 'button';
-  reveal.addEventListener('click', () => void window.pastel.resumeNotes.reveal(set.stamp));
+  reveal.hidden = !set.sessions.length;
+  reveal.addEventListener('click', () => {
+    const open = card.classList.toggle('is-open'); // open: every session, each with where it stopped
+    reveal.textContent = open ? 'Hide notes' : 'Show notes';
+  });
   const dismiss = el('button', 'cz-quiet-button resume-notice-dismiss', 'Dismiss');
   dismiss.type = 'button';
   dismiss.addEventListener('click', () => card.remove());

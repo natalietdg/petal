@@ -133,7 +133,7 @@ export interface ResumeNotesSet {
   stamp: string; // the folder name, e.g. 2026-10-29_14-05
   when: string; // 2026-10-29 14:05
   notes: number; // note files in it
-  sessions: { title: string; sessionId: string; running: boolean }[]; // empty for notes written before sessions.json
+  sessions: { title: string; sessionId: string; running: boolean; stopped: string }[]; // stopped: the note's "Where it stopped" text
 }
 
 export type FlowView = (StoredFlow & { stale: boolean }) | { empty: true; creating: boolean };
@@ -220,7 +220,6 @@ export interface InvokeChannels {
   'claude:path-tip': { args: []; result: Guarded<PathTip | null> }; // her shell's PATH lacks claude's folder
   'claude:reply-visibility': { args: []; result: Guarded<string | null> }; // why Petal can't see replies, or null
   'resume-notes:latest': { args: []; result: Guarded<ResumeNotesSet | null> }; // marks it shown
-  'resume-notes:reveal': { args: [stamp: string]; result: Guarded<boolean> };
   'update:status': { args: []; result: Guarded<UpdateStatus> };
   'update:restart': { args: []; result: Guarded<RestartResult> };
   'update:whats-new': { args: []; result: Guarded<Ok> };

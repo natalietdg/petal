@@ -48,7 +48,7 @@ const api = {
   claudeInstalled: (recheck = false) => invoke('claude:installed', { recheck }),
   claudePathTip: () => invoke('claude:path-tip'),
   replyVisibility: () => invoke('claude:reply-visibility'),
-  resumeNotes: { latest: () => invoke('resume-notes:latest'), reveal: (stamp: string) => invoke('resume-notes:reveal', stamp) },
+  resumeNotes: { latest: () => invoke('resume-notes:latest') },
   onReading: (callback: (readingId: string) => void) => subscribe('reading:changed', callback),
   startShell: (tabId: TabId, { cols, rows }: TermSize, startClaude = false) => send('pty:start', { tabId, cols, rows, startClaude }),
   write: (tabId: TabId, data: string) => send('pty:write', { tabId, data }),

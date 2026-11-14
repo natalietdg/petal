@@ -3,6 +3,7 @@ import { buildResumeCommand, resumeArgs } from './resume-command';
 import { parseStatus, STATUS_KEYS, STATUS_TITLES } from '../shared/status-lines';
 import { replyHeadline } from '../shared/sessions-board';
 import { confirmedItems } from '../shared/confirmed';
+import { NEW_SESSION } from '../shared/session-label';
 
 export const PROMPT_CHARS = 600;
 export const REPLY_TAIL_CHARS = 800;
@@ -172,6 +173,19 @@ export interface NotedSession {
 
 export const notedSessions = (entries: readonly IndexEntry[]): NotedSession[] => entries.flatMap(({ session, file }) =>
   session.sessionId && file ? [{ title: session.title, sessionId: session.sessionId, cwd: session.cwd, running: session.running, file }] : []);
+
+// A note's "Where it stopped" section as plain text: quote marks and bold stripped.
+export function stoppedText(note: string): string {
+  const section = note.split('\n## Where it stopped\n')[1]?.split('\n## ')[0] ?? '';
+  return section.split('\n').map((line) => line.replace(/^> ?/, '')).join('\n').replace(/\*\*/g, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// A note read back without sessions.json (notes from older builds): null when it has no resume line.
+export function readNote(note: string): { title: string; sessionId: string; running: boolean } | null {
+  const sessionId = /claude --resume '([^']+)'/.exec(note)?.[1];
+  if (!sessionId) return null;
+  return { title: /^# (.+)$/m.exec(note)?.[1]?.trim() || NEW_SESSION, sessionId, running: /^- State: Running/m.test(note) };
+}
 
 // sessions.json as read back from disk: well-formed rows only; anything else is an empty list.
 export function parseNotedSessions(raw: unknown): NotedSession[] {

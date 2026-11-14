@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { newestUnseen, notedSessions, parseNotedSessions, stampTime, type ResumeSession } from '../src/main/resume-notes-text';
+import { buildResumeNote, newestUnseen, notedSessions, parseNotedSessions, readNote, stampTime, stoppedText, type ResumeSession } from '../src/main/resume-notes-text';
 
 vi.mock('electron', () => ({ app: { getPath: () => os.tmpdir() }, shell: {}, ipcMain: { handle: () => {}, on: () => {} } }));
 
@@ -44,6 +44,18 @@ describe('notedSessions and parseNotedSessions', () => {
   });
 });
 
+describe('readNote and stoppedText', () => {
+  const note = buildResumeNote({ ...session({ lastPrompt: 'can i try it?', lastReply: 'Yes, open it.' }), sessionId: 'abc' });
+  it('reads the title, session id and where it stopped back out of a note', () => {
+    expect(readNote(note)).toEqual({ title: 'Export button', sessionId: 'abc', running: false });
+    expect(stoppedText(note)).toBe('Last prompt:\n\ncan i try it?\n\nEnd of the last reply:\n\nYes, open it.');
+  });
+  it('returns null for a note without a resume line', () => {
+    expect(readNote('# Just a title')).toBeNull();
+    expect(stoppedText('# Just a title')).toBe('');
+  });
+});
+
 describe('takeLatest', () => {
   let root = '';
   afterEach(() => { if (root) fs.rmSync(root, { recursive: true, force: true }); });
@@ -58,7 +70,7 @@ describe('takeLatest', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-resume-'));
     quit('2026-11-01_09-00', { 'index.md': '', 'old-1.md': '' });
     quit('2026-11-13_18-40', { 'index.md': '', 'export-abc.md': '', 'sessions.json': JSON.stringify([{ title: 'Export button', sessionId: 'abc', cwd: '/tmp/p', running: false, file: 'export-abc.md' }]) });
-    expect(await takeLatest(root)).toEqual({ stamp: '2026-11-13_18-40', when: '2026-11-13 18:40', notes: 1, sessions: [{ title: 'Export button', sessionId: 'abc', running: false }] });
+    expect(await takeLatest(root)).toEqual({ stamp: '2026-11-13_18-40', when: '2026-11-13 18:40', notes: 1, sessions: [{ title: 'Export button', sessionId: 'abc', running: false, stopped: '' }] });
     expect(await takeLatest(root)).toBeNull();
     expect(fs.readFileSync(path.join(root, 'last-shown'), 'utf8')).toBe('2026-11-13_18-40');
   });
@@ -68,8 +80,10 @@ describe('takeLatest', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'petal-resume-'));
     quit('2026-11-13_18-40', { 'index.md': '' });
     expect(await takeLatest(root)).toBeNull();
-    quit('2026-11-14_08-00', { 'index.md': '', 'a-1.md': '', 'b-2.md': '' });
-    expect(await takeLatest(root)).toEqual({ stamp: '2026-11-14_08-00', when: '2026-11-14 08:00', notes: 2, sessions: [] });
+    const older = buildResumeNote({ ...session({ lastPrompt: 'ship it' }), sessionId: 'abc' });
+    quit('2026-11-14_08-00', { 'index.md': '', 'a-1.md': older, 'b-2.md': '' });
+    expect(await takeLatest(root)).toEqual({ stamp: '2026-11-14_08-00', when: '2026-11-14 08:00', notes: 2,
+      sessions: [{ title: 'Export button', sessionId: 'abc', running: false, stopped: 'Last prompt:\n\nship it' }] });
   });
 
   it('returns null when the resume folder does not exist', async () => {
