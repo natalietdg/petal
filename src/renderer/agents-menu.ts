@@ -8,6 +8,7 @@ import { agentsChipText } from '../shared/ipc';
 import type { AgentSummary } from '../main/agents';
 
 const GAP_PX = 8;
+const EDGE_PX = 16; // the menu's CSS width leaves 16px each side
 
 const chip = byId<HTMLButtonElement>('agents-chip');
 const menu = byId('agents-menu');
@@ -66,9 +67,10 @@ async function refresh(): Promise<void> {
 export async function open(): Promise<void> {
   const anchor = chip.getBoundingClientRect();
   menu.style.top = `${Math.round(anchor.bottom + GAP_PX)}px`;
-  menu.style.right = `${Math.round(window.innerWidth - anchor.right)}px`;
   render();
   menu.hidden = false;
+  const room = window.innerWidth - EDGE_PX - menu.offsetWidth; // a chip far left (agent drawer open) would push it past the window
+  menu.style.right = `${Math.round(Math.max(EDGE_PX, Math.min(window.innerWidth - anchor.right, room)))}px`;
   chip.setAttribute('aria-expanded', 'true');
   await refresh();
   if (isOpen() && !menu.contains(document.activeElement)) (rowButtons()[0] ?? menu).focus();
