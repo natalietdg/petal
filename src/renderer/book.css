@@ -12,7 +12,7 @@
 [data-reading="book"][data-theme="light"] :is(#app, .cz-preview, .ck-sample) {
   --reader-bg: #EFEFEF;
   --reader-fg: #2D2D2D;
-  --muted: #6B6B6B;
+  --muted: #5A5A5A; /* 4.5:1 on paper and on every light theme's label wash (worst: blush decide 4.66) */
   --link: #2D2D2D;
   --rule: #CFCFCF;
   --code-bg: #E6E5E2;
