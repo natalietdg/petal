@@ -106,13 +106,45 @@
   position: relative;
   display: grid;
   flex: 1;
-  grid-template-columns: var(--dial-w, 440px) minmax(0, 1fr);
+  grid-template-columns: var(--dial-w, 440px) minmax(0, 1fr) minmax(200px, 280px); /* dial | preview | results */
   min-height: 320px;
   margin: 0 -24px; /* the dial's flat side sits on the window's left edge */
   overflow: hidden;
 }
 .lib-stage.is-empty { grid-template-columns: minmax(0, 1fr); }
-.lib-stage.is-empty > :is(.lib-dial, .lib-preview) { display: none; }
+.lib-stage.is-empty > :is(.lib-dial, .lib-preview, .lib-results) { display: none; }
+
+/* ---- Results: the dial's notes as a plain list, for search; a click opens the note. */
+.lib-results { display: flex; flex-direction: column; min-height: 0; margin: 0 24px 0 0; padding: 16px 0; }
+.lib-results-count { margin: 0 0 8px; font: 600 12px var(--ui-font); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.lib-results-list { flex: 1; min-height: 0; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.lib-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--reader-fg);
+  font: 14px/1.35 var(--ui-font);
+  text-align: left;
+  cursor: pointer;
+}
+.lib-result:hover { background: var(--code-bg); }
+.lib-result[aria-current="true"] { background: var(--cat-wash, var(--code-bg)); }
+.lib-result:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
+.lib-result .lib-dot { grid-row: 1 / 3; align-self: center; }
+.lib-result-title { overflow-wrap: anywhere; }
+.lib-result-cat { grid-column: 2; font-size: 12px; color: var(--muted); }
+/* Narrower windows: the list moves under the preview. */
+@media (max-width: 1000px) {
+  .lib-stage { grid-template-columns: var(--dial-w, 440px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .lib-dial { grid-row: 1 / 3; }
+  .lib-results { grid-column: 2; grid-row: 2; margin: 0 16px 0 8px; padding-top: 8px; }
+}
 
 .lib-dial { position: relative; min-width: 0; height: 100%; touch-action: none; user-select: none; cursor: grab; }
 .lib-dial.dragging { cursor: grabbing; }

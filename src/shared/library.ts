@@ -9,6 +9,7 @@ export interface LibraryEntry {
   updatedMs: number;
   sources: number; // sessions it was gathered from
   preview: string; // its first facts, as plain text
+  text: string; // all its facts, as plain text, for search
 }
 
 export interface LibraryList {
@@ -66,7 +67,7 @@ export function filterEntries(entries: readonly LibraryEntry[], { category, text
   const words = text.toLowerCase().split(/\s+/).filter(Boolean);
   return entries.filter((entry) => {
     if (category && entry.category.toLowerCase() !== category.toLowerCase()) return false;
-    const haystack = `${entry.title} ${entry.category} ${entry.preview}`.toLowerCase();
+    const haystack = `${entry.title} ${entry.category} ${entry.text}`.toLowerCase();
     return words.every((word) => haystack.includes(word));
   });
 }

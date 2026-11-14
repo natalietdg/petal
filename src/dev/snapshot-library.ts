@@ -267,6 +267,16 @@ export async function libraryCheck(kit: Kit, win: BrowserWindow): Promise<void> 
     await js("(() => { const s = document.querySelector('#library .lib-search'); s.value = 'cutoff'; s.dispatchEvent(new Event('input', { bubbles: true })); })()");
     const words = await settle((p) => p.state.text === 'cutoff');
     check(words && JSON.stringify(words.state.shown) === JSON.stringify(['Payout cutoff times']), `"cutoff" within Payments: ${JSON.stringify(words?.state.shown)}`);
+    // The results list beside the dial (kept, #807) shows the same matches, and a click on one reads it.
+    const listed = await js("[...document.querySelectorAll('#library .lib-result .lib-result-title')].map((t) => t.textContent)");
+    const dialShown = await js("getComputedStyle(document.querySelector('#library .lib-dial')).display !== 'none'");
+    check(JSON.stringify(listed) === JSON.stringify(['Payout cutoff times']) && dialShown, `results list matches the dial, dial still shown: ${JSON.stringify(listed)}`);
+    await capture('library-results');
+    await click('#library .lib-result');
+    const fromList = await settle((p) => Boolean(p.reading) && p.readingTitle === 'Payout cutoff times');
+    check(fromList, 'a click on a result reads that note');
+    await click('#library .lib-back');
+    await settle((p) => !p.reading);
     await js("(() => { const s = document.querySelector('#library .lib-search'); s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); })()");
     await click('#library .lib-filter[data-category=""]');
     await settle((p) => p.state.category === null && p.state.text === '' && p.state.shown.length === az.length);

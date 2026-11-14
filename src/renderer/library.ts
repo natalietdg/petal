@@ -34,8 +34,8 @@ const sortGroup = el('div', 'lib-sort');
 sortGroup.setAttribute('role', 'group');
 sortGroup.setAttribute('aria-label', 'Sort');
 const search = el('input', 'lib-search');
-Object.assign(search, { type: 'search', placeholder: 'Filter notes', spellcheck: false });
-search.setAttribute('aria-label', 'Filter notes by words');
+Object.assign(search, { type: 'search', placeholder: 'Search notes', spellcheck: false });
+search.setAttribute('aria-label', 'Search notes by title, category or text');
 const pastButton = el('button', 'lib-add lib-past', 'Read past sessions');
 pastButton.type = 'button';
 tools.append(sortGroup, search, pastButton);
@@ -71,8 +71,14 @@ list.setAttribute('aria-label', 'Library notes, turn with the arrow keys');
 dial.append(disc, rim, pointer, list);
 const preview = el('aside', 'lib-preview');
 preview.setAttribute('aria-label', 'Selected note');
+// The same notes as a plain list beside the dial, filtered by the search box and chips; a click opens the note.
+const results = el('nav', 'lib-results');
+results.setAttribute('aria-label', 'Matching notes');
+const resultsCount = el('p', 'lib-results-count');
+const resultsList = el('ol', 'lib-results-list');
+results.append(resultsCount, resultsList);
 const empty = el('div', 'lib-empty');
-stage.append(dial, preview, empty);
+stage.append(dial, preview, results, empty);
 
 const reading = el('article', 'lib-reading');
 reading.hidden = true;
@@ -304,6 +310,25 @@ const dateText = (iso: string): string => {
 };
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+function drawResults(): void {
+  const n = shown.length;
+  resultsCount.textContent = text.trim() || category ? `${n} ${n === 1 ? 'match' : 'matches'}` : plural(n, 'note');
+  const current = selectedEntry()?.slug;
+  resultsList.replaceChildren(...shown.map((entry) => {
+    const open = el('button', 'lib-result');
+    open.type = 'button';
+    open.dataset.slug = entry.slug;
+    open.dataset.hue = categoryHue(entry.category);
+    open.title = `Read ${entry.title}`;
+    if (entry.slug === current) open.setAttribute('aria-current', 'true');
+    open.append(el('span', 'lib-dot'), el('span', 'lib-result-title', entry.title), el('span', 'lib-result-cat', entry.category));
+    open.addEventListener('click', () => void openDoc(entry.slug));
+    const item = el('li');
+    item.append(open);
+    return item;
+  }));
+}
+
 function drawPreview(): void {
   const entry = selectedEntry();
   preview.replaceChildren();
@@ -519,6 +544,7 @@ function drawAll(): void {
   drawEmpty();
   drawDial();
   drawPreview();
+  drawResults();
 }
 
 // Sort, then filter; keeps the selected note when it is still shown.
@@ -545,6 +571,10 @@ function turnTo(virtual: number): void {
   selected = wrap(Math.round(pos));
   drawDial();
   drawPreview();
+  for (const row of resultsList.querySelectorAll<HTMLElement>('.lib-result')) {
+    if (row.dataset.slug === selectedEntry()?.slug) row.setAttribute('aria-current', 'true');
+    else row.removeAttribute('aria-current');
+  }
 }
 
 // By notes from where the dial rests; wraps past the ends on a full dial.

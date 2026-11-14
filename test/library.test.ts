@@ -156,7 +156,7 @@ describe('reading notes', () => {
   it('a hand-written note without frontmatter still lists, under General', async () => {
     const { listEntries } = await store();
     fs.writeFileSync(path.join(dir, 'loose-notes.md'), '- one\n- two\n');
-    expect(listEntries(dir)[0]).toMatchObject({ title: 'loose-notes', category: 'General', preview: 'one\ntwo' });
+    expect(listEntries(dir)[0]).toMatchObject({ title: 'loose-notes', category: 'General', preview: 'one\ntwo', text: 'one\ntwo' });
   });
 });
 
@@ -283,9 +283,9 @@ describe('the queue', () => {
 });
 
 describe('sort and filter', () => {
-  const entry = (title: string, category: string, updatedMs: number, preview = ''): LibraryEntry =>
-    ({ slug: title.toLowerCase().replace(/\W+/g, '-'), title, category, updated: new Date(updatedMs).toISOString(), updatedMs, sources: 1, preview });
-  const all = [entry('beta', 'Data', 3), entry('Alpha', 'Auth', 1, 'tokens last an hour'), entry('Gamma', 'data', 2), entry('2FA codes', 'Auth', 4)];
+  const entry = (title: string, category: string, updatedMs: number, preview = '', text = preview): LibraryEntry =>
+    ({ slug: title.toLowerCase().replace(/\W+/g, '-'), title, category, updated: new Date(updatedMs).toISOString(), updatedMs, sources: 1, preview, text });
+  const all = [entry('beta', 'Data', 3, '', 'rows are sharded by tenant'), entry('Alpha', 'Auth', 1, 'tokens last an hour'), entry('Gamma', 'data', 2), entry('2FA codes', 'Auth', 4)];
 
   it('A to Z ignores case; Z to A reverses it; recent is newest first', () => {
     expect(sortEntries(all, 'az').map((e) => e.title)).toEqual(['2FA codes', 'Alpha', 'beta', 'Gamma']);
@@ -293,7 +293,8 @@ describe('sort and filter', () => {
     expect(sortEntries(all, 'recent').map((e) => e.title)).toEqual(['2FA codes', 'beta', 'Gamma', 'Alpha']);
   });
 
-  it('category matches any case; words match title, category or preview', () => {
+  it('category matches any case; words match title, category or any of the note text', () => {
+    expect(filterEntries(all, { category: null, text: 'sharded tenant' }).map((e) => e.title)).toEqual(['beta']); // past the preview
     expect(filterEntries(all, { category: 'DATA', text: '' }).map((e) => e.title)).toEqual(['beta', 'Gamma']);
     expect(filterEntries(all, { category: null, text: 'hour tokens' }).map((e) => e.title)).toEqual(['Alpha']);
     expect(filterEntries(all, { category: 'Auth', text: 'codes' }).map((e) => e.title)).toEqual(['2FA codes']);

@@ -166,9 +166,9 @@ const updatedMsOf = (note: Note): number => {
   return Number.isFinite(ms) ? ms : note.mtimeMs;
 };
 
-// Its first facts, without Markdown marks, for the Library's preview.
-const previewOf = (facts: string): string =>
-  bulletsOf(facts).slice(0, PREVIEW_FACTS).map((f) => f.replace(/[*_`[\]]/g, '').replace(/\]\([^)]*\)/g, '')).join('\n').slice(0, PREVIEW_CHARS);
+// Facts without Markdown marks: the first few for the Library's preview, all of them for its search.
+const plainFacts = (facts: string): string[] => bulletsOf(facts).map((f) => f.replace(/[*_`[\]]/g, '').replace(/\]\([^)]*\)/g, ''));
+const previewOf = (facts: string): string => plainFacts(facts).slice(0, PREVIEW_FACTS).join('\n').slice(0, PREVIEW_CHARS);
 
 export function listEntries(dir: string = libraryDir()): LibraryEntry[] {
   return readNotes(dir).map((note) => ({
@@ -179,6 +179,7 @@ export function listEntries(dir: string = libraryDir()): LibraryEntry[] {
     updatedMs: updatedMsOf(note),
     sources: note.sources.length,
     preview: previewOf(note.facts),
+    text: plainFacts(note.facts).join('\n'),
   }));
 }
 
