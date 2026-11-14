@@ -1,0 +1,288 @@
+/* ---------- Book: a Stripe Press book page. One justified serif column, indented paragraphs, unboxed italic pull quotes ----------
+   Ivar is used when installed; Newsreader and Instrument Serif stand in otherwise. IBM Plex Mono for the running head (OFL, bundled).
+   :is(#latest, .prose) carries an id's weight, so these beat reader.css and magazine.css's shared rules. */
+
+[data-reading="book"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
+  --book-ink: var(--reader-fg);
+  --book-mono: "IBM Plex Mono", var(--mono-font);
+  --book-display: "Ivar Display Condensed", "Ivar Display", "Instrument Serif", "Newsreader Variable", Georgia, serif; /* Ivar when installed (licensed, not bundled) */
+}
+/* Light themes: grey paper, soft black ink, as on the reference page. */
+[data-reading="book"][data-theme="light"] :is(#reader, #reader-head, #sessions-dock, #composer, .cz-preview, .ck-sample) {
+  --reader-bg: #EFEFEF;
+  --reader-fg: #2D2D2D;
+  --muted: #6B6B6B;
+  --link: #2D2D2D;
+  --rule: #CFCFCF;
+  --code-bg: #E6E5E2;
+  --book-ink: #2D2D2D;
+}
+[data-reading="book"] .cz-preview { background: var(--reader-bg); }
+
+/* ~750px measure at 20px type. */
+[data-reading="book"] { --reading-measure: clamp(560px, 52vw, 760px); }
+
+[data-reading="book"] .reader-column {
+  --body-font: "Ivar Text", "Newsreader Variable", "Source Serif 4 Variable", Georgia, serif;
+  --display-font: "Ivar Display", "Newsreader Variable", "Source Serif 4 Variable", Georgia, serif;
+  padding-top: 28px;
+  padding-bottom: 150px;
+  font-size: calc(clamp(18px, 1.45vw, 21px) * var(--reader-scale));
+  line-height: 1.3;
+}
+
+/* Running head: small mono caps over a hairline. */
+[data-reading="book"] .status {
+  margin: 0 0 2.4em;
+  padding-bottom: 0.8em;
+  border-bottom: 1px solid var(--rule);
+  font: 400 calc(12px * var(--reader-scale)) / 1.4 var(--book-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--book-ink);
+}
+
+/* ---- Chapter opening: large italic headline, italic dek, no rules. ---- */
+[data-reading="book"] .story-head { margin: 0 0 2.4em; }
+[data-reading="book"] :is(#latest, .prose) .headline {
+  font-family: var(--book-display);
+  font-size: 3.4em;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+  text-align: left;
+  text-indent: 0;
+  text-wrap: balance;
+  margin: 0 0 0.5em;
+}
+[data-reading="book"] :is(#latest, .prose) .headline strong { font-weight: inherit; }
+[data-reading="book"] :is(#latest, .prose) .headline em { font-style: italic; }
+[data-reading="book"] :is(#latest, .prose) .headline.headline-long { font-size: 2.8em; }
+[data-reading="book"] :is(#latest, .prose) .headline.headline-very-long { font-size: 2.2em; line-height: 1; }
+[data-reading="book"] :is(#latest, .prose) .headline + p {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.12em;
+  font-style: italic;
+  line-height: 1.35;
+  text-align: left;
+  text-indent: 0;
+}
+[data-reading="book"] :is(#latest, .prose) .headline + p > strong:first-child { font-variant-caps: normal; letter-spacing: normal; }
+
+/* ---- Body: justified, no gap between paragraphs, a first-line indent marks each new one. ---- */
+[data-reading="book"] :is(#latest, .prose) .lede::first-letter { float: none; font: inherit; padding: 0; }
+[data-reading="book"] .prose p { margin: 0; text-align: justify; hyphens: auto; }
+[data-reading="book"] .prose p + p { text-indent: 3em; }
+/* Anything that isn't running text keeps its own breathing room. */
+[data-reading="book"] .prose :is(ul, ol, table, pre, figure, .callout, blockquote) { margin-top: 1em; margin-bottom: 1em; }
+[data-reading="book"] .prose :is(ul, ol, table, pre, figure, .callout, blockquote) + p { text-indent: 0; }
+[data-reading="book"] .prose a {
+  color: var(--book-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+[data-reading="book"] .prose strong { font-weight: 600; }
+
+/* ---- Sections: mono caps heads, space does the separating. ---- */
+[data-reading="book"] .story-section + .story-section { margin-top: 2.4em; }
+[data-reading="book"] #latest :is(.story-head, .fold-bar) + .story-section > h2:first-child { margin-top: 0; }
+[data-reading="book"] .prose h2:not(.back-matter) {
+  border-top: 0;
+  padding-top: 0;
+  margin: 0 0 1em;
+  font: 500 0.62em/1.4 var(--book-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+[data-reading="book"] .prose h2 .h-num { font: inherit; vertical-align: baseline; }
+[data-reading="book"] .prose h3 { font-family: var(--display-font); font-style: italic; font-size: 1.1em; font-weight: 400; }
+
+/* Small labels: mono, letterspaced, uppercase. */
+[data-reading="book"] :is(.prose h2.back-matter, .prose th, .older-time, .pill, .prose blockquote.sidebar > p:first-child > strong:first-child) {
+  font-family: var(--book-mono);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---- Pull quote: very large tight italic, no box, no rules, indented like a paragraph. ---- */
+[data-reading="book"] .prose blockquote.pull-quote {
+  margin: 1.4em 0 1.4em 3em;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--book-display);
+  font-style: italic;
+  font-size: 2.5em;
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  text-align: left;
+  text-wrap: balance;
+}
+[data-reading="book"] .prose blockquote.pull-quote p { margin: 0; text-align: left; text-indent: 0; }
+
+/* ---- Sidebar: a margin note, small text under a mono label, a hairline on its left. ---- */
+[data-reading="book"] .prose blockquote.sidebar {
+  margin: 1.4em 0;
+  padding: 0 0 0 1em;
+  border: 0;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
+  background: none;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+[data-reading="book"] .prose blockquote.sidebar p { text-align: left; text-indent: 0; }
+[data-reading="book"] .prose blockquote.sidebar > p:first-child > strong:first-child { font-size: 0.85em; color: var(--book-ink); }
+
+/* ---- Numbered lists: mono numbers in small outlined pills, 01, 02. ---- */
+[data-reading="book"] .prose ol:not(.steps-section ol) { list-style: none; padding-left: 0; counter-reset: book-item; }
+[data-reading="book"] .prose ol:not(.steps-section ol) > li { counter-increment: book-item; position: relative; padding-left: 3em; margin: 0.45em 0; }
+[data-reading="book"] .prose ol:not(.steps-section ol) > li::before {
+  content: counter(book-item, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  padding: 0.1em 0.55em;
+  border: 1px solid var(--book-ink);
+  border-radius: 1em;
+  font: 400 0.62em/1.4 var(--book-mono);
+  letter-spacing: 0.04em;
+}
+
+/* ---- Callouts: mono labels, no pills or fills. ---- */
+[data-reading="book"] .pill {
+  margin-right: 0.7em;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--book-ink);
+  font-size: 0.66em;
+  vertical-align: 0.1em;
+}
+[data-reading="book"] :is(.callout-watch, .callout-decide, .callout-next) {
+  border: 0;
+  border-left: 1px solid var(--book-ink);
+  border-radius: 0;
+  background: none;
+  padding: 0 0 0 1em;
+  text-align: left;
+}
+
+/* ---- Tables and code: hairlines, square corners. ---- */
+[data-reading="book"] .prose table { border-top: 1px solid var(--book-ink); border-bottom: 1px solid var(--book-ink); }
+[data-reading="book"] .prose th { font-size: 0.68em; border-bottom: 1px solid var(--rule); }
+[data-reading="book"] .prose td, [data-reading="book"] .prose th { text-align: left; }
+[data-reading="book"] .prose pre { padding: 12px 16px; border: 1px solid var(--rule); border-radius: 0; }
+[data-reading="book"] .prose code { border-radius: 0; }
+[data-reading="book"] .prose p:has(> em:only-child) { font: 400 0.66em/1.5 var(--book-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-indent: 0; }
+
+/* ---- Back matter: notes, small and quiet. ---- */
+[data-reading="book"] .prose h2.back-matter {
+  margin: 0 0 0.8em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--rule);
+  font-size: 0.62em;
+  color: var(--muted);
+}
+[data-reading="book"] .story-section.back :is(ol, ul, p) { font-size: 0.78em; color: var(--muted); text-align: left; text-indent: 0; }
+
+/* ---- Her message: a quiet mono slip. ---- */
+[data-reading="book"] .prompt-pasted { border-left-color: var(--rule); }
+[data-reading="book"] .reader-you {
+  border: 0;
+  border-left: 1px solid var(--book-ink);
+  border-radius: 0;
+  background: none;
+  padding: 0.2em 0 0.2em 1em;
+  font: 400 0.72em/1.6 var(--book-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ---- Earlier turns: hairlines, modest heads. ---- */
+[data-reading="book"] .older-turn { border-top-color: var(--rule); }
+[data-reading="book"] .older-time { font-size: calc(11px * var(--reader-scale)); color: var(--muted); }
+[data-reading="book"] #reader #older .headline + p { font-size: 1em; }
+
+[data-reading="book"] :is(.reader-repo, .reader-session) { font: 400 12px/1.4 var(--book-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--book-ink); }
+[data-reading="book"] .status.empty { font-family: var(--body-font); letter-spacing: normal; text-transform: none; }
+
+/* ---- Wide window: a two-page spread. The headline sits pinned on the left page, the text runs on the right,
+   a double dashed rule between them, as on the Stripe Press reader. ---- */
+@media (min-width: 1200px) {
+  [data-reading="book"] :is(#reader, #reader-head, #composer) {
+    --reading-measure: 1680px;
+    --book-text: min(760px, 56%); /* right page width; % of the spread */
+    --book-gutter: 72px;
+  }
+  [data-reading="book"] #replies-view {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--book-text);
+    column-gap: var(--book-gutter);
+  }
+  /* The double rule, centred in the gutter, full height of the spread. */
+  [data-reading="book"] #replies-view::before,
+  [data-reading="book"] #replies-view::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px dashed var(--rule);
+    pointer-events: none;
+  }
+  [data-reading="book"] #replies-view::before { right: calc(var(--book-text) + var(--book-gutter) / 2 - 12px); }
+  [data-reading="book"] #replies-view::after { right: calc(var(--book-text) + var(--book-gutter) / 2 + 12px); }
+
+  [data-reading="book"] #reader-status { grid-column: 1; grid-row: 1; margin: 0 0 1.6em; border-bottom: 0; }
+  [data-reading="book"] #latest { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: subgrid; }
+  [data-reading="book"] #older { grid-column: 2; grid-row: 3; }
+  [data-reading="book"] #latest > * { grid-column: 2; }
+  [data-reading="book"] #latest > .prose { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-content: start; }
+  [data-reading="book"] #latest > .prose > * { grid-column: 2; }
+  /* Left page: the chapter title, pinned while its reply scrolls past. */
+  [data-reading="book"] #latest > .prose > .story-head {
+    grid-column: 1;
+    grid-row: 1 / span 400;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    margin: 0;
+    padding-right: 8px;
+  }
+  [data-reading="book"] #latest > .prose > .story-head .headline { font-size: clamp(3.2em, 4.6vw, 5em); line-height: 0.92; }
+  [data-reading="book"] #latest > .prose > .story-head .headline.headline-long { font-size: clamp(2.8em, 3.8vw, 4em); }
+  [data-reading="book"] #latest > .prose > .story-head .headline.headline-very-long { font-size: clamp(2.2em, 2.9vw, 3em); }
+  [data-reading="book"] #latest > .prose > .story-head .checked-line::before { content: "[ "; }
+  [data-reading="book"] #latest > .prose > .story-head .checked-line::after { content: " ]"; }
+
+  /* The reply box sits under the right page. */
+  [data-reading="book"] #composer { --reading-measure: 760px; justify-content: end; }
+  [data-reading="book"] #reader-head { justify-content: start; }
+}
+
+/* ---- Doing / Recommend / Next: mono labels between hairlines. ---- */
+[data-reading="book"] .status-chip {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--book-ink, var(--reader-fg));
+  font-family: var(--book-mono, var(--mono-font));
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+[data-reading="book"] .status-block { border-top-color: var(--rule); border-bottom-color: var(--rule); }
+[data-reading="book"] .status-block :is(p, li) { text-align: left; text-indent: 0; }
+
+/* ---- Open threads, Checked, Assumed: hairline slips and the mono label voice. ---- */
+[data-reading="book"] .thread-card { border: 1px solid var(--rule); border-radius: 0; background: none; padding: 0.85em 1.1em 0.7em; }
+[data-reading="book"] .thread-card:hover { background: var(--code-bg); }
+[data-reading="book"] .thread-card p { text-align: left; text-indent: 0; }
+[data-reading="book"] :is(.thread-check-label, .thread-ask) { font-family: var(--book-mono); font-weight: 400; letter-spacing: 0.1em; color: var(--book-ink); }
+[data-reading="book"] .prose .checked-line { font: 400 calc(12px * var(--reader-scale))/1.6 var(--book-mono); letter-spacing: 0.04em; color: var(--muted); text-align: left; text-indent: 0; }
+[data-reading="book"] .prose blockquote.sidebar.assumed { border-left: 3px solid var(--watch-ink); background: none; }

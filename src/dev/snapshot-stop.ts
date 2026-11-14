@@ -14,7 +14,7 @@ const PERMISSION_SCREEN = [
   '─'.repeat(40), ' Bash command', '', '   npm test', '', ' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', '', ' Esc to cancel · Tab to amend',
 ];
 const THEMES = ['paleSky', 'blush', 'nightPastel'];
-const LOOKS = ['newspaper', 'editorial', 'lifestyle', 'print'];
+const LOOKS = ['newspaper', 'editorial', 'lifestyle', 'print', 'book'];
 const MIN_RATIO = 4.5;
 
 interface StopState {

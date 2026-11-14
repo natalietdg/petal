@@ -2,6 +2,9 @@
 
 Each release gets a `## [version] · date` entry here before `npm run release`; the release script checks for it.
 
+## [1.1.9] · 2026-11-14
+- Magazine · Book reading look (⌥⌘5): a two-page spread with the headline on the left and justified, indented text on the right. Uses Ivar when it's installed, Instrument Serif otherwise.
+
 ## [1.1.8] · 2026-11-02
 - A Waiting button gathers every open question and running job across your sessions in one list.
 - Code review shows what a background subagent built on the reply that reports it.

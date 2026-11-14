@@ -11,6 +11,7 @@ import { promptsCheck, questionPickerCheck } from './snapshot-prompts';
 import { builtinMenusCheck } from './snapshot-builtin-menus';
 import { stopButtonCheck } from './snapshot-stop';
 import { printLookCheck } from './snapshot-print';
+import { bookLookCheck } from './snapshot-book';
 import { printAxisCheck } from './snapshot-print-axis';
 import { columnAxisCheck } from './snapshot-column-axis';
 import { tablesCheck } from './snapshot-tables';
@@ -451,6 +452,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['repos', () => reposCheck(kit, { win, ...tabs })],
     ['repo line', () => repoLineCheck(kit, { feed })], // before the print steps, which replace the fixture's replies
     ['print look', () => printLookCheck(kit, win)], // replaces the reader's reply with its own long sample
+    ['book look', () => bookLookCheck(kit, win)],
     ['print axis', () => printAxisCheck(kit, win)],
     ['fixed header', () => headerCheck(kit, win)],
     ['column axis', () => columnAxisCheck(kit, win)],
@@ -623,6 +625,12 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
   if (process.env.PASTEL_SNAPSHOT_MODE === 'scene-idle') {
     await sceneIdle({ win, js, log });
     return app.quit();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'book-look') {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await bookLookCheck(kit, win).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
   }
 
   if (process.env.PASTEL_SNAPSHOT_MODE === 'print-axis') {

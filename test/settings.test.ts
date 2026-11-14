@@ -28,10 +28,11 @@ describe('scene settings', () => {
 });
 
 describe('reading style settings', () => {
-  it('lists Magazine · Print fourth, so the View menu gives it ⌘⇧4', async () => {
+  it('lists Magazine · Print fourth and Magazine · Book fifth, so the View menu gives them ⌥⌘4 and ⌥⌘5', async () => {
     const { READING_CHOICES } = await import('../src/main/menu');
-    expect(READING_CHOICES.map(([id]) => id)).toEqual(['newspaper', 'editorial', 'lifestyle', 'print']);
+    expect(READING_CHOICES.map(([id]) => id)).toEqual(['newspaper', 'editorial', 'lifestyle', 'print', 'book']);
     expect(READING_CHOICES[3]).toEqual(['print', 'Magazine · Print']);
+    expect(READING_CHOICES[4]).toEqual(['book', 'Magazine · Book']);
   });
 
   it('accepts print and rejects unknown ids', async () => {
