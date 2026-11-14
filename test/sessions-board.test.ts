@@ -1,7 +1,7 @@
 // The Sessions board's card model: headline, digest, status, sort and filter.
 import { describe, expect, it } from 'vitest';
 import {
-  EMPTY_DIGEST, boardStatus, digestReplies, filterCards, lastUpdate, replyHeadline, sortCards, toCard,
+  EMPTY_DIGEST, HOME_GROUP, boardSections, boardStatus, digestReplies, filterCards, groupByRepo, lastUpdate, replyHeadline, repoGroupOf, sortCards, toCard,
   type BoardCard, type BoardSource,
 } from '../src/shared/sessions-board';
 import type { Conclusion } from '../src/shared/conclusion';
@@ -11,7 +11,7 @@ const iso = (minutes: number) => new Date(T0 + minutes * 60_000).toISOString();
 const conclusion = (at: string | null): Conclusion => ({ title: '', conclusion: 'Shipped the board', result: '', impact: '', at });
 
 const source = (over: Partial<BoardSource> = {}): BoardSource => ({
-  sessionId: 's1', tabId: null, name: 'Session', place: 'petal · main', busy: false, asking: false,
+  sessionId: 's1', tabId: null, name: 'Session', place: 'petal · main', repo: 'petal', busy: false, asking: false,
   updatedAt: T0, digest: EMPTY_DIGEST, conclusion: null, agents: 0, starred: false, ...over,
 });
 
@@ -130,5 +130,56 @@ describe('replyHeadline fences', () => {
   it('skips a bold line inside a longer fence that a shorter one would have closed', () => {
     expect(replyHeadline(['````', '```', '**Not this**', '````', '**This one**'].join('\n'))).toBe('This one');
     expect(replyHeadline(['~~~', '```', '**Not this**', '~~~', '**Tilde closed**'].join('\n'))).toBe('Tilde closed');
+  });
+});
+
+describe('repoGroupOf', () => {
+  it('groups by the repo part of "<repo> · <branch>", or the folder outside git', () => {
+    expect(repoGroupOf('pastel-term · ux-pass', '~/CascadeProjects/pastel-term')).toBe('pastel-term');
+    expect(repoGroupOf('scratch', '~/scratch')).toBe('scratch');
+  });
+
+  it('home-folder sessions group under Home, whatever the folder is called', () => {
+    expect(repoGroupOf('natalieleong', '~')).toBe(HOME_GROUP);
+  });
+});
+
+describe('groupByRepo and boardSections', () => {
+  const card = (sessionId: string, repo: string, minutes: number, over: Partial<BoardSource> = {}) =>
+    toCard(source({ sessionId, repo, updatedAt: T0 + minutes * 60_000, ...over }));
+  const cards: BoardCard[] = [
+    card('petal-idle', 'petal', 1),
+    card('admin-new', 'admin-v3', 9),
+    card('home-chat', HOME_GROUP, 5),
+    card('petal-wait', 'petal', -30, { asking: true }),
+    card('admin-old', 'admin-v3', 2),
+  ];
+
+  it('one group per repo, the repo with the most recent activity first', () => {
+    expect(groupByRepo(cards).map((g) => [g.repo, g.cards.length, g.latest])).toEqual([
+      ['admin-v3', 2, T0 + 9 * 60_000],
+      [HOME_GROUP, 1, T0 + 5 * 60_000],
+      ['petal', 2, T0 + 60_000],
+    ]);
+  });
+
+  it('cards inside a group keep the board order: Waiting first, then newest', () => {
+    const petal = groupByRepo(cards).find((g) => g.repo === 'petal');
+    expect(petal?.cards.map((c) => c.sessionId)).toEqual(['petal-wait', 'petal-idle']);
+  });
+
+  it('never drops or duplicates a card, and ties order by name', () => {
+    expect(groupByRepo(cards).flatMap((g) => g.cards).map((c) => c.sessionId).sort()).toEqual(cards.map((c) => c.sessionId).sort());
+    expect(groupByRepo([card('b', 'beta', 0), card('a', 'alpha', 0)]).map((g) => g.repo)).toEqual(['alpha', 'beta']);
+  });
+
+  it('Waiting on you stays on top and Headless runs last, around the repo groups', () => {
+    const kinds = boardSections({ cards, waiting: true, headless: true }).map((s) => (s.kind === 'repo' ? s.repo : s.kind));
+    expect(kinds).toEqual(['waiting', 'admin-v3', HOME_GROUP, 'petal', 'headless']);
+  });
+
+  it('leaves out the lane and the headless group when they are empty', () => {
+    expect(boardSections({ cards: [], waiting: false, headless: false })).toEqual([]);
+    expect(boardSections({ cards: [], waiting: true, headless: true }).map((s) => s.kind)).toEqual(['waiting', 'headless']);
   });
 });

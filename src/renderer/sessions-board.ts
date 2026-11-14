@@ -23,8 +23,8 @@ import { agentsBadge, type ChildRow } from '../shared/subsessions';
 import { TASK_STATUS_WORDS } from '../shared/tasks';
 import type { ActivityEvent } from '../shared/activity';
 import {
-  BOARD_FILTERS, EMPTY_DIGEST, FILTER_WORDS, STATUS_WORDS, digestReplies, filterCards, lastUpdate, matchesFilter, sortCards, toCard,
-  type BoardCard, type BoardFilter, type BoardSource,
+  BOARD_FILTERS, EMPTY_DIGEST, FILTER_WORDS, STATUS_WORDS, boardSections, digestReplies, filterCards, lastUpdate, matchesFilter, repoGroupOf, sortCards, toCard,
+  type BoardCard, type BoardFilter, type BoardSource, type RepoGroup,
 } from '../shared/sessions-board';
 
 const view = byId('board');
@@ -79,6 +79,7 @@ const notes = new Map<string, string>(); // per session: why it couldn't open
 const confirms = new Map<string, string>(); // per session: "still running elsewhere, open here as well?"
 let closeAsking: string | null = null; // the card showing "Close this Claude?"
 const closingIds = new Set<string>();
+const collapsedRepos = new Set<string>(); // in memory only: the renderer has no persisted store
 
 export const isOpen = (): boolean => overlays.isOpen('board');
 
@@ -98,11 +99,13 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
     seen.add(update.sessionId);
     const row = rowOf.get(update.sessionId);
     const digest = digestReplies(update.replies);
+    const place = update.repo ?? row?.board?.place ?? folderName(update.cwd);
     out.push({
       sessionId: update.sessionId,
       tabId,
       name: update.label,
-      place: update.repo ?? row?.board?.place ?? folderName(update.cwd),
+      place,
+      repo: repoGroupOf(place, row?.cwd),
       busy: update.busy,
       asking: isWaiting(update.sessionId),
       updatedAt: lastUpdate(row?.updatedAt, digest.at),
@@ -116,11 +119,13 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
     if (seen.has(row.sessionId)) continue;
     seen.add(row.sessionId); // one card per session, even when two processes resumed it
     const digest = row.board?.digest ?? EMPTY_DIGEST;
+    const place = row.board?.place ?? row.cwd;
     out.push({
       sessionId: row.sessionId,
       tabId: null,
       name: row.name,
-      place: row.board?.place ?? row.cwd,
+      place,
+      repo: repoGroupOf(place, row.cwd),
       busy: row.status === 'busy',
       asking: isWaiting(row.sessionId), // its own window reports its screen to main
       updatedAt: lastUpdate(row.updatedAt, digest.at),
@@ -256,6 +261,33 @@ async function openChild(parentId: string, childId: string): Promise<void> {
   else if ('note' in result) notes.set(parentId, result.note);
   else if (!('confirm' in result)) return close();
   render(true);
+}
+
+// One repo's heading (name and count, click to collapse) over its cards.
+function repoElement(group: RepoGroup): HTMLLIElement {
+  const collapsed = collapsedRepos.has(group.repo);
+  const item = el('li', 'board-repo');
+  const listId = `board-repo-${group.repo.replace(/[^\w-]/g, '_')}`;
+  const toggle = el('button', 'board-repo-head');
+  toggle.type = 'button';
+  toggle.dataset.repo = group.repo;
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.setAttribute('aria-controls', listId);
+  toggle.append(el('span', 'board-repo-name', group.repo), el('span', 'board-repo-count', String(group.cards.length)));
+  toggle.addEventListener('click', () => {
+    if (collapsed) collapsedRepos.delete(group.repo);
+    else collapsedRepos.add(group.repo);
+    render(true);
+  });
+  const list = el('ul', 'board-repo-cards');
+  list.id = listId;
+  list.setAttribute('aria-label', group.repo);
+  list.hidden = collapsed;
+  if (!collapsed) list.append(...group.cards.map(cardElement));
+  const heading = el('h3', 'board-repo-title');
+  heading.append(toggle);
+  item.append(heading, list);
+  return item;
 }
 
 // Headless runs with no live parent, each opening its agent panel.
@@ -409,7 +441,7 @@ function render(force = false): void {
   waiting.setShown(sessionsView);
   const agentRows = lastView?.rows?.map((r) => [r.subagents, r.children]);
   const orphans = lastView?.orphans ?? [];
-  const key = JSON.stringify([filter, boardView, branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  const key = JSON.stringify([filter, boardView, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -417,9 +449,14 @@ function render(force = false): void {
   summary.textContent = summaryText(cards);
   filterRow.replaceChildren(...filterButtons(cards));
   const empty = cards.length ? `Nothing ${FILTER_WORDS[filter].toLowerCase()} right now.` : lastView ? 'No Claude sessions are open.' : 'Looking for sessions…';
-  grid.replaceChildren(...(shown.length ? shown.map(cardElement) : [el('li', 'board-empty', empty)]));
+  // Waiting on you and Headless runs keep their fixed places above and below the grid; the grid holds the repo groups.
+  const sections = boardSections({ cards: shown, waiting: waiting.shownItems().length > 0, headless: orphans.length > 0 });
+  const groups = sections.flatMap((section) => (section.kind === 'repo' ? [repoElement(section)] : []));
+  grid.replaceChildren(...(groups.length ? groups : [el('li', 'board-empty', empty)]));
   renderOrphans(orphans, sessionsView);
+  const focusedRepo = (document.activeElement as HTMLElement | null)?.closest('.board-repo-head')?.getAttribute('data-repo');
   if (focusedId) grid.querySelector<HTMLElement>(`.board-card[data-session-id="${CSS.escape(focusedId)}"]`)?.focus();
+  else if (focusedRepo) grid.querySelector<HTMLElement>(`.board-repo-head[data-repo="${CSS.escape(focusedRepo)}"]`)?.focus();
   else if (focusedFilter) filterRow.querySelector<HTMLElement>(`[data-filter="${focusedFilter}"]`)?.focus();
 }
 
@@ -428,8 +465,9 @@ grid.addEventListener('keydown', (event) => {
   const cards = [...grid.querySelectorAll<HTMLElement>('.board-card')];
   const at = cards.indexOf(event.target as HTMLElement);
   if (at === -1) return;
-  const top = cards[0]?.offsetTop;
-  const columns = Math.max(1, cards.filter((c) => c.offsetTop === top).length);
+  const ownList = [...(cards[at]?.closest('.board-repo-cards')?.querySelectorAll<HTMLElement>('.board-card') ?? [])];
+  const top = ownList[0]?.offsetTop;
+  const columns = Math.max(1, ownList.filter((c) => c.offsetTop === top).length);
   const moves: Record<string, number> = { ArrowRight: at + 1, ArrowLeft: at - 1, ArrowDown: at + columns, ArrowUp: at - columns, Home: 0, End: cards.length - 1 };
   const next = moves[event.key];
   if (next === undefined) return;

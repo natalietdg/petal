@@ -32,7 +32,8 @@
 .board-filter:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
 
 /* As many 280px columns as fit; one full-width column when the window is narrower. */
-.board-grid {
+.board-grid,
+.board-repo-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 14px;
@@ -40,6 +41,25 @@
   padding: 0;
   list-style: none;
 }
+/* One full-width row per repo: its heading, then its cards in the same columns. */
+.board-repo { grid-column: 1 / -1; min-width: 0; }
+.board-repo-cards[hidden] { display: none; }
+.board-repo-title { margin: 6px 0 8px; font-size: 13px; }
+.board-repo-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--reader-fg);
+  font: 600 13px var(--ui-font);
+  cursor: pointer;
+}
+.board-repo-head::before { content: "▾"; width: 1em; color: var(--muted); }
+.board-repo-head[aria-expanded="false"]::before { content: "▸"; }
+.board-repo-head:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.board-repo-count { padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px; font-weight: 500; color: var(--muted); }
 .board-item { display: flex; flex-direction: column; min-width: 0; }
 
 .board-card {

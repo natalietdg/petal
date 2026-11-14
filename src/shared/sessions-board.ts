@@ -29,6 +29,7 @@ export interface BoardSource {
   tabId: string | null; // a tab in this window, or null for a session elsewhere on the Mac
   name: string; // the full shared session title
   place: string;
+  repo: string; // the Board heading it groups under (repoGroupOf)
   busy: boolean;
   asking: boolean; // a question or permission prompt on its screen
   updatedAt: number | null;
@@ -107,6 +108,39 @@ export function matchesFilter(card: BoardCard, filter: BoardFilter): boolean {
 }
 
 export const filterCards = (cards: readonly BoardCard[], filter: BoardFilter): BoardCard[] => cards.filter((c) => matchesFilter(c, filter));
+
+export const HOME_GROUP = 'Home';
+const HOME_CWD = '~'; // the Sessions rows' short cwd for her home folder
+const NO_FOLDER_GROUP = 'Other';
+
+// The repo a card groups under: home-folder sessions under Home, else the repo or folder name from "<repo> · <branch>".
+export function repoGroupOf(place: string, cwd: string | null | undefined): string {
+  if (cwd === HOME_CWD) return HOME_GROUP;
+  return place.split(' · ')[0]?.trim() || NO_FOLDER_GROUP;
+}
+
+export interface RepoGroup {
+  repo: string;
+  cards: BoardCard[]; // in sortCards order: Waiting first inside the repo
+  latest: number | null; // the group's most recent activity
+}
+
+// One group per repo, newest activity first; ties by name.
+export function groupByRepo(cards: readonly BoardCard[]): RepoGroup[] {
+  const byRepo = new Map<string, BoardCard[]>();
+  for (const card of cards) byRepo.set(card.repo, [...(byRepo.get(card.repo) ?? []), card]);
+  return [...byRepo]
+    .map(([repo, members]) => ({ repo, cards: sortCards(members), latest: lastUpdate(...members.map((c) => c.updatedAt)) }))
+    .sort((a, b) => (b.latest ?? 0) - (a.latest ?? 0) || a.repo.localeCompare(b.repo));
+}
+
+export type BoardSection = { kind: 'waiting' } | ({ kind: 'repo' } & RepoGroup) | { kind: 'headless' };
+
+// The Board top to bottom: the Waiting on you lane, the repo groups, then Headless runs last.
+export function boardSections({ cards, waiting, headless }: { cards: readonly BoardCard[]; waiting: boolean; headless: boolean }): BoardSection[] {
+  const repos = groupByRepo(cards).map((group): BoardSection => ({ kind: 'repo', ...group }));
+  return [...(waiting ? [{ kind: 'waiting' } as const] : []), ...repos, ...(headless ? [{ kind: 'headless' } as const] : [])];
+}
 
 // The newer of the session file's update and its newest reply.
 export const lastUpdate = (...times: (number | null | undefined)[]): number | null =>
