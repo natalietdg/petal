@@ -31,6 +31,7 @@
   flex-direction: column;
   gap: 10px;
 }
+.pg-whats-next { padding-bottom: 32px; } /* the last step scrolls clear of the footer */
 .pg-footer {
   flex: none;
   display: flex;
