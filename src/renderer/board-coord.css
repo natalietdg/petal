@@ -2,8 +2,8 @@
    Colours come from the theme's label pairs (ink on pill), which check-contrast.mjs holds at 4.5:1. */
 
 /* One line under the title: what changed since the Board was last opened. */
-.board-since { flex-basis: 100%; margin: 0; font: 14px/1.45 var(--ui-font); color: var(--muted); overflow-wrap: anywhere; }
-.board-since[hidden] { display: none; }
+.board-since-line { flex-basis: 100%; margin: 0; font: 14px/1.45 var(--ui-font); color: var(--muted); overflow-wrap: anywhere; }
+.board-since-line[hidden] { display: none; }
 /* The branch filter, in the board's head. */
 .board-branch:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 1px; }
 .board-branch {

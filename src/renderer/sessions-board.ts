@@ -35,7 +35,7 @@ view.tabIndex = -1; // focusable, so Esc reaches the overlay with no card to foc
 const grid = el('ul', 'board-grid');
 grid.setAttribute('aria-label', 'Open Claude sessions');
 // One line on what the activity feed recorded since the Board was last opened; worked out once per open.
-const since = el('p', 'board-since');
+const since = el('p', 'board-since-line');
 since.hidden = true;
 const branchSelect = el('select', 'board-branch');
 branchSelect.setAttribute('aria-label', 'Branch');

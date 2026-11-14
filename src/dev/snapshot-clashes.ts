@@ -49,7 +49,7 @@ const OVERFLOW = `(() => {
   const board = document.getElementById('board');
   if (board.scrollWidth - board.clientWidth > 1) over.push({ id: '#board', by: board.scrollWidth - board.clientWidth });
   const box = board.getBoundingClientRect();
-  for (const e of board.querySelectorAll('.board-head, .board-card, .board-since, .board-clash, .board-task')) {
+  for (const e of board.querySelectorAll('.board-head, .board-card, .board-since-line, .board-clash, .board-task')) {
     if (!e.getClientRects().length) continue;
     const r = e.getBoundingClientRect();
     if (r.right > box.right + 1 || r.left < box.left - 1) over.push({ id: e.className, right: Math.round(r.right), box: Math.round(box.right) });
@@ -60,13 +60,16 @@ const OVERFLOW = `(() => {
   return over;
 })()`;
 
+// Parts the fixture always draws (Board since line and clash chip, the reader's clash line); a missing one means a moved selector.
+const CONTRAST_MUST_SHOW = ['.board-since-line', '.board-clash', '.clash-chip', '.clash-text'];
+
 // WCAG ratio of each coloured part's text on the colour behind it.
 const CONTRAST = `(() => {
   const rgb = (c) => (c.match(/[\\d.]+/g) || []).map(Number);
   const lum = ([r, g, b]) => [r, g, b].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
   const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length >= 3 && (c[3] ?? 1) > 0.5) return c; } return [255, 255, 255]; };
   const out = [];
-  for (const sel of ['.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-since', '.clash-chip', '.clash-text', '.clash-headsup']) {
+  for (const sel of ['.board-task .board-label', '.board-task .board-text', '.board-clash', '.board-since-line', '.clash-chip', '.clash-text', '.clash-headsup']) {
     for (const e of document.querySelectorAll(sel)) {
       if (!e.getClientRects().length) continue;
       const fg = rgb(getComputedStyle(e).color);
@@ -150,8 +153,9 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
 
     // 1 The Board shows its cards with no view tabs; no Tasks section or Give task under the cards.
     await openBoard();
-    const tabsShown = await waitFor(async () => ((await extras(LOGIN)) ? js("document.querySelectorAll('#board .board-view').length") : null), 5000);
-    check(tabsShown === 0, `no Sessions/Activity tabs: ${tabsShown}`);
+    const cardUp = await waitFor(() => extras(LOGIN), 5000); // the count itself can't be waited on: 0 reads as not ready
+    const tabsShown: number = await js("document.querySelectorAll('#board .board-view').length");
+    check(cardUp && tabsShown === 0, `no Sessions/Activity tabs: ${JSON.stringify({ card: Boolean(cardUp), tabsShown })}`);
     check(!(await js("document.querySelector('#board .board-tasks, #board .board-give, #board .task-row')")), 'no task list or Give task on the Board');
 
     // 2 A task given to the login session through the store (as Testing does) shows on its card; Task lines move it.
@@ -249,18 +253,22 @@ export async function clashesCheck(kit: Kit, { win, openTab }: Pick<TabsDeps, 'o
         await js(`window.pastel.look.setReading(${JSON.stringify(look)})`);
         await waitFor(async () => (await js('document.documentElement.dataset.reading')) === look, 3000);
         const low: { sel: string; ratio: number }[] = [];
+        const seen = new Set<string>();
         let counted = 0;
         await wait(200);
         const pairs: { sel: string; cls: string; ratio: number }[] = await js(CONTRAST);
         counted += pairs.length;
+        pairs.forEach((p) => seen.add(p.sel));
         low.push(...pairs.filter((p) => p.ratio < 4.5));
         await js('PastelTerm.sessionsBoard.close()');
         await js(`PastelTerm.tabs.activate(${JSON.stringify(loginTab)})`);
         await wait(200);
         const strip: { sel: string; ratio: number }[] = await js(CONTRAST);
         counted += strip.length;
+        strip.forEach((p) => seen.add(p.sel));
         low.push(...strip.filter((p) => p.ratio < 4.5));
-        check(low.length === 0 && counted > 20, `${themeId} ${look}: ${counted} text parts at 4.5:1 or more ${JSON.stringify(low)}`);
+        const missing = CONTRAST_MUST_SHOW.filter((sel) => !seen.has(sel));
+        check(low.length === 0 && !missing.length, `${themeId} ${look}: ${counted} text parts at 4.5:1 or more ${JSON.stringify({ low, missing })}`);
         await openBoard();
       }
     }
