@@ -2,6 +2,7 @@
 # Full snapshot run under a scratch HOME and a stand-in claude; never reads her ~/.claude or runs the real CLI.
 # Usage: scripts/snapshot-full-fake-home.sh [scratch-dir]   (run before handing a branch over; exit 0 only on fail=0)
 # PASTEL_SNAPSHOT_MODE=<mode> runs one mode instead of the full sequence, under the same scratch HOME.
+# PASTEL_SNAPSHOT_STEPS="a,b" runs only those full-sequence steps (plus reply and launch); for iterating, never the gate.
 set -u
 REPO=${0:A:h:h}
 SCRATCH=${1:-${TMPDIR:-/tmp}/petal-fake-home-run}
@@ -34,7 +35,7 @@ chmod +x $FAKE_HOME/.local/bin/claude
 env -i \
   HOME=$FAKE_HOME USER=${USER} LOGNAME=${USER} SHELL=/bin/zsh TERM=xterm-256color LANG=en_US.UTF-8 TMPDIR=${TMPDIR:-/tmp} \
   PATH=$FAKE_HOME/.local/bin:$NODE_BIN:/usr/bin:/bin:/usr/sbin:/sbin \
-  PASTEL_SNAPSHOT=1 ${PASTEL_SNAPSHOT_MODE:+PASTEL_SNAPSHOT_MODE=$PASTEL_SNAPSHOT_MODE} PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
+  PASTEL_SNAPSHOT=1 ${PASTEL_SNAPSHOT_MODE:+PASTEL_SNAPSHOT_MODE=$PASTEL_SNAPSHOT_MODE} ${PASTEL_SNAPSHOT_STEPS:+PASTEL_SNAPSHOT_STEPS=$PASTEL_SNAPSHOT_STEPS}PASTEL_SNAPSHOT_FAKE_JSONL=$SNAP/fixture.jsonl PASTEL_SNAPSHOT_DIR=$SNAP \
   perl -e "alarm $TIMEOUT_S; exec @ARGV" /usr/bin/caffeinate -d -i -u $ELECTRON . >$SNAP/stdout.log 2>&1
 
 line=$(grep -E '^SNAPSHOT (COMPLETE|INCOMPLETE)' $SNAP/snapshot.log 2>/dev/null | tail -1)

@@ -396,10 +396,14 @@ async function captureDiagrams({ js, capture, log, themes, applyTheme }: Omit<St
 
 const BASELINE_AFTER = 'launch'; // Get started is up from the fresh launch until this step closes it
 
+// PASTEL_SNAPSHOT_STEPS="favorites,overlays" runs only those steps, after reply and launch which set the run up.
+const onlySteps = process.env.PASTEL_SNAPSHOT_STEPS?.split(',').map((s) => s.trim()).filter(Boolean);
+const keepStep = (name: string): boolean => !onlySteps?.length || name === 'reply' || name === BASELINE_AFTER || onlySteps.includes(name);
+
 // Runs every fixture check in order; returns how many finished, so a cut-short run shows in the marker.
 async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme, tabs }: StepDeps & { pty: IPty; feed: ReaderFeed; tabs: TabsDeps }): Promise<StepCount> {
   const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
-  const steps: [string, () => Promise<unknown>][] = [
+  const allSteps: [string, () => Promise<unknown>][] = [
     ['reply', () => fixtureReply({ js, log, pty })], // first: the feed must read the fixture it writes, not an older copy
     ['launch', async () => { organizerOffCheck(kit, 'start'); await launchCheck(kit); }], // Get started still open from the fresh launch
     ['diagrams', () => captureDiagrams({ js, capture, log, themes, applyTheme })],
@@ -489,6 +493,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay
   ];
+  const steps = allSteps.filter(([name]) => keepStep(name));
   const count: StepCount = { done: 0, total: steps.length };
   log(`SNAPSHOT START steps=${count.total}`);
   let isolation: StepIsolation | null = null; // set once the launch screen is closed: the run's resting state
