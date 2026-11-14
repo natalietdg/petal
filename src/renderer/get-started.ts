@@ -175,7 +175,9 @@ export function refresh(): void {
 }
 
 export const isComplete = (): boolean => loaded && allDone(states());
-export const reopensOnLaunch = (): boolean => loaded && needsReopen(states()); // for the snapshot run
+let reopenedAtLaunch = false;
+// For the snapshot run: what the last launch decided, not the steps now (a session started since ticks them).
+export const reopensOnLaunch = (): boolean => reopenedAtLaunch;
 
 // Any past conversation in History; empty while reading her Claude folder is off.
 async function hasPastSessions(): Promise<boolean> {
@@ -206,7 +208,8 @@ export async function open(): Promise<void> {
 // Reloads, since Allow may have just made History readable.
 export async function openIfIncomplete(): Promise<boolean> {
   await load();
-  if (!needsReopen(states())) return false;
+  reopenedAtLaunch = needsReopen(states());
+  if (!reopenedAtLaunch) return false;
   await open();
   return true;
 }
