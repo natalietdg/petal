@@ -6,6 +6,7 @@ import type { OutputStyle, StyleSwitch } from '../main/output-styles';
 import type { PetalStyles } from '../main/petal-styles';
 import type { CustomizeState } from '../shared/ipc';
 import { isPetalStyleFile } from '../shared/petal-style-choices';
+import { STYLE_SCOPE } from '../shared/pet-guide';
 
 // The open style survives redraws (a theme change re-renders the section).
 let openFile: string | null = null;
@@ -59,6 +60,26 @@ async function addPetalStyles(button: HTMLButtonElement): Promise<void> {
   if (!isIpcError(fresh)) page.state = fresh;
   switched = { lines: [isIpcError(result) ? `Couldn’t add them: ${result.error}` : 'Added Petal’s reply styles. Pick one below with Use this style.'], state: page.state };
   page.redraw();
+}
+
+// Undo of Petal's last switch, while that style is still active: settings.json gets back what it had.
+async function undoStyle(button: HTMLButtonElement): Promise<void> {
+  button.disabled = true;
+  const result = await window.pastel.config.undoStyle();
+  const fresh = await window.pastel.config.get();
+  if (!isIpcError(fresh)) page.state = fresh;
+  switched = { lines: [isIpcError(result) ? `Couldn’t undo: ${result.error}` : `Put back ${result.previous ?? 'Claude Code’s default style'}.`], state: page.state };
+  page.redraw();
+}
+
+function undoOffer(): Node[] {
+  const { styleUndo } = page.state;
+  if (!styleUndo) return [];
+  const undo: HTMLButtonElement = actionButton('Undo', () => undoStyle(undo), 'flow-button cz-style-undo');
+  undo.setAttribute('aria-label', 'Undo the style switch');
+  const row = el('div', 'cz-actions cz-style-undo-row');
+  row.append(undo, el('span', 'cz-status', `Puts back ${styleUndo.previous ?? 'Claude Code’s default style'}, the style you had before Petal switched it.`));
+  return [row];
 }
 
 function petalOffer(): Node[] {
@@ -124,8 +145,9 @@ export function outputStylesCard(): HTMLDivElement {
   const { styles, problem } = page.state.outputStyles;
   const list = el('div', 'cz-styles');
   list.append(...styles.map((s) => styleRow(s, list)));
-  const children: Node[] = [];
+  const children: Node[] = [note(STYLE_SCOPE, 'cz-note cz-style-scope')];
   if (problem) children.push(el('p', 'cz-empty', problem));
+  children.push(...undoOffer());
   children.push(...petalOffer());
   if (styles.length) children.push(list);
   if (switched?.state === page.state) children.push(...switched.lines.map((line) => note(line, 'cz-note cz-style-switched')));

@@ -96,8 +96,8 @@ function indentOf(text: string, settings: Record<string, unknown>): string {
   return text.trim().includes('\n') || Object.keys(settings).length === 0 ? '  ' : '';
 }
 
-// settings.json with only `outputStyle` changed: other keys, their order, the indent and the file mode stay as they were.
-function writeStyleSetting(claudeDir: string, name: string): void {
+// settings.json with only `outputStyle` changed (null removes the key): other keys, their order, the indent and the file mode stay as they were.
+function writeStyleSetting(claudeDir: string, name: string | null): void {
   const linked = path.join(claudeDir, 'settings.json');
   const file = fs.existsSync(linked) ? fs.realpathSync(linked) : linked; // a symlinked settings.json stays a symlink
   let text: string | null;
@@ -108,7 +108,7 @@ function writeStyleSetting(claudeDir: string, name: string): void {
     text = null;
   }
   if (text === null) {
-    writeFileDurable(file, `${JSON.stringify({ outputStyle: name }, null, 2)}\n`);
+    if (name !== null) writeFileDurable(file, `${JSON.stringify({ outputStyle: name }, null, 2)}\n`);
     return;
   }
   let settings: unknown;
@@ -118,7 +118,8 @@ function writeStyleSetting(claudeDir: string, name: string): void {
     settings = null;
   }
   if (!isObject(settings)) throw new Error(`${linked} isn’t a valid JSON object, so Petal left it unchanged.`);
-  settings.outputStyle = name; // an existing key keeps its place; a new one goes last
+  if (name === null) delete settings.outputStyle;
+  else settings.outputStyle = name; // an existing key keeps its place; a new one goes last
   const newline = text.endsWith('\n') ? '\n' : '';
   writeFileDurable(file, JSON.stringify(settings, null, indentOf(text, settings)) + newline, fs.statSync(file).mode & 0o7777);
 }
@@ -130,4 +131,9 @@ export function setOutputStyle(name: string, claudeDir: string): StyleSwitch {
   writeStyleSetting(claudeDir, name);
   const local = styleIn(claudeDir, 'settings.local.json');
   return { name, override: local !== null && local !== name ? local : null };
+}
+
+// Undo of a switch Petal made: puts back the exact value settings.json had before (null: no outputStyle key).
+export function restoreOutputStyle(previous: string | null, claudeDir: string): void {
+  writeStyleSetting(claudeDir, previous);
 }

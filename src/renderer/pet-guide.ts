@@ -19,7 +19,7 @@ import { TOKEN_TITLE } from '../shared/token-facts';
 import { tokenFacts } from './customize-start';
 import {
   EXAMPLE_ASK, GUIDE_PETS, HELLO_EXAMPLE, WHATS_NEXT_LINE, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
-  libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, STYLE_LABELS, styleCost, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
+  libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, STYLE_LABELS, STYLE_UNDONE, styleCost, styleUsedLine, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
 } from '../shared/pet-guide';
 
 const COPIED_MS = 1400;
@@ -56,6 +56,7 @@ let past: PastSessionsSummary = { sessions: 0, projects: 0, newest: [] }; // His
 let buildLibrary = false; // the import card's checkbox
 let petalStyleOn = false; // a Petal reply style is already active, so the style card stays away
 let pickedStyle = DEFAULT_PETAL_STYLE; // the style card's pick
+let styleUsed: string | null = null; // Use this style worked: the card stays, with Undo, until Next
 
 const words = () => petWords(cat);
 const save = (stage: GuideStage) => window.pastel.config.save({ onboarding: { step: stage } });
@@ -221,6 +222,7 @@ function styleBody(): HTMLElement {
   cost.textContent = costOf(pickedStyle);
   const result = el('p', 'pg-style-result');
   result.setAttribute('aria-live', 'polite');
+  if (styleUsed) result.textContent = styleUsedLine(styleUsed);
   const picks = radioGroup('Reply style', 'pg-styles', PETAL_STYLE_CHOICES.map((choice) => {
     const tile = radio(pickedStyle === choice.name, () => { pickedStyle = choice.name; repaintPicks(); }, 'pg-style-pick');
     tile.dataset.style = choice.name;
@@ -233,13 +235,28 @@ function styleBody(): HTMLElement {
   return box;
 }
 
-// Use this style: the same add-then-switch Customize › Formatting does; a failure stays on the card.
+// Use this style: the same add-then-switch Customize › Claude setup does. The card stays with Undo; a failure stays on it too.
 async function useStyle(): Promise<void> {
   const result = view.querySelector<HTMLElement>('.pg-style-result');
   const { ok, line } = await addAndUsePetalStyle(pickedStyle);
   if (!ok) { if (result) result.textContent = line; return; }
-  petalStyleOn = true;
-  announce(line);
+  styleUsed = pickedStyle;
+  await show('style');
+  announce(styleUsedLine(pickedStyle));
+}
+
+// Undo: settings.json gets back the outputStyle it had before Use this style.
+async function undoStyle(): Promise<void> {
+  const undone = await window.pastel.config.undoStyle();
+  const result = view.querySelector<HTMLElement>('.pg-style-result');
+  if (isIpcError(undone)) { if (result) result.textContent = `Couldn’t undo: ${undone.error}`; return; }
+  styleUsed = null;
+  await show('style');
+  announce(STYLE_UNDONE);
+}
+
+async function leaveStyleCard(): Promise<void> {
+  petalStyleOn = true; // Back never reopens an answered question
   await advance('style');
 }
 
@@ -299,7 +316,8 @@ function renderCard(card: CardStep): void {
   if (card === 'consent') {
     actions.append(button('Allow', 'pg-primary pg-allow', () => void answerFolder('allowed')), button('Not now', 'pg-secondary pg-later', () => void answerFolder('declined')));
   } else if (card === 'style') {
-    actions.append(button(STYLE_LABELS.use, 'pg-primary pg-use-style', () => void useStyle()), button(STYLE_LABELS.later, 'pg-secondary pg-later', () => void advance('style')));
+    if (styleUsed) actions.append(button(STYLE_LABELS.next, 'pg-primary pg-next', () => void leaveStyleCard()), button(STYLE_LABELS.undo, 'pg-secondary pg-undo-style', () => void undoStyle()));
+    else actions.append(button(STYLE_LABELS.use, 'pg-primary pg-use-style', () => void useStyle()), button(STYLE_LABELS.later, 'pg-secondary pg-later', () => void advance('style')));
   } else if (card === 'import') {
     actions.append(button(IMPORT_LABELS.show, 'pg-primary pg-show', () => void showInHistory()), button(IMPORT_LABELS.later, 'pg-secondary pg-later', () => void advance('import')));
   } else {

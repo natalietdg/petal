@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MAX_STYLE_BYTES, activeStyleName, listOutputStyles, setOutputStyle } from '../src/main/output-styles';
+import { MAX_STYLE_BYTES, activeStyleName, listOutputStyles, restoreOutputStyle, setOutputStyle } from '../src/main/output-styles';
 import { removeTempDirs, tempDir } from './helpers';
 
 const RESEARCH = '---\nname: Research Paper\ndescription: "Abstract first, then sections"\n---\n\n# Research paper\nBody text.\n';
@@ -211,5 +211,35 @@ describe('setOutputStyle', () => {
     const before = snapshot();
     setOutputStyle('Magazine', dir);
     expect(snapshot()).toEqual(before);
+  });
+});
+
+describe('restoreOutputStyle', () => {
+  const files = { 'research-paper.md': RESEARCH, 'magazine.md': FOLDED };
+  const read = (dir: string) => fs.readFileSync(path.join(dir, 'settings.json'), 'utf8');
+
+  it('puts back the previous name, byte for byte', () => {
+    const before = `${JSON.stringify({ model: 'opus', outputStyle: 'Research Paper', zeta: 1 }, null, 2)}\n`;
+    const dir = claudeDir(files, before);
+    fs.writeFileSync(path.join(dir, 'settings.json'), before);
+    setOutputStyle('Magazine', dir);
+    restoreOutputStyle('Research Paper', dir);
+    expect(read(dir)).toBe(before);
+  });
+
+  it('removes the key when there was none, leaving the other keys', () => {
+    const before = `${JSON.stringify({ model: 'opus' }, null, 2)}\n`;
+    const dir = claudeDir(files);
+    fs.writeFileSync(path.join(dir, 'settings.json'), before);
+    setOutputStyle('Magazine', dir);
+    restoreOutputStyle(null, dir);
+    expect(read(dir)).toBe(before);
+    expect(activeStyleName(dir)).toBeNull();
+  });
+
+  it('writes no settings.json just to remove a key that was never there', () => {
+    const dir = claudeDir(files);
+    restoreOutputStyle(null, dir);
+    expect(fs.existsSync(path.join(dir, 'settings.json'))).toBe(false);
   });
 });

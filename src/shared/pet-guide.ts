@@ -146,7 +146,7 @@ export function cardCopy(step: CardStep, pet: PetWords): CardCopy {
     case 'pet': return { title: 'Pick your pet', line: `${pet.name} will show you around. ${capital(pet.they)} sits in the corner while you work.` };
     case 'scene': return { title: 'Pick a scene', line: `Where should ${pet.name} hang out? ${capital(pet.they)} tries each one on in the corner.` };
     case 'consent': return { title: 'One quick question', line: 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' };
-    case 'style': return { title: 'How should Claude write?', line: 'A Petal reply style makes Claude’s replies easy to read here: the answer first, then the detail.' };
+    case 'style': return { title: 'How should Claude write?', line: `A Petal reply style puts the answer first, then the detail. ${STYLE_SCOPE}` };
     case 'import': return { title: 'Import your past sessions', line: 'They’re in History, up top. Press ⌘Y any time to open it.' };
   }
 }
@@ -167,7 +167,12 @@ export const libraryConfirm = (plan: BackfillPlan): string => plan.sessions
 export const styleCost = (tokens: number): string =>
   `This style adds about ${tokens.toLocaleString('en-US')} tokens of instructions to every turn, and replies run a little longer. Change or turn it off in Customize › Claude setup.`;
 
-export const STYLE_LABELS = { use: 'Use this style', later: 'Not now' } as const;
+export const STYLE_LABELS = { use: 'Use this style', later: 'Not now', undo: 'Undo', next: 'Next' } as const;
+
+// The style is Claude Code's own setting, so it changes Claude's writing beyond Petal too (ux review #3).
+export const STYLE_SCOPE = 'It changes how Claude writes everywhere Claude Code runs on this Mac: in Petal, VS Code, the desktop app and your terminals.';
+export const styleUsedLine = (name: string): string => `Claude now writes in ${name.replace(/^Petal · /, '')} everywhere Claude Code runs. Undo puts back the style you had before.`;
+export const STYLE_UNDONE = 'Put back the style you had before.';
 
 export const IMPORT_LABELS = { show: 'Show them in History', later: 'Not now', library: 'Also build my Library from them' } as const;
 

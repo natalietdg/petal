@@ -213,8 +213,15 @@ export async function customizeStylesCheck(kit: Kit, win: BrowserWindow): Promis
     const petalSettings = JSON.parse(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8'));
     check(petalActive && petalSettings.outputStyle === 'Petal · Magazine' && JSON.stringify(Object.keys(petalSettings)) === JSON.stringify(Object.keys(SETTINGS)), `Use this style works on a Petal style: ${petalSettings.outputStyle}`);
     check(!(await js("Boolean(document.querySelector('#customize .cz-petal-add'))")), 'still no offer once they are installed');
+    // The style reaches every app Claude Code runs in, and Undo puts back the one it replaced (ux review #3).
+    const undoRow: Page = await waitFor(() => js("(() => { const r = document.querySelector('#customize .cz-style-undo-row'); return r ? { text: r.innerText.replace(/\\s+/g, ' ').trim(), scope: document.querySelector('#customize .cz-style-scope')?.textContent ?? null } : null; })()"), 5000);
+    check(undoRow && /^Undo Puts back Research Paper,/.test(undoRow.text) && /everywhere Claude Code runs on this Mac: in Petal, VS Code, the desktop app and your terminals/.test(undoRow.scope ?? ''), `Undo names the style it puts back, and the card says the style applies everywhere: ${JSON.stringify(undoRow)}`);
     await js("document.querySelector('#customize .cz-styles').closest('.cz-card').scrollIntoView({ block: 'start' })");
     await capture('customize-styles-petal-paleSky');
+    await js("document.querySelector('#customize .cz-style-undo').click()");
+    const undone = await waitFor(async () => { const rows: Page[] = await js(LIST); return rows.find((r) => r.active)?.name === 'Research Paper' ? rows : null; }, 5000);
+    check(undone && fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8') === SETTINGS_TEXT && !(await js("Boolean(document.querySelector('#customize .cz-style-undo-row'))")),
+      'Undo puts settings.json back byte for byte and the Undo row goes');
     await js('PastelTerm.customize.close()');
 
     // A missing folder: one short line, no list.

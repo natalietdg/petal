@@ -156,6 +156,7 @@ export interface CustomizeState {
   choices: { themes: Choice[]; reading: readonly Choice[]; cats: readonly Choice[]; scenes: readonly Choice[] };
   outputStyle: string | null;
   outputStyles: OutputStyles;
+  styleUndo: { previous: string | null } | null; // Petal's last style switch, while still active: what Undo puts back
   petalStyles: PetalStyles;
   petalSkills: PetalSkills;
   magazinePath: string | null;
@@ -242,6 +243,7 @@ export interface InvokeChannels {
   'config:organizer': { args: []; result: Guarded<OrganizerStatus> };
   'config:open-style': { args: [file: string]; result: Guarded<Ok> };
   'config:use-style': { args: [name: string]; result: Guarded<StyleSwitch> };
+  'config:undo-style': { args: []; result: Guarded<{ previous: string | null }> };
   'config:add-petal-styles': { args: []; result: Guarded<PetalStyles> };
   'config:add-petal-skills': { args: []; result: Guarded<PetalSkills> };
   // This window's saved reader share, or null for the default.

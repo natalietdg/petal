@@ -135,6 +135,7 @@ const api = {
     organizer: () => invoke('config:organizer'),
     openStyle: (file: string) => invoke('config:open-style', file),
     useStyle: (name: string) => invoke('config:use-style', name),
+    undoStyle: () => invoke('config:undo-style'),
     addPetalStyles: () => invoke('config:add-petal-styles'),
     addPetalSkills: () => invoke('config:add-petal-skills'),
   },

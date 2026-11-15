@@ -11,7 +11,8 @@ import * as responseHook from './response-hook';
 import { toMarkdown } from './handoff';
 import { applyCat, applyReading, applyScene, applyTheme, settings, themes } from './look';
 import { handle, on } from './ipc';
-import { activeStyleName, listOutputStyles, setOutputStyle, type OutputStyles } from './output-styles';
+import { activeStyleName, listOutputStyles, restoreOutputStyle, setOutputStyle, type OutputStyles } from './output-styles';
+import { readJsonOrSetAside, writeFileDurable } from './atomic-file';
 import { installPetalStyles, petalStyles, type PetalPaths, type PetalStyles } from './petal-styles';
 import { installPetalSkills, petalSkills, type PetalSkills } from './petal-skills';
 import { petalSkillPaths } from './testing-skill';
@@ -51,10 +52,41 @@ function refuseRealWriteInSnapshot(): void {
   if (isSnapshotRun() && !stylesFixture.claudeDir) throw new Error('snapshot runs only write a stand-in ~/.claude');
 }
 
-// Writes outputStyle in settings.json.
+// What settings.json said before Petal's last style switch, so Undo can put it back (userData, survives relaunch).
+interface StyleUndo { previous: string | null; applied: string }
+const styleUndoFile = (): string => path.join(app.getPath('userData'), 'style-undo.json');
+
+function readStyleUndo(): StyleUndo | null {
+  const value = fs.existsSync(styleUndoFile()) ? readJsonOrSetAside(styleUndoFile()) : null;
+  if (!value || typeof value !== 'object') return null;
+  const { previous, applied } = value as Partial<StyleUndo>;
+  return typeof applied === 'string' && (previous === null || typeof previous === 'string') ? { previous, applied } : null;
+}
+
+// Undo is offered only while the style Petal set is still the active one; a later change of hers wins.
+function pendingStyleUndo(dir: string): { previous: string | null } | null {
+  const undo = readStyleUndo();
+  return undo && activeStyleName(dir) === undo.applied ? { previous: undo.previous } : null;
+}
+
+// Writes outputStyle in settings.json, remembering the value it replaces.
 function useStyle(name: string): StyleSwitch {
   refuseRealWriteInSnapshot();
-  return setOutputStyle(name, claudeDirOrRefuse());
+  const dir = claudeDirOrRefuse();
+  const previous = activeStyleName(dir);
+  const result = setOutputStyle(name, dir);
+  if (previous !== name) writeFileDurable(styleUndoFile(), JSON.stringify({ previous, applied: name } satisfies StyleUndo));
+  return result;
+}
+
+function undoStyle(): { previous: string | null } {
+  refuseRealWriteInSnapshot();
+  const dir = claudeDirOrRefuse();
+  const undo = pendingStyleUndo(dir);
+  if (!undo) throw new Error('the style has changed since, so there is nothing to undo');
+  restoreOutputStyle(undo.previous, dir);
+  fs.rmSync(styleUndoFile(), { force: true });
+  return undo;
 }
 
 // Packaged: Contents/Resources/output-styles (electron-builder extraResources); dev: the repo's resources folder.
@@ -106,6 +138,7 @@ function customizeState(): CustomizeState {
     },
     outputStyle: dir ? activeStyleName(dir) : null,
     outputStyles: dir ? listOutputStyles(dir) : NO_STYLES,
+    styleUndo: dir ? pendingStyleUndo(dir) : null,
     petalStyles: dir ? petalStyles(petalPaths()) : NO_PETAL_STYLES,
     petalSkills: dir ? petalSkills(petalSkillPaths(dir)) : NO_PETAL_SKILLS,
     magazinePath,
@@ -131,6 +164,7 @@ export function registerCustomizeIpc(): void {
   handle('config:organizer', () => organizer.status());
   handle('config:open-style', (_event, file) => openStyle(file));
   handle('config:use-style', (_event, name) => useStyle(name));
+  handle('config:undo-style', () => undoStyle());
   handle('config:add-petal-styles', () => addPetalStyles());
   handle('config:add-petal-skills', () => addPetalSkills());
   on('look:theme', (_event, id) => { if (themes[id]) applyTheme(id); });
