@@ -203,7 +203,7 @@ describe('migrating a version 1 checklist', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.migrated).toBe(true);
-    expect(result.factory.stations.map((s) => s.id)).toEqual(['intake', 'token-plan', 'ux-discovery', 'research-plan', 'build', 'test-queue', 'integrate', 'token-check', 'review', 'approve', 'merge', 'learn']);
+    expect(result.factory.stations.map((s) => s.id)).toEqual(['intake', 'token-plan', 'ux-discovery', 'research-plan', 'build', 'test-queue', 'integrate', 'review', 'approve', 'merge', 'learn']); // Spend check retired: Petal counts spend
     expect(result.factory.stations.filter((s) => (SPINE as readonly string[]).includes(s.id)).map((s) => s.id)).toEqual([...SPINE]);
     expect(result.factory.stations[0].instructions).toBe('Her intake words.');
     expect(result.factory.stations[4]).toMatchObject({ instructions: 'Her build words.', runner: 'subagent', agentType: 'general-purpose' });
@@ -215,5 +215,15 @@ describe('migrating a version 1 checklist', () => {
     const { stations, reviewers } = migrateV1([station({ id: 'perf-review', name: 'Perf review', runner: 'subagent', agentType: 'perf' }), station({ id: 'x', name: 'X' })]);
     expect(reviewers.map((r) => r.agentType)).toContain('perf');
     expect(stations.map((s) => s.id)).toEqual(['intake', 'x', 'build', 'review', 'approve', 'merge']);
+  });
+});
+
+describe('retired stations', () => {
+  it('drops the Spend check station from a saved factory and marks it to save again, since Petal counts spend itself', () => {
+    const saved = { ...defaultFactory(), stations: [...defaultFactory().stations.slice(0, 3), station({ id: 'token-check', name: 'Spend check', runner: 'subagent', agentType: 'token' }), ...defaultFactory().stations.slice(3)] };
+    const result = validateFactory(saved);
+    expect(result.ok && result.factory.stations.some((s) => s.id === 'token-check')).toBe(false);
+    expect(result.ok && result.migrated).toBe(true);
+    expect(validateFactory(defaultFactory())).toMatchObject({ ok: true, migrated: false });
   });
 });

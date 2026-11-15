@@ -1,5 +1,6 @@
 // Data shapes that cross the IPC boundary between main and the renderer.
 import type { Conclusion } from './conclusion';
+import type { SessionSpend } from './session-spend';
 
 export interface LabelColors {
   pill: string;
@@ -64,6 +65,7 @@ export interface ReaderUpdate {
   repo: string | null; // "<repo> · <branch>" for cwd, or its folder name outside git
   conclusion: Conclusion | null; // Claude's answer to her latest "conclude"
   notice?: ReaderNotice | null; // only for a claude with no session file (Claude Code before 2.1.75)
+  spend?: SessionSpend | null; // counted by Petal from the transcript; null before the log exists
 }
 
 // A log this tab's claude could be writing, when two claudes share a folder.

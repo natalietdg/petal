@@ -69,3 +69,14 @@
 
 /* Task rows in the reply's status block and the header strip read like Doing / Recommend / Next. */
 .status-task { --pill: transparent; --ink: var(--reader-fg); }
+
+/* On a card past 1M new tokens: what it has spent, neutral, never an alarm colour. */
+.board-spend {
+  align-self: flex-start;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--muted);
+  font: 600 12px/1.5 var(--ui-font);
+  white-space: nowrap;
+}

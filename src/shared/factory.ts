@@ -266,6 +266,9 @@ export function migrateV1(stations: readonly Station[]): { stations: Station[]; 
 }
 
 // A factory as read from disk or sent by the renderer; never throws. A version 1 file comes back migrated.
+// Petal counts each session's tokens itself from its transcript, at no token cost, so the Spend check agent station retires.
+export const RETIRED_STATION_IDS: readonly string[] = ['token-check'];
+
 export function validateFactory(raw: unknown): Validated {
   if (!isRecord(raw)) return { ok: false, problem: 'The factory isn’t a JSON object.' };
   const version = raw.version ?? 1;
@@ -280,6 +283,9 @@ export function validateFactory(raw: unknown): Validated {
     if (stations.some((s) => s.id === station.id)) return { ok: false, problem: `Two stations share the id “${station.id}”.` };
     stations.push(station);
   }
+  const kept = stations.filter((s) => !RETIRED_STATION_IDS.includes(s.id));
+  const retired = kept.length < stations.length;
+  stations = kept;
   let reviewers = validateReviewers(raw.reviewers);
   if (typeof reviewers === 'string') return { ok: false, problem: reviewers };
   if (version === 1) ({ stations, reviewers } = migrateV1(stations));
@@ -290,7 +296,7 @@ export function validateFactory(raw: unknown): Validated {
   if (typeof risky === 'string') return { ok: false, problem: risky };
   const cap = raw.reworkCap ?? DEFAULT_REWORK_CAP;
   if (!Number.isInteger(cap) || (cap as number) < 0 || (cap as number) > MAX_REWORK) return { ok: false, problem: `The rework cap must be a whole number from 0 to ${MAX_REWORK}.` };
-  return { ok: true, factory: { version: 2, stations, reviewers, reworkCap: cap as number, risky }, migrated: version === 1 };
+  return { ok: true, factory: { version: 2, stations, reviewers, reworkCap: cap as number, risky }, migrated: version === 1 || retired };
 }
 
 function whoRuns(station: Station): string {

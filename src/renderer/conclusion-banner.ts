@@ -1,10 +1,10 @@
 // A concluded session's conclusion, in the reader and in History's preview: a one-line summary pinned at the top,
 // the full Conclusion / Result / Impact at the bottom; clicking the summary scrolls to the full one.
-// Both end in Petal's This session line: Library notes, test runs and the test loop, with links to each.
+// Both end in Petal's This session line: Library notes, test runs, the test loop and the tokens Petal counted.
 import { el } from './dom';
 import { timeOf } from './format';
 import { CONCLUSION_FIELDS, conclusionGist, type Conclusion } from '../shared/conclusion';
-import { hasInfo, libraryText, loopText, testsText, type LibraryLine, type SessionInfo, type TestsLine } from '../shared/session-info';
+import { hasInfo, libraryText, loopText, spendText, testsText, type LibraryLine, type SessionInfo, type TestsLine } from '../shared/session-info';
 
 export const OPEN_NOTE_EVENT = 'petal:open-note'; // detail: the note's slug; library.ts opens it
 export const OPEN_TEST_RUN_EVENT = 'petal:open-test-run'; // detail: the run id; testing.ts opens it
@@ -62,6 +62,7 @@ export function sessionLine(info: SessionInfo | null | undefined, { compact = fa
     ...(info.library ? [libraryPart(info.library, compact)] : []),
     ...(info.tests ? [testsPart(info.tests)] : []),
     ...(info.loop ? [el('span', 'conclusion-session-part', loopText(info.loop))] : []),
+    ...(info.spend ? [el('span', 'conclusion-session-part conclusion-session-spend', spendText(info.spend))] : []),
   ];
   line.append(el('span', 'conclusion-session-label', 'This session'));
   parts.forEach((part, i) => line.append(...(i ? [el('span', 'conclusion-session-dot', '·')] : []), part));

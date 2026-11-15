@@ -16,6 +16,7 @@ import { projectRootOf } from './testing-project';
 import { assistantText } from './replies';
 import { parseEntry } from './transcript-entry';
 import { handle, send } from './ipc';
+import { sessionSpend } from './session-spend';
 import { isSnapshotRun, testingFixture } from './snapshot-mode';
 import { parseLoop, type LoopProgress } from '../shared/loop-line';
 import { libraryLine, runsInSpan, testsLine, type SessionInfo, type Span } from '../shared/session-info';
@@ -115,7 +116,9 @@ export async function sessionInfo(sessionId: string, sessions: TabSessions, now 
   } else if (log.loop) {
     loop = { progress: log.loop, fixed: null };
   }
-  return { sessionId, library, tests, loop };
+  const counted = sessionSpend(found.transcript, { full: true });
+  const spend = counted && counted.newTokens ? { newTokens: counted.newTokens, cacheRead: counted.cacheRead } : null;
+  return { sessionId, library, tests, loop, spend };
 }
 
 const VALID_ID = /^[\w-]{1,128}$/;

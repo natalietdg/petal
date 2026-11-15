@@ -2,6 +2,7 @@
 // Shapes and pure helpers both sides share; main/session-info.ts gathers it, renderer/conclusion-banner.ts draws it.
 import { isTerminal, phaseWord, type LoopProgress } from './loop-line';
 import type { Counts, PipelineRun, RunState } from './testing';
+import { tokenText } from './token-usage';
 
 export interface NoteRef { slug: string; title: string }
 
@@ -22,9 +23,15 @@ export interface SessionInfo {
   library: LibraryLine | null; // null: nothing to say (Build my Library off and nothing added)
   tests: TestsLine | null;
   loop: LoopLine | null;
+  spend?: SpendLine | null; // counted by Petal from the log, at no token cost
 }
 
-export const hasInfo = (info: SessionInfo | null | undefined): info is SessionInfo => Boolean(info && (info.library || info.tests || info.loop));
+export interface SpendLine { newTokens: number; cacheRead: number }
+
+export const hasInfo = (info: SessionInfo | null | undefined): info is SessionInfo => Boolean(info && (info.library || info.tests || info.loop || info.spend));
+
+// "1.2M new tokens, 34M re-read from cache"
+export const spendText = ({ newTokens, cacheRead }: SpendLine): string => `${tokenText(newTokens)} new tokens, ${tokenText(cacheRead)} re-read from cache`;
 
 // ---- The Library part.
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;

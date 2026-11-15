@@ -1,5 +1,6 @@
 // Board, the hub (⌘⇧O, the dock's Board or the Sessions pill): Waiting on you, every open session as a card,
 // Recently closed and Today. It rides the sessions 2s tick; the card model lives in shared/sessions-board.ts.
+import { spendChip } from '../shared/session-spend';
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as sessionsPanel from './sessions-panel';
@@ -97,6 +98,7 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
       updatedAt: lastUpdate(row?.updatedAt, digest.at),
       digest,
       conclusion: update.conclusion,
+      newTokens: update.spend?.newTokens ?? row?.board?.newTokens ?? null,
       agents: (row?.subagents.length ?? 0) + (row?.children.length ?? 0),
       starred: favorites.isFavorite(update.sessionId),
     });
@@ -117,6 +119,7 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
       updatedAt: lastUpdate(row.updatedAt, digest.at),
       digest,
       conclusion: row.board?.conclusion ?? null,
+      newTokens: row.board?.newTokens ?? null,
       agents: row.subagents.length + row.children.length,
       starred: favorites.isFavorite(row.sessionId),
     });
@@ -178,6 +181,12 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (clash) {
     const chip = el('span', 'board-clash', `Clash · ${clash.file}`);
     chip.title = info.clashes.map((c) => `Also being edited in ${c.otherName}: ${c.file}`).join('\n');
+    button.append(chip);
+  }
+  const spend = spendChip(card.newTokens);
+  if (spend) {
+    const chip = el('span', 'board-spend', spend);
+    chip.title = 'Input, cache writes and output so far, counted by Petal from the transcript. Cache re-reads not included.';
     button.append(chip);
   }
   button.addEventListener('click', () => void choose(card, false));

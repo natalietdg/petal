@@ -5,6 +5,7 @@ import { transcriptPath, type SessionFile } from './claude-session';
 import { readTail } from './jsonl-window';
 import { ReplyCollector } from './replies';
 import { repoLabel } from './repo-label';
+import { sessionSpend } from './session-spend';
 import * as conclusionsStore from './conclusions-store';
 import { digestReplies, EMPTY_DIGEST, type BoardDetail, type ReplyDigest } from '../shared/sessions-board';
 
@@ -47,6 +48,7 @@ export async function boardDetails(sessions: readonly SessionFile[]): Promise<Ma
       digest: digestOf(file),
       conclusion: await conclusionsStore.refresh(session.sessionId, file),
       place: repoLabel(session.cwd),
+      newTokens: sessionSpend(file)?.newTokens ?? null,
     });
   }
   prune(files);

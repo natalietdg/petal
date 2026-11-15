@@ -9,6 +9,8 @@ import { promptBubble } from './prompt-bubble';
 import { createStrip, paintStrip } from './status-strip';
 import * as styleOffer from './style-offer';
 import { paintConclusion } from './conclusion-banner';
+import * as contextNoticeLine from './context-notice';
+import type { SessionSpend } from '../shared/session-spend';
 import { infoFor, onInfo } from './conclusion-info';
 import * as banners from './reader-banners';
 import * as prsTab from './prs-tab';
@@ -26,7 +28,7 @@ import { emptyLine } from '../shared/reader-empty';
 import { confirmedItems } from '../shared/confirmed';
 
 export type ReaderView = 'replies' | 'confirmed';
-type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null };
+type ShownUpdate = { state: ReaderState; replies: Reply[]; cwd?: string | null; waiting?: WaitingPrompt[]; pending?: PendingEcho[]; busy?: boolean; repo?: string | null; sessionId?: string | null; label?: string; tabId?: string; conclusion?: Conclusion | null; notice?: ReaderNotice | null; spend?: SessionSpend | null };
 
 const latest = byId('latest');
 const older = byId('older');
@@ -207,6 +209,7 @@ export function update(shown: ShownUpdate): void {
   const stillLatest = conclusion && conclusionIsLatest(conclusion, [replies[0]?.timestamp, waiting.at(-1)?.timestamp]); // a resumed session moved on
   pinned = notesSession && replies.length && stillLatest && conclusion ? { sessionId: notesSession, conclusion } : null; // notesSession outlives an ended claude
   paintPinned();
+  contextNoticeLine.paint(state === 'live' ? shown.sessionId ?? null : null, shown.spend);
   prsTab.paint(notesSession ?? null, `${replies.length}:${replies[0]?.id}:${replies[0]?.markdown.length ?? 0}:${waiting.length}`);
   paintStrip(strip, replies.map((r) => r.markdown), replies.length && styleOffer.shouldOffer() ? stripOffer : null);
   banners.paint();
@@ -376,6 +379,7 @@ const notice = Object.assign(document.createElement('p'), { className: 'status r
 notice.setAttribute('role', 'alert');
 older.before(notice);
 notice.after(setupHints.pathTipLine);
+notice.after(contextNoticeLine.line);
 export const setPathTip = setupHints.setPathTip;
 export function showNotice(text: string): void {
   notice.textContent = text;

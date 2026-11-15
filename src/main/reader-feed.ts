@@ -9,6 +9,7 @@ import { claudeFolderAllowed } from './claude-folder';
 import { isClosingConcludePrompt, sameConclusion, type Conclusion } from '../shared/conclusion';
 import { ConcludeWatch } from './conclude-close';
 import { derivedStatus } from './turn-state';
+import { sessionSpend } from './session-spend';
 import type { FixtureSession } from './snapshot-mode';
 import type { ReaderNotice, ReaderState, ReaderUpdate, Reply, WaitingPrompt } from '../shared/types';
 
@@ -272,6 +273,7 @@ export class ReaderFeed implements ProcessListener {
       state, replies: this.replies, waiting: live ? this.waiting : [], promptCount: this.promptCount, busy, sessionId, cwd, repo: state === 'none' ? null : this.repo,
       conclusion: state === 'none' ? null : this.conclusion,
       notice: live ? this.notice : null,
+      spend: state === 'none' || !this.session?.transcript ? null : sessionSpend(this.session.transcript),
     });
   }
 

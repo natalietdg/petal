@@ -21,6 +21,7 @@ export interface BoardDetail {
   digest: ReplyDigest;
   conclusion: Conclusion | null;
   place: string | null; // "<repo> · <branch>", or the folder outside git
+  newTokens?: number | null; // input + cache write + output so far, counted by Petal from the log
 }
 
 // Everything one card is built from, wherever the session lives.
@@ -37,6 +38,7 @@ export interface BoardSource {
   conclusion: Conclusion | null;
   agents: number;
   starred: boolean;
+  newTokens?: number | null;
 }
 
 export interface BoardCard extends Omit<BoardSource, 'busy' | 'asking' | 'conclusion'> {
