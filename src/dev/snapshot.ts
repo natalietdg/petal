@@ -90,6 +90,7 @@ import { launchCheck, organizerOffCheck, setupEmptyCheck } from './snapshot-onbo
 import { getStartedCheck } from './snapshot-get-started';
 import { firstRunCheck } from './snapshot-first-run';
 import { petOnboardingCheck } from './snapshot-pet-onboarding';
+import { gapsCheck } from './snapshot-gaps';
 import type { SessionFile } from '../main/claude-session';
 import { once } from '../main/ipc';
 import { fixtureFile, panelFixture, snapshotOutDir } from '../main/snapshot-mode';
@@ -498,6 +499,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['text size', withStandInClaude('text-size', () => textSizeCheck(kit, win, { activeSession: tabs.activeSession }), kit.outDir)], // appends a reply; puts both sizes and the window back
     ['stop', withStandInClaude('stop', () => stopButtonCheck(kit, { win, feed, activeSession: tabs.activeSession }), kit.outDir)], // fixture busy/idle; Escs recorded in main, never typed
     ['mentions', keepingStores(['activity'], withStandInClaude('mentions', () => mentionsCheck(kit, { win, openTab: tabs.openTab, sessions: tabs.sessions, fixtureFile: fakeTranscript() ?? '' }), kit.outDir), kit.outDir)], // fixture tabs, pastes recorded never typed; closes its tabs
+    ['gaps', () => gapsCheck(kit, { win, openTab: tabs.openTab })], // outside-Petal fixtures and the guide; puts back the guide's stage
     ['session prs', () => sessionPrsCheck(kit, fakeTranscript() ?? '')], // appends PR turns; stubbed ismainsafe and reviewer, never a real claude
     ['get started', () => getStartedCheck(kit, { win, activeSession: tabs.activeSession })], // near the end: it swaps the first tab's log and puts it back
     ['organizer off', async () => organizerOffCheck(kit, 'end')], // last: the whole run has passed the first-pass delay

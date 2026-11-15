@@ -43,7 +43,9 @@ export function bashTestTurn(): string[] {
     JSON.stringify({ isSidechain: false, type: 'user', uuid: `bash-r${seq}`, timestamp: stamp(), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, is_error: true, content: VITEST_FAIL }] } }),
   ];
 }
-export const loopReply = (): string => JSON.stringify({ isSidechain: false, type: 'assistant', uuid: `loop-${++seq}`, timestamp: stamp(), message: { role: 'assistant', content: [{ type: 'text', text: 'Round 3 is green apart from one flaky scenario.\n\n**Loop:** round 3/3 · done · 1 open' }] } });
+// Token usage on the loop reply, so the This session line has a spend part; 28% of Claude 5's 1M window, under the context line.
+const LOOP_USAGE = { input_tokens: 800, cache_creation_input_tokens: 36_000, cache_read_input_tokens: 240_000, output_tokens: 1900 };
+export const loopReply = (): string => JSON.stringify({ isSidechain: false, type: 'assistant', uuid: `loop-${++seq}`, timestamp: stamp(), message: { id: `msg-loop-${seq}`, role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: 'Round 3 is green apart from one flaky scenario.\n\n**Loop:** round 3/3 · done · 1 open' }], usage: LOOP_USAGE } });
 
 // The line in `root` (the pin or the full banner): its text, links and contrast on its own background.
 export const LINE = (root: string) => `(() => {
@@ -122,6 +124,7 @@ export async function sessionLineCheck(kit: Kit, line: SessionLineFixture): Prom
   const pin = () => js(LINE('#reader-conclusion-pin')) as Promise<LineState>;
 
   const first = await waitFor(async () => { const l = await full(); return l.shown && l.text?.includes('Tests:') ? l : null; }, 8000);
+  check(first && first.parts?.some((p) => /^[\d.]+[kM]? new tokens, [\d.]+[kM]? re-read from cache$/.test(p)), `full banner ends with the tokens Petal counted: ${JSON.stringify(first?.parts)}`);
   check(first && first.parts?.includes(WANT_TESTS) && first.parts?.includes(WANT_LOOP),
     `full banner names this session's test runs (2 of Petal's in its span, Claude's own from the log; the year-old one left out) and the loop: ${JSON.stringify(first)}`);
   const reading = await waitFor(async () => { const l = await full(); return l.parts?.[0] === 'Library: reading…' ? l : null; }, 15000);

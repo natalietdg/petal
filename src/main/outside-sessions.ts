@@ -7,6 +7,7 @@ import { ReplyCollector } from './replies';
 import { pendingAsk } from './subsessions';
 import { transcriptPath, type SessionFile } from './claude-session';
 import { liveSessions } from './sessions-monitor';
+import { isSnapshotRun, panelFixture } from './snapshot-mode';
 import * as history from './history';
 import { laneItems, waitingItems } from '../shared/waiting';
 import { OUTSIDE_REASONS, RECENT_HOURS } from '../shared/outside-sessions';
@@ -73,11 +74,14 @@ export function outsideSignals(live: readonly SessionFile[], inPetal: ReadonlySe
   });
 }
 
+// Live session files; a snapshot run's are the panel fixture's, so a followed fixture session reads as live.
+export const liveNow = (): SessionFile[] => (isSnapshotRun() ? panelFixture.sessions ?? [] : liveSessions());
+
 // What the reader follows: the live session file each tick (for busy and idle), else History's record of an ended one.
 export function followSource(sessionId: string): () => FollowedSession | null {
   return () => {
     if (!claudeFolderAllowed()) return null;
-    const live = liveSessions().find((s) => s.sessionId === sessionId) as WithStatus | undefined;
+    const live = liveNow().find((s) => s.sessionId === sessionId) as WithStatus | undefined;
     if (live) return { ...live, status: live.status === 'busy' ? 'busy' : 'idle', transcript: transcriptPath(live) };
     const record = history.findRecord(sessionId);
     return record ? { sessionId, transcript: record.file, cwd: record.cwd ?? undefined, status: 'idle' } : null;

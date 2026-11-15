@@ -2,8 +2,7 @@
 import { claudeFolderAllowed } from './claude-folder';
 import { handle, on, send } from './ipc';
 import { ReaderFeed } from './reader-feed';
-import { followSource } from './outside-sessions';
-import { liveSessions } from './sessions-monitor';
+import { followSource, liveNow } from './outside-sessions';
 import * as history from './history';
 
 const SESSION_ID = /^[\w-]{1,128}$/;
@@ -23,7 +22,7 @@ export function registerFollowIpc(): void {
     const sender = event.sender;
     stop(sender.id);
     if (!hooked.has(sender.id)) { hooked.add(sender.id); sender.once('destroyed', () => { stop(sender.id); hooked.delete(sender.id); }); }
-    const live = (): boolean => liveSessions().some((s) => s.sessionId === sessionId) || history.isLive(sessionId);
+    const live = (): boolean => liveNow().some((s) => s.sessionId === sessionId) || history.isLive(sessionId);
     const feed = new ReaderFeed(0, (_channel, update) => {
       if (!sender.isDestroyed()) send(sender, 'follow:update', { sessionId, live: live(), update });
     }, { source: followSource(sessionId) });
