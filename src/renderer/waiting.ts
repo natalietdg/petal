@@ -80,6 +80,12 @@ export function refresh(): void {
 // A session in this window: its tab (and reply, or the child's agent panel). Elsewhere: History's resume, which focuses its window.
 export async function openNeed(need: Need): Promise<void> {
   close();
+  if (need.kind === 'job') { // a factory job: its row in Factory › Jobs
+    const customize = await import('./customize');
+    await customize.open('factory');
+    document.querySelector<HTMLElement>(`#customize .fj-job[data-job="${CSS.escape(need.jobId ?? '')}"] .fj-act`)?.focus();
+    return;
+  }
   if (need.here && need.tabId && tabs.get(need.tabId)) {
     tabs.activate(need.tabId);
     const { replyId, childSessionId } = need;

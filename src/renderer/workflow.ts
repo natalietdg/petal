@@ -1,11 +1,12 @@
 // Workflow tabs inside Customize: how her Claude Code setup works, where the day went, and the factory Claude follows.
 // customize.ts owns the page and tab bar; this draws one tab into the body it hands over.
 import * as diagrams from './diagrams';
-import { el } from './dom';
+import { el, isIpcError } from './dom';
 import { timeOf } from './format';
 import { renderFactory } from './workflow-factory';
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData, TodayRow } from '../main/workflow';
 import type { FactoryState } from '../main/factory-store';
+import type { JobsView } from '../shared/factory-jobs';
 import type { IpcError } from '../shared/types';
 
 export type TabId = 'today' | 'setup' | 'time' | 'handoffs' | 'factory';
@@ -17,7 +18,7 @@ interface DataByTab {
   setup: SetupData;
   time: TimeData;
   handoffs: HandoffData;
-  factory: FactoryState;
+  factory: { factory: FactoryState; jobs: JobsView };
 }
 type Loaded = DataByTab[TabId] | IpcError;
 
@@ -27,7 +28,12 @@ export const TABS: { id: TabId; name: string; load: (options: OpenOptions) => Pr
   { id: 'setup', name: 'Setup', load: () => window.pastel.workflow.setup() },
   { id: 'time', name: 'Time', load: () => window.pastel.workflow.time() },
   { id: 'handoffs', name: 'Handoffs', load: () => window.pastel.workflow.handoffs() },
-  { id: 'factory', name: 'Factory', load: () => window.pastel.factory.get() },
+  { id: 'factory', name: 'Factory', load: async () => {
+    const [factory, jobs] = await Promise.all([window.pastel.factory.get(), window.pastel.factory.jobs()]);
+    if (isIpcError(factory)) return factory;
+    if (isIpcError(jobs)) return jobs;
+    return { factory, jobs };
+  } },
 ];
 const UNCACHED: TabId[] = ['factory']; // edited in place, so a return visit reads the files again
 let options: OpenOptions = {};

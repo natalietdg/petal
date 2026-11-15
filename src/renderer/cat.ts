@@ -76,11 +76,13 @@ const root = byId('cat');
 let current: Pet = CATS.mika;
 let busy = false;
 let asking = false; // a permission or question from Claude is on screen
+let jobsAsking = false; // a factory job waits on her (escalated, approve)
 let scene = 'none';
 const petOff = (): boolean => root.dataset.cat === NO_PET;
 
 const status = (): string => {
   if (asking) return 'Claude is waiting on you';
+  if (jobsAsking) return 'A factory job is waiting on you';
   if (busy) return 'Claude is working';
   if (root.classList.contains('done')) return 'Claude is done';
   return 'Claude is resting';
@@ -129,13 +131,27 @@ function showDone(on: boolean): void {
 export function setAsking(next: boolean): void {
   if (Boolean(next) === asking) return;
   asking = Boolean(next);
-  root.classList.toggle('asking', asking);
+  root.classList.toggle('asking', asking || jobsAsking);
   if (petOff()) return;
   if (asking) {
     showDone(false);
     clearTimeout(dozeTimer);
     root.classList.add('awake');
   } else if (!busy) dozeLater();
+  updateTip();
+}
+
+// Factory jobs: a "!" while any waits on her, whichever tab is open; a check when one finishes.
+export function setJobsAsking(next: boolean): void {
+  if (next === jobsAsking) return;
+  jobsAsking = next;
+  root.classList.toggle('asking', asking || jobsAsking);
+  if (!petOff() && next) { showDone(false); root.classList.add('awake'); }
+  updateTip();
+}
+export function jobDone(): void {
+  if (petOff() || asking || jobsAsking) return;
+  showDone(true);
   updateTip();
 }
 

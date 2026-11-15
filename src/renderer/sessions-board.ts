@@ -11,6 +11,7 @@ import * as distillCard from './distill-card';
 import * as codeReviewTask from './code-review-task';
 import * as waiting from './waiting';
 import * as workflow from './workflow';
+import * as factoryJobs from './factory-jobs';
 import { byId, el, isIpcError } from './dom';
 import { sessionNameEl } from './session-name';
 import { folderName } from '../shared/session-label';
@@ -132,6 +133,8 @@ function statusLine(card: BoardCard): HTMLSpanElement {
   const row = lastView?.rows?.find((r) => r.sessionId === card.sessionId);
   const badge = agentsBadge(row?.subagents.length ?? 0, row?.children ?? []);
   if (badge) top.append(el('span', 'board-agents', badge));
+  const jobs = factoryJobs.badgeFor(card.sessionId); // "2 jobs · 1 waiting": jobs roll up into the card that started them
+  if (jobs) top.append(el('span', 'board-agents board-jobs', jobs));
   if (card.starred) {
     const star = el('span', 'board-star');
     star.innerHTML = favorites.STAR_SVG;
@@ -409,7 +412,7 @@ function render(force = false): void {
   waiting.setShown(sessionsView);
   const agentRows = lastView?.rows?.map((r) => [r.subagents, r.children]);
   const orphans = lastView?.orphans ?? [];
-  const key = JSON.stringify([filter, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  const key = JSON.stringify([filter, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), factoryJobs.allJobs().map((j) => `${j.id}:${j.state}:${j.waitReason ?? ''}`), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
@@ -442,6 +445,8 @@ grid.addEventListener('keydown', (event) => {
   event.preventDefault();
   cards[Math.min(Math.max(next, 0), cards.length - 1)]?.focus();
 });
+
+factoryJobs.onChange(() => render());
 
 export function open(): void {
   if (!overlays.show('board')) return;

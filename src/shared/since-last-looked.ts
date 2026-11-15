@@ -9,6 +9,7 @@ const COUNT_WORDS: Record<ActivityKind, [one: string, many: string]> = {
   library: ['Library update', 'Library updates'],
   clash: ['clash', 'clashes'],
   message: ['message', 'messages'],
+  job: ['factory job changed', 'factory jobs changed'],
 };
 
 const counted = (n: number, kind: ActivityKind): string => `${n} ${COUNT_WORDS[kind][n === 1 ? 0 : 1]}`;

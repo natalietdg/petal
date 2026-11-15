@@ -13,10 +13,11 @@ export interface HubState {
   reports: Map<number, SessionSignals[]>; // by webContents id
   children: Map<string, { name: string; rows: ChildRow[] }>; // parent session id -> its children
   orphans: ChildRow[];
+  jobs?: SessionSignals[]; // factory jobs waiting on her, one row each
 }
 
 // Each reported session with its children; parents in no Petal window still count when a child asks; orphans stand alone.
-export function laneFrom({ reports, children, orphans }: HubState): Need[] {
+export function laneFrom({ reports, children, orphans, jobs = [] }: HubState): Need[] {
   const signals: SessionSignals[] = [];
   const reported = new Set<string>();
   for (const list of reports.values()) {
@@ -33,10 +34,11 @@ export function laneFrom({ reports, children, orphans }: HubState): Need[] {
   for (const o of orphans) {
     if (o.ask) signals.push({ sessionId: o.sessionId, tabId: null, windowId: null, title: o.name, ask: o.ask, askSince: o.askSince, decide: null, children: [] });
   }
+  signals.push(...jobs);
   return waitingLane(signals);
 }
 
-const state: HubState = { reports: new Map(), children: new Map(), orphans: [] };
+const state: HubState = { reports: new Map(), children: new Map(), orphans: [], jobs: [] };
 const gate = new NotifyGate();
 const notices = new Set<Notification>(); // held so a notice isn't collected before its click
 let shownKey = '';
@@ -87,6 +89,12 @@ function update(): void {
 export function setChildren(rows: readonly SessionRow[], orphans: readonly ChildRow[]): void {
   state.children = new Map(rows.filter((r) => r.children.length).map((r) => [r.sessionId, { name: r.name, rows: r.children }]));
   state.orphans = [...orphans];
+  update();
+}
+
+// The factory watcher hands over the jobs waiting on her.
+export function setJobs(jobs: readonly SessionSignals[]): void {
+  state.jobs = [...jobs];
   update();
 }
 

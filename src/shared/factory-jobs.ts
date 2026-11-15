@@ -349,3 +349,85 @@ export function reconcile(job: Job, h: Handoffs, ctx: ReconcileContext): Step | 
       return null;
   }
 }
+
+// ---- what the surfaces show
+
+// Why a job waits on her, as the Waiting lane row reads; null when it doesn't wait on her.
+export function waitReason(job: Pick<Job, 'state' | 'reworkCap' | 'riskyHits' | 'blocked' | 'events'>, handoffs: Handoffs): string | null {
+  switch (job.state) {
+    case 'escalated': {
+      const failed = Object.entries(handoffs).find(([n, f]) => REVIEW_FILE.test(n) && f?.kind === 'VERDICT' && f.value === 'FAIL');
+      const last = job.events.at(-1)?.note;
+      const detail = failed ? `${REVIEW_FILE.exec(failed[0])?.[1]}: ${failed[1]?.rest || 'asked for changes'}` : last && !last.startsWith('Stuck') ? last : null;
+      return `Stuck after ${job.reworkCap} tries${detail ? ` · ${detail}` : ''}`;
+    }
+    case 'approve': {
+      const hit = job.riskyHits[0];
+      return hit ? `Approve merge · touches ${hit.label} (${hit.file})` : 'Approve merge';
+    }
+    case 'spec': return 'Check the spec before it builds';
+    case 'merging': return job.blocked;
+    default: return null;
+  }
+}
+
+// The parent card's roll-up: "2 jobs · 1 waiting". Finished jobs don't count.
+export function jobsBadge(jobs: readonly { state: JobState; waitReason: string | null }[]): string {
+  const open = jobs.filter((j) => !isFinished(j.state));
+  if (!open.length) return '';
+  const waiting = open.filter((j) => j.waitReason !== null).length;
+  const stalled = open.filter((j) => j.state === 'stalled').length;
+  return [`${open.length} job${open.length === 1 ? '' : 's'}`, waiting ? `${waiting} waiting` : '', stalled ? `${stalled} stalled` : ''].filter(Boolean).join(' · ');
+}
+
+// One job as Factory › Jobs, the Board and the lane see it.
+export interface JobView {
+  id: string;
+  repo: string;
+  repoName: string;
+  title: string;
+  ask: string;
+  state: JobState;
+  label: string;
+  waitReason: string | null;
+  since: number; // when it entered its state
+  rework: number;
+  reworkCap: number;
+  shipMode: ShipMode;
+  riskyHits: RiskHit[];
+  verdicts: { name: string; line: string }[]; // review-*.md and decision.md first lines, this round
+  tokens: number | null; // spend from the job's transcripts; null when the Claude folder is off
+  prUrl: string | null;
+  merged: boolean;
+  undone: boolean;
+  parentSessionId: string | null;
+  stalledFrom: JobState | null;
+  updatedAt: number;
+}
+
+export interface RepoJobs {
+  repo: string;
+  name: string;
+  ship: { mode: ShipMode; detected: ShipMode; saved: boolean };
+  seen: boolean; // the first-run card was dismissed
+  jobs: JobView[];
+}
+
+export interface JobsView { repos: RepoJobs[]; activeRepo: string | null }
+
+export type JobAction = 'approve' | 'reject' | 'guidance' | 'resume' | 'discard' | 'undo-merge' | 'take-over';
+export const JOB_ACTIONS: readonly JobAction[] = ['approve', 'reject', 'guidance', 'resume', 'discard', 'undo-merge', 'take-over'];
+
+// The buttons a job's row offers in its state.
+export function actionsFor(job: Pick<JobView, 'state' | 'shipMode' | 'merged' | 'undone'>): JobAction[] {
+  switch (job.state) {
+    case 'spec': return ['approve', 'discard'];
+    case 'approve': return ['approve', 'reject', 'discard'];
+    case 'escalated': return ['guidance', 'take-over', 'approve', 'discard']; // approve: she fixed it by hand, review again
+    case 'stalled': return ['resume', 'take-over', 'discard'];
+    case 'merging': return ['take-over', 'discard'];
+    case 'done': return job.shipMode === 'local-merge' && job.merged && !job.undone ? ['undo-merge'] : [];
+    case 'discarded': return [];
+    default: return ['discard'];
+  }
+}

@@ -79,3 +79,41 @@
   .fx-node { flex-basis: 100%; }
   .fx-arrow { flex-basis: 100%; transform: rotate(90deg); }
 }
+
+/* Factory › Jobs: each repo's jobs above the folded station editor. */
+.fj { display: flex; flex-direction: column; gap: 18px; margin: 0 0 22px; }
+.fj-title { margin: 0; font-size: 18px; font-weight: 600; }
+.fj-repo { display: flex; flex-direction: column; gap: 12px; }
+.fj-repo-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.fj-repo-name { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.fj-ship { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fj-ship-toggle { margin: 0; }
+.fj-ship-why { font-size: 12px; color: var(--muted); }
+.fj-first { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; background: var(--next-pill); border-color: transparent; }
+.fj-first-text { margin: 0; font-size: 14px; line-height: 1.45; }
+.fj-empty { margin: 0; }
+.fj-sub { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fj-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.fj-job { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 14px; background: var(--reader-bg); min-width: 0; }
+.fj-job-waiting { border-color: var(--decide-ink); box-shadow: inset 3px 0 0 var(--decide-ink); }
+.fj-job-done, .fj-job-discarded { opacity: 0.85; }
+.fj-job-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.fj-job-title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.fj-state { flex-shrink: 0; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--why-wash); color: var(--reader-fg); }
+.fj-state-waiting { background: var(--decide-pill); color: var(--decide-ink); }
+.fj-state-queued, .fj-state-discarded { background: var(--code-bg); color: var(--muted); }
+.fj-state-done { background: var(--next-pill); color: var(--next-ink); }
+.fj-reason { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.fj-meta { margin: 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.fj-verdicts { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 13px; overflow-wrap: anywhere; }
+.fj-verdict-fail { color: var(--decide-ink); }
+.fj-pr { align-self: flex-start; font-size: 13px; color: var(--link); }
+.fj-actions { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
+.fj-open { flex-direction: column; align-items: stretch; }
+.fj-open .fx-field { width: 100%; }
+.fj-note { margin: 0; font-size: 13px; }
+.fx-fold { margin: 0 0 14px; border-top: 1px solid var(--rule); padding-top: 12px; }
+.fx-fold-summary { cursor: pointer; font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+.fx-fold-summary:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; border-radius: 4px; }
+.fx-spine .fx-card { border-style: solid; border-width: 2px; }
+.fx-runner-petal { background: var(--next-pill); color: var(--next-ink); }

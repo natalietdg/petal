@@ -3,8 +3,8 @@
 // Idle at the prompt never counts; a silent child is a stall on its card, never waiting.
 import type { ScreenAsk } from './prompt-answer';
 
-export type NeedKind = 'permission' | 'question' | 'child' | 'decide';
-export const NEED_RANK: Record<NeedKind, number> = { permission: 1, question: 2, child: 3, decide: 4 };
+export type NeedKind = 'permission' | 'question' | 'child' | 'job' | 'decide';
+export const NEED_RANK: Record<NeedKind, number> = { permission: 1, question: 2, child: 3, job: 3, decide: 4 };
 
 export interface OpenDecide {
   text: string; // markdown of the Decide line
@@ -20,6 +20,14 @@ export interface ChildSignal {
   since: number | null;
 }
 
+// A factory job waiting on her (escalated, approve, a spec to check, a merge blocked on her checkout).
+export interface JobSignal {
+  id: string;
+  repo: string;
+  reason: string; // "Approve merge · touches auth (src/auth.ts)"
+  since: number | null;
+}
+
 // Everything needsYou() reads about one session, from whichever Petal window holds it.
 export interface SessionSignals {
   sessionId: string;
@@ -30,6 +38,7 @@ export interface SessionSignals {
   askSince: number | null; // first seen on screen
   decide: OpenDecide | null;
   children: readonly ChildSignal[];
+  job?: JobSignal; // set on a job's own row, whose sessionId is jobSessionId(job)
 }
 
 export interface Need {
@@ -44,14 +53,17 @@ export interface Need {
   text?: string; // the Decide line, markdown
   replyId?: string;
   childSessionId?: string;
+  jobId?: string;
+  jobRepo?: string;
   here?: boolean; // set per window by main: the tab is in this window
 }
 
-const REASONS: Record<Exclude<NeedKind, 'child' | 'decide'>, string> = { permission: 'Asking permission', question: 'Asking a question' };
+const REASONS: Record<Exclude<NeedKind, 'child' | 'job' | 'decide'>, string> = { permission: 'Asking permission', question: 'Asking a question' };
 
 // The strongest reason this session waits on her, or null when nothing does.
 export function needsYou(s: SessionSignals): Need | null {
   const base = { sessionId: s.sessionId, tabId: s.tabId, windowId: s.windowId, title: s.title };
+  if (s.job) return { ...base, kind: 'job', rank: NEED_RANK.job, reason: s.job.reason, since: s.job.since, jobId: s.job.id, jobRepo: s.job.repo };
   if (s.ask) return { ...base, kind: s.ask, rank: NEED_RANK[s.ask], reason: REASONS[s.ask], since: s.askSince };
   const child = [...s.children].filter((c) => c.ask).sort((a, b) => NEED_RANK[a.ask ?? 'question'] - NEED_RANK[b.ask ?? 'question'] || (a.since ?? 0) - (b.since ?? 0))[0];
   if (child) return { ...base, kind: 'child', rank: NEED_RANK.child, reason: `${child.name} needs you`, since: child.since, childSessionId: child.sessionId };
@@ -73,6 +85,9 @@ export function waitingLane(signals: readonly SessionSignals[]): Need[] {
 
 // The dock Board button and the app's dock badge show this.
 export const badgeCount = (lane: readonly Need[]): number => lane.length;
+
+// A job's row in the lane: its own id, so it never folds into a session's row.
+export const jobSessionId = (id: string): string => `job:${id}`;
 
 // A wait is the same wait while its session, kind and start stay put; a new prompt is a new wait.
 export const waitKey = (need: Need): string => `${need.sessionId}|${need.kind}|${need.childSessionId ?? ''}|${need.since ?? ''}`;

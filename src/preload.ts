@@ -220,6 +220,11 @@ const api = {
     get: () => invoke('factory:get'),
     save: (request: InvokeArgs<'factory:save'>[0]) => invoke('factory:save', request),
     useGlobal: (repo: string) => invoke('factory:use-global', { repo }),
+    jobs: () => invoke('factory:jobs'),
+    jobAction: (request: InvokeArgs<'factory:job-action'>[0]) => invoke('factory:job-action', request),
+    setShipMode: (repo: string, mode: InvokeArgs<'factory:ship-mode'>[0]['mode']) => invoke('factory:ship-mode', { repo, mode }),
+    seen: (repo: string) => invoke('factory:seen', { repo }),
+    onJobsChanged: (callback: () => void) => subscribe('factory:jobs-changed', callback),
   },
   codeReview: {
     summary: (source: ReviewSource) => invoke('code-review:summary', { source }),

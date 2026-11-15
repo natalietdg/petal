@@ -2,7 +2,17 @@
 // the project is the git repo of the active tab's Claude session, and the renderer can only name that one.
 import { BrowserWindow } from 'electron';
 import { handle, send } from './ipc';
+import path from 'node:path';
 import { tick } from './factory-jobs-watch';
+import { jobAction, jobSignals, jobsView, markSeen } from './factory-jobs-view';
+import { listJobs, saveShipMode, writeJob } from './factory-jobs-store';
+import { recordActivity } from './activity-feed';
+import * as needsYouHub from './needs-you-hub';
+import { openTab } from './tabs';
+import { claudeLaunch } from './claude-launch';
+import { buildStartInCommand, shellQuote } from './resume-command';
+import { harnessLine } from './snapshot-shell';
+import { JOB_ACTIONS, isFinished, isWaiting, stateLabel, type Job } from '../shared/factory-jobs';
 import { allowedClaudeHome } from './claude-folder';
 import { loadFactoryState, migrateSaved, saveFactory, useGlobal, type FactoryPaths } from './factory-store';
 import { repoRoot } from './repo-label';
@@ -20,14 +30,24 @@ export function factoryFor(repo: string) {
 // Reads job files every two seconds; no tokens. Windows hear when any job moved.
 export function startJobWatch(onChange: () => void = () => {}): () => void {
   const timer = setInterval(() => {
-    let moved = 0;
-    try { moved = tick({ factoryFor }).length; } catch (error) { console.warn('[petal] factory watch:', (error as Error).message); }
-    if (!moved) return;
-    for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'factory:jobs-changed');
+    let moved: Job[] = [];
+    try { moved = tick({ factoryFor }); } catch (error) { console.warn('[petal] factory watch:', (error as Error).message); }
+    if (moved.length) jobsMoved(moved);
     onChange();
   }, WATCH_MS);
   timer.unref?.();
+  jobsMoved([]);
   return () => clearInterval(timer);
+}
+
+// Windows re-read, the lane gets the waiting jobs, and the feed records each job that needs her or finished.
+function jobsMoved(moved: readonly Job[]): void {
+  for (const job of moved) {
+    if (!isWaiting(job.state) && !isFinished(job.state) && job.state !== 'stalled' && job.state !== 'spec') continue;
+    recordActivity({ id: `job-${job.id}-${job.state}`, kind: 'job', sessionId: job.parentSessionId, sessionName: null, branch: job.branch, repo: path.basename(job.repo), text: `${job.title}: ${stateLabel(job)}` });
+  }
+  try { needsYouHub.setJobs(jobSignals()); } catch (error) { console.warn('[petal] factory lane:', (error as Error).message); }
+  if (moved.length) for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'factory:jobs-changed');
 }
 
 export function registerFactoryIpc({ activeSession }: { activeSession: ActiveSession }): void {
@@ -51,4 +71,29 @@ export function registerFactoryIpc({ activeSession }: { activeSession: ActiveSes
   });
   handle('factory:save', (event, { scope, repo, factory }) => saveFactory(checked(event.sender.id, scope, repo), scope === 'project' ? 'project' : 'global', factory));
   handle('factory:use-global', (event, { repo }) => useGlobal(checked(event.sender.id, 'project', repo)));
+
+  // Jobs: only repos Petal lists can be named, so a renderer can't point git at another folder.
+  const activeRepo = (contentsId: number): string | null => paths(contentsId).repo;
+  const known = (contentsId: number, repo: unknown): string => {
+    const view = jobsView(activeRepo(contentsId));
+    if (typeof repo !== 'string' || !view.repos.some((r) => r.repo === repo)) throw new Error('Petal doesn’t know that repo. Reopen Factory and try again.');
+    return repo;
+  };
+  handle('factory:jobs', (event) => jobsView(activeRepo(event.sender.id)));
+  handle('factory:job-action', async (event, { repo, id, action, note }) => {
+    if (!JOB_ACTIONS.includes(action) || typeof id !== 'string') throw new Error('Unknown job action.');
+    const result = await jobAction(known(event.sender.id, repo), id, action, typeof note === 'string' ? note : undefined);
+    jobsMoved(result.job ? [result.job] : []);
+    // Take over: the job's copy opens as an ordinary tab with Claude in it. Snapshot runs type a no-op instead.
+    if (result.takeOver) openTab(event.sender, { command: isSnapshotRun() ? harnessLine(`: petal-take-over ${shellQuote(result.takeOver)}`) : buildStartInCommand(result.takeOver, (await claudeLaunch()).command, null) });
+    return { takeOver: result.takeOver ?? null };
+  });
+  handle('factory:ship-mode', (event, { repo, mode }) => {
+    const checkout = known(event.sender.id, repo);
+    saveShipMode(checkout, mode);
+    // Jobs that haven't reached Merge ship the new way; a job already merging keeps the mode it was checked against.
+    for (const job of listJobs(checkout)) if (!isFinished(job.state) && job.state !== 'merging') writeJob({ ...job, shipMode: mode });
+    return jobsView(activeRepo(event.sender.id));
+  });
+  handle('factory:seen', (event, { repo }) => { markSeen(known(event.sender.id, repo)); return jobsView(activeRepo(event.sender.id)); });
 }

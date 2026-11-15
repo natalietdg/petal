@@ -22,7 +22,7 @@ interface Section { id: SectionId; name: string; summary: string; advancedOnly?:
 const button = byId('customize-button');
 
 // Workflow tabs carry their own one-line summary, so theirs is empty and the line hides.
-const workflowSection = (id: WorkflowSection): Section => ({ id, name: workflow.TABS.find((t) => t.id === id)?.name ?? id, summary: '', advancedOnly: true });
+const workflowSection = (id: WorkflowSection, advancedOnly = true): Section => ({ id, name: workflow.TABS.find((t) => t.id === id)?.name ?? id, summary: '', advancedOnly });
 const SECTIONS: Section[] = [
   { id: 'look', name: 'Look', summary: 'Theme, reading style, text size, pet and pet size, and scene. Changes apply at once and tick the same menu items.' },
   { id: 'formatting', name: 'Formatting', summary: 'How each markdown shape in a reply is drawn in each reading style, and what each colour means.' },
@@ -33,7 +33,7 @@ const SECTIONS: Section[] = [
   { id: 'start', name: 'First steps', summary: 'Whether Petal may read your Claude folder, what it costs in tokens, and the setup guide.' },
   workflowSection('time'),
   workflowSection('handoffs'),
-  workflowSection('factory'),
+  workflowSection('factory', false), // Jobs live here, out of Advanced
   { id: 'advanced', name: 'Advanced', summary: 'Power tools for many sessions, tasks and releases. Off for new installs.' },
 ];
 

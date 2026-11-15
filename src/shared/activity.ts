@@ -1,15 +1,15 @@
 // The shared activity feed: one list of what every open session did, newest first, capped.
 // Main records events (main/activity-feed.ts); the Board's "Since you last looked" line counts them.
 
-export type ActivityKind = 'task' | 'edits' | 'test' | 'conclusion' | 'library' | 'clash' | 'message';
-export const ACTIVITY_KINDS: readonly ActivityKind[] = ['task', 'edits', 'test', 'conclusion', 'library', 'clash', 'message'];
+export type ActivityKind = 'task' | 'edits' | 'test' | 'conclusion' | 'library' | 'clash' | 'message' | 'job';
+export const ACTIVITY_KINDS: readonly ActivityKind[] = ['task', 'edits', 'test', 'conclusion', 'library', 'clash', 'message', 'job'];
 export const KIND_WORDS: Record<ActivityKind, string> = {
-  task: 'Tasks', edits: 'Edits', test: 'Tests', conclusion: 'Conclusions', library: 'Library', clash: 'Clashes', message: 'Messages',
+  task: 'Tasks', edits: 'Edits', test: 'Tests', conclusion: 'Conclusions', library: 'Library', clash: 'Clashes', message: 'Messages', job: 'Factory jobs',
 };
 
 // One item's badge.
 export const KIND_BADGES: Record<ActivityKind, string> = {
-  task: 'Task', edits: 'Edits', test: 'Test run', conclusion: 'Conclusion', library: 'Library', clash: 'Clash', message: 'Message',
+  task: 'Task', edits: 'Edits', test: 'Test run', conclusion: 'Conclusion', library: 'Library', clash: 'Clash', message: 'Message', job: 'Factory job',
 };
 
 export const ACTIVITY_CAP = 500;

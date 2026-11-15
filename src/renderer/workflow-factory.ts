@@ -3,6 +3,8 @@
 import { el, isIpcError } from './dom';
 import { CUSTOM_RUNNERS, defaultFactory, isSpineId, newStationId, runnerLabel, validateFactory, type Factory, type Runner, type Station } from '../shared/factory';
 import type { FactoryScope, FactoryState } from '../main/factory-store';
+import type { JobsView } from '../shared/factory-jobs';
+import { renderJobs } from './workflow-factory-jobs';
 
 interface Editing {
   index: number; // where the station sits (or goes, when new)
@@ -75,7 +77,15 @@ function followsLine(state: FactoryState): string {
   }
 }
 
-export function renderFactory(state: FactoryState): HTMLElement[] {
+// Factory: Jobs on top; the stations every job follows fold below.
+export function renderFactory({ factory: state, jobs }: { factory: FactoryState; jobs: JobsView }): HTMLElement[] {
+  const fold = el('details', 'fx-fold');
+  fold.append(el('summary', 'fx-fold-summary', 'Edit stations'));
+  fold.append(...renderStationsEditor(state));
+  return [renderJobs(jobs), fold];
+}
+
+function renderStationsEditor(state: FactoryState): HTMLElement[] {
   const root = el('div', 'fx');
   const view: View = { state, scope: state.project?.factory ? 'project' : 'global', editing: null, confirmRemove: null, confirmUseGlobal: false, note: null, focus: null };
   draw(root, view);

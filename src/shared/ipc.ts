@@ -15,6 +15,7 @@ import type { OrganizerLabel, OrganizerStatus, PassResult } from '../main/sessio
 import type { HandoffData, OpenTab, SetupData, TimeData, TodayData } from '../main/workflow';
 import type { FactoryScope, FactoryState } from '../main/factory-store';
 import type { Factory } from './factory';
+import type { JobAction, JobsView, ShipMode } from './factory-jobs';
 import type { TagsData } from '../main/tags-store';
 import type { ClosedSession } from '../main/closed-store';
 import type { PromptAnswerRequest } from './prompt-answer';
@@ -331,6 +332,10 @@ export interface InvokeChannels {
   'factory:get': { args: []; result: Guarded<FactoryState> };
   'factory:save': { args: [request: { scope: FactoryScope; repo: string | null; factory: Factory }]; result: Guarded<FactoryState> };
   'factory:use-global': { args: [request: { repo: string }]; result: Guarded<FactoryState> };
+  'factory:jobs': { args: []; result: Guarded<JobsView> };
+  'factory:job-action': { args: [request: { repo: string; id: string; action: JobAction; note?: string }]; result: Guarded<{ takeOver: string | null }> };
+  'factory:ship-mode': { args: [request: { repo: string; mode: ShipMode }]; result: Guarded<JobsView> };
+  'factory:seen': { args: [request: { repo: string }]; result: Guarded<JobsView> };
 
   'history:list': { args: []; result: Guarded<HistoryList> };
   'history:search': { args: [request: { query: string }]; result: Guarded<HistorySearchResult> }; // her prompts and Claude's replies, not just titles
