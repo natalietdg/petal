@@ -39,6 +39,7 @@ export interface BoardSource {
   agents: number;
   starred: boolean;
   newTokens?: number | null;
+  outside?: boolean; // started in another app: clicking follows it read-only
 }
 
 export interface BoardCard extends Omit<BoardSource, 'busy' | 'asking' | 'conclusion'> {

@@ -7,11 +7,12 @@ import { sessionTitleFor } from './session-title';
 import { closeSession } from './session-close';
 import { handle } from './ipc';
 import { ownAgents, panelSessions, subagentsDirOf } from './agents-ipc';
-import { agentCloses, concludeCloses, isSnapshotRun } from './snapshot-mode';
+import { agentCloses, concludeCloses, isSnapshotRun, panelFixture } from './snapshot-mode';
 import { boardDetails } from './sessions-board';
 import { resolveLinks } from './subsessions';
 import { isHeadless } from './claude-session';
 import * as needsYouHub from './needs-you-hub';
+import { outsideSignals, endedToday } from './outside-sessions';
 import type { ActiveSession } from './tab-session';
 import type { ConcludedSession } from './reader-feed';
 import type { AgentCloseResult } from '../shared/ipc';
@@ -29,14 +30,19 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
     const known = isSnapshotRun() ? [] : await resolveLinks(live);
     const base = sessionsMonitor.snapshot({ detailed, expandedIds, ownSessionId: own?.sessionId, nameOf }, live, subagentsDirOf, known);
     if (base.rows) needsYouHub.setChildren(base.rows, base.orphans ?? []);
+    const inPetal = needsYouHub.inPetal();
+    const watchOutside = !isSnapshotRun() || panelFixture.outside === true;
+    if (watchOutside) needsYouHub.setOutside(outsideSignals(live, inPetal, nameOf));
+    const marked = base.rows?.map((row) => ({ ...row, outside: watchOutside && !inPetal.has(row.sessionId) }));
     const { maxOpen } = configStore.load().sessions;
     const { running, total } = await ownAgents(own);
     const here = { running, total };
-    if (!detailed) return { ...base, maxOpen, here };
+    if (!detailed) return { ...base, rows: marked, maxOpen, here };
     const details = board ? await boardDetails(live.filter((s) => !isHeadless(s))) : null;
     return {
       ...base,
-      rows: details ? base.rows?.map((row) => ({ ...row, board: details.get(row.sessionId) })) : base.rows,
+      rows: details ? marked?.map((row) => ({ ...row, board: details.get(row.sessionId) })) : marked,
+      endedToday: board && watchOutside ? endedToday(live.map((s) => s.sessionId), inPetal) : undefined,
       maxOpen,
       here,
       closed: closedStore.reopenable(live.map((s) => s.sessionId)).map((c) => ({ ...c, title: nameOf(c), cwd: sessionsMonitor.shortCwd(c.cwd) })),

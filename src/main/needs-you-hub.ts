@@ -14,10 +14,11 @@ export interface HubState {
   children: Map<string, { name: string; rows: ChildRow[] }>; // parent session id -> its children
   orphans: ChildRow[];
   jobs?: SessionSignals[]; // factory jobs waiting on her, one row each
+  outside?: SessionSignals[]; // sessions Petal did not start, from their session file and transcript
 }
 
 // Each reported session with its children; parents in no Petal window still count when a child asks; orphans stand alone.
-export function laneFrom({ reports, children, orphans, jobs = [] }: HubState): Need[] {
+export function laneFrom({ reports, children, orphans, jobs = [], outside = [] }: HubState): Need[] {
   const signals: SessionSignals[] = [];
   const reported = new Set<string>();
   for (const list of reports.values()) {
@@ -28,17 +29,18 @@ export function laneFrom({ reports, children, orphans, jobs = [] }: HubState): N
     }
   }
   for (const [sessionId, { name, rows }] of children) {
-    if (reported.has(sessionId) || !rows.some((c) => c.ask)) continue;
+    if (reported.has(sessionId) || outside.some((o) => o.sessionId === sessionId) || !rows.some((c) => c.ask)) continue; // an outside parent gets its own row below
     signals.push({ sessionId, tabId: null, windowId: null, title: name, ask: null, askSince: null, decide: null, children: childSignals(rows) });
   }
   for (const o of orphans) {
     if (o.ask) signals.push({ sessionId: o.sessionId, tabId: null, windowId: null, title: o.name, ask: o.ask, askSince: o.askSince, decide: null, children: [] });
   }
   signals.push(...jobs);
+  for (const s of outside) if (!reported.has(s.sessionId)) signals.push({ ...s, children: childSignals(children.get(s.sessionId)?.rows ?? []) });
   return waitingLane(signals);
 }
 
-const state: HubState = { reports: new Map(), children: new Map(), orphans: [], jobs: [] };
+const state: HubState = { reports: new Map(), children: new Map(), orphans: [], jobs: [], outside: [] };
 const gate = new NotifyGate();
 const notices = new Set<Notification>(); // held so a notice isn't collected before its click
 let shownKey = '';
@@ -89,6 +91,15 @@ function update(): void {
 export function setChildren(rows: readonly SessionRow[], orphans: readonly ChildRow[]): void {
   state.children = new Map(rows.filter((r) => r.children.length).map((r) => [r.sessionId, { name: r.name, rows: r.children }]));
   state.orphans = [...orphans];
+  update();
+}
+
+// Sessions some Petal window holds in a tab; every other live session is outside Petal.
+export const inPetal = (): Set<string> => new Set([...state.reports.values()].flat().map((s) => s.sessionId));
+
+// The sessions tick hands over the sessions Petal did not start.
+export function setOutside(signals: readonly SessionSignals[]): void {
+  state.outside = [...signals];
   update();
 }
 

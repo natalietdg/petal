@@ -49,6 +49,7 @@ export interface SessionRow {
   subagents: SubagentRow[];
   children: ChildRow[]; // headless claude -p runs it started, live or finished in the last 2 min
   board?: BoardDetail; // only while the Sessions board is open
+  outside?: boolean; // no Petal window holds it: started in another app, watched read-only
 }
 
 export interface SessionsSnapshot {

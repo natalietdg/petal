@@ -1,6 +1,7 @@
 // The IPC contract: every channel between main and the renderer, with its payload and reply types.
 // main/ipc.ts and preload.ts only accept channels listed here, so a renamed channel fails typecheck.
-import type { Choice, FlowTarget, IpcError, Reply, TabId, TabReaderUpdate, Theme, TermSize } from './types';
+import type { Choice, FlowTarget, IpcError, ReaderUpdate, Reply, TabId, TabReaderUpdate, Theme, TermSize } from './types';
+import type { EndedSession } from '../main/outside-sessions';
 import type { Config, ConfigPatch } from '../main/config-store';
 import type { SessionCounts, SessionsSnapshot, SnapshotOptions } from '../main/sessions-monitor';
 import type { ListedSession, PastSessionsSummary } from '../main/history';
@@ -86,6 +87,7 @@ export interface ConversationPage {
 // The Sessions panel: live counts and rows, her limit, and (when open) what can be reopened.
 export interface SessionsView extends SessionsSnapshot {
   maxOpen: number;
+  endedToday?: EndedSession[]; // Board only: stopped in the last 12 hours, no Petal tab holds them
   closed?: ClosedSession[];
   oldestIdleId?: string | null;
   here: { running: number; total: number }; // the reader's session agents, any day, for its header chip
@@ -363,6 +365,8 @@ export interface InvokeChannels {
   'repos:open': { args: [request: { tabId: TabId; path?: string; target?: RepoStartTarget }]; result: Guarded<RepoOpenResult> }; // path: an indexed repo; target: any palette row
   'repos:start': { args: [request: { tabId: TabId; target: RepoStartTarget; agent?: string | null; worktree?: string | null }]; result: Guarded<RepoStartResult> }; // worktree: a name ('' picks one), null for the folder itself
   'repos:agents': { args: []; result: Guarded<{ name: string; description: string }[]> }; // ~/.claude/agents, for Start as
+  // Follow a session Petal did not start, read-only, in this window's reader; updates arrive on follow:update.
+  'follow:start': { args: [request: { sessionId: string }]; result: Guarded<{ ok: true } | { note: string }> };
 
   // The reply box's send: answered, so a send that never reached the pty can be taken back.
   'pty:paste': { args: [request: { tabId: TabId; data: string }]; result: Guarded<{ sent: boolean }> };
@@ -420,6 +424,7 @@ export interface SendChannels {
   'look:scene': [id: string];
   'testing:agent-pasted': [reply: { requestId: number; outcome: AgentPasteOutcome }]; // the answer to testing:agent-paste
   'testing:agent-asking': [report: { tabIds: TabId[] }]; // this window's agent terminals with a prompt on screen now
+  'follow:stop': [];
 }
 
 // main -> renderer: webContents.send / ipcRenderer.on. void = no payload.
@@ -430,6 +435,7 @@ export interface EventChannels {
   'reading:changed': string;
   'pty:data': { tabId: TabId; data: string };
   'reader:replies': TabReaderUpdate;
+  'follow:update': { sessionId: string; live: boolean; update: ReaderUpdate }; // the session this window follows read-only
   'tab:closed': { tabId: TabId };
   'tab:label': { tabId: TabId; label: string }; // its session got a (new) title after the last reader update
   'session:titles': void; // some open session's title changed; History re-lists

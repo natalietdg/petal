@@ -39,6 +39,8 @@ export interface SessionSignals {
   decide: OpenDecide | null;
   children: readonly ChildSignal[];
   job?: JobSignal; // set on a job's own row, whose sessionId is jobSessionId(job)
+  outside?: boolean; // a session Petal did not start: she answers where it runs
+  reason?: string; // the row's words when the default ones would mislead (outside sessions)
 }
 
 export interface Need {
@@ -56,18 +58,19 @@ export interface Need {
   jobId?: string;
   jobRepo?: string;
   here?: boolean; // set per window by main: the tab is in this window
+  outside?: boolean;
 }
 
 const REASONS: Record<Exclude<NeedKind, 'child' | 'job' | 'decide'>, string> = { permission: 'Asking permission', question: 'Asking a question' };
 
 // The strongest reason this session waits on her, or null when nothing does.
 export function needsYou(s: SessionSignals): Need | null {
-  const base = { sessionId: s.sessionId, tabId: s.tabId, windowId: s.windowId, title: s.title };
+  const base = { sessionId: s.sessionId, tabId: s.tabId, windowId: s.windowId, title: s.title, ...(s.outside ? { outside: true } : {}) };
   if (s.job) return { ...base, kind: 'job', rank: NEED_RANK.job, reason: s.job.reason, since: s.job.since, jobId: s.job.id, jobRepo: s.job.repo };
-  if (s.ask) return { ...base, kind: s.ask, rank: NEED_RANK[s.ask], reason: REASONS[s.ask], since: s.askSince };
+  if (s.ask) return { ...base, kind: s.ask, rank: NEED_RANK[s.ask], reason: s.reason ?? REASONS[s.ask], since: s.askSince };
   const child = [...s.children].filter((c) => c.ask).sort((a, b) => NEED_RANK[a.ask ?? 'question'] - NEED_RANK[b.ask ?? 'question'] || (a.since ?? 0) - (b.since ?? 0))[0];
   if (child) return { ...base, kind: 'child', rank: NEED_RANK.child, reason: `${child.name} needs you`, since: child.since, childSessionId: child.sessionId };
-  if (s.decide) return { ...base, kind: 'decide', rank: NEED_RANK.decide, reason: 'Decide', since: s.decide.at, text: s.decide.text, replyId: s.decide.replyId };
+  if (s.decide) return { ...base, kind: 'decide', rank: NEED_RANK.decide, reason: s.reason ?? 'Decide', since: s.decide.at, text: s.decide.text, replyId: s.decide.replyId };
   return null;
 }
 

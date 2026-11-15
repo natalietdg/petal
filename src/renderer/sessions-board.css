@@ -137,3 +137,15 @@
 
 /* A card with agents and factory jobs: the jobs badge sits right after the agents one, not mid-row. */
 .board-agents + .board-jobs { margin-left: 0; }
+
+/* Outside Petal: the card's second way in sits under it, like Close. */
+.board-open-tab { align-self: flex-start; margin: 6px 0 0; }
+
+/* Ended today: quieter cards in the same columns; each follows read-only. */
+.board-ended { margin: 28px 0 0; }
+.board-ended[hidden] { display: none; }
+.board-ended-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.board-ended-item { display: flex; flex-direction: column; min-width: 0; }
+.board-ended-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 14px; border: 1px dashed var(--rule); border-radius: 14px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.board-ended-card:hover { background: var(--code-bg); }
+.board-ended-card:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }

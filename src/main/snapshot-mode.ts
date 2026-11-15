@@ -71,7 +71,8 @@ export const historyFixture: { records: SessionRecord[]; live: string[]; resumes
 // Fake live sessions the harness shows in the Sessions panel; closing still reads only the real session files.
 // sessions: null means none live, so her limit counts only these and never her real Claudes.
 // subagentsRoot: <root>/<sessionId>/*.jsonl stands in for each fixture session's subagents folder.
-export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null } = { sessions: null, subagentsRoot: null };
+// outside: a step that checks sessions Petal did not start turns their marks and waits on; others keep the fixture rows plain.
+export const panelFixture: { sessions: SessionFile[] | null; subagentsRoot: string | null; outside?: boolean } = { sessions: null, subagentsRoot: null };
 
 // A stand-in ~/.claude for the folder-consent check (it holds a sentinel file); null means the real one.
 // `choice` seeds a fresh snapshot userData, so every other check runs with reading on.

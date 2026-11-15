@@ -35,6 +35,7 @@ interface Located { pid: number | null; session: FollowedSession | null; notice:
 
 interface FeedOptions {
   fixture?: FixtureSession | null;
+  source?: (() => FollowedSession | null) | null; // follow a session by id, read-only, with no process of ours (outside Petal)
   onReplyFinished?: ((finished: ReplyFinished) => void) | null;
   onConcluded?: ((concluded: ConcludedSession) => void) | null; // her "conclude" was answered and the turn is over
   onEnded?: ((ended: FollowedSession) => void) | null; // the followed claude exited
@@ -49,6 +50,7 @@ export class ReaderFeed implements ProcessListener {
   private finishingId: string | null = null; // reply whose turn just went busy -> idle, reported on the next tick
   // Dev-only: a snapshot run replays a fixture jsonl instead of a live claude.
   readonly fixture: FixtureSession | null;
+  private readonly source: (() => FollowedSession | null) | null;
   private readonly send: (channel: 'reader:replies', update: ReaderUpdate) => void;
   session: FollowedSession | null = null;
   claudePid: number | null = null;
@@ -66,7 +68,8 @@ export class ReaderFeed implements ProcessListener {
   private transcriptChangedAt = 0; // 0 until the first read is in, so following an old log never looks busy
   private firstReadIn = false;
 
-  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, onReplyFinished = null, onConcluded = null, onEnded = null }: FeedOptions = {}) {
+  constructor(shellPid: number, send: (channel: 'reader:replies', update: ReaderUpdate) => void, { fixture = null, source = null, onReplyFinished = null, onConcluded = null, onEnded = null }: FeedOptions = {}) {
+    this.source = source;
     this.shellPid = shellPid;
     this.onEnded = onEnded;
     this.onReplyFinished = onReplyFinished;
@@ -88,7 +91,7 @@ export class ReaderFeed implements ProcessListener {
   }
 
   get needsProcesses(): boolean {
-    return !this.fixture;
+    return !this.fixture && !this.source;
   }
 
   // Re-resolved every tick: /clear and /resume change the sessionId.
@@ -100,7 +103,8 @@ export class ReaderFeed implements ProcessListener {
       if (!allowed && this.session) this.forget();
       const { pid, session: found, notice }: Located = this.fixture
         ? { pid: null, session: allowed ? { ...this.fixture } : null, notice: null }
-        : await this.locate(processes); // no session file is read while reading is off
+        : this.source ? { pid: null, session: allowed ? this.source() : null, notice: null }
+          : await this.locate(processes); // no session file is read while reading is off
       const noticeChanged = JSON.stringify(notice) !== JSON.stringify(this.notice);
       this.notice = notice;
       this.setClaudePid(pid);

@@ -1,5 +1,8 @@
 // Board, the hub (⌘⇧O, the dock's Board or the Sessions pill): Waiting on you, every open session as a card,
 // Recently closed and Today. It rides the sessions 2s tick; the card model lives in shared/sessions-board.ts.
+import * as followSession from './follow';
+import { ENDED_TODAY, FOLLOW_LABEL, NO_SESSIONS, OPEN_IN_TAB_LABEL, outsidePlace } from '../shared/outside-sessions';
+import type { EndedSession } from '../main/outside-sessions';
 import { spendChip } from '../shared/session-spend';
 import * as overlays from './overlays';
 import * as tabs from './tabs';
@@ -54,7 +57,13 @@ orphansSection.setAttribute('aria-label', 'Headless runs');
 const orphansList = el('div', 'board-headless-body');
 orphansSection.append(el('h3', 'board-lane-title', 'Headless runs'), orphansList);
 orphansSection.hidden = true;
-view.append(head, sessionsPanel.limitElement(), waiting.element(), grid, closed, today, orphansSection, codeReviewTask.element());
+// Ended today: sessions that stopped in the last 12 hours and no tab holds; each opens read-only.
+const endedSection = el('section', 'board-ended');
+endedSection.setAttribute('aria-label', ENDED_TODAY);
+const endedList = el('ul', 'board-ended-list');
+endedSection.append(el('h3', 'board-lane-title', ENDED_TODAY), endedList);
+endedSection.hidden = true;
+view.append(head, sessionsPanel.limitElement(), waiting.element(), grid, closed, today, orphansSection, endedSection, codeReviewTask.element());
 
 let filter: BoardFilter = 'all';
 let branchFilter: string | null = null;
@@ -111,6 +120,7 @@ export function sources(rows: SessionsView['rows'] = []): BoardSource[] {
     out.push({
       sessionId: row.sessionId,
       tabId: null,
+      outside: row.outside === true,
       name: row.name,
       place,
       repo: repoGroupOf(place, row.cwd),
@@ -164,7 +174,7 @@ function cardElement(card: BoardCard): HTMLLIElement {
   button.dataset.sessionId = card.sessionId;
   if (card.tabId) button.dataset.tabId = card.tabId;
   const name = sessionNameEl('span', 'board-name', card.name);
-  button.append(statusLine(card), name, el('span', 'board-place', card.tabId ? `${card.place} · this window` : card.place));
+  button.append(statusLine(card), name, el('span', 'board-place', card.tabId ? `${card.place} · this window` : card.outside ? outsidePlace(card.place) : card.place));
   const need = card.status === 'waiting' ? waiting.needOf(card.sessionId) : undefined;
   if (need) button.append(el('span', `board-reason waiting-${need.kind}`, need.reason));
   if (card.digest.headline) button.append(el('span', 'board-headline', card.digest.headline));
@@ -189,8 +199,10 @@ function cardElement(card: BoardCard): HTMLLIElement {
     chip.title = 'Input, cache writes and output so far, counted by Petal from the transcript. Cache re-reads not included.';
     button.append(chip);
   }
-  button.addEventListener('click', () => void choose(card, false));
+  if (card.outside) button.title = `${FOLLOW_LABEL}, read-only`;
+  button.addEventListener('click', () => void (card.outside ? followCard(card) : choose(card, false)));
   item.append(button);
+  if (card.outside) item.append(openInTabControl(card));
   const needsYou = card.tabId && card.status !== 'working' ? distillCard.card(card.tabId, 'board') : null;
   if (needsYou) { button.classList.add('needs-you'); item.append(needsYou); }
   // A working session in this window: Stop sits on the card's corner, outside the card's own button.
@@ -285,6 +297,37 @@ function repoElement(group: RepoGroup): HTMLLIElement {
   heading.append(toggle);
   item.append(heading, list);
   return item;
+}
+
+// An outside session: the reader follows it read-only; Board closes so she sees it.
+async function followCard(card: { sessionId: string; name: string }): Promise<void> {
+  const note = await followSession.start(card.sessionId, card.name);
+  if (note) { notes.set(card.sessionId, note); render(true); return; }
+  notes.delete(card.sessionId);
+  close();
+}
+
+// The second way in: a copy of it in a Petal tab (claude --resume), which asks first since the original keeps running.
+function openInTabControl(card: BoardCard): HTMLButtonElement {
+  const button = el('button', 'session-link board-open-tab', OPEN_IN_TAB_LABEL);
+  button.type = 'button';
+  button.setAttribute('aria-label', `${OPEN_IN_TAB_LABEL}: ${card.name}`);
+  button.addEventListener('click', () => void choose(card, false));
+  return button;
+}
+
+function renderEnded(ended: readonly EndedSession[], on: boolean): void {
+  endedSection.hidden = !on || !ended.length;
+  endedList.replaceChildren(...ended.map((session) => {
+    const item = el('li', 'board-ended-item');
+    const button = el('button', 'board-ended-card');
+    button.type = 'button';
+    button.append(el('span', 'board-name', session.title), el('span', 'board-place', `${session.place} · ended ${sessionsPanel.sinceText(session.endedAt)}`));
+    button.addEventListener('click', () => void followCard({ sessionId: session.sessionId, name: session.title }));
+    const note = notes.get(session.sessionId);
+    item.append(button, ...(note ? [el('p', 'board-note', note)] : []));
+    return item;
+  }));
 }
 
 // Headless runs with no live parent, each opening its agent panel.
@@ -421,19 +464,21 @@ function render(force = false): void {
   waiting.setShown(sessionsView);
   const agentRows = lastView?.rows?.map((r) => [r.subagents, r.children]);
   const orphans = lastView?.orphans ?? [];
-  const key = JSON.stringify([filter, [...collapsedRepos], branchFilter, cards, agentRows, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), factoryJobs.allJobs().map((j) => `${j.id}:${j.state}:${j.waitReason ?? ''}`), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
+  const ended = lastView?.endedToday ?? [];
+  const key = JSON.stringify([filter, [...collapsedRepos], branchFilter, cards, agentRows, ended, cards.map((c) => sessionsPanel.sinceText(c.updatedAt)), [...notes], [...confirms], closeAsking, [...closingIds], stops, orphans, waiting.shownItems(), factoryJobs.allJobs().map((j) => `${j.id}:${j.state}:${j.waitReason ?? ''}`), coord.current(), distillCard.stateKey(cards.map((c) => c.tabId))]);
   if (!force && key === shownKey) return;
   shownKey = key;
   const focusedId = (document.activeElement as HTMLElement | null)?.closest('.board-card')?.getAttribute('data-session-id');
   const focusedFilter = (document.activeElement as HTMLElement | null)?.closest('.board-filter')?.getAttribute('data-filter');
   summary.textContent = summaryText(cards);
   filterRow.replaceChildren(...filterButtons(cards));
-  const empty = cards.length ? `Nothing ${FILTER_WORDS[filter].toLowerCase()} right now.` : lastView ? 'No Claude sessions are open.' : 'Looking for sessions…';
+  const empty = cards.length ? `Nothing ${FILTER_WORDS[filter].toLowerCase()} right now.` : lastView ? NO_SESSIONS : 'Looking for sessions…';
   // Waiting on you and Headless runs keep their fixed places above and below the grid; the grid holds the repo groups.
   const sections = boardSections({ cards: shown, waiting: waiting.shownItems().length > 0, headless: orphans.length > 0 });
   const groups = sections.flatMap((section) => (section.kind === 'repo' ? [repoElement(section)] : []));
   grid.replaceChildren(...(groups.length ? groups : [el('li', 'board-empty', empty)]));
   renderOrphans(orphans, sessionsView);
+  renderEnded(ended, sessionsView);
   const focusedRepo = (document.activeElement as HTMLElement | null)?.closest('.board-repo-head')?.getAttribute('data-repo');
   if (focusedId) grid.querySelector<HTMLElement>(`.board-card[data-session-id="${CSS.escape(focusedId)}"]`)?.focus();
   else if (focusedRepo) grid.querySelector<HTMLElement>(`.board-repo-head[data-repo="${CSS.escape(focusedRepo)}"]`)?.focus();

@@ -1,4 +1,5 @@
 // Renderer entry: loads every module in page order, then wires main's events to the active tab.
+import * as follow from './follow';
 import './styles';
 import './motion-clock';
 import * as themeKit from './theme';
@@ -95,6 +96,7 @@ async function start(): Promise<void> {
   promptDock.hooks.askingChanged = (asking) => { reader.setAsking(asking); cat.setAsking(asking !== null); stopClaude.paintComposer(); };
   const readScreen = (tab: Tab) => promptDock.readScreen(tab.id, tabs.screenLines(tab));
   const showTab = (tab: Tab) => {
+    if (follow.isActive()) return; // the reader shows the followed session until she stops or picks a tab
     const update = tab.update ?? NO_UPDATE;
     reader.update({ ...update, tabId: tab.id, pending: tab.pending });
     favorites.followReader(tab.id, update.sessionId);
@@ -128,7 +130,8 @@ async function start(): Promise<void> {
   // ⌘T and + ask where the new Claude should work, so her session limit applies and no session starts in home unasked.
   const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) repos.openForNewSession(); };
   const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); petGuide.refresh(); dockSessions.sync(); };
-  tabs.init({ theme, onNewTab: newSessionTab, onActivate: showTab, onCreated, onScreen });
+  follow.setOnStop(() => { const active = tabs.active(); if (active) showTab(active); });
+  tabs.init({ theme, onNewTab: newSessionTab, onActivate: (tab) => { follow.stop(); showTab(tab); }, onCreated, onScreen });
 
   window.pastel.onTheme((next) => {
     themeKit.applyCssVars(next);

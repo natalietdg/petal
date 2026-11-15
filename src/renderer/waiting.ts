@@ -1,6 +1,7 @@
 // Board's "Waiting on you" lane, read through the one shared needsYou() (shared/needs-you.ts).
 // This window reports its tabs (screen prompt, open Decide) to main; main merges every window and headless child
 // into one ranked lane, sends it back, sets the dock badge and notifies. The lane and the dock Board count draw it.
+import * as follow from './follow';
 import * as overlays from './overlays';
 import * as tabs from './tabs';
 import * as reader from './reader';
@@ -93,6 +94,12 @@ export async function openNeed(need: Need): Promise<void> {
     const { replyId, childSessionId } = need;
     if (childSessionId) sessionsPanel.openAgentFor(need.sessionId, childAgentId(childSessionId));
     else if (replyId) setTimeout(() => reader.showReply([replyId]), 0); // after the tab's replies are on screen
+    return;
+  }
+  if (need.outside && !need.childSessionId) { // started in another app: watch it here, she answers where it runs
+    const note = await follow.start(need.sessionId, need.title);
+    if (note) console.error('[petal] could not follow the waiting session:', note);
+    else if (need.replyId) setTimeout(() => reader.showReply([need.replyId as string]), 300);
     return;
   }
   if (need.childSessionId && !need.tabId) {

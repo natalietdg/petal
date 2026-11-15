@@ -71,6 +71,11 @@ const api = {
   activateTab: (tabId: TabId) => send('tab:activate', { tabId }),
   onData: (callback: (payload: EventChannels['pty:data']) => void) => subscribe('pty:data', callback),
   onReplies: (callback: (update: EventChannels['reader:replies']) => void) => subscribe('reader:replies', callback),
+  follow: {
+    start: (sessionId: string) => invoke('follow:start', { sessionId }),
+    stop: () => send('follow:stop'),
+    onUpdate: (callback: (update: EventChannels['follow:update']) => void) => subscribe('follow:update', callback),
+  },
   onTabClosed: (callback: (payload: EventChannels['tab:closed']) => void) => subscribe('tab:closed', callback),
   onTabLabel: (callback: (payload: EventChannels['tab:label']) => void) => subscribe('tab:label', callback),
   onSessionTitles: (callback: () => void) => subscribe('session:titles', callback),

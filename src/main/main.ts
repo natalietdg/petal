@@ -37,6 +37,7 @@ import { claudeLaunch } from './claude-launch';
 import { allowedClaudeHome } from './claude-folder';
 import { replyVisibilityProblem } from './reply-visibility';
 import { formatNotice } from './format-check';
+import { registerFollowIpc } from './follow-ipc';
 import { claudeVersion } from './claude-fallback';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
@@ -209,6 +210,7 @@ function registerIpc(): void {
   registerSessionsIpc({ activeSession });
   registerAgentsIpc({ activeSession });
   registerNeedsYou();
+  registerFollowIpc();
 
   on('link:open', (_event, url) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
