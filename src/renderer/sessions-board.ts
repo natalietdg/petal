@@ -1,7 +1,7 @@
 // Board, the hub (⌘⇧O, the dock's Board or the Sessions pill): Waiting on you, every open session as a card,
 // Recently closed and Today. It rides the sessions 2s tick; the card model lives in shared/sessions-board.ts.
 import * as followSession from './follow';
-import { ENDED_TODAY, FOLLOW_LABEL, NO_SESSIONS, OPEN_IN_TAB_LABEL, OUTSIDE_CLOSE_CONFIRM, OUTSIDE_MARK } from '../shared/outside-sessions';
+import { ENDED_TODAY, FOLLOW_LABEL, NO_SESSIONS, OPEN_IN_TAB_HINT, OPEN_IN_TAB_LABEL, OUTSIDE_CLOSE_CONFIRM, OUTSIDE_MARK } from '../shared/outside-sessions';
 import type { EndedSession } from '../main/outside-sessions';
 import { spendChip } from '../shared/session-spend';
 import * as overlays from './overlays';
@@ -333,12 +333,13 @@ function followControl(card: BoardCard): HTMLButtonElement {
   return button;
 }
 
-// The second way in: a copy of it in a Petal tab (claude --resume), which asks first since the original keeps running.
+// The second way in: a copy of it in a Petal tab (claude --resume). The label already says copy, so no second question (#797).
 function openInTabControl(card: BoardCard): HTMLButtonElement {
   const button = el('button', 'session-link board-open-tab', OPEN_IN_TAB_LABEL);
   button.type = 'button';
-  button.setAttribute('aria-label', `${OPEN_IN_TAB_LABEL}: ${card.name}`);
-  button.addEventListener('click', () => void choose(card, false));
+  button.title = OPEN_IN_TAB_HINT;
+  button.setAttribute('aria-label', `${OPEN_IN_TAB_LABEL}: ${card.name}. ${OPEN_IN_TAB_HINT}`);
+  button.addEventListener('click', () => void choose(card, true));
   return button;
 }
 

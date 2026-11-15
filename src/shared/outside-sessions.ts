@@ -8,13 +8,15 @@ export const OUTSIDE_REASONS = {
 } as const;
 
 export const FOLLOW_LABEL = 'Follow';
-export const OPEN_IN_TAB_LABEL = 'Open in a Petal tab';
-export const FOLLOW_BANNER = 'Following, read-only. This session runs outside Petal. To answer, use the terminal where it runs.';
+// Says "copy" before the click: resuming it here forks the conversation, and the original keeps running.
+export const OPEN_IN_TAB_LABEL = 'Open a copy in a Petal tab';
+export const OPEN_IN_TAB_HINT = 'Starts a copy of this conversation in a Petal tab. The original keeps running where it is.';
+export const FOLLOW_BANNER = 'Following, read-only. This session runs outside Petal. To answer, use the app or terminal where it runs.';
 export const FOLLOW_ENDED_BANNER = 'Following, read-only. This session has ended.';
 export const STOP_FOLLOWING = 'Stop following';
 export const ENDED_TODAY = 'Ended today';
 // Board's Close still quits it (#529), so the question says where it runs and what is lost.
-export const OUTSIDE_CLOSE_CONFIRM = 'Quit this Claude? It runs in another terminal, and that terminal will lose it.';
+export const OUTSIDE_CLOSE_CONFIRM = 'Quit this Claude? It runs outside Petal, and the app or terminal where it runs will lose it.';
 export const NO_SESSIONS = 'No Claude sessions are running. Sessions you start anywhere on this Mac show up here.';
 export const RECENT_HOURS = 12;
 

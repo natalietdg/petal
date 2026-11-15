@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { outsideSignal, tailFacts } from '../src/main/outside-sessions';
 import { laneFrom } from '../src/main/needs-you-hub';
 import { needsYou, type SessionSignals } from '../src/shared/needs-you';
-import { OUTSIDE_CLOSE_CONFIRM, OUTSIDE_REASONS } from '../src/shared/outside-sessions';
+import { FOLLOW_BANNER, OPEN_IN_TAB_HINT, OPEN_IN_TAB_LABEL, OUTSIDE_CLOSE_CONFIRM, OUTSIDE_REASONS } from '../src/shared/outside-sessions';
 import type { SessionFile } from '../src/main/claude-session';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 import { assistantEntry, userEntry } from './helpers';
@@ -49,8 +49,14 @@ describe('the lane with outside sessions', () => {
     expect(laneFrom({ reports: new Map([[3, [own]]]), children: new Map(), orphans: [], outside: [outside] })).toEqual([]);
   });
 
-  it('Close on an outside card says it quits Claude in the other terminal', () => {
-    expect(OUTSIDE_CLOSE_CONFIRM).toMatch(/another terminal/);
+  it('Close on an outside card says it quits Claude where it runs, without assuming a terminal', () => {
+    expect(OUTSIDE_CLOSE_CONFIRM).toMatch(/app or terminal where it runs/);
     expect(OUTSIDE_CLOSE_CONFIRM).not.toContain('—');
+  });
+
+  it('the banner names the app or terminal, and Open says copy before the click', () => {
+    expect(FOLLOW_BANNER).toMatch(/use the app or terminal where it runs\.$/);
+    expect(OPEN_IN_TAB_LABEL).toMatch(/copy/);
+    expect(OPEN_IN_TAB_HINT).toMatch(/original keeps running/);
   });
 });
