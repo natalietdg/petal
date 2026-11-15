@@ -98,7 +98,7 @@
 .board-star svg { width: 14px; height: 14px; fill: currentColor; }
 
 .board-name { overflow: hidden; font-size: 16px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.board-place { display: flex; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.board-place { display: flex; gap: 0.3em; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .board-place-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .board-place-where { flex: none; } /* "· outside Petal" never ellipsed: it is the card's only outside cue */
 .board-headline {

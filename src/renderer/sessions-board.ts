@@ -159,12 +159,14 @@ function statusLine(card: BoardCard): HTMLSpanElement {
   return top;
 }
 
-// "<repo> · <branch>" shortens with an ellipsis; " · this window" or " · outside Petal" always stays whole.
+// "<repo> · <branch>" shortens with an ellipsis; "· this window" or "· outside Petal" always stays whole.
 function placeLine(card: BoardCard): HTMLSpanElement {
   const line = el('span', 'board-place');
-  const suffix = card.tabId ? ' · this window' : card.outside ? ` · ${OUTSIDE_MARK}` : '';
-  line.append(el('span', 'board-place-name', card.place), ...(suffix ? [el('span', 'board-place-where', suffix)] : []));
-  line.title = `${card.place}${suffix}`;
+  const where = card.tabId ? 'this window' : card.outside ? OUTSIDE_MARK : '';
+  const suffix = where && card.place ? `· ${where}` : where; // no leading middot when there is no place
+  if (card.place) line.append(el('span', 'board-place-name', card.place));
+  if (suffix) line.append(el('span', 'board-place-where', suffix));
+  line.title = [card.place, suffix].filter(Boolean).join(' ');
   return line;
 }
 

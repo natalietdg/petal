@@ -39,7 +39,8 @@ const ALL = [...TABS, ...ELSEWHERE];
 const CARDS = `[...document.querySelectorAll('#board .board-card')].map((c) => ({
   id: c.dataset.sessionId, tab: c.dataset.tabId ?? null, status: c.className.replace('board-card', '').trim(),
   word: c.querySelector('.board-status-word')?.textContent ?? null,
-  name: c.querySelector('.board-name')?.textContent ?? null, place: c.querySelector('.board-place')?.textContent ?? null,
+  name: c.querySelector('.board-name')?.textContent ?? null, place: c.querySelector('.board-place') ? [...c.querySelectorAll('.board-place > span')].map((s) => s.textContent).join(' ') : null,
+  placeGap: (() => { const [a, b] = c.querySelectorAll('.board-place > span'); return a && b ? Math.round(b.getBoundingClientRect().left - a.getBoundingClientRect().right) : null; })(),
   headline: c.querySelector('.board-headline')?.textContent ?? null,
   doing: c.querySelector('.board-doing .board-text')?.textContent ?? null, recommend: c.querySelector('.board-recommend .board-text')?.textContent ?? null,
   next: c.querySelector('.board-next .board-text')?.textContent ?? null, conclusion: c.querySelector('.board-conclusion .board-text')?.textContent ?? null,
@@ -166,7 +167,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
   const restoreActivity = keepActivity();
   const startTabs: string[] = await js('PastelTerm.tabs.ids()');
   const startActive: string | null = await js('PastelTerm.tabs.active()?.id ?? null');
-  const cards = async (): Promise<{ id: string; tab: string | null; status: string; word: string | null; name: string | null; place: string | null; headline: string | null; doing: string | null; recommend: string | null; next: string | null; conclusion: string | null; agents: string | null; star: boolean; since: string | null }[]> => js(CARDS);
+  const cards = async (): Promise<{ id: string; tab: string | null; status: string; word: string | null; name: string | null; place: string | null; placeGap: number | null; headline: string | null; doing: string | null; recommend: string | null; next: string | null; conclusion: string | null; agents: string | null; star: boolean; since: string | null }[]> => js(CARDS);
   const boardOpen = (): Promise<boolean> => js("PastelTerm.overlays.current() === 'board'");
   const mine = <T extends { id: string }>(list: T[]): T[] => list.filter((c) => ALL.some((f) => f.id === c.id));
   const cardOf = async (f: Fixture) => (await cards()).find((c) => c.id === f.id);
@@ -268,6 +269,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     const by = (f: Fixture) => all.find((c) => c.id === f.id);
     check(by(WAIT)?.doing === 'comparing two table layouts' && by(WAIT)?.recommend === 'keep one table per country' && by(WAIT)?.next === 'run the migration once you pick', `Doing / Recommend / Next on the waiting card: ${JSON.stringify(by(WAIT))}`);
     check(by(WORK)?.word === 'Working' && by(WORK)?.headline === 'Building the Sessions board.' && by(WORK)?.place === 'petal · sessions-board · this window', `working tab: headline and repo · branch: ${JSON.stringify(by(WORK))}`);
+    check((by(WORK)?.placeGap ?? 0) >= 2, `a visible space before "· this window" (ui review #1): ${by(WORK)?.placeGap}px`);
     check(by(ELSEWHERE_BUSY)?.headline === 'The nightly job still reads the old price table.' && by(ELSEWHERE_BUSY)?.next === 'point it at prices_v2' && by(ELSEWHERE_BUSY)?.place === 'billing-service · stale-prices' && by(ELSEWHERE_BUSY)?.tab === null,
       `a session elsewhere gets its digest from main: ${JSON.stringify(by(ELSEWHERE_BUSY))}`);
     check(by(DONE)?.word === 'Concluded' && by(DONE)?.conclusion === 'Invoice dates now use the customer’s timezone.' && by(DONE)?.headline === null, `Conclusion line, not repeated as a headline, on the concluded card: ${JSON.stringify(by(DONE))}`);
