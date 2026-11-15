@@ -128,8 +128,11 @@
 .board-confirm,
 .board-note { margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
 .board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--reader-fg); }
+/* The question on its own line; Yes pulled back by its link padding so it starts on the question's edge. */
+.board-confirm > span:first-child { flex-basis: 100%; }
+.board-confirm > button:first-of-type { margin-left: -6px; }
 /* The card's footer: its own actions inside the border; Close, the one that quits Claude, alone on the right. */
-.board-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0; padding: 6px 10px 8px; border-top: 1px dashed var(--rule); }
+.board-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; padding: 6px 10px 8px; border-top: 1px dashed var(--rule); }
 .board-actions .board-message-open { margin-top: 0; }
 .board-actions .board-close { margin-left: auto; }
 .board-empty { list-style: none; font-size: 14px; color: var(--muted); }
