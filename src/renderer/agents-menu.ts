@@ -122,7 +122,8 @@ window.addEventListener('resize', () => close());
 // The chip and the open dropdown ride the Sessions tick; no timer of their own.
 sessionsPanel.onView(({ here }) => {
   chip.hidden = here.total === 0;
-  chip.textContent = agentsChipText(here);
+  const text = agentsChipText(here);
+  if (chip.textContent !== text) chip.textContent = text; // an unchanged write still wakes the header's fit observer
   chip.classList.toggle('has-running', here.running > 0);
   if (chip.hidden) close();
   if (isOpen()) void refresh();

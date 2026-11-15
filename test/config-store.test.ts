@@ -550,3 +550,19 @@ describe('config-store Get started and the Claude folder choice', () => {
     expect(config.save({ updates: { lastSeenVersion: 'latest', lastNotifiedVersion: 7 } }).updates).toEqual({ lastSeenVersion: '1.0.7', lastNotifiedVersion: '1.0.8' });
   });
 });
+
+describe('config-store load cache', () => {
+  it('re-reads after the file changes outside Petal', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ pet: { size: 'small' } }));
+    expect(config.load().pet.size).toBe('small');
+    fs.writeFileSync(configFile(), JSON.stringify({ pet: { size: 'large' }, padding: 'x' }));
+    expect(config.load().pet.size).toBe('large');
+  });
+
+  it('hands out copies, so a caller changing one never changes the next load', () => {
+    fs.writeFileSync(configFile(), JSON.stringify({ pet: { size: 'small' } }));
+    const first = config.load();
+    first.pet.size = 'large';
+    expect(config.load().pet.size).toBe('small');
+  });
+});

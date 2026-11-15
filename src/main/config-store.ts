@@ -265,11 +265,28 @@ function readSaved(): ConfigPatch {
   return data && typeof data === 'object' && !Array.isArray(data) ? (data as ConfigPatch) : {};
 }
 
+// Timers read the config every second or so; re-parse only when the file (or the organizer's marker) changed.
+let cached: { key: string; config: Config } | null = null;
+
+function fileKey(): string | null {
+  try {
+    const stat = fs.statSync(configFile());
+    return `${stat.mtimeMs}:${stat.size}:${fs.existsSync(userDataFile('organizer.json'))}`;
+  } catch {
+    return null; // no config yet: build it fresh each time, as before
+  }
+}
+
 export function load(): Config {
-  return validate(readSaved(), migratedBase());
+  const key = fileKey();
+  if (key && cached?.key === key) return structuredClone(cached.config);
+  const config = validate(readSaved(), migratedBase());
+  cached = key ? { key, config: structuredClone(config) } : null;
+  return config;
 }
 
 function write(config: Config): Config {
+  cached = null;
   writeJsonAtomic(configFile(), config, 2);
   for (const listener of listeners) listener(config);
   return config;

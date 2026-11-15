@@ -2,6 +2,7 @@
 import { BrowserWindow, webContents, type WebContents } from 'electron';
 import { spawnShell } from './pty';
 import { ReaderFeed, type ReplyFinished } from './reader-feed';
+import { noteTerminalOutput } from './process-poll';
 import { closeConcluded } from './sessions-ipc';
 import { shouldCloseConcludedTab } from './conclude-tab';
 import { confirmConcludeClose } from './conclude-confirm';
@@ -152,6 +153,7 @@ function startSession(sender: WebContents, { tabId, cols, rows, startClaude = fa
   let typed = !typeFirst;
   const guarded = guardsShell();
   pty.onData((data) => {
+    noteTerminalOutput();
     if (guarded) recordShellOutput(tabKey(contentsId, tabId), data); // the harness's end check scans it for leaks
     if (!sender.isDestroyed()) send(sender, 'pty:data', { tabId, data });
     if (!typed && typeFirst) { typed = true; setTimeout(typeFirst, PENDING_COMMAND_DELAY_MS); }

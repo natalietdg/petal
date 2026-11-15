@@ -52,9 +52,15 @@ export function sinceText(ms: number | null, verb = ''): string {
 }
 
 
+let pillShown = '';
+
+// Rebuilt only when its text changes: a rebuild restarts the busy dot's pulse and repaints the header.
 function renderPill(view: SessionsView): void {
   const { counts, maxOpen } = view;
   const over = overLimit(view);
+  const shown = JSON.stringify([sessionsPillText(counts), counts.busy > 0, over, maxOpen]);
+  if (shown === pillShown) return;
+  pillShown = shown;
   pill.classList.toggle('has-busy', counts.busy > 0);
   pill.classList.toggle('over-limit', over);
   pill.replaceChildren(el('span', 'dot'), el('span', '', sessionsPillText(counts)));
@@ -224,6 +230,7 @@ function renderPanel(view: SessionsView): void {
 export async function refresh(auto = false): Promise<void> {
   const result = await window.pastel.getSessions({ detailed: boardOpen, expandedIds: [...expandedIds], board: boardOpen });
   if (isIpcError(result)) {
+    pillShown = '';
     pill.replaceChildren(el('span', 'dot'), el('span', '', 'Sessions · unavailable'));
     if (boardOpen) panel.replaceChildren(el('p', 'sessions-heading', `Couldn’t read Claude sessions: ${result.error}`));
   } else {
