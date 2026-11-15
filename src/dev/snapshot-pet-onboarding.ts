@@ -205,7 +205,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   // 3. No Petal style in the stand-in folder: the reply-style card comes before pet and scene, with its cost per turn; Not now writes nothing.
   const styled = await until((s) => s.card === 'style');
   check(styled && styled.title === 'How should Claude write?' && styled.counter === 'Step 3 of 5' && styled.buttons.join() === 'Use this style,Not now,Skip setup'
-    && /adds about 1,900 tokens of instructions to every turn/.test(await js("document.querySelector('#pet-guide .pg-cost')?.textContent ?? ''")),
+    && /adds about 1,400 tokens of instructions to every turn/.test(await js("document.querySelector('#pet-guide .pg-cost')?.textContent ?? ''")),
     `style card after Allow: title, counter, buttons and the Magazine cost line: ${JSON.stringify(styled && { title: styled.title, counter: styled.counter, buttons: styled.buttons })}`);
   await shot('03-style');
   await contrastOk('style card');

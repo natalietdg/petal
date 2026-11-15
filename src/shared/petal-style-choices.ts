@@ -8,10 +8,10 @@ export interface PetalStyleChoice {
 }
 
 export const PETAL_STYLE_CHOICES: readonly PetalStyleChoice[] = [
-  { name: 'Petal · Magazine', file: 'petal-magazine.md', line: 'Headline and short summary first, then the story.', tokens: 1900 },
-  { name: 'Petal · Research Paper', file: 'petal-research-paper.md', line: 'Abstract first, then numbered sections.', tokens: 1700 },
-  { name: 'Petal · Pyramid', file: 'petal-pyramid.md', line: 'The answer first, then three supporting points.', tokens: 1800 },
-  { name: 'Petal · Landing Page', file: 'petal-landing-page.md', line: 'Headline answer, short proof, one next step.', tokens: 2700 },
+  { name: 'Petal · Magazine', file: 'petal-magazine.md', line: 'Headline and short summary first, then the story.', tokens: 1400 },
+  { name: 'Petal · Research Paper', file: 'petal-research-paper.md', line: 'Abstract first, then numbered sections.', tokens: 1300 },
+  { name: 'Petal · Pyramid', file: 'petal-pyramid.md', line: 'The answer first, then three supporting points.', tokens: 1300 },
+  { name: 'Petal · Landing Page', file: 'petal-landing-page.md', line: 'Headline answer, short proof, one next step.', tokens: 1800 },
 ];
 
 export const DEFAULT_PETAL_STYLE = PETAL_STYLE_CHOICES[0].name;

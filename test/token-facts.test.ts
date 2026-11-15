@@ -3,7 +3,7 @@ import { TOKEN_OWN, TOKEN_USERS, styleLine, tokenLead } from '../src/shared/toke
 
 describe('token facts card', () => {
   it('gives the style range from the measured style sizes', () => {
-    expect(styleLine()).toBe('A Petal reply style adds about 1,700 to 2,700 tokens of instructions to every turn, and replies run a little longer. Turn it off in Customize › Claude setup.');
+    expect(styleLine()).toBe('A Petal reply style adds about 1,300 to 1,800 tokens of instructions to every turn, and replies run a little longer. Turn it off in Customize › Claude setup.');
   });
 
   it('has no em dashes', () => {
