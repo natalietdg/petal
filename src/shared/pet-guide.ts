@@ -1,11 +1,11 @@
-// The pet's setup guide for a new install: four cards (plus the reply-style card and past sessions to import when they apply), then speech-bubble steps that follow
-// what Petal sees until the first reply.
+// The setup guide for a new install: the reader first (welcome, folder, reply style), then pet and scene, then past sessions to import
+// when they apply; then speech-bubble steps that follow what Petal sees until the first reply.
 import type { FolderChoice } from './claude-folder';
 import { rangeText, type BackfillPlan } from './library';
 import { estimateText } from './library-cost';
 export { INSTALL_COMMAND } from './get-started';
 
-export const CARD_STEPS = ['welcome', 'pet', 'scene', 'consent', 'style', 'import'] as const;
+export const CARD_STEPS = ['welcome', 'consent', 'style', 'pet', 'scene', 'import'] as const;
 export const BUBBLE_STEPS = ['add-session', 'type-claude', 'claude-setup', 'ask', 'celebrate'] as const;
 export type CardStep = (typeof CARD_STEPS)[number];
 export type BubbleStep = (typeof BUBBLE_STEPS)[number];
@@ -58,8 +58,12 @@ export function nextCard(step: CardStep, folder: FolderChoice, pastSessions = 0,
   return after.find((card) => cardApplies(card, folder, pastSessions, petalStyleOn)) ?? 'bubbles';
 }
 
-// The style and import cards come after the folder question is answered, so there is no going back to it.
-export const previousCard = (step: CardStep): CardStep | null => (step === 'import' || step === 'style' ? null : CARD_STEPS[CARD_STEPS.indexOf(step) - 1] ?? null);
+// Back never reopens an answered question: not the folder card, and not the style card once a Petal style is on.
+export function previousCard(step: CardStep, folder: FolderChoice = 'unasked', petalStyleOn = false): CardStep | null {
+  if (step === 'scene') return 'pet';
+  if (step === 'pet') return showsStyle(folder, petalStyleOn) ? 'style' : null;
+  return null;
+}
 
 // "Step N of M": four cards, more once the style or import card is known to show.
 export function cardCounter(step: CardStep, folder: FolderChoice, pastSessions: number, petalStyleOn = false): { number: number; total: number } {
@@ -113,6 +117,15 @@ export const personality = (id: string, pet: PetWords): string => PERSONALITIES[
 
 export const EXAMPLE_ASK = 'what’s in this folder?';
 
+// The welcome card's picture: one reply as the terminal prints it, then as a page.
+export const HELLO_EXAMPLE = {
+  label: 'A Claude reply as the terminal prints it, and the same reply as a page in Petal',
+  raw: ['**Redis reconnects on every login.**', '## 1. Where the time goes', '- the pool closes after each request'],
+  head: 'Redis reconnects on every login',
+  dek: 'The pool closes after each request, so every login waits for a new connection.',
+  next: 'Next: keep one pool open',
+} as const;
+
 // The What's next card: the Get started checklist, said by the pet.
 export const WHATS_NEXT_LINE = 'Four steps from installing Claude Code to your first reply. I tick each one off when I see it happen.';
 
@@ -123,7 +136,7 @@ export interface CardCopy {
 
 export function cardCopy(step: CardStep, pet: PetWords): CardCopy {
   switch (step) {
-    case 'welcome': return { title: 'Hi! Let’s set up Petal.', line: 'Petal is a terminal for Claude Code that shows Claude’s replies as easy pages to read, with a pet for company.' };
+    case 'welcome': return { title: 'The terminal stays. The reply becomes a page.', line: 'Claude Code runs right here, as it always does. Petal turns each reply into a page that’s easy to read.' };
     case 'pet': return { title: 'Pick your pet', line: `${pet.name} will show you around. ${capital(pet.they)} sits in the corner while you work.` };
     case 'scene': return { title: 'Pick a scene', line: `Where should ${pet.name} hang out? ${capital(pet.they)} tries each one on in the corner.` };
     case 'consent': return { title: 'One quick question', line: 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' };

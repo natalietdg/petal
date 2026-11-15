@@ -11,56 +11,57 @@ const MIKI: PetWords = { name: 'Miki', they: 'he', their: 'his' };
 const MIKA: PetWords = { name: 'Mika', they: 'she', their: 'her' };
 
 describe('the cards', () => {
-  it('go welcome, pet, scene, then the folder question while it is unanswered', () => {
-    expect(nextCard('welcome', 'unasked')).toBe('pet');
-    expect(nextCard('pet', 'unasked')).toBe('scene');
-    expect(nextCard('scene', 'unasked')).toBe('consent');
+  it('lead with the reader: welcome, the folder question while unanswered, the reply style, then pet and scene', () => {
+    expect(nextCard('welcome', 'unasked')).toBe('consent');
     expect(nextCard('consent', 'allowed')).toBe('style');
-    expect(nextCard('consent', 'allowed', 0, true)).toBe('bubbles');
+    expect(nextCard('style', 'allowed')).toBe('pet');
+    expect(nextCard('pet', 'allowed')).toBe('scene');
+    expect(nextCard('scene', 'allowed')).toBe('bubbles');
+    expect(nextCard('consent', 'allowed', 0, true)).toBe('pet');
+    expect(nextCard('consent', 'declined')).toBe('pet');
   });
 
   it('skip the folder question when it was answered before', () => {
-    expect(nextCard('scene', 'allowed', 0, true)).toBe('bubbles');
-    expect(nextCard('scene', 'declined')).toBe('bubbles');
+    expect(nextCard('welcome', 'allowed')).toBe('style');
+    expect(nextCard('welcome', 'allowed', 0, true)).toBe('pet');
+    expect(nextCard('welcome', 'declined')).toBe('pet');
   });
 
-  it('go back one at a time, and not before the welcome', () => {
+  it('go back only to a card that asks nothing already answered', () => {
     expect(previousCard('scene')).toBe('pet');
+    expect(previousCard('pet', 'allowed')).toBe('style');
+    expect(previousCard('pet', 'allowed', true)).toBeNull(); // a Petal style is on: the style card no longer shows
+    expect(previousCard('pet', 'declined')).toBeNull(); // never back to the folder question
     expect(previousCard('welcome')).toBeNull();
   });
 });
 
 describe('the import card', () => {
-  it('follows the folder card only when the folder was allowed and past sessions were found', () => {
-    expect(nextCard('consent', 'allowed', 5, true)).toBe('import');
-    expect(nextCard('consent', 'allowed', 0, true)).toBe('bubbles');
-    expect(nextCard('consent', 'declined', 5)).toBe('bubbles');
+  it('follows the scene card only when the folder was allowed and past sessions were found', () => {
+    expect(nextCard('scene', 'allowed', 5, true)).toBe('import');
+    expect(nextCard('scene', 'allowed', 0, true)).toBe('bubbles');
+    expect(nextCard('scene', 'declined', 5)).toBe('bubbles');
     expect(nextCard('import', 'allowed', 5)).toBe('bubbles');
     expect(showsImport('unasked', 5)).toBe(false);
   });
 
-  it('a restart with the folder already allowed goes from the scene card straight to it', () => {
-    expect(nextCard('scene', 'allowed', 3, true)).toBe('import');
-    expect(nextCard('scene', 'unasked', 3)).toBe('consent');
-  });
-
   it('has no Back: the folder question is answered', () => {
     expect(previousCard('import')).toBeNull();
-    expect(previousCard('consent')).toBe('scene');
+    expect(previousCard('consent')).toBeNull();
   });
 
   it('keeps Step N of M right: four cards, five once the import card shows', () => {
     expect(cardCounter('welcome', 'unasked', 0)).toEqual({ number: 1, total: 4 });
-    expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 4, total: 4 });
+    expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 2, total: 4 });
     expect(cardCounter('import', 'allowed', 5, true)).toEqual({ number: 5, total: 5 });
-    expect(cardCounter('pet', 'allowed', 5, true)).toEqual({ number: 2, total: 5 }); // a restart that knows it will show
-    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 3, total: 4 });
+    expect(cardCounter('pet', 'allowed', 5, true)).toEqual({ number: 3, total: 5 }); // a restart that knows it will show
+    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 4, total: 4 });
   });
 
   it('resumes there only while it still applies', () => {
     expect(resumeAt('import', { ...ALLOWED, pastSessions: 4 })).toBe('import');
     expect(resumeAt('import', ALLOWED)).toBe('add-session');
-    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4, petalStyleOn: true })).toBe('import');
+    expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4, petalStyleOn: true })).toBe('pet');
   });
 
   it('says what it found, in the pet’s words, with the Library cost before anything starts', () => {
@@ -74,25 +75,24 @@ describe('the import card', () => {
 });
 
 describe('the reply-style card', () => {
-  it('follows the folder card only with the folder allowed and no Petal style on yet', () => {
+  it('follows the folder card only with the folder allowed and no Petal style on yet, before pet and scene', () => {
     expect(showsStyle('allowed')).toBe(true);
     expect(showsStyle('allowed', true)).toBe(false);
     expect(showsStyle('declined')).toBe(false);
     expect(nextCard('consent', 'allowed', 5)).toBe('style');
-    expect(nextCard('style', 'allowed', 5)).toBe('import');
-    expect(nextCard('style', 'allowed', 0)).toBe('bubbles');
+    expect(nextCard('style', 'allowed', 5)).toBe('pet');
     expect(previousCard('style')).toBeNull();
   });
 
   it('counts itself in Step N of M once it will show', () => {
-    expect(cardCounter('style', 'allowed', 0)).toEqual({ number: 5, total: 5 });
+    expect(cardCounter('style', 'allowed', 0)).toEqual({ number: 3, total: 5 });
     expect(cardCounter('import', 'allowed', 5)).toEqual({ number: 6, total: 6 });
-    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 3, total: 4 });
+    expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 4, total: 4 });
   });
 
   it('resumes past itself once a Petal style is on', () => {
     expect(resumeAt('style', ALLOWED)).toBe('style');
-    expect(resumeAt('style', { ...ALLOWED, petalStyleOn: true })).toBe('add-session');
+    expect(resumeAt('style', { ...ALLOWED, petalStyleOn: true })).toBe('pet');
     expect(resumeAt('consent', { ...ALLOWED, pastSessions: 4 })).toBe('style');
   });
 
@@ -134,8 +134,8 @@ describe('resume and skip', () => {
     expect(resumeAt('consent', FRESH)).toBe('consent');
   });
 
-  it('a folder question answered elsewhere moves on to the bubbles', () => {
-    expect(resumeAt('consent', { ...ALLOWED, petalStyleOn: true })).toBe('add-session');
+  it('a folder question answered elsewhere moves on to the next card', () => {
+    expect(resumeAt('consent', { ...ALLOWED, petalStyleOn: true })).toBe('pet');
     expect(resumeAt('consent', ALLOWED)).toBe('style'); // the reply-style card first, when no Petal style is on
   });
 
@@ -183,7 +183,8 @@ describe('claude missing from the tab’s PATH', () => {
 describe('copy', () => {
   it('says the brief’s lines', () => {
     const ctx = { claudeFound: true, folder: 'allowed' as const };
-    expect(cardCopy('welcome', MIKI).title).toBe('Hi! Let’s set up Petal.');
+    expect(cardCopy('welcome', MIKI).title).toBe('The terminal stays. The reply becomes a page.');
+    expect(cardCopy('welcome', MIKI).line).not.toMatch(/terminal|\bpet\b/i); // the reader leads; the pet comes after
     expect(cardCopy('consent', MIKI).line).toBe('I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.');
     expect(bubbleCopy('add-session', MIKI, ctx).say).toBe('Click Add Session');
     expect(bubbleCopy('claude-setup', MIKI, ctx).say).toBe('Pick a style and sign in, I’ll wait');

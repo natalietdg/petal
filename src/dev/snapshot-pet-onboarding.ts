@@ -44,7 +44,7 @@ const STATE = `(() => {
     past: [...view.querySelectorAll('.pg-past-row')].map((r) => [r.querySelector('.pg-past-title')?.textContent, r.querySelector('.pg-past-project')?.textContent]),
     library: (() => { const box = view.querySelector('.pg-library input'); const c = view.querySelector('.pg-library-confirm'); return box ? { label: box.parentElement.textContent, checked: box.checked, confirm: c && !c.hidden ? c.textContent : null } : null; })(),
     historyHint: document.getElementById('history-button').classList.contains('pg-hint'),
-    hello: view.querySelectorAll('.pg-hello-pet svg rect').length > 0 ? view.querySelectorAll('.pg-hello-pet').length : 0,
+    hello: view.querySelector('.pg-hello-page .pg-hello-head')?.textContent ?? null,
     pets: [...view.querySelectorAll('.pg-pet')].map((b) => ({ id: b.dataset.pet, name: b.querySelector('.pg-pet-name')?.textContent, line: b.querySelector('.pg-pet-line')?.textContent, on: b.getAttribute('aria-checked') === 'true', picture: Boolean(b.querySelector('svg rect')) })),
     scenes: [...view.querySelectorAll('.pg-scene')].map((b) => ({ id: b.dataset.scene, on: b.getAttribute('aria-checked') === 'true', rects: b.querySelectorAll('.pg-thumb .scene rect').length, pet: Boolean(b.querySelector('.pg-thumb-pet svg rect')) })),
     bubble: bubble.hidden ? null : {
@@ -168,21 +168,55 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   claudeFixture.installed = false; // the PATH-missing branch first
   await js('PastelTerm.getStarted.recheckInstall()');
 
+  // With the folder answered: welcome, the style card (still no Petal style on, so Not now), pet, scene, then import.
+  const walkToImport = async (): Promise<void> => {
+    await js("document.querySelector('#pet-guide .pg-next').click()");
+    await until((s) => s.card === 'style');
+    await js("document.querySelector('#pet-guide .pg-later').click()");
+    for (const next of ['pet', 'scene', 'import']) {
+      if (next !== 'pet') await js("document.querySelector('#pet-guide .pg-next').click()");
+      await until((s) => s.card === next);
+    }
+  };
+
   // 1. A brand-new install opens on the hello card, and the old welcome never shows.
   const hello = await until((s) => s.card === 'welcome', 15000);
-  check(hello && hello.overlay === 'pet-guide' && hello.title === 'Hi! Let’s set up Petal.' && hello.hello === 5 && hello.buttons.join() === 'Start,Skip setup' && hello.emDashes === 0,
-    `fresh install shows "Hi! Let’s set up Petal." with five pets, Start and Skip setup: ${JSON.stringify(hello && { overlay: hello.overlay, title: hello.title, line: hello.line, hello: hello.hello, buttons: hello.buttons })}`);
+  check(hello && hello.overlay === 'pet-guide' && hello.title === 'The terminal stays. The reply becomes a page.' && hello.hello === 'Redis reconnects on every login'
+    && !/terminal|\bpet\b/i.test(hello.line ?? '') && hello.counter === 'Step 1 of 4' && hello.buttons.join() === 'Start,Skip setup' && hello.emDashes === 0,
+    `fresh install leads with the reader: the page line, a reply shown raw then as a page, no pet yet, Start and Skip setup: ${JSON.stringify(hello && { overlay: hello.overlay, title: hello.title, line: hello.line, hello: hello.hello, counter: hello.counter, buttons: hello.buttons })}`);
   const saved0 = configStore.load();
   check(saved0.onboarding.step === 'welcome' && saved0.welcome.seen && saved0.claudeFolder.choice === 'unasked', `the hello card is saved as the step to resume, the old welcome marked seen, the folder unasked: ${JSON.stringify({ onboarding: saved0.onboarding, welcome: saved0.welcome, folder: saved0.claudeFolder })}`);
-  check(hello?.focus === 'pg-primary pg-next' && /Hi! Let’s set up Petal/.test(hello.announced), `focus on Start, the card announced: ${JSON.stringify({ focus: hello?.focus, announced: hello?.announced })}`);
+  check(hello?.focus === 'pg-primary pg-next' && /The terminal stays\. The reply becomes a page\./.test(hello.announced), `focus on Start, the card announced: ${JSON.stringify({ focus: hello?.focus, announced: hello?.announced })}`);
   await shot('01-welcome');
   await fitsAtEveryWidth('welcome');
 
-  // 2. Pick your pet: five portraits with a line each; picking Miki changes the corner pet live.
+  // 2. The folder question, said by the pet, right after the welcome (the style card needs it); Allow saves it exactly as the old question did.
   await js("document.querySelector('#pet-guide .pg-next').click()");
+  const asked = await until((s) => s.card === 'consent');
+  check(asked && asked.counter === 'Step 2 of 4' && asked.said === 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' && asked.buttons.join() === 'Allow,Not now,Skip setup' && asked.focus === 'pet-guide',
+    `folder card: the pet's one line, Allow and Not now, focus on the card not Allow: ${JSON.stringify(asked && { said: asked.said, buttons: asked.buttons, focus: asked.focus })}`);
+  await shot('02-consent');
+  await contrastOk('folder card');
+  await fitsAtEveryWidth('consent');
+  await js("document.querySelector('#pet-guide .pg-allow').click()");
+  const allowed = await waitFor(() => (configStore.load().claudeFolder.choice === 'allowed' ? true : null), 5000);
+  check(allowed, 'Allow saves claudeFolder.choice = allowed');
+
+  // 3. No Petal style in the stand-in folder: the reply-style card comes before pet and scene, with its cost per turn; Not now writes nothing.
+  const styled = await until((s) => s.card === 'style');
+  check(styled && styled.title === 'How should Claude write?' && styled.counter === 'Step 3 of 5' && styled.buttons.join() === 'Use this style,Not now,Skip setup'
+    && /adds about 1,900 tokens of instructions to every turn/.test(await js("document.querySelector('#pet-guide .pg-cost')?.textContent ?? ''")),
+    `style card after Allow: title, counter, buttons and the Magazine cost line: ${JSON.stringify(styled && { title: styled.title, counter: styled.counter, buttons: styled.buttons })}`);
+  await shot('03-style');
+  await contrastOk('style card');
+  await fitsAtEveryWidth('style');
+  await js("document.querySelector('#pet-guide .pg-later').click()");
+  check(!fs.existsSync(path.join(home, 'output-styles')), 'style card Not now writes no output style');
+
+  // 4. Pick your pet, after the reader's cards: five portraits with a line each; picking Miki changes the corner pet live.
   const pets = await until((s) => s.card === 'pet');
   const names = pets?.pets.map((p: { name: string }) => p.name).join();
-  check(names === 'Mika,Miki,Kira,Hoshi,Corgi' && pets.pets.every((p: { picture: boolean; line: string }) => p.picture && p.line) && pets.pets.find((p: { on: boolean }) => p.on)?.id === 'mika',
+  check(names === 'Mika,Miki,Kira,Hoshi,Corgi' && pets.pets.every((p: { picture: boolean; line: string }) => p.picture && p.line) && pets.pets.find((p: { on: boolean }) => p.on)?.id === 'mika' && pets.counter === 'Step 4 of 5' && pets.buttons.join() === 'Next,Back,Skip setup',
     `pet card: five pets with portraits and lines, Mika picked: ${JSON.stringify(pets?.pets)}`);
   check(pets?.preview?.cat === 'mika' && pets.preview.rects > 0, `the corner preview shows Mika while the card covers the reader: ${JSON.stringify(pets?.preview)}`);
   await js("document.querySelector('#pet-guide .pg-pet[data-pet=\"miki\"]').click()");
@@ -194,10 +228,10 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   check(arrowed, 'arrow keys move the pick like a radio group (Miki to Kira)');
   await js("document.querySelector('#pet-guide .pg-pet[data-pet=\"miki\"]').click()");
   await until((s) => s.cat === 'miki');
-  await shot('02-pet');
+  await shot('04-pet');
   await fitsAtEveryWidth('pet');
 
-  // 3. Pick a scene: a thumbnail for each, with Miki in it; picking one changes the corner live.
+  // 4b. Pick a scene: a thumbnail for each, with Miki in it; picking one changes the corner live.
   await js("document.querySelector('#pet-guide .pg-next').click()");
   const scenesUp = await until((s) => s.card === 'scene');
   const allThumbs = scenesUp?.scenes.filter((s: { id: string }) => s.id !== 'none').every((s: { rects: number; pet: boolean }) => s.rects > 50 && s.pet);
@@ -208,31 +242,10 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   await js("document.querySelector('#pet-guide .pg-scene[data-scene=\"cherry\"]').click()");
   const cherry = await until((s) => s.scene === 'cherry' && s.preview?.scene && s.scenes.find((x: { on: boolean }) => x.on)?.id === 'cherry');
   check(cherry, `picking Cherry Blossom Picnic shows it behind the pet: ${JSON.stringify(cherry && cherry.scene)}`);
-  await shot('03-scene');
+  await shot('04b-scene');
   await fitsAtEveryWidth('scene');
 
-  // 4. The folder question, said by the pet; Allow saves it exactly as the old question did.
-  await js("document.querySelector('#pet-guide .pg-next').click()");
-  const asked = await until((s) => s.card === 'consent');
-  check(asked && asked.said === 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' && asked.buttons.join() === 'Allow,Not now,Skip setup' && asked.focus === 'pet-guide',
-    `folder card: the pet's one line, Allow and Not now, focus on the card not Allow: ${JSON.stringify(asked && { said: asked.said, buttons: asked.buttons, focus: asked.focus })}`);
-  await shot('04-consent');
-  await contrastOk('folder card');
-  await fitsAtEveryWidth('consent');
-  await js("document.querySelector('#pet-guide .pg-allow').click()");
-  const allowed = await waitFor(() => (configStore.load().claudeFolder.choice === 'allowed' ? true : null), 5000);
-  check(allowed, 'Allow saves claudeFolder.choice = allowed');
-
-  // 4b. No Petal style in the stand-in folder: the reply-style card, with its cost per turn; Not now writes nothing.
-  const styled = await until((s) => s.card === 'style');
-  check(styled && styled.title === 'How should Claude write?' && styled.counter === 'Step 5 of 5' && styled.buttons.join() === 'Use this style,Not now,Skip setup'
-    && /adds about 1,900 tokens of instructions to every turn/.test(await js("document.querySelector('#pet-guide .pg-cost')?.textContent ?? ''")),
-    `style card after Allow: title, counter, buttons and the Magazine cost line: ${JSON.stringify(styled && { title: styled.title, counter: styled.counter, buttons: styled.buttons })}`);
-  await shot('04b-style');
-  await contrastOk('style card');
-  await fitsAtEveryWidth('style');
-  await js("document.querySelector('#pet-guide .pg-later').click()");
-  check(!fs.existsSync(path.join(home, 'output-styles')), 'style card Not now writes no output style');
+  await js("document.querySelector('#pet-guide .pg-next').click()"); // scene is the last card: on to the bubbles
 
   // 5. The bubble: Add Session, pointed at and pulsing; focus on it; the bubble never covers it.
   const add = await until((s) => s.bubble?.step === 'add-session');
@@ -325,15 +338,11 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   check(escaped && configStore.load().onboarding.step === 'skipped' && configStore.load().claudeFolder.choice === 'allowed', `Esc on a card skips setup and keeps the folder answer: ${JSON.stringify(configStore.load().onboarding)}`);
   send(win.webContents, 'pet-guide:open');
   await until((s) => s.card === 'welcome');
-  for (const next of ['pet', 'scene', 'style']) {
-    await js("document.querySelector('#pet-guide .pg-next').click()");
-    await until((s) => s.card === next);
-  }
-  await js("document.querySelector('#pet-guide .pg-later').click()"); // the style card, still no Petal style on
+  await walkToImport();
   // The first-reply session is now a past session: the import card, then Not now moves on without starting anything.
   const one = await until((s) => s.card === 'import');
   check(one && one.said === 'You’ve used Claude Code before! I found 1 past session in 1 project.' && one.counter === 'Step 6 of 6' && one.buttons.join() === 'Show them in History,Not now,Skip setup',
-    `with the folder answered, scene goes to the import card for the one past session: ${JSON.stringify(one && { said: one.said, counter: one.counter, past: one.past, buttons: one.buttons })}`);
+    `with the folder answered, welcome, style, pet and scene lead to the import card for the one past session: ${JSON.stringify(one && { said: one.said, counter: one.counter, past: one.past, buttons: one.buttons })}`);
   const runsBefore = (await js('window.pastel.library.backfillState()')).total;
   await js("document.querySelector('#pet-guide .pg-later').click()");
   const resumed = await until((s) => s.bubble?.step === 'ask');
@@ -378,12 +387,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   send(win.webContents, 'pet-guide:open');
   const restarted = await until((s) => s.card === 'welcome');
   check(restarted?.counter === 'Step 1 of 6', `a restart that knows about past sessions counts six cards from the start (style card included): ${restarted?.counter}`);
-  for (const next of ['pet', 'scene', 'style']) {
-    await js("document.querySelector('#pet-guide .pg-next').click()");
-    await until((s) => s.card === next);
-  }
-  await js("document.querySelector('#pet-guide .pg-later').click()");
-  await until((s) => s.card === 'import');
+  await walkToImport();
   const found = await until((s) => s.card === 'import' && s.past.length === 3);
   const wantPast = [['Fix the payout cutoff', PAST_PROJECT], ['Draft the launch notes', SESSION_CWD], ['Why is the build slow', PAST_PROJECT]]; // /tmp paths show as themselves
   check(found && found.title === 'Import your past sessions' && found.said === 'You’ve used Claude Code before! I found 5 past sessions in 2 projects.' && found.counter === 'Step 6 of 6'

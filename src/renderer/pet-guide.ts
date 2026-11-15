@@ -18,7 +18,7 @@ import { DEFAULT_PETAL_STYLE, PETAL_STYLE_CHOICES } from '../shared/petal-style-
 import { TOKEN_TITLE } from '../shared/token-facts';
 import { tokenFacts } from './customize-start';
 import {
-  EXAMPLE_ASK, GUIDE_PETS, WHATS_NEXT_LINE, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
+  EXAMPLE_ASK, GUIDE_PETS, HELLO_EXAMPLE, WHATS_NEXT_LINE, IMPORT_LABELS, IMPORT_LIBRARY_DAYS, INSTALL_COMMAND, bubbleCopy, bubbleStep, cardCopy, cardCounter, importSaid, isCardStep, isEnded,
   libraryConfirm, nextCard, personality, previousCard, resumeAt, stageToSave, STYLE_LABELS, styleCost, typeClaudeHelp, type BubbleStep, type CardStep, type GuideFacts, type GuideStage, type GuideStep,
 } from '../shared/pet-guide';
 
@@ -130,9 +130,16 @@ function radio(selected: boolean, onPick: () => void, className: string): HTMLBu
 
 // ── Cards ──
 
+// The same reply twice: as Claude Code prints it, then as Petal's reader shows it.
 function welcomeBody(): HTMLElement {
   const row = el('div', 'pg-hello');
-  row.append(...GUIDE_PETS.map((id) => petPicture(id, 'pg-hello-pet')));
+  row.setAttribute('role', 'img');
+  row.setAttribute('aria-label', HELLO_EXAMPLE.label);
+  const raw = el('div', 'pg-hello-raw');
+  raw.append(...HELLO_EXAMPLE.raw.map((line) => el('span', null, line)));
+  const page = el('div', 'pg-hello-page');
+  page.append(el('strong', 'pg-hello-head', HELLO_EXAMPLE.head), el('span', 'pg-hello-dek', HELLO_EXAMPLE.dek), el('span', 'pg-hello-next', HELLO_EXAMPLE.next));
+  row.append(raw, el('span', 'pg-hello-arrow', '→'), page);
   return row;
 }
 
@@ -297,7 +304,7 @@ function renderCard(card: CardStep): void {
     actions.append(button(IMPORT_LABELS.show, 'pg-primary pg-show', () => void showInHistory()), button(IMPORT_LABELS.later, 'pg-secondary pg-later', () => void advance('import')));
   } else {
     actions.append(button(card === 'welcome' ? 'Start' : 'Next', 'pg-primary pg-next', () => void advance(card)));
-    const back = previousCard(card);
+    const back = previousCard(card, folder, petalStyleOn);
     if (back) actions.append(button('Back', 'pg-secondary pg-back', () => void show(back)));
   }
   footer.append(actions, button('Skip setup', 'pg-skip', () => void skip()));
