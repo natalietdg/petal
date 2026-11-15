@@ -87,7 +87,7 @@ const PROBE = (root: string) => `(() => {
       return { text: check.textContent.trim(), below: box.top >= body.bottom - 1, tight: box.top - body.bottom < 14, muted: getComputedStyle(check).color === muted, indented: box.left >= body.left - 1 };
     }),
     leftoverChecks: [...(stepsSection?.querySelectorAll('.section-body > p') ?? [])].filter((p) => /^\\s*check\\s*:/i.test(p.textContent)).length,
-    plain: plain ? { steps: plain.classList.contains('steps'), items: plain.children.length, rows: plain.querySelectorAll('.step, .step-badge').length, marker: getComputedStyle(plain).listStyleType, display: getComputedStyle(plain.firstElementChild).display } : null,
+    plain: plain ? { steps: plain.classList.contains('steps'), items: plain.children.length, rows: plain.querySelectorAll('.step, .step-badge').length, marker: getComputedStyle(plain).listStyleType, counter: getComputedStyle(plain.firstElementChild, '::before').content, display: getComputedStyle(plain.firstElementChild).display } : null,
     overflow: {
       reader: reader ? reader.scrollWidth - reader.clientWidth : null,
       rows: rows.filter((r) => r.getBoundingClientRect().right > proseBox.right + 1 || r.scrollWidth > r.clientWidth + 1).length,
@@ -163,7 +163,9 @@ export async function readerStepsCheck(kit: Kit, win: BrowserWindow): Promise<vo
       // A plain numbered list outside Steps renders as before.
       await js(click('#latest .story-section:nth-of-type(1) > h2'));
       const plain = (await probe('#latest'))?.plain;
-      check(plain && !plain.steps && plain.items === 2 && plain.rows === 0 && plain.marker === 'decimal' && plain.display === 'list-item',
+      // Book numbers plain lists with its own 01, 02 pills (book.css), so its marker is a ::before counter.
+      const numbered = look === 'book' ? plain?.marker === 'none' && /counter\(book-item/.test(plain?.counter ?? '') : plain?.marker === 'decimal';
+      check(plain && !plain.steps && plain.items === 2 && plain.rows === 0 && numbered && plain.display === 'list-item',
         `${look} plain <ol> outside Steps unchanged: ${JSON.stringify(plain)}`);
 
       // Collapse all covers Steps too; Expand all opens it again with the tick still there.

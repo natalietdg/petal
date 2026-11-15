@@ -600,6 +600,7 @@ function loopDistillation(): { distill: DistillRecord[]; sessionId: string | nul
 
 function drawLoop(): void {
   loopPanel.element.hidden = !folderAllowed || !data?.project || !suite();
+  agentsZone.hidden = false; // lanes draw laid out, so their scroll to the newest turn lands
   agents.draw();
   agentsZone.hidden = pickerBox.hidden && loopPanel.element.hidden && agents.element.hidden;
   if (loopPanel.element.hidden) { stopLoopTick(); return; }
