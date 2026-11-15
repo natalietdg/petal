@@ -62,7 +62,9 @@
 .follow-offer[hidden] { display: none; }
 .follow-offer-title { margin: 0; font-weight: 650; }
 .follow-offer-line { margin: 2px 0 6px; color: var(--muted); font-size: 13px; }
-.follow-offer-list { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.follow-offer-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px 18px; margin: 0; padding: 0; list-style: none; }
+/* With the offer under it, the empty line sits higher, so the Follow buttons stay above the fold at 900px. */
+:is(.status, [data-reading] .status).empty:has(.follow-offer:not([hidden])) { margin-top: 6vh; }
 .follow-offer-follow { margin-left: -6px; color: var(--link); text-align: left; overflow-wrap: anywhere; }
 .follow-offer-follow:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .follow-offer-note { margin: 4px 0 0; font-size: 13px; }
