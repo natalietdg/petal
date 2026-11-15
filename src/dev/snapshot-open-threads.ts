@@ -94,7 +94,7 @@ const PROBE = `(() => {
     checks: cards.map((c) => c.querySelector('.thread-check')?.textContent.trim() ?? null),
     cardRatio: Math.min(...cards.flatMap((c) => texts(c).map(ratio))),
     checked: checked ? { inHead: Boolean(checked.closest('header.story-head')), label: checked.querySelector('.checked-label')?.textContent ?? null, shown: shown(checked), ratio: ratio(checked) } : null,
-    assumed: assumed ? { shown: shown(assumed), ratio: Math.min(...[...assumed.querySelectorAll('p, li')].map(ratio)), tinted: getComputedStyle(assumed).backgroundColor !== (plainSidebar ? getComputedStyle(plainSidebar).backgroundColor : '') || getComputedStyle(assumed).borderTopColor !== getComputedStyle(plainSidebar ?? assumed).borderTopColor, inRail: Boolean(assumed.closest('.rail')) && getComputedStyle(assumed.closest('.rail')).display === 'block' } : null,
+    assumed: assumed ? { shown: shown(assumed), ratio: Math.min(...[...assumed.querySelectorAll('p, li')].map(ratio)), tinted: getComputedStyle(assumed).backgroundColor !== (plainSidebar ? getComputedStyle(plainSidebar).backgroundColor : '') || getComputedStyle(assumed).borderTopColor !== getComputedStyle(plainSidebar ?? assumed).borderTopColor || getComputedStyle(assumed).borderLeftColor !== getComputedStyle(plainSidebar ?? assumed).borderLeftColor, inRail: Boolean(assumed.closest('.rail')) && getComputedStyle(assumed.closest('.rail')).display === 'block' } : null,
     readerOverflow: reader ? reader.scrollWidth - reader.clientWidth : null,
   };
 })()`;
