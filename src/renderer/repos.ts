@@ -90,6 +90,7 @@ function render(): void {
   shown = [...rankRepos(search.value, repos).slice(0, MAX_ROWS), ...EXTRAS];
   selected = Math.min(selected, Math.max(shown.length - 1, 0));
   list.replaceChildren(...shown.map(row));
+  if (mode === 'session') hint.textContent = sessionHint();
   list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
 
@@ -130,7 +131,9 @@ async function choose(row: Row | undefined): Promise<void> {
 
 const SESSION_HINT = 'Enter starts Claude in a new tab, in that folder.';
 const WORKTREE_HINT = 'Enter starts Claude in a new tab, in a new worktree of that repo on its own branch.';
-const sessionHint = (): string => (worktreeTick.checked ? WORKTREE_HINT : SESSION_HINT);
+const PICK_REPO_HINT = 'Pick a repo. A new worktree needs one.';
+// With New worktree ticked, Home and Other folder may not be repos: the hint says so before Enter fails.
+const sessionHint = (): string => (!worktreeTick.checked ? SESSION_HINT : shown[selected] && 'kind' in shown[selected] ? PICK_REPO_HINT : WORKTREE_HINT);
 
 // Lists her agents each time the palette opens, so a file added a minute ago is there.
 async function loadAgents(): Promise<void> {

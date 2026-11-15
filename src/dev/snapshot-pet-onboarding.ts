@@ -182,7 +182,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   // 1. A brand-new install opens on the hello card, and the old welcome never shows.
   const hello = await until((s) => s.card === 'welcome', 15000);
   check(hello && hello.overlay === 'pet-guide' && hello.title === 'The terminal stays. The reply becomes a page.' && hello.hello === 'Redis reconnects on every login'
-    && !/terminal|\bpet\b/i.test(hello.line ?? '') && hello.counter === 'Step 1 of 4' && hello.buttons.join() === 'Start,Skip setup' && hello.emDashes === 0,
+    && !/terminal|\bpet\b/i.test(hello.line ?? '') && hello.counter === 'Step 1 of 5' && hello.buttons.join() === 'Start,Skip setup' && hello.emDashes === 0,
     `fresh install leads with the reader: the page line, a reply shown raw then as a page, no pet yet, Start and Skip setup: ${JSON.stringify(hello && { overlay: hello.overlay, title: hello.title, line: hello.line, hello: hello.hello, counter: hello.counter, buttons: hello.buttons })}`);
   const saved0 = configStore.load();
   check(saved0.onboarding.step === 'welcome' && saved0.welcome.seen && saved0.claudeFolder.choice === 'unasked', `the hello card is saved as the step to resume, the old welcome marked seen, the folder unasked: ${JSON.stringify({ onboarding: saved0.onboarding, welcome: saved0.welcome, folder: saved0.claudeFolder })}`);
@@ -193,7 +193,7 @@ export async function petOnboardingCheck(kit: Kit, { win, activeSession }: { win
   // 2. The folder question, said by the pet, right after the welcome (the style card needs it); Allow saves it exactly as the old question did.
   await js("document.querySelector('#pet-guide .pg-next').click()");
   const asked = await until((s) => s.card === 'consent');
-  check(asked && asked.counter === 'Step 2 of 4' && asked.said === 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' && asked.buttons.join() === 'Allow,Not now,Skip setup' && asked.focus === 'pet-guide',
+  check(asked && asked.counter === 'Step 2 of 5' && asked.said === 'I read Claude’s replies from your Claude folder on this Mac. Nothing leaves it.' && asked.buttons.join() === 'Allow,Not now,Skip setup' && asked.focus === 'pet-guide',
     `folder card: the pet's one line, Allow and Not now, focus on the card not Allow: ${JSON.stringify(asked && { said: asked.said, buttons: asked.buttons, focus: asked.focus })}`);
   await shot('02-consent');
   await contrastOk('folder card');

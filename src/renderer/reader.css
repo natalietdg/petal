@@ -693,7 +693,10 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 .context-notice-close:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 /* Following a session Petal did not start (follow.ts): one quiet line under the header, and no reply box. */
-.follow-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0; padding: 8px 28px; border-bottom: 1px solid var(--rule); background: var(--code-bg); color: var(--reader-fg); font: 13px/1.45 var(--ui-font); }
+/* The tint spans the pane like a mode band; the text sits on the reader column, as #reader-head's does. */
+.follow-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0;
+  padding-block: 8px;
+  padding-inline: calc(var(--reading-pad-start) + max(0px, (100% - var(--reading-pad-start) - var(--reading-pad-end) - var(--reading-measure)) / 2)) var(--reading-pad-end); border-bottom: 1px solid var(--rule); background: var(--code-bg); color: var(--reader-fg); font: 13px/1.45 var(--ui-font); }
 .follow-banner[hidden] { display: none; }
 .follow-stop { padding: 0; border: none; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .follow-stop:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }

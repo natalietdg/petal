@@ -17,7 +17,6 @@ let following: { sessionId: string; title: string } | null = null;
 let onStop: (() => void) | null = null; // app.ts puts the active tab back in the reader
 
 export const isActive = (): boolean => following !== null;
-export const sessionId = (): string | null => following?.sessionId ?? null;
 export const setOnStop = (callback: () => void): void => { onStop = callback; };
 
 export function stop(): void {

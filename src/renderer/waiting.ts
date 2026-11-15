@@ -1,6 +1,7 @@
 // Board's "Waiting on you" lane, read through the one shared needsYou() (shared/needs-you.ts).
 // This window reports its tabs (screen prompt, open Decide) to main; main merges every window and headless child
 // into one ranked lane, sends it back, sets the dock badge and notifies. The lane and the dock Board count draw it.
+import { OUTSIDE_MARK } from '../shared/outside-sessions';
 import * as follow from './follow';
 import * as overlays from './overlays';
 import * as tabs from './tabs';
@@ -129,7 +130,7 @@ function row(need: Need): HTMLLIElement {
   } else text.textContent = need.reason;
   const meta = el('p', 'waiting-meta');
   meta.append(sessionNameEl('span', 'waiting-session', need.title));
-  if (!need.here && need.kind !== 'job') meta.append(el('span', 'waiting-where', 'other window')); // a job has no window
+  if (!need.here && need.kind !== 'job') meta.append(el('span', 'waiting-where', need.outside ? OUTSIDE_MARK : 'other window')); // a job has no window
   const ago = sinceText(need.since);
   if (ago) meta.append(el('span', 'waiting-ago', ago));
   li.append(text, meta);

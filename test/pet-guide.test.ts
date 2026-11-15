@@ -50,9 +50,10 @@ describe('the import card', () => {
     expect(previousCard('consent')).toBeNull();
   });
 
-  it('keeps Step N of M right: four cards, five once the import card shows', () => {
-    expect(cardCounter('welcome', 'unasked', 0)).toEqual({ number: 1, total: 4 });
-    expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 2, total: 4 });
+  it('keeps Step N of M steady: the style card counts from the start, the import card once it will show', () => {
+    expect(cardCounter('welcome', 'unasked', 0)).toEqual({ number: 1, total: 5 });
+    expect(cardCounter('consent', 'unasked', 0)).toEqual({ number: 2, total: 5 });
+    expect(cardCounter('style', 'allowed', 0)).toEqual({ number: 3, total: 5 }); // no jump from 4 to 5 after Allow
     expect(cardCounter('import', 'allowed', 5, true)).toEqual({ number: 5, total: 5 });
     expect(cardCounter('pet', 'allowed', 5, true)).toEqual({ number: 3, total: 5 }); // a restart that knows it will show
     expect(cardCounter('scene', 'declined', 5)).toEqual({ number: 4, total: 4 });

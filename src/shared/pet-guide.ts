@@ -65,10 +65,16 @@ export function previousCard(step: CardStep, folder: FolderChoice = 'unasked', p
   return null;
 }
 
-// "Step N of M": four cards, more once the style or import card is known to show.
+// "Step N of M": the style card counts from the start unless it can't show (folder declined, a Petal style already on),
+// so the total never grows mid-setup; the import card counts once it is known to show.
 export function cardCounter(step: CardStep, folder: FolderChoice, pastSessions: number, petalStyleOn = false): { number: number; total: number } {
-  const optional = (card: CardStep): boolean => card === 'style' || card === 'import';
-  const counted = CARD_STEPS.filter((card) => !optional(card) || card === step || cardApplies(card, folder, pastSessions, petalStyleOn));
+  const counts = (card: CardStep): boolean => {
+    if (card === step) return true;
+    if (card === 'style') return folder !== 'declined' && !petalStyleOn;
+    if (card === 'import') return cardApplies(card, folder, pastSessions, petalStyleOn);
+    return true;
+  };
+  const counted = CARD_STEPS.filter(counts);
   return { number: counted.indexOf(step) + 1, total: counted.length };
 }
 

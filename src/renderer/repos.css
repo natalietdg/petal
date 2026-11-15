@@ -83,6 +83,6 @@
 .repos-worktree[hidden], .repos-worktree-name[hidden] { display: none; }
 .repos-worktree-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .repos-worktree-toggle input { margin: 0; accent-color: var(--link); }
-.repos-worktree-name { flex: 1 1 160px; min-width: 0; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: var(--reader-fg); font: inherit; }
+.repos-worktree-name { flex: 1 1 160px; min-width: 0; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: var(--code-bg); color: var(--reader-fg); font: inherit; } /* filled like the search box: a faint outline missed 3:1 */
 .repos-worktree-name:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
 .repos-agent { flex: 1; min-width: 0; font: inherit; color: var(--reader-fg); }

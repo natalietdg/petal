@@ -98,7 +98,9 @@
 .board-star svg { width: 14px; height: 14px; fill: currentColor; }
 
 .board-name { overflow: hidden; font-size: 16px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.board-place { overflow: hidden; font-size: 12px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.board-place { display: flex; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.board-place-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.board-place-where { flex: none; } /* "· outside Petal" never ellipsed: it is the card's only outside cue */
 .board-headline {
   display: -webkit-box;
   overflow: hidden;
@@ -117,7 +119,8 @@
 .board-confirm,
 .board-note { margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
 .board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--reader-fg); }
-.board-close { align-self: flex-start; margin: 6px 0 0; }
+.board-close { align-self: flex-start; }
+.board-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; }
 .board-empty { list-style: none; font-size: 14px; color: var(--muted); }
 .board-folder-off p { margin: 0 0 8px; }
 
@@ -138,8 +141,6 @@
 /* A card with agents and factory jobs: the jobs badge sits right after the agents one, not mid-row. */
 .board-agents + .board-jobs { margin-left: 0; }
 
-/* Outside Petal: the card's second way in sits under it, like Close. */
-.board-open-tab { align-self: flex-start; margin: 6px 0 0; }
 
 /* Ended today: quieter cards in the same columns; each follows read-only. */
 .board-ended { margin: 28px 0 0; }

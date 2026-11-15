@@ -1,7 +1,7 @@
 // Board, the hub (⌘⇧O, the dock's Board or the Sessions pill): Waiting on you, every open session as a card,
 // Recently closed and Today. It rides the sessions 2s tick; the card model lives in shared/sessions-board.ts.
 import * as followSession from './follow';
-import { ENDED_TODAY, FOLLOW_LABEL, NO_SESSIONS, OPEN_IN_TAB_LABEL, outsidePlace } from '../shared/outside-sessions';
+import { ENDED_TODAY, FOLLOW_LABEL, NO_SESSIONS, OPEN_IN_TAB_LABEL, OUTSIDE_CLOSE_CONFIRM, OUTSIDE_MARK } from '../shared/outside-sessions';
 import type { EndedSession } from '../main/outside-sessions';
 import { spendChip } from '../shared/session-spend';
 import * as overlays from './overlays';
@@ -159,6 +159,15 @@ function statusLine(card: BoardCard): HTMLSpanElement {
   return top;
 }
 
+// "<repo> · <branch>" shortens with an ellipsis; " · this window" or " · outside Petal" always stays whole.
+function placeLine(card: BoardCard): HTMLSpanElement {
+  const line = el('span', 'board-place');
+  const suffix = card.tabId ? ' · this window' : card.outside ? ` · ${OUTSIDE_MARK}` : '';
+  line.append(el('span', 'board-place-name', card.place), ...(suffix ? [el('span', 'board-place-where', suffix)] : []));
+  line.title = `${card.place}${suffix}`;
+  return line;
+}
+
 function labelled(className: string, label: string, text: string): HTMLSpanElement {
   const line = el('span', className);
   line.append(el('span', 'board-label', label), el('span', 'board-text', text));
@@ -174,7 +183,7 @@ function cardElement(card: BoardCard): HTMLLIElement {
   button.dataset.sessionId = card.sessionId;
   if (card.tabId) button.dataset.tabId = card.tabId;
   const name = sessionNameEl('span', 'board-name', card.name);
-  button.append(statusLine(card), name, el('span', 'board-place', card.tabId ? `${card.place} · this window` : card.outside ? outsidePlace(card.place) : card.place));
+  button.append(statusLine(card), name, placeLine(card));
   const need = card.status === 'waiting' ? waiting.needOf(card.sessionId) : undefined;
   if (need) button.append(el('span', `board-reason waiting-${need.kind}`, need.reason));
   if (card.digest.headline) button.append(el('span', 'board-headline', card.digest.headline));
@@ -202,7 +211,6 @@ function cardElement(card: BoardCard): HTMLLIElement {
   if (card.outside) button.title = `${FOLLOW_LABEL}, read-only`;
   button.addEventListener('click', () => void (card.outside ? followCard(card) : choose(card, false)));
   item.append(button);
-  if (card.outside) item.append(openInTabControl(card));
   const needsYou = card.tabId && card.status !== 'working' ? distillCard.card(card.tabId, 'board') : null;
   if (needsYou) { button.classList.add('needs-you'); item.append(needsYou); }
   // A working session in this window: Stop sits on the card's corner, outside the card's own button.
@@ -214,8 +222,12 @@ function cardElement(card: BoardCard): HTMLLIElement {
   const children = childrenOf(card.sessionId);
   if (agents.length || children.length) item.append(sessionsPanel.agentList(card.sessionId, agents, children, (childId) => void openChild(card.sessionId, childId)));
   if (info?.task) item.append(reviewControl(card.sessionId, info.task.id, info.task.title));
-  item.append(closeControl(card));
-  if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId));
+  // The card's own actions on one row: Follow and Open in a Petal tab for an outside session, then Close.
+  const actions = el('div', 'board-actions');
+  if (card.outside) actions.append(followControl(card), openInTabControl(card));
+  actions.append(closeControl(card));
+  item.append(actions);
+  if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId, card.outside === true));
 
   const confirm = confirms.get(card.sessionId);
   if (confirm) {
@@ -307,6 +319,14 @@ async function followCard(card: { sessionId: string; name: string }): Promise<vo
   close();
 }
 
+function followControl(card: BoardCard): HTMLButtonElement {
+  const button = el('button', 'session-link board-follow', FOLLOW_LABEL);
+  button.type = 'button';
+  button.setAttribute('aria-label', `${FOLLOW_LABEL}, read-only: ${card.name}`);
+  button.addEventListener('click', () => void followCard(card));
+  return button;
+}
+
 // The second way in: a copy of it in a Petal tab (claude --resume), which asks first since the original keeps running.
 function openInTabControl(card: BoardCard): HTMLButtonElement {
   const button = el('button', 'session-link board-open-tab', OPEN_IN_TAB_LABEL);
@@ -361,7 +381,7 @@ function closeControl(card: BoardCard): HTMLButtonElement {
   return button;
 }
 
-function closeConfirm(sessionId: string): HTMLParagraphElement {
+function closeConfirm(sessionId: string, outside: boolean): HTMLParagraphElement {
   const line = el('p', 'board-confirm board-close-confirm');
   line.setAttribute('role', 'group');
   const yes = el('button', 'session-link session-yes', 'Yes');
@@ -370,7 +390,7 @@ function closeConfirm(sessionId: string): HTMLParagraphElement {
   const no = el('button', 'session-link session-no', 'No');
   no.type = 'button';
   no.addEventListener('click', () => { closeAsking = null; render(true); });
-  line.append(el('span', '', 'Close this Claude?'), yes, el('span', 'session-sep', '·'), no);
+  line.append(el('span', '', outside ? OUTSIDE_CLOSE_CONFIRM : 'Close this Claude?'), yes, el('span', 'session-sep', '·'), no);
   return line;
 }
 

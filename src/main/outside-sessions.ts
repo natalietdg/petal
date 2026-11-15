@@ -97,5 +97,3 @@ export function endedToday(live: readonly string[], inPetal: ReadonlySet<string>
     .slice(0, ENDED_SHOWN)
     .map((r) => ({ sessionId: r.sessionId, title: r.title || r.firstPrompt, place: repoLabel(r.cwd) ?? r.shortCwd, cwd: r.cwd, endedAt: r.lastAt }));
 }
-
-export const resetForTests = (): void => { tailCache.clear(); endedCache = null; };

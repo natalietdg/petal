@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { outsideSignal, tailFacts } from '../src/main/outside-sessions';
 import { laneFrom } from '../src/main/needs-you-hub';
 import { needsYou, type SessionSignals } from '../src/shared/needs-you';
-import { OUTSIDE_REASONS, outsidePlace } from '../src/shared/outside-sessions';
+import { OUTSIDE_CLOSE_CONFIRM, OUTSIDE_REASONS } from '../src/shared/outside-sessions';
 import type { SessionFile } from '../src/main/claude-session';
 import type { TranscriptEntry } from '../src/main/transcript-entry';
 import { assistantEntry, userEntry } from './helpers';
@@ -49,7 +49,8 @@ describe('the lane with outside sessions', () => {
     expect(laneFrom({ reports: new Map([[3, [own]]]), children: new Map(), orphans: [], outside: [outside] })).toEqual([]);
   });
 
-  it('marks the card’s place line', () => {
-    expect(outsidePlace('shop · main')).toBe('shop · main · outside Petal');
+  it('Close on an outside card says it quits Claude in the other terminal', () => {
+    expect(OUTSIDE_CLOSE_CONFIRM).toMatch(/another terminal/);
+    expect(OUTSIDE_CLOSE_CONFIRM).not.toContain('—');
   });
 });

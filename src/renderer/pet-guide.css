@@ -59,14 +59,14 @@
 }
 
 /* Hello: one reply as raw terminal text, then as a page. Still, so the first card costs no CPU. */
-.pg-hello { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 18px 0 6px; }
+.pg-hello { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; margin: 18px 0 6px; }
 .pg-hello-raw, .pg-hello-page { flex: 1 1 220px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; }
 .pg-hello-raw { background: var(--pg-wash); color: var(--muted); font: 12.5px/1.45 var(--mono-font); }
 .pg-hello-page { background: var(--reader-bg); box-shadow: 0 0 0 1px var(--rule); }
 .pg-hello-head { font: 600 1.15em/1.2 var(--display-font); letter-spacing: -0.01em; }
 .pg-hello-dek { font: 1em/1.4 var(--body-font); }
 .pg-hello-next { font-size: 12.5px; color: var(--muted); }
-.pg-hello-arrow { flex: none; font-size: 1.4em; color: var(--muted); }
+.pg-hello-arrow { flex: none; align-self: center; font-size: 1.4em; color: var(--muted); }
 :is(#pet-guide, .pet-bubble) .cat-portrait svg { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
 
 /* Pet tiles: big portrait, name, one line. */
