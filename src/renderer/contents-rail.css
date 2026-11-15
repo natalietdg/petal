@@ -9,10 +9,9 @@
   font: 13px/1.35 var(--ui-font);
 }
 .contents-rail[hidden] { display: none; }
-.contents-rail-title,
-.contents-rail-list { position: sticky; }
-.contents-rail-title { top: 16px; margin: 0 0 6px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
-.contents-rail-list { top: 38px; margin: 0; padding: 0; list-style: none; max-height: calc(100vh - 260px); overflow-y: auto; }
+.contents-rail-stuck { position: sticky; top: 16px; }
+.contents-rail-title { margin: 0 0 6px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+.contents-rail-list { margin: 0; padding: 0; list-style: none; max-height: calc(100vh - 260px); overflow-y: auto; }
 .contents-rail-item {
   display: block;
   width: 100%;

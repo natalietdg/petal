@@ -72,6 +72,18 @@ export async function fixtureFlow(kit: Kit): Promise<void> {
     log(`${!rail.flowTab && rail.exists && rail.shown === (roomy && rail.replies >= 2) && rail.items.length === rail.replies && !rail.overlapsText ? 'ok' : 'FAIL'} contents rail ${id}, no Flow tab: ${JSON.stringify(rail)}`);
     await verifiedCapture({ ...kit, theme: themes[id], panelOpen: false, name: `contents-rail-${id}` });
   }
+  // Scrolled to the end, the title still sits above its list (they used to stick apart and the list slid over it).
+  const end = await js(`(() => {
+    const reader = document.getElementById('reader');
+    reader.scrollTop = reader.scrollHeight;
+    const title = document.querySelector('#replies-view .contents-rail-title');
+    const list = document.querySelector('#replies-view .contents-rail-list');
+    if (!title || !list || !list.getBoundingClientRect().height) return { shown: false };
+    return { shown: true, titleAbove: title.getBoundingClientRect().bottom <= list.getBoundingClientRect().top + 1 };
+  })()`);
+  log(`${!end.shown || end.titleAbove ? 'ok' : 'FAIL'} contents rail title stays above its list at the end: ${JSON.stringify(end)}`);
+  await js("document.getElementById('reader').scrollTop = 0");
+
   await js("document.querySelector('#replies-view .contents-rail-item')?.click()");
   log(`${await js("Boolean(document.querySelector('.flash'))") ? 'ok' : 'FAIL'} rail click jumps to its reply: view=${await js('PastelTerm.reader.currentView()')}`);
 

@@ -7,7 +7,9 @@ const rail = el('nav', 'contents-rail');
 rail.setAttribute('aria-label', 'Contents');
 rail.hidden = true;
 const list = el('ol', 'contents-rail-list');
-rail.append(el('p', 'contents-rail-title', 'Contents'), list);
+const stuck = el('div', 'contents-rail-stuck'); // one sticky block, so the list can't slide over its title
+stuck.append(el('p', 'contents-rail-title', 'Contents'), list);
+rail.append(stuck);
 
 let jump: (replyId: string) => void = () => {};
 let entries: RailEntry[] = [];
