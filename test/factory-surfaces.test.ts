@@ -176,3 +176,56 @@ describe('runners start in one place', () => {
     expect(spawned).toHaveLength(1);
   });
 });
+
+describe('the code review’s cases', () => {
+  const forge = (over: Record<string, unknown>) => {
+    const job = createJob({ repo, ask: 'Real job', factory: defaultFactory(), parentSessionId: null });
+    const file = path.join(jobDir(repo, job.id), 'job.json');
+    fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), ...over }));
+    return job;
+  };
+
+  it.each([
+    ['another repo', { repo: '/somewhere/else' }],
+    ['another branch', { branch: 'main' }],
+    ['a folder outside Petal', { worktree: '/Users' }],
+    ['an option for a branch', { branch: '--receive-pack=x' }],
+  ])('a job.json naming %s is never believed, so no runner starts and nothing ships', async (_what, over) => {
+    const { ensureRunners } = await import('../src/main/factory-jobs-view');
+    const job = forge({ ...over, state: 'building', events: [{ at: 1, from: 'intake', to: 'building' }] });
+    expect(readJob(repo, job.id)).toBeNull();
+    expect(await ensureRunners()).toEqual([]);
+    expect(spawned).toHaveLength(0);
+  });
+
+  it('two overlapping starts make one runner', async () => {
+    const { ensureRunner } = await import('../src/main/factory-jobs-view');
+    const job = createJob({ repo, ask: 'Once', factory: defaultFactory(), parentSessionId: null });
+    for (const to of ['intake', 'building'] as const) moveJob(repo, job.id, to);
+    const fresh = readJob(repo, job.id)!;
+    await Promise.all([ensureRunner(fresh), ensureRunner(fresh), ensureRunner(readJob(repo, job.id)!)]);
+    expect(spawned).toHaveLength(1);
+    expect(readJob(repo, job.id)?.childSessionIds).toHaveLength(1);
+  });
+
+  it('archived rounds never overwrite one another', async () => {
+    const { archiveRound } = await import('../src/main/factory-jobs-store');
+    const job = createJob({ repo, ask: 'Rounds', factory: defaultFactory(), parentSessionId: null });
+    const dir = jobDir(repo, job.id);
+    fs.writeFileSync(path.join(dir, 'decision.md'), 'VERDICT: FAIL · one');
+    archiveRound(repo, job.id, ['decision.md']);
+    fs.writeFileSync(path.join(dir, 'decision.md'), 'VERDICT: FAIL · two');
+    archiveRound(repo, job.id, ['decision.md']);
+    expect(fs.readFileSync(path.join(dir, 'round-1', 'decision.md'), 'utf8')).toBe('VERDICT: FAIL · one');
+    expect(fs.readFileSync(path.join(dir, 'round-2', 'decision.md'), 'utf8')).toBe('VERDICT: FAIL · two');
+  });
+
+  it('a stalled job whose runner writes again resumes by itself, keeping its runner', async () => {
+    const { stepJob } = await import('../src/main/factory-jobs-watch');
+    const job = createJob({ repo, ask: 'Slow build', factory: defaultFactory(), parentSessionId: null });
+    for (const to of ['intake', 'building', 'stalled'] as const) moveJob(repo, job.id, to, undefined, Date.now() - 60_000);
+    const after = stepJob(repo, job.id, Date.now(), () => Date.now());
+    expect(after).toMatchObject({ state: 'building' });
+    expect(after?.runnerAt).toBe(after?.events.length);
+  });
+});

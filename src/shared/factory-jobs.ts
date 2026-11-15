@@ -70,6 +70,7 @@ export interface Job {
   guidance: string | null;
   takenOver?: boolean; // she opened its copy; "I fixed it" can send it back to review
   runnerAt?: number; // events.length when Petal last started a runner, so each start happens once
+  runnerPid?: number | null; // that runner's process, so Discard can stop it
   merge: MergeRecord | null;
   prUrl: string | null;
   events: JobEvent[];
@@ -122,7 +123,7 @@ export function firstLine(text: string): FirstLine | null {
 }
 
 export const REVIEW_FILE = /^review-([a-z0-9-]+)\.md$/;
-export const reviewFile = (name: string): string => `review-${name}.md`;
+const reviewFile = (name: string): string => `review-${name}.md`;
 export const HANDOFF_FILES = ['request.md', 'spec.md', 'build.md', 'decision.md'] as const;
 
 // The files in a job's folder, name → first line (null when the file has none Petal can read).
@@ -147,16 +148,6 @@ export function afterReview(job: Pick<Job, 'rework' | 'reworkCap' | 'risky'>, ve
   }
   const hits = riskyHits(files, job.risky);
   return hits.length ? { to: 'approve', failed, hits, reason: `Touches ${hits[0].label} (${hits[0].file})` } : { to: 'merging', failed, hits, reason: 'Low risk, merging' };
-}
-
-// Where Resume restarts: the furthest stage whose file carries a verdict or status.
-export function resumeState(handoffs: Handoffs, expectedReviewers: readonly string[]): JobState {
-  if (handoffs['decision.md']?.kind === 'VERDICT') return handoffs['decision.md'].value === 'PASS' ? 'merging' : 'rework';
-  const reviews = expectedReviewers.map((name) => handoffs[reviewFile(name)]);
-  if (reviews.length && reviews.every((r) => r?.kind === 'VERDICT')) return 'reviewing'; // afterReview decides from here
-  if (handoffs['build.md']?.kind === 'STATUS' && handoffs['build.md'].value === 'done') return 'reviewing';
-  if ('spec.md' in handoffs) return 'building';
-  return 'intake';
 }
 
 // ---- risky paths and visual files

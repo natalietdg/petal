@@ -15,6 +15,7 @@ const SHIP_RETRY_MS = 10_000; // a blocked merge (dirty main) is retried this of
 
 export interface WatchDeps {
   factoryFor: (repo: string) => Factory | null; // the factory a new job starts with
+  progressOf?: (job: Job) => number; // the runner's last transcript write, so a long build isn't a stall
   now?: () => number;
 }
 
@@ -59,8 +60,12 @@ export function adoptRequests(deps: WatchDeps): Job[] {
       let request;
       try { request = parseRequest(fs.readFileSync(path.join(dir, 'request.md'), 'utf8')); } catch { continue; }
       if (!request || repoKey(request.repo) !== key || !fs.existsSync(path.join(request.repo, '.git'))) continue;
-      const factory = deps.factoryFor(request.repo) ?? defaultFactory();
-      made.push(createJob({ repo: request.repo, ask: request.ask, factory, parentSessionId: request.sessionId, id, now: (deps.now ?? Date.now)() }));
+      try { // one bad folder (a link, a full disk) never stops the other jobs
+        const factory = deps.factoryFor(request.repo) ?? defaultFactory();
+        made.push(createJob({ repo: request.repo, ask: request.ask, factory, parentSessionId: request.sessionId, id, now: (deps.now ?? Date.now)() }));
+      } catch (error) {
+        console.warn(`[petal] factory request ${dir}:`, (error as Error).message);
+      }
     }
   }
   return made;
@@ -69,15 +74,22 @@ export function adoptRequests(deps: WatchDeps): Job[] {
 const lastShipTry = new Map<string, number>();
 
 // One pass over one job: follow its files, merge when it reaches Merge, stall it when silent. Returns it when it changed.
-export function stepJob(repo: string, id: string, all: readonly Job[], now: number): Job | null {
+export function stepJob(repo: string, id: string, now: number, progressOf: (job: Job) => number = () => 0): Job | null {
   let job = readJob(repo, id);
   if (!job || isFinished(job.state)) return null;
   const start = JSON.stringify(job);
+  const progress = Math.max(job.progressAt, lastProgress(repo, id), progressOf(job));
+  // Files or the runner moved after a stall: it was only slow. Back where it was, with the runner it already has.
+  if (job.state === 'stalled' && job.stalledFrom && progress > job.updatedAt) {
+    const back = move(job, job.stalledFrom, now, 'Progress again');
+    if (back.ok) job = writeJob({ ...back.job, runnerAt: back.job.events.length });
+  }
   for (let i = 0; i < MAX_STEPS; i++) {
     const needsDiff = job.state === 'reviewing';
-    const step = reconcile(job, readHandoffs(repo, id), { changed: needsDiff ? changedFiles(job) : [], freeSlot: hasFreeSlot(all.filter((j) => j.id !== id), repo) });
+    const others = listJobs(repo).filter((j) => j.id !== id); // read again each step, so two jobs can't take one slot
+    const step = reconcile(job, readHandoffs(repo, id), { changed: needsDiff ? changedFiles(job) : [], freeSlot: hasFreeSlot(others, repo) });
     if (!step) break;
-    if (step.archive?.length) archiveRound(repo, id, step.archive, job.rework + 1);
+    if (step.archive?.length) archiveRound(repo, id, step.archive);
     const moved = move({ ...job, ...step.patch }, step.to, now, step.note);
     if (!moved.ok) break;
     job = writeJob(moved.job);
@@ -91,7 +103,7 @@ export function stepJob(repo: string, id: string, all: readonly Job[], now: numb
       job = writeJob({ ...job, blocked: job.shipMode === 'pr' ? 'Couldn’t push the branch. Take over to see why.' : 'Couldn’t merge. Take over to see why.', updatedAt: now });
     }
   }
-  const progressed = { ...job, progressAt: Math.max(job.progressAt, lastProgress(repo, id)) };
+  const progressed = { ...job, progressAt: Math.max(job.progressAt, lastProgress(repo, id), progressOf(job)) };
   if (isStalled(progressed, now)) {
     const stalled = move(progressed, 'stalled', now, 'No progress for 10 min');
     if (stalled.ok) job = writeJob(stalled.job);
@@ -104,11 +116,10 @@ export function tick(deps: WatchDeps): Job[] {
   const now = (deps.now ?? Date.now)();
   const changed: Job[] = [...adoptRequests(deps)];
   for (const repo of jobRepos()) {
-    const all = listJobs(repo);
-    for (const job of all) {
+    for (const job of listJobs(repo)) {
       if (isFinished(job.state)) continue;
       try {
-        const after = stepJob(repo, job.id, all, now);
+        const after = stepJob(repo, job.id, now, deps.progressOf);
         if (after) changed.push(after);
       } catch (error) {
         console.warn(`[petal] factory job ${job.id} in ${jobDir(repo, job.id)}:`, (error as Error).message);

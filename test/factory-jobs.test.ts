@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_RISKY, defaultFactory } from '../src/shared/factory';
 import {
   needsRunner, JOB_STATES, STALL_MS, afterReview, canMove, defaultShipMode, firstLine, globToRegExp, isStalled, isVisualFile, mergeCheck,
-  move, newJobId, resumeState, reviewersFor, riskyHits, startable, stateLabel, titleOf, type Job, type JobState,
+  move, newJobId, reviewersFor, riskyHits, startable, stateLabel, titleOf, type Job, type JobState,
 } from '../src/shared/factory-jobs';
 
 const T0 = Date.UTC(2026, 10, 15, 9, 0, 0);
@@ -163,16 +163,6 @@ describe('hand-off files', () => {
     expect(firstLine('STATUS: done · tests pass')).toEqual({ kind: 'STATUS', value: 'done', rest: 'tests pass' });
     expect(firstLine('VERDICT: MAYBE')).toBeNull();
     expect(firstLine('# Review\nVERDICT: PASS')).toBeNull(); // only the first line counts
-  });
-
-  it('resumes from the furthest file that carries a verdict or status', () => {
-    const reviewers = ['ux', 'code'];
-    expect(resumeState({}, reviewers)).toBe('intake');
-    expect(resumeState({ 'spec.md': null }, reviewers)).toBe('building');
-    expect(resumeState({ 'spec.md': null, 'build.md': { kind: 'STATUS', value: 'working', rest: '' } }, reviewers)).toBe('building');
-    expect(resumeState({ 'spec.md': null, 'build.md': { kind: 'STATUS', value: 'done', rest: '' } }, reviewers)).toBe('reviewing');
-    expect(resumeState({ 'review-ux.md': pass, 'review-code.md': fail }, reviewers)).toBe('reviewing');
-    expect(resumeState({ 'decision.md': pass }, reviewers)).toBe('merging');
   });
 });
 

@@ -64,8 +64,16 @@ export function parseJob(text: string): Job | null {
   return raw as unknown as Job;
 }
 
+// A job is only believed where Petal would have put it: its own repo, id, branch and copy. job.json sits in a folder
+// Claude can write, so a hand-written one naming another repo, branch or folder is never run, merged or pushed.
+export const isOwnJob = (job: Job, repo: string, id: string): boolean =>
+  job.repo === repo && job.id === id && job.branch === branchOf(id) && job.worktree === worktreeOf(repo, id);
+
 export function readJob(repo: string, id: string): Job | null {
-  try { return parseJob(fs.readFileSync(jobFile(repo, id), 'utf8')); } catch { return null; }
+  if (!/^[a-z0-9-]{1,80}$/.test(id)) return null;
+  let job: Job | null;
+  try { job = parseJob(fs.readFileSync(jobFile(repo, id), 'utf8')); } catch { return null; }
+  return job && isOwnJob(job, repo, id) ? job : null;
 }
 
 export function listJobs(repo: string): Job[] {
@@ -94,17 +102,20 @@ export function readHandoffs(repo: string, id: string): Handoffs {
   return out;
 }
 
-// Newest change among the job's files, for stall detection.
+// Newest change among the hand-off files, for stall detection. job.json is Petal's own write, never progress.
 export function lastProgress(repo: string, id: string): number {
   const dir = jobDir(repo, id);
   try {
-    return Math.max(0, ...fs.readdirSync(dir).map((n) => fs.statSync(path.join(dir, n)).mtimeMs));
+    return Math.max(0, ...fs.readdirSync(dir).filter((n) => n !== 'job.json').map((n) => fs.statSync(path.join(dir, n)).mtimeMs));
   } catch { return 0; }
 }
 
-// A finished round's files move into round-<n>/, so the next round's verdicts start clean and History keeps the old ones.
-export function archiveRound(repo: string, id: string, names: readonly string[], round: number): void {
+// A finished round's files move into the next free round-<n>/, so the next round's verdicts start clean and no
+// earlier round is ever written over.
+export function archiveRound(repo: string, id: string, names: readonly string[]): void {
   const dir = jobDir(repo, id);
+  let round = 1;
+  while (fs.existsSync(path.join(dir, `round-${round}`))) round++;
   const into = path.join(dir, `round-${round}`);
   for (const name of names) {
     const from = path.join(dir, name);
@@ -139,12 +150,16 @@ export function changedFiles(job: Pick<Job, 'repo' | 'branch'>): string[] {
   return out ? out.split('\n').filter(Boolean) : [];
 }
 
-export function createWorktree(repo: string, id: string): string {
-  const dir = worktreeOf(repo, id);
-  fs.mkdirSync(path.dirname(dir), { recursive: true });
-  git(repo, ['worktree', 'add', '-b', branchOf(id), dir, mainBranchOf(repo)]);
-  return dir;
+// The job's copy on its branch: made from main the first time, from the branch after that (a Take over, a restart).
+export function ensureWorktree(job: Pick<Job, 'repo' | 'branch' | 'worktree'>): string {
+  if (fs.existsSync(job.worktree)) return job.worktree;
+  fs.mkdirSync(path.dirname(job.worktree), { recursive: true });
+  const hasBranch = tryGit(job.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${job.branch}`]) !== null;
+  git(job.repo, hasBranch ? ['worktree', 'add', '--', job.worktree, job.branch] : ['worktree', 'add', '-b', job.branch, '--', job.worktree, mainBranchOf(job.repo)]);
+  return job.worktree;
 }
+
+export const createWorktree = (repo: string, id: string): string => ensureWorktree({ repo, branch: branchOf(id), worktree: worktreeOf(repo, id) });
 
 export function removeWorktree(job: Pick<Job, 'repo' | 'worktree' | 'branch'>, deleteBranch: boolean): void {
   if (fs.existsSync(job.worktree)) tryGit(job.repo, ['worktree', 'remove', '--force', job.worktree]);
@@ -185,10 +200,11 @@ export function shipJob(repo: string, id: string, now = Date.now()): { job: Job;
   const job = readJob(repo, id);
   if (!job) throw new Error('That job is gone.');
   if (job.state !== 'merging') throw new Error('Only a job at Merge can ship.');
-  const check = mergeCheck(job.shipMode, checkoutState(repo, job.branch), path.basename(repo));
-  if (!check.ok) return { job: writeJob({ ...job, blocked: check.reason, updatedAt: now }), check };
+  const mode = shipSetting(repo).mode; // the repo's setting at ship time, never a mode a job file claims
+  const check = mergeCheck(mode, checkoutState(repo, job.branch), path.basename(repo));
+  if (!check.ok) return { job: writeJob({ ...job, shipMode: mode, blocked: check.reason, updatedAt: now }), check };
   if (check.action === 'push') {
-    git(job.worktree, ['push', '-u', 'origin', job.branch]);
+    git(job.worktree, ['push', '-u', 'origin', `refs/heads/${job.branch}:refs/heads/${job.branch}`]);
     const done = move({ ...job, prUrl: prCreateUrl(tryGit(repo, ['remote', 'get-url', 'origin']), job.branch) }, 'done', now);
     if (!done.ok) throw new Error(done.problem);
     return { job: writeJob(done.job), check };
@@ -202,7 +218,11 @@ export function shipJob(repo: string, id: string, now = Date.now()): { job: Job;
     return { job: writeJob({ ...job, blocked: reason, updatedAt: now }), check: { ok: false, reason } };
   }
   const commit = git(repo, ['rev-parse', 'HEAD']);
-  const done = move({ ...job, merge: { base, commit, at: now } }, 'done', now);
+  if (commit === base) { // nothing new on the branch: no merge commit, so nothing Undo could safely revert
+    const reason = 'Nothing to merge: the branch has no new commits. Take over or Discard.';
+    return { job: writeJob({ ...job, blocked: reason, updatedAt: now }), check: { ok: false, reason } };
+  }
+  const done = move({ ...job, shipMode: mode, merge: { base, commit, at: now } }, 'done', now);
   if (!done.ok) throw new Error(done.problem);
   removeWorktree(job, false); // the branch stays so Undo merge and History can still name it
   return { job: writeJob(done.job), check };
@@ -213,9 +233,15 @@ export function undoMerge(repo: string, id: string, now = Date.now()): Job {
   const job = readJob(repo, id);
   if (!job?.merge || job.state !== 'done' || job.shipMode !== 'local-merge') throw new Error('Only a job Petal merged locally can be undone.');
   if (job.merge.undoneBy) throw new Error('This merge was already undone.');
-  const check = mergeCheck('local-merge', checkoutState(repo, job.branch), path.basename(repo));
-  if (!check.ok && !/branch is gone/.test(check.reason)) throw new Error(check.reason.replace('to merge', 'to undo the merge'));
-  git(repo, ['revert', '-m', '1', '--no-edit', job.merge.commit]);
+  // The same clean-main rule as merging, whether or not the job's branch still exists.
+  const check = mergeCheck('local-merge', { ...checkoutState(repo, job.branch), jobBranchExists: true }, path.basename(repo));
+  if (!check.ok) throw new Error(check.reason.replace('to merge', 'to undo the merge'));
+  try {
+    git(repo, ['revert', '-m', '1', '--no-edit', job.merge.commit]);
+  } catch {
+    tryGit(repo, ['revert', '--abort']); // never leave her main checkout mid-revert
+    throw new Error('Undo would conflict with later changes on main. Revert it by hand.');
+  }
   return writeJob({ ...job, merge: { ...job.merge, undoneBy: git(repo, ['rev-parse', 'HEAD']) }, updatedAt: now, events: [...job.events, { at: now, from: 'done', to: 'done', note: 'merge undone' }] });
 }
 

@@ -4,7 +4,7 @@ import { BrowserWindow } from 'electron';
 import { handle, send } from './ipc';
 import path from 'node:path';
 import { jobRepos, tick } from './factory-jobs-watch';
-import { ensureRunners, jobAction, jobSignals, jobsView, markSeen } from './factory-jobs-view';
+import { ensureRunners, jobAction, jobSignals, jobsView, markSeen, runnerProgress } from './factory-jobs-view';
 import { listJobs, saveShipMode, writeJob } from './factory-jobs-store';
 import { recordActivity } from './activity-feed';
 import * as needsYouHub from './needs-you-hub';
@@ -31,7 +31,7 @@ export function factoryFor(repo: string) {
 export function startJobWatch(onChange: () => void = () => {}): () => void {
   const timer = setInterval(() => {
     let moved: Job[] = [];
-    try { moved = tick({ factoryFor }); } catch (error) { console.warn('[petal] factory watch:', (error as Error).message); }
+    try { moved = tick({ factoryFor, progressOf: runnerProgress }); } catch (error) { console.warn('[petal] factory watch:', (error as Error).message); }
     void ensureRunners().then((started) => { if (started.length) jobsMoved(started); }).catch((error: Error) => console.warn('[petal] factory runners:', error.message));
     jobsMoved(moved); // every tick: the lane also learns of jobs that appeared without moving (after a restart)
     if (moved.length) onChange();
@@ -88,7 +88,7 @@ export function registerFactoryIpc({ activeSession }: { activeSession: ActiveSes
   };
   handle('factory:jobs', (event) => jobsView(activeRepo(event.sender.id)));
   handle('factory:job-action', async (event, { repo, id, action, note }) => {
-    if (!JOB_ACTIONS.includes(action) || typeof id !== 'string') throw new Error('Unknown job action.');
+    if (!JOB_ACTIONS.includes(action) || typeof id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(id)) throw new Error('Unknown job action.');
     const result = await jobAction(known(event.sender.id, repo), id, action, typeof note === 'string' ? note : undefined);
     jobsMoved(result.job ? [result.job] : []);
     // Take over: the job's copy opens as an ordinary tab with Claude in it. Snapshot runs type a no-op instead.

@@ -198,3 +198,39 @@ describe('moving a saved checklist onto the spine', () => {
     expect(migrateSaved({ claudeDir, repo: null })).toBe(false);
   });
 });
+
+describe('the code review’s git cases', () => {
+  it('a branch with nothing new is not recorded as merged', () => {
+    const job = createJob({ repo, ask: 'Nothing', factory: defaultFactory(), parentSessionId: null });
+    createWorktree(repo, job.id);
+    toMerging(job.id);
+    const { job: after, check } = shipJob(repo, job.id);
+    expect(check.ok).toBe(false);
+    expect(after).toMatchObject({ state: 'merging', merge: null });
+    expect(after.blocked).toMatch(/^Nothing to merge/);
+  });
+
+  it('Undo refuses a checkout on another branch even after the job branch is deleted', () => {
+    const job = createJob({ repo, ask: 'Add b', factory: defaultFactory(), parentSessionId: null });
+    createWorktree(repo, job.id);
+    build(job.id);
+    toMerging(job.id);
+    shipJob(repo, job.id);
+    sh(repo, 'branch', '-D', job.branch);
+    sh(repo, 'switch', '-q', '-c', 'feature');
+    const head = sh(repo, 'rev-parse', 'HEAD');
+    expect(() => undoMerge(repo, job.id)).toThrow('Switch');
+    expect(sh(repo, 'rev-parse', 'HEAD')).toBe(head);
+  });
+
+  it('PR mode follows the repo’s setting at ship time, not a mode the job file claims', () => {
+    const job = createJob({ repo, ask: 'Add b', factory: defaultFactory(), parentSessionId: null });
+    writeJob({ ...readJob(repo, job.id)!, shipMode: 'pr' }); // the repo is local-merge
+    createWorktree(repo, job.id);
+    build(job.id);
+    toMerging(job.id);
+    const { job: done, check } = shipJob(repo, job.id);
+    expect(check).toEqual({ ok: true, action: 'merge' });
+    expect(done.shipMode).toBe('local-merge');
+  });
+});

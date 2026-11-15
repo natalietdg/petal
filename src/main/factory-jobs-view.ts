@@ -1,6 +1,6 @@
 // Factory › Jobs from main: every repo's jobs with labels and spend, the Waiting lane's job rows, her buttons, and the
 // job runner Petal starts when a button sends a job back to work (a headless claude in the job's worktree).
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,10 +11,9 @@ import { prepareRepoDir, repoDir } from './petal-home';
 import { isSnapshotRun } from './snapshot-mode';
 import * as links from './subsession-links';
 import {
-  discardJob, git, jobDir, listJobs, readHandoffs, readJob, shipSetting, undoMerge, worktreeOf, writeJob, mainBranchOf,
+  changedFiles, discardJob, ensureWorktree, jobDir, listJobs, moveJob, readHandoffs, readJob, shipSetting, undoMerge, writeJob,
 } from './factory-jobs-store';
 import { jobRepos, stepJob } from './factory-jobs-watch';
-import { changedFiles, moveJob } from './factory-jobs-store';
 import { repoKey } from './petal-repos';
 import { sumUsage, totalTokens } from '../shared/token-usage';
 import { jobSessionId, type SessionSignals } from '../shared/needs-you';
@@ -104,35 +103,55 @@ export function jobSignals(): SessionSignals[] {
 
 // ---- the runner
 
-export const runnerStarts: { jobId: string; cwd: string; args: string[] }[] = []; // snapshot runs record instead of starting claude
-
-function ensureWorktree(job: Job): void {
-  if (fs.existsSync(job.worktree)) return;
-  fs.mkdirSync(path.dirname(job.worktree), { recursive: true });
-  const hasBranch = (() => { try { git(job.repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${job.branch}`]); return true; } catch { return false; } })();
-  git(job.repo, hasBranch ? ['worktree', 'add', job.worktree, job.branch] : ['worktree', 'add', '-b', job.branch, job.worktree, mainBranchOf(job.repo)]);
-}
+const starting = new Set<string>(); // jobs whose runner is being started right now: a second call waits its turn
+const runnerArg = (id: string): string => `Use the factory skill: /factory run ${id}`;
 
 // A headless claude in the job's worktree running "/factory run <job>", nested under the session that started the job.
+// runnerAt is written before anything waits, so the next tick or a button press can't start a second one.
 export async function startRunner(job: Job): Promise<Job> {
-  ensureWorktree(job);
-  const sessionId = randomUUID();
-  const args = ['-p', `Use the factory skill: /factory run ${job.id}`, '--permission-mode', 'acceptEdits', '--session-id', sessionId];
-  if (isSnapshotRun()) runnerStarts.push({ jobId: job.id, cwd: job.worktree, args });
-  else {
-    const claude = await claudePath();
-    if (!claude) throw new Error('Claude Code isn’t installed, so the job can’t restart. Install it, then press the button again.');
-    const child = spawn(claude, args, { cwd: job.worktree, env: cleanEnv(claude), stdio: 'ignore', detached: true });
-    child.on('error', (error) => console.warn(`[petal] factory runner for ${job.id}:`, error.message));
-    child.unref();
+  if (starting.has(job.id)) return job;
+  starting.add(job.id);
+  try {
+    const sessionId = randomUUID();
+    let current = writeJob({ ...job, runnerAt: job.events.length, childSessionIds: [...job.childSessionIds, sessionId] });
+    ensureWorktree(current);
+    const args = ['-p', runnerArg(job.id), '--permission-mode', 'acceptEdits', '--session-id', sessionId];
+    let pid: number | null = null;
+    if (!isSnapshotRun()) { // snapshot runs never start claude
+      const claude = await claudePath();
+      if (!claude) throw new Error('Claude Code isn’t installed, so the job can’t run. Install it, then press Resume.');
+      const child = spawn(claude, args, { cwd: current.worktree, env: cleanEnv(claude), stdio: 'ignore', detached: true });
+      child.on('error', (error) => console.warn(`[petal] factory runner for ${job.id}:`, error.message));
+      child.unref();
+      pid = child.pid ?? null;
+    }
+    if (job.parentSessionId) links.add([{ childId: sessionId, parentId: job.parentSessionId, cwd: current.worktree, name: job.title, at: Date.now() }]);
+    current = readJob(job.repo, job.id) ?? current; // a move made while claude was being found is kept
+    return writeJob({ ...current, runnerPid: pid });
+  } finally {
+    starting.delete(job.id);
   }
-  if (job.parentSessionId) links.add([{ childId: sessionId, parentId: job.parentSessionId, cwd: job.worktree, name: job.title, at: Date.now() }]);
-  return writeJob({ ...job, childSessionIds: [...job.childSessionIds, sessionId], runnerAt: job.events.length });
 }
 
 // The one place a runner starts: a job that just entered a stage that needs one, once per move.
 export async function ensureRunner(job: Job): Promise<Job> {
   return needsRunner(job) ? startRunner(job) : job;
+}
+
+// Discard stops the job's runner, but only a process that is still that job's runner (a pid can be reused).
+function stopRunner(job: Job): void {
+  if (!job.runnerPid) return;
+  try {
+    const command = execFileSync('ps', ['-o', 'command=', '-p', String(job.runnerPid)], { encoding: 'utf8' });
+    if (command.includes(`/factory run ${job.id}`)) process.kill(-job.runnerPid, 'SIGTERM'); // its whole group: claude and its tools
+  } catch { /* already gone */ }
+}
+
+// The runner's newest transcript write, so a long build that only talks to Claude never looks stalled.
+export function runnerProgress(job: Job, claudeDir: string | null = allowedClaudeHome()): number {
+  if (!claudeDir) return 0;
+  const dir = path.join(claudeDir, 'projects', repoKey(job.worktree));
+  try { return Math.max(0, ...fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')).map((f) => fs.statSync(path.join(dir, f)).mtimeMs)); } catch { return 0; }
 }
 
 // Every tick: queued jobs whose spec is ready start as slots free, oldest first; then every job owed a runner gets one.
@@ -170,18 +189,18 @@ function approveSpec(job: Job): void {
 const oneLine = (note: string | undefined): string => (note ?? '').replace(/\s+/g, ' ').trim().slice(0, 500);
 
 // Moves the job now, so a runner started next reads the new state, not the old one.
-const settle = (job: Job): Job => stepJob(job.repo, job.id, listJobs(job.repo), Date.now()) ?? readJob(job.repo, job.id) ?? job;
+const settle = (job: Job): Job => stepJob(job.repo, job.id, Date.now(), runnerProgress) ?? readJob(job.repo, job.id) ?? job;
 
 export interface ActionResult { job: Job | null; takeOver?: string }
 
 export async function jobAction(repo: string, id: string, action: JobAction, note?: string): Promise<ActionResult> {
   const job = readJob(repo, id);
   if (!job) throw new Error('That job is gone.');
-  if (worktreeOf(repo, id) !== job.worktree) throw new Error('That job’s copy isn’t where Petal keeps it.');
+  // readJob already refused a job filed anywhere but its own repo, branch and copy.
   switch (action) {
     case 'approve': {
       if (job.state === 'spec') { approveSpec(job); return { job: await ensureRunner(settle(job)) }; }
-      if (job.state !== 'approve' && job.state !== 'escalated') throw new Error('Nothing here waits for approval.');
+      if (job.state !== 'approve' && !(job.state === 'escalated' && job.takenOver)) throw new Error('Nothing here waits for approval.');
       writeHandoff(job, 'decision.md', 'VERDICT: PASS\n');
       return { job: await ensureRunner(settle(job)) };
     }
@@ -197,9 +216,10 @@ export async function jobAction(repo: string, id: string, action: JobAction, not
       if (job.state !== 'stalled' || !job.stalledFrom) throw new Error('Only a stalled job can resume.');
       const moved = move(job, job.stalledFrom, Date.now(), 'Resumed');
       if (!moved.ok) throw new Error(moved.problem);
-      return { job: await ensureRunner(settle(writeJob(moved.job))) };
+      // The runner starts first, then the job catches up with its files; the runner picks up whatever stage that is.
+      return { job: settle(await ensureRunner(writeJob(moved.job))) };
     }
-    case 'discard': return { job: discardJob(repo, id) };
+    case 'discard': stopRunner(job); return { job: discardJob(repo, id) };
     case 'undo-merge': return { job: undoMerge(repo, id) };
     case 'take-over': {
       ensureWorktree(job);

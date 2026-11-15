@@ -232,7 +232,7 @@ async function jobsScreen(kit: Kit, win: BrowserWindow, repo: string): Promise<v
   const jobFile = petalFileOf(repo, 'factory', 'jobs', '20261115-export-csv', 'job.json');
   const moved = await waitFor(() => { const j = JSON.parse(fs.readFileSync(jobFile, 'utf8')); return j.state === 'rework' ? j : null; }, 8000);
   check(moved?.guidance === 'Add a test for an empty board' && moved?.childSessionIds?.length === 1, `guidance sends it to rework with a runner: ${JSON.stringify(moved && { state: moved.state, guidance: moved.guidance, runners: moved.childSessionIds })}`);
-  check(fs.existsSync(petalFileOf(repo, 'factory', 'jobs', '20261115-export-csv', 'round-3', 'review-code.md')), 'the failed round moves into round-3/ (its third try)');
+  check(fs.existsSync(petalFileOf(repo, 'factory', 'jobs', '20261115-export-csv', 'round-1', 'review-code.md')), 'the failed round moves into the first free round-1/');
   check(repoUntouched(repo), 'the repo itself gets nothing of Petal’s');
 
   // Discard asks inline, then the job lands under Finished.
