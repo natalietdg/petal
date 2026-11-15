@@ -218,12 +218,14 @@
 /* Wide windows: the text column stays 760px; a reply's Doing / Recommend / Next pin in a column on its left. */
 @media (min-width: 1200px) {
   [data-reading="book"] :is(#reader, #reader-head, #composer) { --reading-measure: 760px; --book-pin: 260px; --book-pin-gap: 64px; }
-  [data-reading="book"]:has(#latest > .prose > .status-block) :is(#reader, #reader-head) { --reading-measure: calc(760px + var(--book-pin) + var(--book-pin-gap)); }
+  /* The pin column hangs in the left padding, so the text and the reply box keep one 760px axis. */
+  [data-reading="book"]:has(#latest > .prose > .status-block) :is(#reader, #reader-head, #composer) { --reading-pad-start: calc(56px + var(--book-pin) + var(--book-pin-gap)); }
   [data-reading="book"] #latest > .prose:has(> .status-block) {
     display: grid;
     grid-template-columns: var(--book-pin) minmax(0, 1fr);
     column-gap: var(--book-pin-gap);
     align-items: start;
+    margin-left: calc(-1 * (var(--book-pin) + var(--book-pin-gap)));
   }
   [data-reading="book"] #latest > .prose:has(> .status-block) > * { grid-column: 2; }
   [data-reading="book"] #latest > .prose > .status-block {
@@ -238,7 +240,6 @@
     border-top: 1px solid var(--rule);
   }
   [data-reading="book"] #latest > .prose > .status-block .status-chip + * { margin-bottom: 0.9em; }
-  [data-reading="book"]:has(#latest > .prose > .status-block) :is(#older, #reader-status) { margin-left: calc(var(--book-pin) + var(--book-pin-gap)); }
   [data-reading="book"]:has(#latest > .prose > .status-block) #reader-status-strip { display: none; } /* pinned beside the text instead */
   /* Its fold bar too, when the conclusion pin and PRs it also folds are absent. */
   [data-reading="book"]:has(#latest > .prose > .status-block):has(#reader-conclusion-pin[hidden]):has(#reader-prs[hidden]) #reader-banners-bar { display: none; }
