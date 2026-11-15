@@ -78,4 +78,11 @@
 /* Start as: plain Claude or one of her agents, session mode only. */
 .repos-start-as { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 .repos-start-as[hidden] { display: none; }
+/* New worktree: a tick, then its optional name; the same muted 13px row as Start as. */
+.repos-worktree { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.repos-worktree[hidden], .repos-worktree-name[hidden] { display: none; }
+.repos-worktree-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.repos-worktree-toggle input { margin: 0; accent-color: var(--link); }
+.repos-worktree-name { flex: 1 1 160px; min-width: 0; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: var(--reader-fg); font: inherit; }
+.repos-worktree-name:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
 .repos-agent { flex: 1; min-width: 0; font: inherit; color: var(--reader-fg); }

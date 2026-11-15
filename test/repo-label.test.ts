@@ -33,7 +33,7 @@ describe('repoLabel', () => {
     expect(repoLabel(repo)).toBe('sweep · a1b2c3d');
   });
 
-  it('follows a worktree .git pointer file to its own HEAD', () => {
+  it('follows a worktree .git pointer file to its own HEAD, named after its main checkout so the Board groups it there', () => {
     const root = tempDir();
     const gitDir = path.join(root, 'main', '.git', 'worktrees', 'wt');
     fs.mkdirSync(gitDir, { recursive: true });
@@ -41,7 +41,7 @@ describe('repoLabel', () => {
     const worktree = path.join(root, 'wt');
     fs.mkdirSync(worktree);
     fs.writeFileSync(path.join(worktree, '.git'), `gitdir: ${gitDir}\n`);
-    expect(repoLabel(worktree)).toBe('wt · wt-branch');
+    expect(repoLabel(worktree)).toBe('main · wt-branch');
   });
 
   it('is just the folder name outside git, and null without a cwd', () => {

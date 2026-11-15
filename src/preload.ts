@@ -260,7 +260,7 @@ const api = {
   repos: {
     list: (tabId: TabId) => invoke('repos:list', { tabId }),
     open: (tabId: TabId, where: string | RepoStartTarget) => invoke('repos:open', typeof where === 'string' ? { tabId, path: where } : { tabId, target: where }),
-    start: (tabId: TabId, target: RepoStartTarget, agent: string | null = null) => invoke('repos:start', { tabId, target, agent }),
+    start: (tabId: TabId, target: RepoStartTarget, agent: string | null = null, worktree: string | null = null) => invoke('repos:start', { tabId, target, agent, worktree }),
     agents: () => invoke('repos:agents'),
   },
   flow: {

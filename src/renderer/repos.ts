@@ -35,10 +35,31 @@ const startAs = el('label', 'repos-start-as');
 const agentPick = el('select', 'repos-agent');
 startAs.append(el('span', null, 'Start as'), agentPick);
 startAs.hidden = true;
+// Session mode only, opt-in: Claude starts in its own worktree under ~/.petal/worktrees, on a new branch.
+const worktreeRow = el('div', 'repos-worktree');
+const worktreeLabel = el('label', 'repos-worktree-toggle');
+const worktreeTick = el('input');
+worktreeTick.type = 'checkbox';
+worktreeLabel.append(worktreeTick, el('span', null, 'New worktree'));
+const worktreeNameInput = el('input', 'repos-worktree-name');
+worktreeNameInput.type = 'text';
+worktreeNameInput.placeholder = 'Name (optional)';
+worktreeNameInput.setAttribute('aria-label', 'Worktree name');
+worktreeNameInput.spellcheck = false;
+worktreeNameInput.hidden = true;
+worktreeRow.append(worktreeLabel, worktreeNameInput);
+worktreeRow.hidden = true;
+worktreeTick.addEventListener('change', () => {
+  worktreeNameInput.hidden = !worktreeTick.checked;
+  hint.textContent = sessionHint();
+  search.focus();
+});
+// Enter in the name field starts the selected row, like Enter in the search.
+worktreeNameInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); void choose(shown[selected]); } });
 const list = el('div', 'repos-list');
 list.setAttribute('role', 'listbox');
 const status = el('p', 'repos-status');
-card.append(search, startAs, hint, list, status);
+card.append(search, startAs, worktreeRow, hint, list, status);
 view.append(card);
 
 let repos: Repo[] = [];
@@ -88,7 +109,7 @@ async function load(): Promise<void> {
     return;
   }
   repos = result.repos;
-  hint.textContent = mode === 'session' ? SESSION_HINT : result.claudeLive ? 'Claude is running in this tab, so the folder opens in a new tab.' : 'Enter switches this tab’s shell into that folder.';
+  hint.textContent = mode === 'session' ? sessionHint() : result.claudeLive ? 'Claude is running in this tab, so the folder opens in a new tab.' : 'Enter switches this tab’s shell into that folder.';
   hint.classList.toggle('new-tab', mode === 'session' || result.claudeLive);
   status.textContent = describe(result);
   render();
@@ -100,13 +121,16 @@ const targetOf = (row: Row): RepoStartTarget => ('kind' in row ? { kind: row.kin
 async function choose(row: Row | undefined): Promise<void> {
   if (!row || !tabId) return;
   const target = targetOf(row);
-  const result = mode === 'session' ? await window.pastel.repos.start(tabId, target, agentPick.value || null) : await window.pastel.repos.open(tabId, target);
+  const worktree = worktreeTick.checked ? worktreeNameInput.value : null;
+  const result = mode === 'session' ? await window.pastel.repos.start(tabId, target, agentPick.value || null, worktree) : await window.pastel.repos.open(tabId, target);
   if (isIpcError(result)) status.textContent = `Couldn’t open it: ${result.error}`;
   else if ('note' in result) status.textContent = result.note;
   else close();
 }
 
 const SESSION_HINT = 'Enter starts Claude in a new tab, in that folder.';
+const WORKTREE_HINT = 'Enter starts Claude in a new tab, in a new worktree of that repo on its own branch.';
+const sessionHint = (): string => (worktreeTick.checked ? WORKTREE_HINT : SESSION_HINT);
 
 // Lists her agents each time the palette opens, so a file added a minute ago is there.
 async function loadAgents(): Promise<void> {
@@ -129,7 +153,11 @@ export function open(query = '', nextMode: Mode = 'open'): void {
   search.value = query;
   selected = 0;
   status.textContent = '';
-  hint.textContent = mode === 'session' ? SESSION_HINT : ''; // session mode's hint does not wait on the list
+  worktreeTick.checked = false; // opt-in every time
+  worktreeNameInput.value = '';
+  worktreeNameInput.hidden = true;
+  worktreeRow.hidden = mode !== 'session';
+  hint.textContent = mode === 'session' ? sessionHint() : ''; // session mode's hint does not wait on the list
   startAs.hidden = true;
   if (mode === 'session') void loadAgents();
   render();

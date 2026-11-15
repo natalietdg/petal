@@ -11,6 +11,8 @@ import { claudeInstalled } from './tabs';
 import { buildStartInCommand, shellQuote } from './resume-command';
 import { agentsIn } from './workflow-setup';
 import { allowedClaudeHome } from './claude-folder';
+import { createSessionWorktree } from './session-worktree';
+import { worktreeName } from '../shared/session-worktree';
 import type { OpenTab, TabSessions } from './tab-session';
 
 interface ReposIpcDeps {
@@ -69,11 +71,14 @@ export function registerReposIpc({ sessions, openTab }: ReposIpcDeps): void {
   // Add Session: a new tab whose shell cd's into the chosen folder and starts claude there, so home is never a silent default.
   handle('repos:agents', () => userAgents());
 
-  handle('repos:start', async (event, { target, agent = null }) => {
+  handle('repos:start', async (event, { target, agent = null, worktree = null }) => {
     if (agent !== null && !userAgents().some((a) => a.name === agent)) return { note: `No agent named ${String(agent)} in ~/.claude/agents.` }; // never trust the renderer's name
     const folder = await resolveFolder(event.sender, target);
     if ('note' in folder) return folder;
-    const { cwd } = folder;
+    // New worktree: its own folder under ~/.petal/worktrees on a new branch; the name is cleaned here, never trusted as typed.
+    const made = typeof worktree === 'string' ? createSessionWorktree(folder.cwd, worktreeName(worktree)) : folder;
+    if ('note' in made) return made;
+    const { cwd } = made;
     // Without Claude Code the new tab only enters the folder, so no "command not found" greets her.
     const installed = await claudeInstalled();
     const command = installed ? buildStartInCommand(cwd, (await claudeLaunch()).command, agent) : repoIndex.buildCdCommand(cwd);

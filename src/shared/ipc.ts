@@ -361,7 +361,7 @@ export interface InvokeChannels {
 
   'repos:list': { args: [request: { tabId: TabId }]; result: Guarded<ReposList> };
   'repos:open': { args: [request: { tabId: TabId; path?: string; target?: RepoStartTarget }]; result: Guarded<RepoOpenResult> }; // path: an indexed repo; target: any palette row
-  'repos:start': { args: [request: { tabId: TabId; target: RepoStartTarget; agent?: string | null }]; result: Guarded<RepoStartResult> };
+  'repos:start': { args: [request: { tabId: TabId; target: RepoStartTarget; agent?: string | null; worktree?: string | null }]; result: Guarded<RepoStartResult> }; // worktree: a name ('' picks one), null for the folder itself
   'repos:agents': { args: []; result: Guarded<{ name: string; description: string }[]> }; // ~/.claude/agents, for Start as
 
   // The reply box's send: answered, so a send that never reached the pty can be taken back.

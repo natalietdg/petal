@@ -21,6 +21,11 @@ const readHead = (gitDir: string): string => {
   }
 };
 
+// A linked worktree's git dir is <main>/.git/worktrees/<name>: it is named after <main>, so the Board groups it with its repo.
+const LINKED_WORKTREE = /[\\/]\.git[\\/]worktrees[\\/][^\\/]+[\\/]?$/;
+const repoNameOf = (dir: string, gitDir: string): string =>
+  LINKED_WORKTREE.test(gitDir) ? path.basename(path.dirname(path.dirname(path.dirname(path.resolve(gitDir))))) : path.basename(dir);
+
 // Walks up from cwd to the git toplevel; outside git it is just the folder's name.
 export function repoLabel(cwd: string | null | undefined): string | null {
   if (!cwd) return null;
@@ -29,7 +34,8 @@ export function repoLabel(cwd: string | null | undefined): string | null {
     const gitDir = gitDirAt(dir);
     if (gitDir) {
       const branch = branchFromHead(readHead(gitDir));
-      return branch ? `${path.basename(dir)} · ${branch}` : path.basename(dir);
+      const name = repoNameOf(dir, gitDir);
+      return branch ? `${name} · ${branch}` : name;
     }
     if (path.dirname(dir) === dir) return path.basename(start) || start;
   }
