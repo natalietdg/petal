@@ -558,7 +558,7 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
       pill: document.getElementById('sessions-pill').innerText.replace(/\\s+/g, ' ').trim(),
       pillOver: document.getElementById('sessions-pill').classList.contains('over-limit'),
       rows: items.map((i) => i.querySelector('.board-card').dataset.sessionId),
-      closeControls: items.filter((i) => i.querySelector(':scope > .board-close')).length,
+      closeControls: items.filter((i) => i.querySelector(':scope > .board-actions > .board-close')).length,
       closeInsideHead: b.querySelectorAll('.board-card .board-close, button button').length,
       confirm: [...b.querySelectorAll('.session-confirm, .board-close-confirm')].map((c) => c.innerText.replace(/\\s+/g, ' ').trim()),
       banner: p.querySelector('.sessions-limit-text')?.textContent ?? null,
@@ -583,7 +583,7 @@ export async function sessionsCloseCheck(kit: Kit): Promise<void> {
   check(shown && shown.closedHeading === 'Recently closed' && shown.closed.join() === [fake(9), fake(8)].join(),
     `Recently closed lists the closed ones newest first, minus the one live again: ${JSON.stringify(shown?.closed)}`);
 
-  await click(`.board-item:has(> .board-card[data-session-id="${fake(2)}"]) > .board-close`);
+  await click(`.board-item:has(> .board-card[data-session-id="${fake(2)}"]) > .board-actions > .board-close`);
   const asking = await waitState((s) => s.confirm.length === 1);
   check(asking && asking.confirm[0] === 'Close this Claude? Yes · No' && asking.windowConfirms === 0, `Close asks inline, not with window.confirm: ${JSON.stringify(asking?.confirm)} windowConfirms=${asking?.windowConfirms}`);
   await wait(2500); // a timer refresh must leave the open confirm in place

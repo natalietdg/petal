@@ -339,7 +339,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
     // 8b Close on every card: a sibling of the card button, asks inline, No keeps it. Yes goes through sessions:close,
     // which looks in the stand-in claude-home, finds no live process for a fixture id, and refuses before any signal.
     const closes = await js(`[...document.querySelectorAll('#board .board-item')].filter((i) => i.querySelector(':scope > .board-card')).map((i) => {
-      const own = i.querySelectorAll(':scope > .board-close');
+      const own = i.querySelectorAll(':scope > .board-actions > .board-close');
       return { id: i.querySelector(':scope > .board-card').dataset.sessionId, count: own.length, label: own[0]?.getAttribute('aria-label') ?? null, want: 'Close ' + i.querySelector('.board-name').title, text: own[0]?.textContent ?? null };
     })`);
     const nested: number = await js("document.querySelectorAll('#board .board-card .board-close, #board button button').length");
