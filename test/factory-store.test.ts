@@ -71,14 +71,16 @@ describe('global save', () => {
     expect(state).toMatchObject({ follows: 'global', skill: { state: 'generated' }, global: { saved: true, problem: null } });
   });
 
-  it('reflects add, remove and reorder in the skill', () => {
+  it('reflects add, remove and reorder in the skill, and refuses a spine out of order', () => {
     const factory = defaultFactory();
     factory.stations.splice(1, 1); // remove Research & plan
-    factory.stations.push({ id: 'review', name: 'Review', instructions: 'Read the diff.', passCheck: 'No open comments.', runner: 'you' });
-    [factory.stations[0], factory.stations[1]] = [factory.stations[1], factory.stations[0]];
+    factory.stations.push({ id: 'learn', name: 'Learn', instructions: 'Write a retro.', passCheck: 'A retro is written.', runner: 'claude' });
+    [factory.stations[2], factory.stations[1]] = [factory.stations[1], factory.stations[2]]; // Test before Build
     saveFactory(paths, 'global', factory);
-    const headings = read(skillFile(claudeDir)).split('\n').filter((l) => l.startsWith('## '));
-    expect(headings).toEqual(['## 1. Build', '## 2. Intake', '## 3. Test', '## 4. Integrate', '## 5. Ship', '## 6. Learn', '## 7. Review']);
+    const headings = read(skillFile(claudeDir)).split('\n').filter((l) => /^## \d+\. /.test(l));
+    expect(headings).toEqual(['## 1. Intake', '## 2. Test', '## 3. Build', '## 4. Review', '## 5. Approve', '## 6. Merge', '## 7. Learn']);
+    [factory.stations[0], factory.stations[1]] = [factory.stations[1], factory.stations[0]];
+    expect(() => saveFactory(paths, 'global', factory)).toThrow(/Intake has to come first/);
   });
 
   it('refuses an invalid factory and writes nothing', () => {

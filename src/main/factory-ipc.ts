@@ -2,7 +2,7 @@
 // the project is the git repo of the active tab's Claude session, and the renderer can only name that one.
 import { handle } from './ipc';
 import { allowedClaudeHome } from './claude-folder';
-import { loadFactoryState, saveFactory, useGlobal, type FactoryPaths } from './factory-store';
+import { loadFactoryState, migrateSaved, saveFactory, useGlobal, type FactoryPaths } from './factory-store';
 import { repoRoot } from './repo-label';
 import { factoryFixture, isSnapshotRun } from './snapshot-mode';
 import type { ActiveSession } from './tab-session';
@@ -21,7 +21,11 @@ export function registerFactoryIpc({ activeSession }: { activeSession: ActiveSes
     return current;
   };
 
-  handle('factory:get', (event) => loadFactoryState(paths(event.sender.id)));
+  handle('factory:get', (event) => {
+    const where = paths(event.sender.id);
+    migrateSaved(where); // a version 1 checklist moves onto the spine once, its old file kept beside it
+    return loadFactoryState(where);
+  });
   handle('factory:save', (event, { scope, repo, factory }) => saveFactory(checked(event.sender.id, scope, repo), scope === 'project' ? 'project' : 'global', factory));
   handle('factory:use-global', (event, { repo }) => useGlobal(checked(event.sender.id, 'project', repo)));
 }

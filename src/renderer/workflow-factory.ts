@@ -1,7 +1,7 @@
 // Customize › Factory: the stations Claude follows, as a left-to-right chart she edits in place.
 // Every change saves through main, which regenerates the skill Claude reads (main/factory-store.ts).
 import { el, isIpcError } from './dom';
-import { RUNNERS, newStationId, runnerLabel, validateFactory, type Runner, type Station } from '../shared/factory';
+import { CUSTOM_RUNNERS, defaultFactory, isSpineId, newStationId, runnerLabel, validateFactory, type Factory, type Runner, type Station } from '../shared/factory';
 import type { FactoryScope, FactoryState } from '../main/factory-store';
 
 interface Editing {
@@ -22,7 +22,7 @@ interface View {
 }
 
 const SAVED = 'Saved. Claude follows this from your next message.';
-const RUNNER_NAMES: Record<Runner, string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', you: 'You (approve before it continues)' };
+const RUNNER_NAMES: Record<(typeof CUSTOM_RUNNERS)[number], string> = { claude: 'Claude', subagent: 'A subagent', script: 'A script', you: 'You (approve before it continues)' };
 
 const PATHS = {
   left: 'M14.5 6l-6 6 6 6',
@@ -52,12 +52,13 @@ function iconButton(tool: keyof typeof PATHS, label: string, onClick: () => void
   return b;
 }
 
-// The stations shown for the scope; null when its file is broken.
-function stationsOf(view: View): Station[] | null {
+// The factory shown for the scope; null when its file is broken.
+function factoryOf(view: View): Factory | null {
   const { global, project } = view.state;
-  if (view.scope === 'global') return global.factory?.stations ?? null;
-  return project?.factory?.stations ?? global.factory?.stations ?? null;
+  if (view.scope === 'global') return global.factory;
+  return project?.factory ?? global.factory;
 }
+const stationsOf = (view: View): Station[] | null => factoryOf(view)?.stations ?? null;
 
 // Editing needs Petal's own skill in the Claude folder; a project with no override shows the global one read-only.
 const canEdit = (view: View): boolean =>
@@ -133,7 +134,7 @@ function scopeBody(root: HTMLElement, view: View): HTMLElement[] {
   if (!project.factory) {
     const copy = button('cz-quiet-button fx-customise', 'Customise for this project', () => {
       const stations = global.factory?.stations;
-      if (stations) persist(root, view, stations, null);
+      if (stations) persist(root, view, stations, null, global.factory);
     });
     copy.disabled = !global.factory || view.state.folderOff || view.state.skill.state === 'foreign';
     actions.append(el('span', 'wf-desc', `${project.name} follows the global factory.`), copy);
@@ -204,20 +205,28 @@ function node(root: HTMLElement, view: View, stations: Station[], i: number, edi
   item.append(card);
   if (!editable) return item;
 
+  const addAfter = iconButton('add', `Add a station after ${station.name}`, () => {
+    const draft: Station = { id: '', name: '', instructions: '', passCheck: '', runner: 'claude' };
+    Object.assign(view, { editing: { index: i + 1, draft, isNew: true, problem: null }, confirmRemove: null, note: null, focus: '#fx-name' });
+    draw(root, view);
+  }, false, 'Add');
+  const tools = el('div', 'fx-tools');
+  // Spine stations keep their place and can't go; only their words are hers to edit.
+  if (isSpineId(station.id)) {
+    item.classList.add('fx-spine');
+    tools.append(addAfter);
+    item.append(tools);
+    return item;
+  }
   const move = (to: number, tool: 'left' | 'right') => {
-    view.focus = `[data-station="${station.id}"] [data-tool="${to === 0 ? 'right' : to === stations.length - 1 ? 'left' : tool}"]`;
+    view.focus = `[data-station="${station.id}"] [data-tool="${to === 1 ? 'right' : to === stations.length - 1 ? 'left' : tool}"]`;
     persist(root, view, moved(stations, i, to), view.focus);
   };
-  const tools = el('div', 'fx-tools');
   tools.append(
-    iconButton('left', `Move ${station.name} left`, () => move(i - 1, 'left'), i === 0),
+    iconButton('left', `Move ${station.name} left`, () => move(i - 1, 'left'), i <= 1), // nothing goes before Intake
     iconButton('right', `Move ${station.name} right`, () => move(i + 1, 'right'), i === stations.length - 1),
-    iconButton('add', `Add a station after ${station.name}`, () => {
-      const draft: Station = { id: '', name: '', instructions: '', passCheck: '', runner: 'claude' };
-      Object.assign(view, { editing: { index: i + 1, draft, isNew: true, problem: null }, confirmRemove: null, note: null, focus: '#fx-name' });
-      draw(root, view);
-    }, false, 'Add'),
-    iconButton('remove', `Remove ${station.name}`, () => { view.confirmRemove = station.id; view.focus = '.fx-remove-yes'; draw(root, view); }, stations.length === 1),
+    addAfter,
+    iconButton('remove', `Remove ${station.name}`, () => { view.confirmRemove = station.id; view.focus = '.fx-remove-yes'; draw(root, view); }),
   );
   item.append(tools);
   if (view.confirmRemove === station.id) {
@@ -229,7 +238,7 @@ function node(root: HTMLElement, view: View, stations: Station[], i: number, edi
     );
     item.append(confirm);
   }
-  dragAndDrop(item, i, (from) => persist(root, view, moved(stations, from, i), null));
+  dragAndDrop(item, i, (from) => { if (i > 0) persist(root, view, moved(stations, from, i), null); });
   return item;
 }
 
@@ -295,7 +304,7 @@ function editor(root: HTMLElement, view: View, editing: Editing): HTMLElement {
 
   const runner = el('select', 'fx-input fx-select');
   runner.id = 'fx-runner';
-  for (const r of RUNNERS) {
+  for (const r of CUSTOM_RUNNERS) {
     const option = el('option', '', RUNNER_NAMES[r]);
     option.value = r;
     runner.append(option);
@@ -313,8 +322,9 @@ function editor(root: HTMLElement, view: View, editing: Editing): HTMLElement {
   command.addEventListener('input', () => { draft.command = command.value; });
   const agentField = field('Agent type', agentType, 'The subagent Claude hands this station to.');
   const commandField = field('Command', command, 'Claude runs this and reads the result. Petal never runs it.');
+  const spine = isSpineId(draft.id) && !editing.isNew;
   const showExtra = () => {
-    agentField.hidden = draft.runner !== 'subagent';
+    agentField.hidden = spine || draft.runner !== 'subagent';
     commandField.hidden = draft.runner !== 'script';
   };
   runner.addEventListener('change', () => { draft.runner = runner.value as Runner; showExtra(); });
@@ -330,7 +340,7 @@ function editor(root: HTMLElement, view: View, editing: Editing): HTMLElement {
       if (station.runner !== 'script') delete station.command;
       const next = [...stations];
       next.splice(editing.index, editing.isNew ? 0 : 1, station);
-      const checked = validateFactory({ version: 1, stations: next });
+      const checked = validateFactory({ ...(factoryOf(view) ?? {}), version: 2, stations: next });
       if (!checked.ok) {
         problem.textContent = checked.problem;
         problem.hidden = false;
@@ -349,7 +359,7 @@ function editor(root: HTMLElement, view: View, editing: Editing): HTMLElement {
     field('Name', name),
     field('Instructions', instructions, 'What Claude does at this station.'),
     field('Pass check', passCheck, 'What has to hold before the next station starts.'),
-    field('Who runs it', runner),
+    ...(spine ? [] : [field('Who runs it', runner)]),
     agentField,
     commandField,
     problem,
@@ -359,9 +369,9 @@ function editor(root: HTMLElement, view: View, editing: Editing): HTMLElement {
 }
 
 // Saves the whole list for the current scope and redraws from what main wrote back.
-async function persist(root: HTMLElement, view: View, stations: Station[], focus: string | null): Promise<void> {
+async function persist(root: HTMLElement, view: View, stations: Station[], focus: string | null, base: Factory | null = factoryOf(view)): Promise<void> {
   const repo = view.scope === 'project' ? view.state.project?.repo ?? null : null;
-  const result = await window.pastel.factory.save({ scope: view.scope, repo, factory: { version: 1, stations } });
+  const result = await window.pastel.factory.save({ scope: view.scope, repo, factory: { ...(base ?? defaultFactory()), version: 2, stations } });
   if (isIpcError(result)) {
     if (view.editing) view.editing.problem = result.error;
     else view.note = { text: result.error, error: true };

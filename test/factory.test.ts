@@ -1,24 +1,28 @@
 // The factory model: defaults, validation, and the skill text Claude reads.
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STATIONS, GENERATED_MARKER, MAX_STATIONS, defaultFactory, isGenerated, newStationId, renderSkill, runnerLabel, validateFactory, type Station } from '../src/shared/factory';
+import { DEFAULT_STATIONS, GENERATED_MARKER, MAX_STATIONS, SPINE, defaultFactory, isGenerated, migrateV1, newStationId, renderSkill, runnerLabel, spineStation, validateFactory, type Factory, type Station } from '../src/shared/factory';
 
 const station = (over: Partial<Station> = {}): Station => ({ id: 'a', name: 'A', instructions: '', passCheck: '', runner: 'claude', ...over });
+const withStations = (stations: Station[]): Factory => ({ ...defaultFactory(), stations });
+const spineWith = (...custom: Station[]): Station[] => [spineStation('intake'), ...custom, spineStation('build'), spineStation('review'), spineStation('approve'), spineStation('merge')];
 const problemOf = (raw: unknown): string => {
   const result = validateFactory(raw);
   return result.ok ? '' : result.problem;
 };
 
 describe('defaults', () => {
-  it('seeds the seven stations in order, and they validate', () => {
-    expect(DEFAULT_STATIONS.map((s) => s.name)).toEqual(['Intake', 'Research & plan', 'Build', 'Test', 'Integrate', 'Ship', 'Learn']);
-    expect(validateFactory(defaultFactory())).toEqual({ ok: true, factory: defaultFactory() });
+  it('seeds the spine with two stations of its own between stages, in order, and they validate', () => {
+    expect(DEFAULT_STATIONS.map((s) => s.name)).toEqual(['Intake', 'Research & plan', 'Build', 'Test', 'Review', 'Approve', 'Merge']);
+    expect(validateFactory(defaultFactory())).toEqual({ ok: true, factory: defaultFactory(), migrated: false });
+    expect(defaultFactory()).toMatchObject({ version: 2, reworkCap: 2 });
+    expect(defaultFactory().reviewers.map((r) => `${r.name}:${r.when}`)).toEqual(['ux:always', 'code:always', 'security:always', 'ui:visual']);
   });
 
   it('names no person and stays generic', () => {
     const text = JSON.stringify(DEFAULT_STATIONS);
-    expect(text).not.toMatch(/natalie|\bher\b|\bshe\b|audit|memory|push|install|\u2014/i);
-    expect(DEFAULT_STATIONS.map((s) => s.id)).toEqual(['intake', 'research-plan', 'build', 'test-queue', 'integrate', 'ship', 'learn']);
-    expect(DEFAULT_STATIONS.find((s) => s.id === 'ship')?.runner).toBe('you');
+    expect(text).not.toMatch(/natalie|\bher\b|\bshe\b|audit|memory|install|\u2014/i);
+    expect(DEFAULT_STATIONS.map((s) => s.id)).toEqual(['intake', 'research-plan', 'build', 'test-queue', 'review', 'approve', 'merge']);
+    expect(DEFAULT_STATIONS.find((s) => s.id === 'approve')?.runner).toBe('you');
   });
 
   it('assumes no toolchain: Claude finds the test command itself', () => {
@@ -32,8 +36,7 @@ describe('defaults', () => {
     const jargon = /\b(npm|tickets?|gates?|queues?|push|install)\b/i;
     const shouted = /\bFAIL\b/; // plain "failure" is fine
     const visible = DEFAULT_STATIONS.map(({ id: _id, ...shown }) => shown); // ids are storage keys, never shown
-    const texts = [JSON.stringify(visible), ...(['global', 'project', 'project-skill'] as const).map((scope) => renderSkill(defaultFactory(), scope, 'demo'))];
-    for (const text of texts) {
+    for (const text of [JSON.stringify(visible)]) { // the skill is Claude's instructions and names git steps
       expect(text).not.toMatch(jargon);
       expect(text).not.toMatch(shouted);
     }
@@ -47,19 +50,25 @@ describe('defaults', () => {
 
 describe('validateFactory', () => {
   it('trims text, drops unknown keys and fields that do not belong to the runner', () => {
-    const result = validateFactory({ version: 1, extra: true, stations: [{ ...station({ name: '  Build  ', runner: 'claude' }), agentType: 'x', command: 'y', colour: 'red' }] });
-    expect(result).toEqual({ ok: true, factory: { version: 1, stations: [{ id: 'a', name: 'Build', instructions: '', passCheck: '', runner: 'claude' }] } });
+    const result = validateFactory({ ...defaultFactory(), extra: true, stations: spineWith({ ...station({ name: '  Build it  ', runner: 'claude' }), agentType: 'x', command: 'y', colour: 'red' } as Station) });
+    expect(result.ok && result.factory.stations[1]).toEqual({ id: 'a', name: 'Build it', instructions: '', passCheck: '', runner: 'claude' });
   });
 
   it('accepts a file without a version and keeps subagent and script extras', () => {
     const result = validateFactory({ stations: [station({ runner: 'subagent', agentType: 'Explore' }), station({ id: 'b', runner: 'script', command: 'npm test' })] });
-    expect(result.ok && result.factory.stations.map((s) => [s.agentType, s.command])).toEqual([['Explore', undefined], [undefined, 'npm test']]);
+    expect(result.ok && result.factory.stations.slice(1, 3).map((s) => [s.agentType, s.command])).toEqual([['Explore', undefined], [undefined, 'npm test']]);
+    expect(result.ok && result.migrated).toBe(true);
   });
 
   it.each([
     [null, 'isn’t a JSON object'],
     [[], 'isn’t a JSON object'],
-    [{ version: 2, stations: [station()] }, 'Unknown factory version 2'],
+    [{ version: 3, stations: [station()] }, 'Unknown factory version 3'],
+    [{ version: 2, stations: [station()] }, 'must keep Intake'],
+    [{ version: 2, stations: [station(), ...spineWith()] }, 'Intake has to come first'],
+    [{ ...defaultFactory(), reworkCap: 9 }, 'rework cap must be a whole number from 0 to 5'],
+    [{ ...defaultFactory(), reviewers: [] }, 'at least one reviewer'],
+    [{ ...defaultFactory(), stations: spineWith(station({ runner: 'petal' })) }, 'Only Merge is run by Petal'],
     [{ stations: 'x' }, 'no stations list'],
     [{ stations: [] }, 'at least one station'],
     [{ stations: Array.from({ length: MAX_STATIONS + 1 }, (_, i) => station({ id: `s${i}` })) }, `over ${MAX_STATIONS} stations`],
@@ -79,7 +88,7 @@ describe('validateFactory', () => {
 
   it('reads a saved approval gate named natalie as you, so older files still load', () => {
     const result = validateFactory({ version: 1, stations: [station({ runner: 'natalie' as never })] });
-    expect(result).toEqual({ ok: true, factory: { version: 1, stations: [station({ runner: 'you' })] } });
+    expect(result.ok && result.factory.stations[1]).toEqual(station({ runner: 'you' }));
     expect(problemOf({ stations: [station({ runner: 'constructor' as never })] })).toContain('who runs it must be one of'); // no prototype keys
   });
 
@@ -97,7 +106,7 @@ describe('renderSkill', () => {
     expect(lines[2]).toMatch(/^description: ".*build, add, change or fix.*"$/);
     expect(lines[3]).toBe('---');
     expect(lines[4]).toBe(GENERATED_MARKER);
-    expect(JSON.parse(lines[2].slice('description: '.length))).toContain('Use for any request');
+    expect(JSON.parse(lines[2].slice('description: '.length))).toContain('/factory <ask>');
   });
 
   it('lists every station as a numbered step with who runs it, its instructions and pass check, in order', () => {
@@ -109,7 +118,7 @@ describe('renderSkill', () => {
     }
     expect(skill).toContain('**Who runs it:** a `Plan` subagent');
     expect(skill).toContain('**Who runs it:** a `general-purpose` subagent. Brief it with the request and what earlier stations found');
-    const script = renderSkill({ version: 1, stations: [station({ runner: 'script', command: 'make check' })] }, 'project');
+    const script = renderSkill(withStations([station({ runner: 'script', command: 'make check' })]), 'project');
     expect(script).toContain('Run `make check`');
     expect(script).toContain('Petal never runs it');
     expect(skill).toContain('**Who runs it:** The user. Stop here, show where things stand, and wait for their go-ahead');
@@ -134,7 +143,7 @@ describe('renderSkill', () => {
   });
 
   it('tells Claude to add the Station line with the saved factory\'s total and names', () => {
-    const four = { version: 1 as const, stations: ['Scope', 'Code', 'Check', 'Release'].map((name, i) => station({ id: `s${i}`, name })) };
+    const four = withStations(['Scope', 'Code', 'Check', 'Release'].map((name, i) => station({ id: `s${i}`, name })));
     const text = renderSkill(four, 'project');
     expect(text).toContain('`**Station:** <n>/4 <station name> · <met or not yet>`');
     expect(text).toContain('`**Station:** 1/4 Scope · not yet`');
@@ -144,7 +153,7 @@ describe('renderSkill', () => {
   });
 
   it('carries edited text through verbatim and says when a pass check is missing', () => {
-    const text = renderSkill({ version: 1, stations: [station({ name: 'Only', instructions: 'Say “hi” <b>twice</b>.' })] }, 'project');
+    const text = renderSkill(withStations([station({ name: 'Only', instructions: 'Say “hi” <b>twice</b>.' })]), 'project');
     expect(text).toContain('## 1. Only\n\n**Who runs it:** Claude, in this session.\n\nSay “hi” <b>twice</b>.\n\n**Pass check:** none set');
   });
 });
@@ -162,12 +171,49 @@ describe('isGenerated', () => {
 
 describe('labels and ids', () => {
   it('names who runs each station for the card badge', () => {
-    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Claude', 'Claude', 'You approve', 'Claude']);
+    expect(DEFAULT_STATIONS.map(runnerLabel)).toEqual(['Claude', 'Subagent · Plan', 'Subagent · general-purpose', 'Claude', 'Reviewers', 'You approve', 'Petal']);
   });
 
   it('makes a unique slug id from the name', () => {
     expect(newStationId('Code review!', [])).toBe('code-review');
     expect(newStationId('Code review', ['code-review', 'code-review-2'])).toBe('code-review-3');
     expect(newStationId('✨', [])).toBe('station');
+    expect(newStationId('Review', [])).toBe('review-2'); // never a spine id
+  });
+});
+
+describe('migrating a version 1 checklist', () => {
+  // The eleven stations saved in petal-factory.json before the spine.
+  const saved: Station[] = [
+    station({ id: 'intake', name: 'Intake', instructions: 'Her intake words.' }),
+    station({ id: 'token-plan', name: 'Token plan', runner: 'subagent', agentType: 'token' }),
+    station({ id: 'ux-discovery', name: 'UX discovery', runner: 'subagent', agentType: 'ux' }),
+    station({ id: 'research-plan', name: 'Research & plan', runner: 'subagent', agentType: 'Plan' }),
+    station({ id: 'build', name: 'Build', runner: 'subagent', agentType: 'general-purpose', instructions: 'Her build words.' }),
+    station({ id: 'ux-review', name: 'UX review', runner: 'subagent', agentType: 'ux' }),
+    station({ id: 'test-queue', name: 'Test' }),
+    station({ id: 'integrate', name: 'Integrate' }),
+    station({ id: 'token-check', name: 'Spend check', runner: 'subagent', agentType: 'token' }),
+    station({ id: 'ship', name: 'Ship', runner: 'you' }),
+    station({ id: 'learn', name: 'Learn' }),
+  ];
+
+  it('puts her stations between spine stages, keeps her Intake and Build words, folds the review into the reviewers', () => {
+    const result = validateFactory({ version: 1, stations: saved });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.migrated).toBe(true);
+    expect(result.factory.stations.map((s) => s.id)).toEqual(['intake', 'token-plan', 'ux-discovery', 'research-plan', 'build', 'test-queue', 'integrate', 'token-check', 'review', 'approve', 'merge', 'learn']);
+    expect(result.factory.stations.filter((s) => (SPINE as readonly string[]).includes(s.id)).map((s) => s.id)).toEqual([...SPINE]);
+    expect(result.factory.stations[0].instructions).toBe('Her intake words.');
+    expect(result.factory.stations[4]).toMatchObject({ instructions: 'Her build words.', runner: 'subagent', agentType: 'general-purpose' });
+    expect(result.factory.reviewers.filter((r) => r.agentType === 'ux')).toHaveLength(1); // ux review was already a reviewer
+    expect(validateFactory(result.factory)).toEqual({ ok: true, factory: result.factory, migrated: false }); // stable once moved
+  });
+
+  it('adds a reviewer it did not have, and a checklist without Ship ends with the spine', () => {
+    const { stations, reviewers } = migrateV1([station({ id: 'perf-review', name: 'Perf review', runner: 'subagent', agentType: 'perf' }), station({ id: 'x', name: 'X' })]);
+    expect(reviewers.map((r) => r.agentType)).toContain('perf');
+    expect(stations.map((s) => s.id)).toEqual(['intake', 'x', 'build', 'review', 'approve', 'merge']);
   });
 });

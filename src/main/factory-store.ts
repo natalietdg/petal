@@ -143,6 +143,28 @@ export function saveFactory(paths: FactoryPaths, scope: FactoryScope, raw: unkno
   return loadFactoryState(paths);
 }
 
+// A version 1 checklist saved by an older build becomes the spine with its stations between stages, once. The old file
+// is kept beside it as petal-factory.v1.json; the new one is still Petal's, so the skill is regenerated from it.
+export function migrateSaved(paths: FactoryPaths): boolean {
+  const files = [paths.claudeDir && globalJson(paths.claudeDir), paths.repo && projectJson(paths.repo)].filter((f): f is string => Boolean(f));
+  let changed = false;
+  for (const file of files) {
+    let raw: unknown;
+    try { raw = JSON.parse(readText(file) ?? 'null'); } catch { continue; }
+    const result = validateFactory(raw);
+    if (!result.ok || !result.migrated) continue;
+    const backup = file.replace(/\.json$/, '.v1.json');
+    if (!fs.existsSync(backup)) fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
+    try {
+      saveFactory(paths, file === projectJson(paths.repo ?? '') ? 'project' : 'global', result.factory);
+      changed = true;
+    } catch (error) {
+      console.warn(`[petal] couldn’t move ${file} to the factory spine:`, (error as Error).message);
+    }
+  }
+  return changed;
+}
+
 // "Use global": the project's files in Petal's folder go. A factory.md she wrote stops it first. An older build's
 // project skill in the repo is left alone.
 export function useGlobal(paths: FactoryPaths): FactoryState {
