@@ -14,6 +14,7 @@ import { SESSION_ID } from '../src/main/session-id';
 import { replyJson } from '../src/main/claude-reply';
 import { readTurns } from '../src/main/handoff';
 import { pageOfTurns, turnsFor } from '../src/main/history-turns';
+import { CHECKED_THROUGH, formatNotice, formatProblemIn, isUncheckedVersion, sessionFileProblem, transcriptProblem } from '../src/main/format-check';
 import { allowClaudeFolder, removeTempDirs } from './helpers';
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'claude-code');
@@ -248,5 +249,61 @@ describe('headless claude -p --output-format json', () => {
   it('headless: is_error true surfaces the result as an error', () => {
     const stdout = fs.readFileSync(path.join(FIXTURES, 'headless-error.json'), 'utf8');
     expect(() => replyJson(stdout)).toThrow(/Claude error: Credit balance is too low/);
+  });
+});
+
+// The launch self-check (format-check.ts) runs the same assumptions over her newest files and names the version when they break.
+describe('launch format self-check', () => {
+  const lines = (): string[] => fs.readFileSync(TRANSCRIPT, 'utf8').split('\n').filter(Boolean);
+  const longLog = (): string[] => [...lines(), ...lines()]; // past the 20-line floor, same shapes
+
+  it('self-check: the fixture session files and transcript pass', () => {
+    for (const name of fs.readdirSync(path.join(FIXTURES, 'sessions'))) expect(sessionFileProblem(fs.readFileSync(path.join(FIXTURES, 'sessions', name), 'utf8'))).toBeNull();
+    expect(transcriptProblem(longLog())).toBeNull();
+    expect(formatProblemIn(FIXTURES)).toBeNull();
+  });
+
+  it('self-check: a session file without sessionId or cwd is named', () => {
+    expect(sessionFileProblem(JSON.stringify({ session_id: SESSION_ID_1, cwd: CWD }))).toBe('a session file has no sessionId');
+    expect(sessionFileProblem(JSON.stringify({ sessionId: SESSION_ID_1, dir: CWD }))).toBe('a session file has no cwd');
+    expect(sessionFileProblem('{not json')).toBe('a session file isn’t JSON');
+  });
+
+  it('self-check: replies whose message.content changed shape are named', () => {
+    const reshaped = longLog().map((line) => {
+      const entry = JSON.parse(line);
+      if (entry.type === 'assistant' || entry.type === 'user') entry.message = { parts: entry.message?.content };
+      return JSON.stringify(entry);
+    });
+    expect(transcriptProblem(reshaped)).toBe('its replies have a new shape');
+  });
+
+  it('self-check: renamed entry types, lost types and non-JSON lines are named', () => {
+    const edit = (change: (entry: Record<string, unknown>) => void): string[] => longLog().map((line) => { const entry = JSON.parse(line); change(entry); return JSON.stringify(entry); });
+    expect(transcriptProblem(edit((entry) => { if (entry.type === 'user' || entry.type === 'assistant') entry.type = `${entry.type}_message`; }))).toBe('its transcript has no user or assistant lines');
+    expect(transcriptProblem(edit((entry) => { delete entry.type; }))).toBe('its transcript lines have no type');
+    expect(transcriptProblem(longLog().map((line) => line.slice(1)))).toBe('its transcript lines aren’t JSON');
+  });
+
+  it('self-check: unknown entry types and a short log are not a format change', () => {
+    expect(transcriptProblem([...longLog(), JSON.stringify({ type: 'some-new-kind', data: 1 })])).toBeNull();
+    expect(transcriptProblem(lines().slice(0, 5).map((line) => line.slice(1)))).toBeNull();
+  });
+
+  it('self-check: a new major.minor line is unchecked; patch releases are not', () => {
+    expect(isUncheckedVersion('2.1.999', '2.1.325')).toBe(false);
+    expect(isUncheckedVersion('2.2.0', '2.1.325')).toBe(true);
+    expect(isUncheckedVersion('3.0.1', '2.1.325')).toBe(true);
+    expect(isUncheckedVersion(null)).toBe(false);
+  });
+
+  it('self-check: the notice names the version and says the terminal still has every reply', () => {
+    expect(formatNotice(null, '9.0.0')).toBeNull(); // folder off: the reader already says so
+    expect(formatNotice(FIXTURES, CHECKED_THROUGH)).toBeNull();
+    const newer = formatNotice(FIXTURES, '2.2.0') ?? '';
+    expect(newer).toContain('Claude Code 2.2.0');
+    expect(newer).toContain(`up to ${CHECKED_THROUGH}`);
+    expect(newer).toMatch(/still in the terminal/);
+    expect(newer).not.toContain('—');
   });
 });

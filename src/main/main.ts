@@ -36,6 +36,8 @@ import { claudePath } from './claude-cli';
 import { claudeLaunch } from './claude-launch';
 import { allowedClaudeHome } from './claude-folder';
 import { replyVisibilityProblem } from './reply-visibility';
+import { formatNotice } from './format-check';
+import { claudeVersion } from './claude-fallback';
 import { handle, on, send } from './ipc';
 import { checkForUpdatesNow, liveEnv, restartToUpdate, startUpdater, updateReadyVersion } from './updater';
 import { recordLaunch, showWhatsNew, takeWhatsNew } from './whats-new';
@@ -198,7 +200,11 @@ function registerIpc(): void {
   handle('claude:installed', async (_event, request) => (isSnapshotRun() && claudeFixture.installed !== null ? claudeFixture.installed : Boolean(await claudePath({ recheck: request?.recheck === true }))));
 
   handle('claude:path-tip', async () => (await claudeLaunch()).tip);
-  handle('claude:reply-visibility', () => replyVisibilityProblem(allowedClaudeHome()));
+  // Folder access first, then whether this Claude Code still writes what the reader parses.
+  handle('claude:reply-visibility', async () => {
+    const home = allowedClaudeHome();
+    return replyVisibilityProblem(home) ?? formatNotice(home, isSnapshotRun() ? null : await claudeVersion(await claudePath(), ''));
+  });
 
   registerSessionsIpc({ activeSession });
   registerAgentsIpc({ activeSession });
