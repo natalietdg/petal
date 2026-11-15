@@ -58,6 +58,7 @@
 /* Board card's Message… and its small composer. */
 .board-message-open {
   align-self: flex-start;
+  min-height: 24px;
   margin-top: 6px;
   padding: 2px 6px;
   border: 0;

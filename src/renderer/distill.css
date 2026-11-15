@@ -70,4 +70,4 @@
 :is(.distill-card-input, .distill-card-send):focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 .distill-card-note { margin: 4px 0 0; color: var(--reader-fg); font-size: 12.5px; }
 .distill-card-note:empty { display: none; }
-.board-card.needs-you { border-color: var(--decide-ink); }
+.board-item:has(> .board-card.needs-you) { border-color: var(--decide-ink); }

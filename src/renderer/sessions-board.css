@@ -60,7 +60,16 @@
 .board-repo-head[aria-expanded="false"]::before { content: "▸"; }
 .board-repo-head:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 .board-repo-count { padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px; font-weight: 500; color: var(--muted); }
-.board-item { display: flex; flex-direction: column; min-width: 0; }
+.board-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--reader-bg);
+}
+/* Everything under the card's button sits inside the card's border, on the button's text edge. */
+.board-item > :not(.board-card, .stop-claude, .board-actions) { margin-inline: 16px; }
 
 .board-card {
   display: flex;
@@ -69,9 +78,9 @@
   gap: 6px;
   min-width: 0;
   padding: 14px 16px;
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  background: var(--reader-bg);
+  border: 0;
+  border-radius: 13px 13px 0 0;
+  background: none;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -80,7 +89,7 @@
 .board-card:hover { background: var(--code-bg); }
 .board-card:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
 /* The one status that asks for her: the only coloured card. */
-.board-card.waiting { border-color: var(--decide-ink); background: var(--decide-wash); box-shadow: inset 4px 0 0 var(--decide-ink); }
+.board-item:has(> .board-card.waiting) { border-color: var(--decide-ink); background: var(--decide-wash); box-shadow: inset 4px 0 0 var(--decide-ink); }
 
 .board-card-top { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
 .board-status { display: inline-flex; flex: none; align-items: center; gap: 6px; font-weight: 600; color: var(--reader-fg); }
@@ -119,8 +128,10 @@
 .board-confirm,
 .board-note { margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
 .board-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--reader-fg); }
-.board-close { align-self: flex-start; }
-.board-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; }
+/* The card's footer: its own actions inside the border; Close, the one that quits Claude, alone on the right. */
+.board-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0; padding: 6px 10px 8px; border-top: 1px dashed var(--rule); }
+.board-actions .board-message-open { margin-top: 0; }
+.board-actions .board-close { margin-left: auto; }
 .board-empty { list-style: none; font-size: 14px; color: var(--muted); }
 .board-folder-off p { margin: 0 0 8px; }
 

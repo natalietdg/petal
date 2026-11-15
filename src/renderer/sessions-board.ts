@@ -218,17 +218,10 @@ function cardElement(card: BoardCard): HTMLLIElement {
   // A working session in this window: Stop sits on the card's corner, outside the card's own button.
   const stop = card.tabId ? stopClaude.control(card.tabId, 'board') : null;
   if (stop) { item.classList.add('has-stop'); item.append(stop); }
-  const message = boardMessage.control(card);
-  if (message) item.append(message);
   const agents = row?.subagents ?? [];
   const children = childrenOf(card.sessionId);
   if (agents.length || children.length) item.append(sessionsPanel.agentList(card.sessionId, agents, children, (childId) => void openChild(card.sessionId, childId)));
   if (info?.task) item.append(reviewControl(card.sessionId, info.task.id, info.task.title));
-  // The card's own actions on one row: Follow and Open in a Petal tab for an outside session, then Close.
-  const actions = el('div', 'board-actions');
-  if (card.outside) actions.append(followControl(card), openInTabControl(card));
-  actions.append(closeControl(card));
-  item.append(actions);
   if (closeAsking === card.sessionId) item.append(closeConfirm(card.sessionId, card.outside === true));
 
   const confirm = confirms.get(card.sessionId);
@@ -245,7 +238,18 @@ function cardElement(card: BoardCard): HTMLLIElement {
   }
   const note = notes.get(card.sessionId);
   if (note) item.append(el('p', 'board-note', note));
+  item.append(cardFooter(card));
   return item;
+}
+
+// The card's footer, inside its border: Message…, Follow and Open in a Petal tab on the left; Close alone on the right.
+function cardFooter(card: BoardCard): HTMLDivElement {
+  const actions = el('div', 'board-actions');
+  const message = boardMessage.control(card);
+  if (message) actions.append(message);
+  if (card.outside) actions.append(followControl(card), openInTabControl(card));
+  actions.append(closeControl(card));
+  return actions;
 }
 
 // A tab here: switch to it. Elsewhere: History's resume, which focuses its Petal window or asks before forking it.
