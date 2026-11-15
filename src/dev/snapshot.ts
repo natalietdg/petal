@@ -165,10 +165,17 @@ export function setFixtureStatus(feed: ReaderFeed, status: 'idle' | 'busy'): voi
 }
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Counts awake time only: a lid-closed sleep mid-wait would otherwise spend the whole timeout (#562).
+const MAX_TICK_MS = 2000;
 async function waitFor<T>(check: () => T | Promise<T>, timeoutMs: number): Promise<T | null> {
-  for (const start = Date.now(); Date.now() - start < timeoutMs; await wait(500)) {
+  let waited = 0;
+  for (let last = Date.now(); waited < timeoutMs; ) {
     const value = await check();
     if (value) return value;
+    await wait(500);
+    const now = Date.now();
+    waited += Math.min(now - last, MAX_TICK_MS);
+    last = now;
   }
   return null;
 }
