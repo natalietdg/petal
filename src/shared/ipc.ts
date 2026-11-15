@@ -91,6 +91,7 @@ export interface SessionsView extends SessionsSnapshot {
   closed?: ClosedSession[];
   oldestIdleId?: string | null;
   here: { running: number; total: number }; // the reader's session agents, any day, for its header chip
+  outside?: { sessionId: string; title: string }[]; // live sessions started outside Petal, every tick
 }
 
 // The Agents dropdown: a session's subagents, and the one opened in the right panel.

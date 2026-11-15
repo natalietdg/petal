@@ -1,5 +1,6 @@
 // Renderer entry: loads every module in page order, then wires main's events to the active tab.
 import * as follow from './follow';
+import * as followOffer from './follow-offer';
 import './styles';
 import './motion-clock';
 import * as themeKit from './theme';
@@ -131,6 +132,7 @@ async function start(): Promise<void> {
   const newSessionTab = async () => { if (await sessionsPanel.roomForSession()) repos.openForNewSession(); };
   const onCreated = (tab: Tab) => { catchEscape(tab); getStarted.refresh(); petGuide.refresh(); dockSessions.sync(); };
   follow.setOnStop(() => { const active = tabs.active(); if (active) showTab(active); });
+  reader.setEmptyExtra(() => [followOffer.element()]);
   tabs.init({ theme, onNewTab: newSessionTab, onActivate: (tab) => { follow.stop(); showTab(tab); }, onCreated, onScreen });
 
   window.pastel.onTheme((next) => {

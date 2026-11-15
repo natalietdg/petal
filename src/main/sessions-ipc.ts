@@ -32,15 +32,19 @@ export function registerSessionsIpc({ activeSession }: { activeSession: ActiveSe
     if (base.rows) needsYouHub.setChildren(base.rows, base.orphans ?? []);
     const inPetal = needsYouHub.inPetal();
     const watchOutside = !isSnapshotRun() || panelFixture.outside === true;
-    if (watchOutside) needsYouHub.setOutside(outsideSignals(live, inPetal, nameOf));
+    const outsideNow = watchOutside ? outsideSignals(live, inPetal, nameOf) : [];
+    if (watchOutside) needsYouHub.setOutside(outsideNow);
+    const outside = outsideNow.map(({ sessionId, title }) => ({ sessionId, title })); // the reader's "Follow a session you already have"
+
     const marked = base.rows?.map((row) => ({ ...row, outside: watchOutside && !inPetal.has(row.sessionId) }));
     const { maxOpen } = configStore.load().sessions;
     const { running, total } = await ownAgents(own);
     const here = { running, total };
-    if (!detailed) return { ...base, rows: marked, maxOpen, here };
+    if (!detailed) return { ...base, rows: marked, maxOpen, here, outside };
     const details = board ? await boardDetails(live.filter((s) => !isHeadless(s))) : null;
     return {
       ...base,
+      outside,
       rows: details ? marked?.map((row) => ({ ...row, board: details.get(row.sessionId) })) : marked,
       endedToday: board && watchOutside ? endedToday(live.map((s) => s.sessionId), inPetal) : undefined,
       maxOpen,

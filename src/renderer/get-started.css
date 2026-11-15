@@ -56,3 +56,15 @@
 .resume-notice-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resume-notice-row .resume-notice-open { flex: none; }
 .resume-notice-actions { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+
+/* "Follow a session you already have" (follow-offer.ts): under First steps, on What's next and in the first bubble. */
+.follow-offer { margin: 18px 0 0; padding: 12px 14px; border: 1px dashed var(--muted); border-radius: 12px; font: 14px/1.45 var(--ui-font); letter-spacing: normal; text-transform: none; color: var(--reader-fg); text-align: left; }
+.follow-offer[hidden] { display: none; }
+.follow-offer-title { margin: 0; font-weight: 650; }
+.follow-offer-line { margin: 2px 0 6px; color: var(--muted); font-size: 13px; }
+.follow-offer-list { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.follow-offer-follow { margin-left: -6px; color: var(--link); text-align: left; overflow-wrap: anywhere; }
+.follow-offer-follow:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.follow-offer-note { margin: 4px 0 0; font-size: 13px; }
+.follow-offer-note:empty { display: none; }
+.pet-bubble .follow-offer { margin-top: 8px; padding: 8px 10px; font-size: 13px; }

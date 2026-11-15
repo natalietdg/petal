@@ -20,3 +20,7 @@ export const OUTSIDE_CLOSE_CONFIRM = 'Quit this Claude? It runs outside Petal, a
 export const NO_SESSIONS = 'No Claude sessions are running. Sessions you start anywhere on this Mac show up here.';
 export const RECENT_HOURS = 12;
 
+// Onboarding and the empty reader: the first page can be a session she already has (ux review #5).
+export const FOLLOW_OFFER_TITLE = 'Follow a session you already have';
+export const FOLLOW_OFFER_LINE = 'Claude is already running outside Petal. Follow one here, read-only. You answer it where it runs.';
+export const FOLLOW_OFFER_MAX = 3;

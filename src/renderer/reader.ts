@@ -185,6 +185,8 @@ let lastUpdate: ShownUpdate | null = null;
 let claudeMissing = false;
 let claudeSetup = false; // a new user: Claude Code's first-run screens, not replies, are what's next
 let folderAllowed = true; // set at startup; off means no replies can arrive, whatever the state
+let emptyExtra: () => HTMLElement[] = () => []; // app.ts: "Follow a session you already have" (kept out of reader's imports)
+export const setEmptyExtra = (make: () => HTMLElement[]): void => { emptyExtra = make; };
 const GET_STARTED: EmptyAction = { label: 'First steps', event: 'petal:get-started' }; // the checklist; Help › Get started is the pet guide
 const SHOW_TERMINAL: EmptyAction = { label: 'Show the terminal', event: 'petal:show-terminal' };
 const ALLOW_FOLDER: EmptyAction = { label: 'Allow reading your Claude folder', event: 'petal:allow-folder' };
@@ -232,7 +234,10 @@ export function update(shown: ShownUpdate): void {
   else if (empty === 'setting-up') showMessage('Claude Code is setting up in the terminal below. Pick your options there (arrow keys and Enter).', SHOW_TERMINAL);
   else if (empty === 'running') showLive(noticeLines(shown.notice, shown.tabId));
   else if (empty === 'not-installed') showMessage('Claude Code isn’t installed yet. Install it with this command:', GET_STARTED, setupHints.installSteps());
-  else if (empty === 'start') showMessage('No conversation yet. Start here: click Add Session and pick a folder. Claude starts there in a new tab.', GET_STARTED);
+  else if (empty === 'start') {
+    showMessage('No conversation yet. Start here: click Add Session and pick a folder. Claude starts there in a new tab.', GET_STARTED);
+    status.append(...emptyExtra()); // under First steps: the quicker first page, when one is running elsewhere
+  }
   if (empty || !newest) return;
   status.classList.remove('empty');
   status.textContent = state === 'ended'

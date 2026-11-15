@@ -5,6 +5,7 @@ import * as overlays from './overlays';
 import * as consent from './consent';
 import * as repos from './repos';
 import { addAndUsePetalStyle, petalStyleActive } from './customize-styles';
+import * as followOffer from './follow-offer';
 import * as getStarted from './get-started';
 import * as tabs from './tabs';
 import * as scenes from './scenes';
@@ -417,6 +418,7 @@ function bubbleBody(s: BubbleStep): { nodes: Node[]; focus: HTMLElement | null }
   name.append(petPicture(cat, 'pb-face'), el('span', null, words().name));
   const nodes: Node[] = [name, el('p', 'pb-say', copy.say)];
   if (copy.note) nodes.push(el('p', 'pb-note', copy.note));
+  if (s === 'add-session' && !repos.isPickingSessionFolder()) nodes.push(followOffer.element(followedFromGuide)); // first page from a session she has
   const actions = el('div', 'pb-actions');
   let focus: HTMLElement | null = null;
   if (s === 'type-claude' && typeClaudeHelp(claudeFound) === 'type' && !startedItself) {
@@ -602,6 +604,12 @@ async function show(next: GuideStep): Promise<void> {
 
 const clearTargets = (): void => { for (const old of document.querySelectorAll('.pg-target')) old.classList.remove('pg-target'); };
 
+// She followed a session she already had: that page is the payoff, so the guide steps aside (Get started brings it back).
+function followedFromGuide(): void {
+  end('done');
+  announce('Following it, read-only. Help, Get started shows the setup again.');
+}
+
 function end(stage: 'done' | 'skipped'): void {
   step = null;
   terminalFor(null);
@@ -635,7 +643,7 @@ function renderSteps(): void {
   view.dataset.card = STEPS_CARD;
   const said = el('div', 'pg-said');
   said.append(petPicture(cat, 'pg-said-pet'), el('p', 'pg-said-line', WHATS_NEXT_LINE));
-  pane.append(el('h1', 'pg-title', 'What’s next'), said, getStarted.checklist());
+  pane.append(el('h1', 'pg-title', 'What’s next'), said, getStarted.checklist(), followOffer.element(closeSteps)); // a session she already has: the first page now
   const footer = el('footer', 'pg-footer');
   const actions = el('div', 'pg-actions');
   const close = button('Close', 'pg-primary gs-close', closeSteps);
