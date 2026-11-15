@@ -37,6 +37,7 @@ const STRIP = (root: string) => `(() => {
   const reader = document.getElementById('reader');
   return {
     hidden: strip.hidden || s.height === 0,
+    offer: strip.querySelector('.style-offer-cause')?.textContent ?? null,
     chips: [...strip.querySelectorAll('.status-chip')].map((c) => c.textContent),
     texts: [...strip.querySelectorAll('.status-text')].map((t) => t.textContent),
     insideHead: s.top >= head.top - 0.5 && s.bottom <= head.bottom + 0.5 && s.left >= head.left - 0.5 && s.right <= head.right + 0.5,
@@ -46,6 +47,19 @@ const STRIP = (root: string) => `(() => {
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       return reader.hidden || hit === b || b.contains(hit);
     }),
+  };
+})()`;
+
+// Book's wide pin: the header strip hidden, the reply's status block sticky in a column left of the text.
+const PINNED = `(() => {
+  const strip = document.querySelector('#reader-head .status-strip');
+  const block = document.querySelector('#latest > .prose > .status-block');
+  const text = document.querySelector('#latest > .prose > .story-head');
+  if (!block || !text) return null;
+  return {
+    stripHidden: !strip || strip.hidden || strip.getBoundingClientRect().height === 0,
+    sticky: getComputedStyle(block).position === 'sticky',
+    leftOfText: block.getBoundingClientRect().right <= text.getBoundingClientRect().left,
   };
 })()`;
 
@@ -105,9 +119,16 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
       await waitFor(async () => { win.webContents.invalidate(); return (await js('window.innerWidth')) === width; }, 3000);
       await wait(300);
       await js("document.getElementById('reader').scrollTop = 0");
-      const strip = await stripShows('#reader-head', [DOING, RECOMMEND, NEXT]);
       const m = await js(OVERLAP);
       const clear = m.scrollport >= m.header && m.first !== null && m.first >= m.header;
+      // Book at 1200px+: the lines pin in a column beside the text instead of the header strip (#817, #818).
+      if (look === 'book' && width >= 1200) {
+        const pin = await js(PINNED);
+        check(pin && pin.stripHidden && pin.sticky && pin.leftOfText && clear,
+          `${look} ${width}px lines pinned beside the text, no header strip: ${JSON.stringify({ pin, overlap: m })}`);
+        continue;
+      }
+      const strip = await stripShows('#reader-head', [DOING, RECOMMEND, NEXT]);
       check(strip && strip.insideHead && strip.aboveReader && strip.toggleClickable && clear,
         `${look} ${width}px strip in the header, column starts below it: ${JSON.stringify({ strip, overlap: m })}`);
     }
@@ -152,10 +173,11 @@ export async function statusStripCheck(kit: Kit, win: BrowserWindow, file: strin
     removeFixture();
   }
 
-  // A conversation where no reply has the lines: no strip in the reader.
+  // A conversation where no reply has the lines: no strip, or, with no Petal style on, only the Add Petal style offer (#734).
   const noLines = { state: 'live', replies: [{ id: 'strip-none', timestamp: new Date().toISOString(), prompt: 'hi', markdown: 'Hello, no status here.' }] };
   const none = await js(`(() => { PastelTerm.reader.update(${JSON.stringify(noLines)}); return ${STRIP('#reader-head')}; })()`); // same tick: the fixture feed can redraw
-  check(none?.hidden, `a reply without the lines shows no strip: ${JSON.stringify(none)}`);
+  const offerOnly = none && !none.hidden && none.chips.length === 0 && /Petal reply style/.test(none.offer ?? '');
+  check(none?.hidden || offerOnly, `a reply without the lines shows no strip, or only the style offer: ${JSON.stringify(none)}`);
   await capture('status-strip-none');
 
   await js("window.pastel.look.setReading('newspaper')");
