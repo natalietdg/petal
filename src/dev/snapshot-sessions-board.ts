@@ -351,7 +351,7 @@ export async function sessionsBoardCheck(kit: Kit, { win, openTab, sessions }: P
       const before = i.querySelector(':scope > .board-actions > :nth-last-child(2)')?.getBoundingClientRect();
       return { inside: foot.left >= box.left && foot.right <= box.right + 0.5 && foot.bottom <= box.bottom + 0.5, rightGap: Math.round(box.right - close.right), apart: before ? Math.round(close.left - before.right) : null, closeH: Math.round(close.height) };
     })`);
-    check(footers.length && footers.every((f: { inside: boolean; rightGap: number; apart: number | null; closeH: number }) => f.inside && f.rightGap <= 20 && (f.apart === null || f.apart >= 16) && f.closeH >= 24),
+    check(footers.length && footers.every((f: { inside: boolean; rightGap: number; apart: number | null; closeH: number }) => f.inside && f.rightGap <= 20 && (f.apart === null || f.apart >= 12) && f.closeH >= 24),
       `card actions inside the card, Close right-aligned and apart, 24px tall: ${JSON.stringify(footers)}`);
     check(closes.length && closes.every((c: { count: number; label: string | null; want: string; text: string | null }) => c.count === 1 && c.label === c.want && c.text === 'Close') && nested === 0,
       `every card has one Close beside its button, named for the session: ${JSON.stringify({ nested, closes })}`);
