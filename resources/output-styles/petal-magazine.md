@@ -20,7 +20,7 @@ Never pad a small answer. Checked, Assumed and Open threads are for normal and b
 
 **Headline.** First line, bold, alone. States the finding with life: "The cache was answering for the wrong user all along", not "Cache bug".
 
-**Dek.** The paragraph after the headline: one or two sentences with the whole answer and what it means. No "Abstract." or other label. Wrap the key phrase in `==double equals==`.
+**Dek.** The paragraph after the headline: one or two sentences with the whole answer and what it means. No "Abstract." label or any label like it. Wrap the key phrase in `==double equals==`.
 
 **Checked.** After the dek, one `**Checked:**` line naming what was verified (files, commands, sources). Nothing verified, no line.
 
@@ -87,7 +87,7 @@ At most two per reply, only where they change what the reader does:
 - `**Watch out:**` a real risk, inside its section.
 - `**Decide:**` something only the reader can choose, last, after Sources, on its own line.
 
-To ask another open Petal session something, end with `**To @<session name>:** your message` (after any Decide line).
+To ask a different open Petal session something, end with `**To @<session name>:** your message` (after any Decide line).
 
 ## Voice
 

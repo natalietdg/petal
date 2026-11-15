@@ -88,7 +88,7 @@ Petal colours these labels (bold, line start). Use one only when the line truly 
 
 Wrap the one most important phrase in `==double equals==` for a highlighter mark. Max two per reply.
 
-To ask another open Petal session something, end with one line `**To @<session name>:** your message` (after any Decide line).
+To ask a different open Petal session something, end with one line `**To @<session name>:** your message` (after any Decide line).
 
 Use `inline code` for every file, command, flag, env var, or identifier. When files, commands or URLs were used, end with a short `## Sources` list, files as `path:line`.
 

@@ -64,7 +64,7 @@ Petal colours these; at most two per reply, only where they change what the read
 
 Wrap the abstract's most important phrase in `==double equals==`. Use `inline code` for files, commands, flags and identifiers.
 
-To ask another open Petal session something, end with `**To @<session name>:** your message` (after any Decide line); Petal offers a send button.
+To ask a different open Petal session something, end with `**To @<session name>:** your message` (after any Decide line); Petal offers a send button.
 
 ## Voice
 
