@@ -102,6 +102,18 @@ export function lastProgress(repo: string, id: string): number {
   } catch { return 0; }
 }
 
+// A finished round's files move into round-<n>/, so the next round's verdicts start clean and History keeps the old ones.
+export function archiveRound(repo: string, id: string, names: readonly string[], round: number): void {
+  const dir = jobDir(repo, id);
+  const into = path.join(dir, `round-${round}`);
+  for (const name of names) {
+    const from = path.join(dir, name);
+    if (!fs.existsSync(from)) continue;
+    fs.mkdirSync(into, { recursive: true });
+    fs.renameSync(from, path.join(into, name));
+  }
+}
+
 // ---- git
 
 export function mainBranchOf(repo: string): string {
@@ -142,13 +154,13 @@ export function removeWorktree(job: Pick<Job, 'repo' | 'worktree' | 'branch'>, d
 
 // ---- lifecycle
 
-export interface NewJob { repo: string; ask: string; factory: Factory; parentSessionId: string | null; now?: number }
+export interface NewJob { repo: string; ask: string; factory: Factory; parentSessionId: string | null; id?: string; now?: number }
 
 // A queued job with the stations it starts with; no worktree yet (Build makes it).
-export function createJob({ repo, ask, factory, parentSessionId, now = Date.now() }: NewJob): Job {
+export function createJob({ repo, ask, factory, parentSessionId, id: given, now = Date.now() }: NewJob): Job {
   const text = ask.trim();
   if (!text) throw new Error('Say what to build after /factory.');
-  const id = newJobId(text, now, listJobs(repo).map((j) => j.id));
+  const id = given ?? newJobId(text, now, listJobs(repo).map((j) => j.id));
   return writeJob({
     version: 1, id, repo, ask: text, title: titleOf(text), state: 'queued', createdAt: now, updatedAt: now, progressAt: now,
     rework: 0, reworkCap: factory.reworkCap, askedQuestions: false,

@@ -467,6 +467,7 @@ export interface EventChannels {
   'waiting:lane': Need[]; // every window's waiting sessions, ranked; the lane, card status and dock count read it
   'waiting:open': Need; // a waiting notification was clicked: show that session (and child)
   'activity:changed': void; // the activity feed gained or changed an event
+  'factory:jobs-changed': void; // a factory job moved; Factory › Jobs, the Board and the Waiting lane re-read
   'coord:update': CoordView; // a session's task, branch or file clashes changed
   'code-review:changed': { sessionId: string }; // answers landed or a run started or ended, so open views repaint
 }

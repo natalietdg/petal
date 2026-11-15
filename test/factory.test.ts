@@ -110,8 +110,8 @@ describe('renderSkill', () => {
   });
 
   it('lists every station as a numbered step with who runs it, its instructions and pass check, in order', () => {
-    const headings = lines.filter((l) => l.startsWith('## '));
-    expect(headings).toEqual(DEFAULT_STATIONS.map((s, i) => `## ${i + 1}. ${s.name}`));
+    const headings = lines.filter((l) => l.startsWith('### '));
+    expect(headings).toEqual(DEFAULT_STATIONS.map((s, i) => `### ${i + 1}. ${s.name}`));
     for (const s of DEFAULT_STATIONS) {
       expect(skill).toContain(s.instructions);
       expect(skill).toContain(`**Pass check:** ${s.passCheck}`);
@@ -154,7 +154,7 @@ describe('renderSkill', () => {
 
   it('carries edited text through verbatim and says when a pass check is missing', () => {
     const text = renderSkill(withStations([station({ name: 'Only', instructions: 'Say “hi” <b>twice</b>.' })]), 'project');
-    expect(text).toContain('## 1. Only\n\n**Who runs it:** Claude, in this session.\n\nSay “hi” <b>twice</b>.\n\n**Pass check:** none set');
+    expect(text).toContain('### 1. Only\n\n**Who runs it:** Claude, in this session.\n\nSay “hi” <b>twice</b>.\n\n**Pass check:** none set');
   });
 });
 

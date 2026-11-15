@@ -194,7 +194,7 @@ describe('moving a saved checklist onto the spine', () => {
     expect(saved.version).toBe(2);
     expect(saved.stations.map((s: { id: string }) => s.id)).toEqual(['intake', 'build', 'review', 'approve', 'merge', 'learn']);
     expect(JSON.parse(fs.readFileSync(path.join(claudeDir, 'petal-factory.v1.json'), 'utf8'))).toEqual(v1);
-    expect(fs.readFileSync(skillFile(claudeDir), 'utf8')).toContain('## 6. Learn');
+    expect(fs.readFileSync(skillFile(claudeDir), 'utf8')).toContain('### 6. Learn');
     expect(migrateSaved({ claudeDir, repo: null })).toBe(false);
   });
 });

@@ -305,7 +305,7 @@ function whoRuns(station: Station): string {
 
 export function renderStations(stations: readonly Station[]): string {
   return stations.map((s, i) => [
-    `## ${i + 1}. ${s.name}`,
+    `### ${i + 1}. ${s.name}`,
     '',
     `**Who runs it:** ${whoRuns(s)}`,
     ...(s.instructions ? ['', s.instructions] : []),
@@ -314,12 +314,78 @@ export function renderStations(stations: readonly Station[]): string {
   ].join('\n')).join('\n\n');
 }
 
-const INTRO = 'Follow these stations in order for every build, feature or fix request. A station is done only when its pass check holds; say which station you are on as you go.';
+const INTRO = 'Every build, feature or fix in a project runs as a factory job: its own branch and its own copy of the repo, reviewers in parallel, and an approval step for risky changes. Petal watches the job’s files and moves the job along; you write the files.';
 
 // The reply line Petal pins as a progress bar in the reader's status strip (shared/station-line.ts parses it).
 function stationLineRule(stations: readonly Station[]): string {
   const first = stations[0]?.name ?? 'Intake';
-  return `**Station line.** While you work through these stations, every reply carries exactly one extra line right after its status lines (after **Next:**): \`**Station:** <n>/${stations.length} <station name> · <met or not yet>\`. Use the number and name of the station you are on, as written below, and say \`met\` once its pass check holds, \`not yet\` until then. For example: \`**Station:** 1/${stations.length} ${first} · not yet\`.`;
+  return `**Station line.** While you work a job, every reply carries exactly one extra line right after its status lines (after **Next:**): \`**Station:** <n>/${stations.length} <station name> · <met or not yet>\`. Use the number and name of the station you are on, as written below, and say \`met\` once its pass check holds, \`not yet\` until then. For example: \`**Station:** 1/${stations.length} ${first} · not yet\`.`;
+}
+
+const REPO_KEY_RULE = '`<repoKey>` is the output of `git rev-parse --show-toplevel` with every character that is not a letter or digit replaced by `-` (for example `/home/me/shop` becomes `-home-me-shop`).';
+
+function reviewerLines(reviewers: readonly Reviewer[]): string {
+  return reviewers.map((r) => `- \`${r.name}\`: a \`${r.agentType}\` subagent${r.when === 'visual' ? ', only when the diff touches how something looks (CSS, layout, themes, icons, components, renderer files)' : ''}. It writes \`review-${r.name}.md\`.`).join('\n');
+}
+
+function riskyLines(risky: readonly RiskRule[]): string {
+  return risky.map((r) => `- ${r.label}: ${r.patterns.map((p) => `\`${p}\``).join(', ')}`).join('\n');
+}
+
+// The orchestrator: what /factory and its subcommands do, the files and their first lines, then the stations.
+function renderOrchestrator(factory: Factory): string {
+  return `## Where a job lives
+
+- Job folder: \`~/.petal/repos/<repoKey>/factory/jobs/<job>/\`, where ${REPO_KEY_RULE}
+- Its copy of the repo: \`~/.petal/worktrees/<repoKey>/<job>\`, on branch \`factory/<job>\`. Nothing about a job is written inside the repo.
+- \`<job>\` is today's date as \`YYYYMMDD\`, a dash, and the ask in lowercase with every run of other characters turned into one dash, at most 28 characters (add \`-2\`, \`-3\` if that folder exists).
+- \`job.json\` is Petal's. Read it for the job's \`state\`, \`stations\`, \`reviewers\`, \`rework\` and \`guidance\`; never write it. After you write a hand-off file, wait a few seconds and read \`state\` again: Petal moves the job from your files.
+
+## Hand-off files
+
+Each file's first line is what Petal reads. Write the first line exactly, then whatever detail helps.
+
+| File | First line | Written at |
+|---|---|---|
+| \`request.md\` | \`STATUS: intake\`, then \`Repo: <git toplevel>\`, \`Session: <this session's id, if known>\`, a blank line, the ask | /factory |
+| \`spec.md\` | \`STATUS: ready\`, or \`STATUS: confirm\` when you asked questions at Intake | Intake |
+| \`build.md\` | \`STATUS: working\`, then \`STATUS: done · <one line>\` or \`STATUS: blocked · <why>\` | Build |
+| \`review-<name>.md\` | \`VERDICT: PASS\` or \`VERDICT: FAIL · <the main problem>\` | Review |
+| \`decision.md\` | \`VERDICT: PASS\` or \`VERDICT: FAIL · <note>\` | approve, rework |
+
+## Commands
+
+**/factory <ask>.** Runs Intake here, in this session, because this is where the user is.
+1. Make the job folder and write \`request.md\`.
+2. Intake: restate the ask, list the acceptance checks, and ask every question at once (one AskUserQuestion). Unless the ask is small enough for three stations or fewer, call the \`token\` agent once to name the model for each role (builder, each reviewer) and write its picks under \`## Models\` in \`spec.md\`.
+3. Write \`spec.md\`. Its first line is \`STATUS: confirm\` if you asked questions, so the user checks the spec before building; otherwise \`STATUS: ready\`.
+4. Read \`state\`. \`building\`: start the job (below). \`queued\`: two jobs already run in this repo; say it waits for \`/factory next\`. \`spec\`: say \`/factory approve <job>\` starts it.
+
+**Starting a job.** In the repo, \`git worktree add -b factory/<job> ~/.petal/worktrees/<repoKey>/<job> <main branch>\` if that copy doesn't exist yet. Then start its runner in the background with Bash (run_in_background): \`cd ~/.petal/worktrees/<repoKey>/<job> && claude -p "Use the factory skill: /factory run <job>" --permission-mode acceptEdits\`. Tell the user the job is running and go back to what they were doing. Petal shows its progress and calls them when it needs them.
+
+**/factory next.** List the job folders, read each \`job.json\`, and start the oldest \`queued\` job. If its \`spec.md\` is missing, run Intake for it first, as for /factory <ask>.
+
+**/factory approve <job>.** At \`spec\`: change the first line of \`spec.md\` to \`STATUS: approved\`, then start the job. At \`approve\` or \`escalated\`: write \`decision.md\` with \`VERDICT: PASS\`. Petal merges from \`approve\`; from \`escalated\` (after the user took over) start the runner again so it reviews their work.
+
+**/factory rework <job> <note>.** Write \`decision.md\` with \`VERDICT: FAIL · <note>\` and start the runner again. The note reaches the builder as \`guidance\`.
+
+**/factory run <job>.** The job's runner, in its copy. Loop on \`state\`:
+- \`building\` or \`rework\`: write \`build.md\` with \`STATUS: working\`. Run the stations between Build and Review in \`stations\`, in order, then Build itself with a subagent briefed with \`spec.md\`, the \`guidance\` and any \`round-*/review-*.md\` from earlier rounds. Commit on \`factory/<job>\` and run the project's unit tests in this copy. Then set \`build.md\` to \`STATUS: done · <one line>\`, or \`STATUS: blocked · <why>\` if it can't be done.
+- \`reviewing\`: \`git diff --name-only <main branch>...factory/<job>\` lists the changed files. Start every reviewer that applies in one message, all at once, each briefed with \`spec.md\` and the diff, each writing its own review file.
+- \`rework\` again: Petal moved the last round's files into \`round-<n>/\`; build again from their verdicts.
+- \`approve\`, \`escalated\`, \`merging\`, \`done\`, \`discarded\`: stop. The user or Petal takes it from here.
+
+## Rules
+
+- Never merge, push or touch the main checkout. Petal merges into main on this computer (only when that checkout has nothing uncommitted) or pushes the job branch and stops at a pull request, as the repo's ship mode says.
+- A job keeps the stations, reviewers and risky paths it started with: read them from \`job.json\`, not from below.
+- After ${factory.reworkCap} reworks a failing review goes to the user (\`escalated\`).
+- A change touching any of these paths waits for the user's approval before it merges:
+${riskyLines(factory.risky)}
+
+## Reviewers
+
+${reviewerLines(factory.reviewers)}`;
 }
 
 // global: SKILL.md with frontmatter (Claude Code reads it from line 1), the marker as the first body line.
@@ -332,9 +398,13 @@ export function renderSkill(factory: Factory, scope: 'global' | 'project' | 'pro
     scope !== 'global' ? `# Software factory for ${projectName ?? 'this project'}` : '# Software factory',
     '',
     INTRO,
+    ...(scope === 'global' ? ['', `If the project you are working in has its own factory, follow it instead of this one. It is in \`~/.petal/repos/<repoKey>/factory.md\`, where ${REPO_KEY_RULE}`] : []),
+    '',
+    renderOrchestrator(factory),
+    '',
+    '## Stations',
     '',
     stationLineRule(factory.stations),
-    ...(scope === 'global' ? ['', 'If the project you are working in has its own stations, follow them instead of the stations below. They are in `~/.petal/repos/<repoKey>/factory.md`, where `<repoKey>` is the output of `git rev-parse --show-toplevel` with every character that is not a letter or digit replaced by `-` (for example `/home/me/shop` becomes `-home-me-shop`).'] : []),
     '',
     renderStations(factory.stations),
     '',

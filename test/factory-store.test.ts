@@ -66,7 +66,7 @@ describe('global save', () => {
     expect(JSON.parse(read(globalJson(claudeDir)))).toEqual(edited('Intake plus'));
     const skill = read(skillFile(claudeDir));
     expect(skill).toBe(renderSkill(edited('Intake plus'), 'global'));
-    expect(skill).toContain('## 1. Intake plus');
+    expect(skill).toContain('### 1. Intake plus');
     expect(skill).toContain('Intake plus instructions');
     expect(state).toMatchObject({ follows: 'global', skill: { state: 'generated' }, global: { saved: true, problem: null } });
   });
@@ -77,8 +77,8 @@ describe('global save', () => {
     factory.stations.push({ id: 'learn', name: 'Learn', instructions: 'Write a retro.', passCheck: 'A retro is written.', runner: 'claude' });
     [factory.stations[2], factory.stations[1]] = [factory.stations[1], factory.stations[2]]; // Test before Build
     saveFactory(paths, 'global', factory);
-    const headings = read(skillFile(claudeDir)).split('\n').filter((l) => /^## \d+\. /.test(l));
-    expect(headings).toEqual(['## 1. Intake', '## 2. Test', '## 3. Build', '## 4. Review', '## 5. Approve', '## 6. Merge', '## 7. Learn']);
+    const headings = read(skillFile(claudeDir)).split('\n').filter((l) => /^### \d+\. /.test(l));
+    expect(headings).toEqual(['### 1. Intake', '### 2. Test', '### 3. Build', '### 4. Review', '### 5. Approve', '### 6. Merge', '### 7. Learn']);
     [factory.stations[0], factory.stations[1]] = [factory.stations[1], factory.stations[0]];
     expect(() => saveFactory(paths, 'global', factory)).toThrow(/Intake has to come first/);
   });
@@ -98,10 +98,10 @@ describe('global save', () => {
   });
 
   it('replaces its own earlier skill', () => {
-    saveFactory(paths, 'global', edited('First'));
+    saveFactory(paths, 'global', edited('Alpha'));
     saveFactory(paths, 'global', edited('Second'));
-    expect(read(skillFile(claudeDir))).toContain('## 1. Second');
-    expect(read(skillFile(claudeDir))).not.toContain('First');
+    expect(read(skillFile(claudeDir))).toContain('### 1. Second');
+    expect(read(skillFile(claudeDir))).not.toContain('Alpha');
   });
 
   it('is atomic: a failed rename keeps the old file and leaves no temp file', () => {
@@ -111,7 +111,7 @@ describe('global save', () => {
     expect(() => saveFactory(paths, 'global', edited('New'))).toThrow('disk full');
     vi.restoreAllMocks();
     expect(read(globalJson(claudeDir))).toBe(before);
-    expect(read(skillFile(claudeDir))).toContain('## 1. Old');
+    expect(read(skillFile(claudeDir))).toContain('### 1. Old');
     expect(listAll(claudeDir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
   });
 
@@ -132,7 +132,7 @@ describe('project override', () => {
     const md = read(projectMd(repo));
     expect(md.split('\n')[0]).toBe(GENERATED_MARKER);
     expect(md).toContain(`# Software factory for ${path.basename(repo)}`);
-    expect(md).toContain('## 1. Project intake');
+    expect(md).toContain('### 1. Project intake');
     expect(listAll(repo)).toEqual(['.git']); // no .petal, no .claude, no .gitignore
     expect(listAll(claudeDir)).toEqual([]); // no global skill, no global JSON: other repos stay untouched
     expect(state).toMatchObject({ follows: 'none', skill: { state: 'missing' }, project: { factory: edited('Project intake') } });
@@ -254,11 +254,11 @@ describe('the IPC asks the folder gate', () => {
   it('allowed: saves to the stand-in, and a project write must name the active repo', async () => {
     await register('allowed');
     handlers.get('factory:save')?.(event, { scope: 'global', repo: null, factory: edited('X') });
-    expect(read(skillFile(claudeDir))).toContain('## 1. X');
+    expect(read(skillFile(claudeDir))).toContain('### 1. X');
     expect(() => handlers.get('factory:save')?.(event, { scope: 'project', repo: '/somewhere/else', factory: edited('X') })).toThrow(/another project/);
     expect(() => handlers.get('factory:use-global')?.(event, { repo: '/somewhere/else' })).toThrow(/another project/);
     handlers.get('factory:save')?.(event, { scope: 'project', repo, factory: edited('P') });
-    expect(read(projectMd(repo))).toContain('## 1. P');
+    expect(read(projectMd(repo))).toContain('### 1. P');
   });
 });
 
@@ -272,7 +272,7 @@ describe('symlinks', () => {
   });
 
   it('a symlinked global skill stays a link and its target gets the update', () => {
-    saveFactory(paths, 'global', edited('First'));
+    saveFactory(paths, 'global', edited('Alpha'));
     const dotfiles = tempDir('petal-factory-dotfiles-');
     const real = path.join(dotfiles, 'SKILL.md');
     fs.renameSync(skillFile(claudeDir), real);

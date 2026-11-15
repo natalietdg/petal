@@ -19,7 +19,7 @@ import { registerLibraryIpc } from './library-ipc';
 import { registerTestingIpc } from './testing-ipc';
 import { registerSessionInfoIpc } from './session-info';
 import { registerSessionPrsIpc } from './session-prs-ipc';
-import { registerFactoryIpc } from './factory-ipc';
+import { registerFactoryIpc, startJobWatch } from './factory-ipc';
 import { registerCustomizeIpc } from './customize-ipc';
 import { registerReposIpc } from './repos-ipc';
 import { registerPasteIpc } from './paste-ipc';
@@ -190,6 +190,7 @@ function registerIpc(): void {
   registerSessionInfoIpc({ sessions });
   registerSessionPrsIpc({ sessions });
   registerFactoryIpc({ activeSession });
+  startJobWatch();
   registerResumeNotesIpc();
   registerLookIpc();
   registerTabIpc();

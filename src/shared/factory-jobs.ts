@@ -25,7 +25,7 @@ export const isFinished = (state: JobState): boolean => FINISHED.includes(state)
 
 // Every move a job may make. Any unfinished state may also stall or be discarded.
 const NEXT: Record<JobState, readonly JobState[]> = {
-  queued: ['intake'],
+  queued: ['intake', 'building'], // building: /factory next started it, its spec already done
   intake: ['spec', 'building', 'queued'], // queued: intake done but two jobs already run in this repo
   spec: ['building', 'queued'],
   building: ['reviewing', 'escalated'],
@@ -121,7 +121,7 @@ export function firstLine(text: string): FirstLine | null {
 
 export const REVIEW_FILE = /^review-([a-z0-9-]+)\.md$/;
 export const reviewFile = (name: string): string => `review-${name}.md`;
-export const HANDOFF_FILES = ['spec.md', 'build.md', 'decision.md'] as const;
+export const HANDOFF_FILES = ['request.md', 'spec.md', 'build.md', 'decision.md'] as const;
 
 // The files in a job's folder, name → first line (null when the file has none Petal can read).
 export type Handoffs = Readonly<Record<string, FirstLine | null>>;
@@ -273,5 +273,79 @@ export function stateLabel(job: Pick<Job, 'state' | 'rework' | 'reworkCap' | 'st
     case 'done': return job.shipMode === 'pr' ? 'Branch pushed · open a pull request' : job.merge?.undoneBy ? 'Merge undone' : 'Merged locally · not pushed';
     case 'stalled': return `No progress for 10 min · Resume from ${job.stalledFrom ?? 'the last step'}`;
     case 'discarded': return 'Discarded';
+  }
+}
+
+// ---- the files drive the job
+
+// request.md, written by Claude on /factory: "STATUS: intake" (or "queued" for later), then "Repo: <path>", "Session: <id>", a blank line, the ask.
+export interface Request { status: string; repo: string; sessionId: string | null; ask: string }
+
+export function parseRequest(text: string): Request | null {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const head = firstLine(text);
+  if (head?.kind !== 'STATUS') return null;
+  const field = (name: string): string | null => lines.find((l) => l.toLowerCase().startsWith(`${name.toLowerCase()}:`))?.slice(name.length + 1).trim() || null;
+  const repo = field('Repo');
+  if (!repo || !repo.startsWith('/')) return null;
+  const blank = lines.findIndex((l, i) => i > 0 && !l.trim());
+  const ask = blank === -1 ? '' : lines.slice(blank + 1).join('\n').trim();
+  return ask ? { status: head.value, repo, sessionId: field('Session'), ask } : null;
+}
+
+// One move Petal makes after reading the job's files. archive: the files that go into round-<n>/ first, so the next
+// round starts clean.
+export interface Step { to: JobState; note?: string; archive?: readonly string[]; patch?: Partial<Pick<Job, 'riskyHits' | 'askedQuestions'>> }
+
+export interface ReconcileContext {
+  changed: readonly string[]; // files the job's branch changed against main
+  freeSlot: boolean; // fewer than two jobs run in its repo
+}
+
+const reviewNames = (h: Handoffs): string[] => Object.keys(h).filter((n) => REVIEW_FILE.test(n));
+
+// The next state the files call for, or null when they call for nothing new. Petal applies one step per call and
+// calls again, so a job that is several files ahead catches up in one pass.
+export function reconcile(job: Job, h: Handoffs, ctx: ReconcileContext): Step | null {
+  const spec = h['spec.md'];
+  const build = h['build.md'];
+  const decision = h['decision.md'];
+  const status = (f: FirstLine | null | undefined): string | null => (f?.kind === 'STATUS' ? f.value : null);
+  const verdict = (f: FirstLine | null | undefined): 'PASS' | 'FAIL' | null => (f?.kind === 'VERDICT' ? f.value : null);
+  const startBuild = (): Step => (ctx.freeSlot ? { to: 'building' } : { to: 'queued', note: 'Two jobs already run in this repo' });
+  switch (job.state) {
+    case 'queued':
+      if (status(build)) return { to: 'building' };
+      if (!spec && status(h['request.md']) === 'intake') return { to: 'intake' };
+      return null;
+    case 'intake':
+      if (status(spec) === 'confirm') return { to: 'spec', patch: { askedQuestions: true } };
+      if (status(spec) === 'ready' || status(spec) === 'approved') return startBuild();
+      return null;
+    case 'spec':
+      return status(spec) === 'approved' ? startBuild() : null;
+    case 'building':
+    case 'rework':
+      if (status(build) === 'done') return { to: 'reviewing' };
+      if (status(build) === 'blocked') return { to: 'escalated', note: (build as FirstLine).rest || 'The build is blocked' };
+      return null;
+    case 'reviewing': {
+      const expected = reviewersFor(job.reviewers, ctx.changed).map((r) => r.name);
+      const verdicts = Object.fromEntries(expected.map((name) => [name, h[reviewFile(name)] ?? null]));
+      const out = afterReview(job, verdicts, expected, ctx.changed);
+      if (!out) return null;
+      const archive = out.to === 'rework' ? ['build.md', ...reviewNames(h)] : undefined;
+      return { to: out.to, note: out.reason, ...(archive ? { archive } : {}), patch: { riskyHits: out.hits } };
+    }
+    case 'approve':
+      if (verdict(decision) === 'PASS') return { to: 'merging', note: 'Approved' };
+      if (verdict(decision) === 'FAIL') return { to: 'rework', note: (decision as FirstLine).rest || 'Sent back', archive: ['build.md', 'decision.md', ...reviewNames(h)] };
+      return null;
+    case 'escalated':
+      if (verdict(decision) === 'FAIL') return { to: 'rework', note: (decision as FirstLine).rest || 'Guidance given', archive: ['build.md', 'decision.md', ...reviewNames(h)] };
+      if (verdict(decision) === 'PASS') return { to: 'reviewing', note: 'Taken over, reviewing again', archive: ['decision.md', ...reviewNames(h)] };
+      return null;
+    default:
+      return null;
   }
 }

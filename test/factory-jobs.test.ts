@@ -39,7 +39,7 @@ describe('moves', () => {
   });
 
   it('refuses moves the spine does not have', () => {
-    expect(move(job(), 'building', T0).ok).toBe(false);
+    expect(move(job(), 'reviewing', T0).ok).toBe(false);
     expect(move(job({ state: 'building' }), 'merging', T0)).toEqual({ ok: false, problem: 'A job can’t go from building to merging.' });
     expect(canMove(job({ state: 'done' }), 'discarded')).toBe(false);
     expect(canMove(job({ state: 'discarded' }), 'intake')).toBe(false);
