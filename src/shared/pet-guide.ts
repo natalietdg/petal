@@ -170,7 +170,7 @@ export const styleCost = (tokens: number): string =>
 export const STYLE_LABELS = { use: 'Use this style', later: 'Not now', undo: 'Undo', next: 'Next' } as const;
 
 // The style is Claude Code's own setting, so it changes Claude's writing beyond Petal too (ux review #3).
-export const STYLE_SCOPE = 'It changes how Claude writes everywhere Claude Code runs on this Mac: in Petal, VS Code, the desktop app and your terminals.';
+export const STYLE_SCOPE = 'The style changes how Claude writes everywhere Claude Code runs on this Mac: in Petal, VS Code, the desktop app and your terminals.';
 export const styleUsedLine = (name: string): string => `Claude now writes in ${name.replace(/^Petal · /, '')} everywhere Claude Code runs. Undo puts back the style you had before.`;
 export const STYLE_UNDONE = 'Put back the style you had before.';
 
