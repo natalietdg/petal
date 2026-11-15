@@ -48,10 +48,12 @@ function jobAt(state: 'escalated' | 'approve' | 'reviewing', over: { riskyHits?:
 
 describe('what a waiting job says', () => {
   it('names the risky file at Approve and the failing reviewer when stuck', () => {
-    const base = { reworkCap: 2, blocked: null, events: [] };
+    const base = { rework: 2, reworkCap: 2, blocked: null, events: [] };
     expect(waitReason({ ...base, state: 'approve', riskyHits: [{ file: 'src/auth.ts', label: 'auth' }] }, {})).toBe('Approve merge · touches auth (src/auth.ts)');
     expect(waitReason({ ...base, state: 'escalated', riskyHits: [] }, { 'review-code.md': { kind: 'VERDICT', value: 'FAIL', rest: 'no test for the limit' } })).toBe('Stuck after 2 tries · code: no test for the limit');
-    expect(waitReason({ ...base, state: 'merging', riskyHits: [], blocked: 'Commit or stash in shop to merge' }, {})).toBe('Commit or stash in shop to merge');
+    expect(waitReason({ ...base, state: 'merging', riskyHits: [], blocked: 'Commit or stash in shop to merge' }, {})).toBe('Commit or stash in shop to merge · Petal tries again on its own');
+    expect(waitReason({ ...base, state: 'merging', riskyHits: [], blocked: 'Couldn’t merge. Take over to see why.' }, {})).toBe('Couldn’t merge. Take over to see why.');
+    expect(waitReason({ ...base, rework: 0, state: 'escalated', riskyHits: [], events: [{ at: 1, from: 'building', to: 'escalated', note: 'needs an API key' }] }, {})).toBe('Builder is stuck · needs an API key');
     expect(waitReason({ ...base, state: 'building', riskyHits: [] }, {})).toBeNull();
   });
 
@@ -59,10 +61,13 @@ describe('what a waiting job says', () => {
     expect(jobsBadge([{ state: 'building', waitReason: null }, { state: 'approve', waitReason: 'x' }, { state: 'done', waitReason: null }])).toBe('2 jobs · 1 waiting');
     expect(jobsBadge([{ state: 'stalled', waitReason: null }])).toBe('1 job · 1 stalled');
     expect(jobsBadge([{ state: 'done', waitReason: null }])).toBe('');
-    expect(actionsFor({ state: 'escalated', shipMode: 'local-merge', merged: false, undone: false })).toEqual(['guidance', 'take-over', 'approve', 'discard']);
-    expect(actionsFor({ state: 'stalled', shipMode: 'local-merge', merged: false, undone: false })).toEqual(['resume', 'take-over', 'discard']);
-    expect(actionsFor({ state: 'done', shipMode: 'local-merge', merged: true, undone: false })).toEqual(['undo-merge']);
-    expect(actionsFor({ state: 'done', shipMode: 'pr', merged: false, undone: false })).toEqual([]);
+    const v = { shipMode: 'local-merge' as const, merged: false, undone: false, takenOver: false };
+    expect(actionsFor({ ...v, state: 'escalated' })).toEqual(['guidance', 'take-over', 'discard']);
+    expect(actionsFor({ ...v, state: 'escalated', takenOver: true })).toEqual(['approve', 'guidance', 'take-over', 'discard']); // "I fixed it" only after Take over
+    expect(actionsFor({ ...v, state: 'approve' })).toEqual(['take-over', 'approve', 'reject', 'discard']);
+    expect(actionsFor({ ...v, state: 'stalled' })).toEqual(['resume', 'take-over', 'discard']);
+    expect(actionsFor({ ...v, state: 'done', merged: true })).toEqual(['undo-merge']);
+    expect(actionsFor({ ...v, state: 'done', shipMode: 'pr' })).toEqual([]);
   });
 });
 
@@ -143,6 +148,7 @@ describe('her buttons', () => {
     const job = jobAt('escalated');
     const { takeOver } = await jobAction(repo, job.id, 'take-over');
     expect(takeOver).toBe(worktreeOf(repo, job.id));
+    expect(readJob(repo, job.id)?.takenOver).toBe(true);
     expect(fs.existsSync(takeOver!)).toBe(true);
     expect((await jobAction(repo, job.id, 'discard')).job?.state).toBe('discarded');
     expect(fs.existsSync(takeOver!)).toBe(false);
@@ -153,5 +159,20 @@ describe('her buttons', () => {
     await expect(jobAction(repo, job.id, 'approve')).rejects.toThrow('Nothing here waits for approval');
     await expect(jobAction(repo, job.id, 'resume')).rejects.toThrow('Only a stalled job can resume');
     await expect(jobAction(repo, 'nope', 'discard')).rejects.toThrow('That job is gone');
+  });
+});
+
+describe('runners start in one place', () => {
+  it('a queued job with a ready spec starts when a slot frees, once; one without a spec waits for Intake', async () => {
+    const { ensureRunners } = await import('../src/main/factory-jobs-view');
+    const ready = createJob({ repo, ask: 'Ready one', factory: defaultFactory(), parentSessionId: null });
+    fs.writeFileSync(path.join(jobDir(repo, ready.id), 'spec.md'), 'STATUS: ready\n');
+    const bare = createJob({ repo, ask: 'No spec yet', factory: defaultFactory(), parentSessionId: null, now: Date.now() + 1 });
+    const started = await ensureRunners();
+    expect(started.map((j) => j.id)).toEqual([ready.id]);
+    expect(readJob(repo, ready.id)).toMatchObject({ state: 'building', runnerAt: 1 });
+    expect(readJob(repo, bare.id)?.state).toBe('queued');
+    expect(await ensureRunners()).toEqual([]); // the same move never starts a second runner
+    expect(spawned).toHaveLength(1);
   });
 });

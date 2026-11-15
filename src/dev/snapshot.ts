@@ -72,6 +72,7 @@ import { historyLayoutCheck } from './snapshot-history-layout';
 import { petSizeCheck } from './snapshot-pet-size';
 import { customizeStylesCheck } from './snapshot-customize-styles';
 import { factoryCheck } from './snapshot-factory';
+import { factoryJobsCheck } from './snapshot-factory-jobs';
 import { formattingGuideCheck } from './snapshot-formatting-guide';
 import { favoritesCheck } from './snapshot-favorites';
 import { sessionNamesCheck } from './snapshot-session-names';
@@ -440,6 +441,7 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
     ['factory', () => factoryCheck(kit, win)],
+    ['factory jobs', () => factoryJobsCheck(kit, { win, openTab: tabs.openTab })], // a fixture tab; closes it after
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
@@ -916,6 +918,13 @@ export async function run({ win, sessions, activeSession, openTab, themes, apply
     const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
     await fixtureReply({ js, log, pty });
     await textSizeCheck(kit, win, { activeSession }).catch((error: Error) => log(`FAIL ${error.stack}`));
+    return finish();
+  }
+
+  if (process.env.PASTEL_SNAPSHOT_MODE === 'factory-jobs' && fakeTranscript()) {
+    const kit: Kit = { js, capture, log, wait, waitFor, verifiedCapture, themes, applyTheme, outDir: outDir() };
+    await fixtureReply({ js, log, pty });
+    await factoryJobsCheck(kit, { win, openTab }).catch((error: Error) => log(`FAIL ${error.stack}`));
     return finish();
   }
 

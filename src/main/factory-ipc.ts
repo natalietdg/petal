@@ -3,8 +3,8 @@
 import { BrowserWindow } from 'electron';
 import { handle, send } from './ipc';
 import path from 'node:path';
-import { tick } from './factory-jobs-watch';
-import { jobAction, jobSignals, jobsView, markSeen } from './factory-jobs-view';
+import { jobRepos, tick } from './factory-jobs-watch';
+import { ensureRunners, jobAction, jobSignals, jobsView, markSeen } from './factory-jobs-view';
 import { listJobs, saveShipMode, writeJob } from './factory-jobs-store';
 import { recordActivity } from './activity-feed';
 import * as needsYouHub from './needs-you-hub';
@@ -32,22 +32,29 @@ export function startJobWatch(onChange: () => void = () => {}): () => void {
   const timer = setInterval(() => {
     let moved: Job[] = [];
     try { moved = tick({ factoryFor }); } catch (error) { console.warn('[petal] factory watch:', (error as Error).message); }
-    if (moved.length) jobsMoved(moved);
-    onChange();
+    void ensureRunners().then((started) => { if (started.length) jobsMoved(started); }).catch((error: Error) => console.warn('[petal] factory runners:', error.message));
+    jobsMoved(moved); // every tick: the lane also learns of jobs that appeared without moving (after a restart)
+    if (moved.length) onChange();
   }, WATCH_MS);
   timer.unref?.();
   jobsMoved([]);
   return () => clearInterval(timer);
 }
 
+let shownJobs = ''; // what windows last heard about: every job's id, state and last write
+
 // Windows re-read, the lane gets the waiting jobs, and the feed records each job that needs her or finished.
+// Windows also re-read when jobs appear or change on disk without a move (after a restart, or a job removed).
 function jobsMoved(moved: readonly Job[]): void {
   for (const job of moved) {
     if (!isWaiting(job.state) && !isFinished(job.state) && job.state !== 'stalled' && job.state !== 'spec') continue;
     recordActivity({ id: `job-${job.id}-${job.state}`, kind: 'job', sessionId: job.parentSessionId, sessionName: null, branch: job.branch, repo: path.basename(job.repo), text: `${job.title}: ${stateLabel(job)}` });
   }
   try { needsYouHub.setJobs(jobSignals()); } catch (error) { console.warn('[petal] factory lane:', (error as Error).message); }
-  if (moved.length) for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'factory:jobs-changed');
+  const key = JSON.stringify(jobRepos().flatMap((repo) => listJobs(repo).map((j) => [j.id, j.state, j.updatedAt])));
+  if (!moved.length && key === shownJobs) return;
+  shownJobs = key;
+  for (const win of BrowserWindow.getAllWindows()) send(win.webContents, 'factory:jobs-changed');
 }
 
 export function registerFactoryIpc({ activeSession }: { activeSession: ActiveSession }): void {

@@ -226,6 +226,7 @@ function node(root: HTMLElement, view: View, stations: Station[], i: number, edi
     item.classList.add('fx-spine');
     tools.append(addAfter);
     item.append(tools);
+    if (i > 0) dropTarget(item, i, (from) => persist(root, view, moved(stations, from, i), null)); // a station of hers can land here
     return item;
   }
   const move = (to: number, tool: 'left' | 'right') => {
@@ -266,6 +267,11 @@ function dragAndDrop(item: HTMLLIElement, index: number, onDrop: (from: number) 
     item.classList.add('fx-dragging');
   });
   item.addEventListener('dragend', () => item.classList.remove('fx-dragging'));
+  dropTarget(item, index, onDrop);
+}
+
+// Spine cards can't be dragged but take a drop, so a custom station can move between any two stages.
+function dropTarget(item: HTMLLIElement, index: number, onDrop: (from: number) => void): void {
   item.addEventListener('dragover', (event) => {
     if (!event.dataTransfer?.types.includes('application/x-petal-station')) return;
     event.preventDefault();

@@ -14,11 +14,12 @@ import {
   discardJob, git, jobDir, listJobs, readHandoffs, readJob, shipSetting, undoMerge, worktreeOf, writeJob, mainBranchOf,
 } from './factory-jobs-store';
 import { jobRepos, stepJob } from './factory-jobs-watch';
+import { changedFiles, moveJob } from './factory-jobs-store';
 import { repoKey } from './petal-repos';
 import { sumUsage, totalTokens } from '../shared/token-usage';
 import { jobSessionId, type SessionSignals } from '../shared/needs-you';
 import {
-  REVIEW_FILE, isFinished, move, stateLabel, waitReason, type Job, type JobAction, type JobView, type JobsView, type RepoJobs,
+  REVIEW_FILE, isFinished, move, needsRunner, startable, stateLabel, waitReason, type Job, type JobAction, type JobView, type JobsView, type RepoJobs,
 } from '../shared/factory-jobs';
 
 const SPEND_FILE_CAP = 64 * 1024 * 1024;
@@ -56,23 +57,32 @@ export function markSeen(repo: string): void {
   writeFileDurable(seenFile(repo), `${JSON.stringify({ at: new Date().toISOString() })}\n`, undefined, { within });
 }
 
-export function jobView(job: Job): JobView {
+const SPEC_SHOWN = 6000;
+const readSpec = (job: Job): string | null => { try { return fs.readFileSync(path.join(jobDir(job.repo, job.id), 'spec.md'), 'utf8').slice(0, SPEC_SHOWN); } catch { return null; } };
+
+export function jobView(job: Job, queuePlace = 0): JobView {
   const handoffs = readHandoffs(job.repo, job.id);
   const verdicts = Object.entries(handoffs)
     .filter(([name, line]) => (REVIEW_FILE.test(name) || name === 'decision.md') && line)
     .map(([name, line]) => ({ name: name === 'decision.md' ? 'you' : REVIEW_FILE.exec(name)?.[1] ?? name, line: `${line?.kind === 'VERDICT' ? line.value : line?.value ?? ''}${line?.rest ? ` · ${line.rest}` : ''}` }));
   return {
-    id: job.id, repo: job.repo, repoName: path.basename(job.repo), title: job.title, ask: job.ask, state: job.state, label: stateLabel(job),
+    id: job.id, repo: job.repo, repoName: path.basename(job.repo), title: job.title, ask: job.ask, state: job.state, label: stateLabel(job, queuePlace),
     waitReason: waitReason(job, handoffs), since: job.events.at(-1)?.at ?? job.createdAt, rework: job.rework, reworkCap: job.reworkCap,
     shipMode: job.shipMode, riskyHits: job.riskyHits, verdicts, tokens: jobSpend(job.worktree), prUrl: job.prUrl,
     merged: Boolean(job.merge), undone: Boolean(job.merge?.undoneBy), parentSessionId: job.parentSessionId,
-    stalledFrom: job.stalledFrom ?? null, updatedAt: job.updatedAt,
+    stalledFrom: job.stalledFrom ?? null, updatedAt: job.updatedAt, takenOver: Boolean(job.takenOver),
+    spec: job.state === 'spec' || job.state === 'approve' ? readSpec(job) : null,
+    changes: job.state === 'approve' ? changedFiles(job) : null,
   };
 }
 
+// 1 for the next queued job in its repo, 2 for the one after; 0 when not queued.
+const queuePlaceOf = (job: Job, all: readonly Job[]): number =>
+  job.state === 'queued' ? all.filter((j) => j.state === 'queued').sort((a, b) => a.createdAt - b.createdAt).findIndex((j) => j.id === job.id) + 1 : 0;
+
 function repoJobs(repo: string): RepoJobs {
   const ship = shipSetting(repo);
-  return { repo, name: path.basename(repo), ship: { mode: ship.mode, detected: ship.detected, saved: ship.saved }, seen: firstRunSeen(repo), jobs: listJobs(repo).map(jobView) };
+  return { repo, name: path.basename(repo), ship: { mode: ship.mode, detected: ship.detected, saved: ship.saved }, seen: firstRunSeen(repo), jobs: listJobs(repo).map((job, _i, all) => jobView(job, queuePlaceOf(job, all))) };
 }
 
 // The active tab's repo first (even with no jobs, for the first-run card), then every repo that has jobs.
@@ -117,7 +127,29 @@ export async function startRunner(job: Job): Promise<Job> {
     child.unref();
   }
   if (job.parentSessionId) links.add([{ childId: sessionId, parentId: job.parentSessionId, cwd: job.worktree, name: job.title, at: Date.now() }]);
-  return writeJob({ ...job, childSessionIds: [...job.childSessionIds, sessionId] });
+  return writeJob({ ...job, childSessionIds: [...job.childSessionIds, sessionId], runnerAt: job.events.length });
+}
+
+// The one place a runner starts: a job that just entered a stage that needs one, once per move.
+export async function ensureRunner(job: Job): Promise<Job> {
+  return needsRunner(job) ? startRunner(job) : job;
+}
+
+// Every tick: queued jobs whose spec is ready start as slots free, oldest first; then every job owed a runner gets one.
+export async function ensureRunners(): Promise<Job[]> {
+  const started: Job[] = [];
+  for (const repo of jobRepos()) {
+    for (const job of startable(listJobs(repo))) {
+      const spec = readHandoffs(repo, job.id)['spec.md'];
+      if (spec?.kind !== 'STATUS' || !['ready', 'approved'].includes(spec.value)) continue; // Intake isn't done: /factory next runs it
+      moveJob(repo, job.id, 'building', 'A slot freed');
+    }
+    for (const job of listJobs(repo)) {
+      if (!needsRunner(job)) continue;
+      try { started.push(await startRunner(job)); } catch (error) { console.warn(`[petal] factory runner for ${job.id}:`, (error as Error).message); }
+    }
+  }
+  return started;
 }
 
 // ---- her buttons
@@ -148,11 +180,10 @@ export async function jobAction(repo: string, id: string, action: JobAction, not
   if (worktreeOf(repo, id) !== job.worktree) throw new Error('That job’s copy isn’t where Petal keeps it.');
   switch (action) {
     case 'approve': {
-      if (job.state === 'spec') { approveSpec(job); const next = settle(job); return { job: next.state === 'building' ? await startRunner(next) : next }; }
+      if (job.state === 'spec') { approveSpec(job); return { job: await ensureRunner(settle(job)) }; }
       if (job.state !== 'approve' && job.state !== 'escalated') throw new Error('Nothing here waits for approval.');
       writeHandoff(job, 'decision.md', 'VERDICT: PASS\n');
-      const next = settle(job);
-      return { job: next.state === 'reviewing' ? await startRunner(next) : next };
+      return { job: await ensureRunner(settle(job)) };
     }
     case 'reject':
     case 'guidance': {
@@ -160,21 +191,19 @@ export async function jobAction(repo: string, id: string, action: JobAction, not
       const text = oneLine(note);
       if (!text) throw new Error('Say what to change.');
       writeHandoff(job, 'decision.md', `VERDICT: FAIL · ${text}\n`);
-      const next = settle(job);
-      return { job: next.state === 'rework' ? await startRunner(next) : next };
+      return { job: await ensureRunner(settle(job)) };
     }
     case 'resume': {
       if (job.state !== 'stalled' || !job.stalledFrom) throw new Error('Only a stalled job can resume.');
       const moved = move(job, job.stalledFrom, Date.now(), 'Resumed');
       if (!moved.ok) throw new Error(moved.problem);
-      const next = settle(writeJob(moved.job));
-      return { job: ['building', 'rework', 'reviewing'].includes(next.state) ? await startRunner(next) : next };
+      return { job: await ensureRunner(settle(writeJob(moved.job))) };
     }
     case 'discard': return { job: discardJob(repo, id) };
     case 'undo-merge': return { job: undoMerge(repo, id) };
     case 'take-over': {
       ensureWorktree(job);
-      return { job, takeOver: job.worktree };
+      return { job: writeJob({ ...job, takenOver: true }), takeOver: job.worktree };
     }
   }
 }

@@ -147,5 +147,6 @@ describe('the skill Claude reads', () => {
     expect(skill).toContain('never write it');
     expect(skill).toContain('Never merge, push or touch the main checkout.');
     expect(skill).toContain('After 2 reworks');
+    expect(skill).toContain('Never start one yourself, and never create the copy.'); // Petal alone starts runners
   });
 });

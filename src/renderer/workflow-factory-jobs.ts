@@ -10,7 +10,7 @@ const ACTION_NAMES: Record<JobAction, string> = {
 };
 const NOTE_ACTIONS: readonly JobAction[] = ['reject', 'guidance'];
 const CONFIRM: Partial<Record<JobAction, string>> = {
-  discard: 'Discard this job? Its branch and its copy are deleted.',
+  discard: 'Discard this job? Its branch and copy are deleted, including changes you made there.',
   'undo-merge': 'Undo this merge? Petal adds a commit on main that reverses it.',
 };
 const EMPTY = 'No jobs yet. In any session, type /factory and what to build.';
@@ -27,7 +27,7 @@ const button = (className: string, text: string, onClick: () => void): HTMLButto
 };
 
 export function tokensText(n: number | null): string {
-  if (n === null) return '';
+  if (!n) return ''; // nothing spent yet, or the Claude folder is off: no line
   if (n < 1000) return `${n} tokens`;
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k tokens`;
   return `${(n / 1_000_000).toFixed(1)}M tokens`;
@@ -118,10 +118,12 @@ function shipSwitch(root: HTMLElement, state: State, repo: RepoJobs): HTMLElemen
 function firstRun(root: HTMLElement, state: State, repo: RepoJobs): HTMLElement {
   const card = el('section', 'wf-card fj-first');
   card.setAttribute('aria-label', `Factory in ${repo.name}`);
-  const shipping = repo.ship.mode === 'pr' ? 'The branch is pushed and stops at a pull request. Main is never touched.' : 'Nothing is pushed. A finished job merges into main on this computer.';
+  const shipping = repo.ship.mode === 'pr'
+    ? 'Low-risk jobs push their branch for a pull request by themselves. Main is never touched.'
+    : 'Low-risk jobs merge into main on this computer by themselves, and you can undo them. Nothing is pushed.';
   card.append(
     el('h4', 'wf-card-title', `How jobs run in ${repo.name}`),
-    el('p', 'fj-first-text', `Jobs run on their own branch in a separate copy. ${shipping} You approve risky changes.`),
+    el('p', 'fj-first-text', `Jobs run on their own branch in a separate copy. ${shipping} You approve anything touching auth, payments, CI, migrations, email or new packages.`),
     button('cz-quiet-button fj-first-ok', 'Got it', async () => {
       const result = await window.pastel.factory.seen(repo.repo);
       if (isIpcError(result)) state.note = { text: result.error, error: true };
@@ -142,11 +144,12 @@ function list(root: HTMLElement, state: State, jobs: readonly JobView[], label: 
 function row(root: HTMLElement, state: State, job: JobView): HTMLLIElement {
   const li = el('li', `fj-job fj-job-${job.state}${job.waitReason ? ' fj-job-waiting' : ''}`);
   li.dataset.job = job.id;
+  li.tabIndex = -1; // a Waiting row lands here, never on a button that merges
   const head = el('div', 'fj-job-head');
   head.append(el('span', 'fj-job-title', job.title), el('span', `fj-state fj-state-${isWaiting(job.state) || job.waitReason ? 'waiting' : job.state}`, job.label));
   li.append(head);
   if (job.waitReason && job.waitReason !== job.label) li.append(el('p', 'fj-reason', job.waitReason));
-  const meta = [job.rework ? `Rework ${job.rework}/${job.reworkCap}` : '', tokensText(job.tokens), agoText(job.since)].filter(Boolean);
+  const meta = [job.rework && job.state !== 'escalated' ? `Rework ${job.rework}/${job.reworkCap}` : '', tokensText(job.tokens), agoText(job.since)].filter(Boolean);
   li.append(el('p', 'fj-meta', meta.join(' · ')));
   if (job.verdicts.length) {
     const verdicts = el('ul', 'fj-verdicts');
@@ -162,11 +165,25 @@ function row(root: HTMLElement, state: State, job: JobView): HTMLLIElement {
     link.rel = 'noreferrer';
     li.append(link);
   }
+  // What she is approving, on the row: the spec, and at Approve the files the branch changed.
+  if (job.spec) {
+    const spec = el('details', 'fj-spec');
+    spec.append(el('summary', 'fj-spec-summary', 'Read the spec'), el('pre', 'fj-spec-text', job.spec));
+    if (job.state === 'spec') spec.open = true;
+    li.append(spec);
+  }
+  if (job.changes?.length) {
+    const changes = el('details', 'fj-spec fj-changes');
+    const files = el('ul', 'fj-files');
+    for (const file of job.changes) files.append(el('li', '', file));
+    changes.append(el('summary', 'fj-spec-summary', `Changed files (${job.changes.length})`), files);
+    li.append(changes);
+  }
   const actions = actionsFor(job);
   if (actions.length) {
     const bar = el('div', 'fj-actions');
     for (const action of actions) {
-      const name = action === 'approve' && job.state === 'escalated' ? 'Review again' : ACTION_NAMES[action];
+      const name = buttonName(job, action);
       const b = button(`cz-quiet-button fj-act fj-act-${action}`, name, () => {
         if (NOTE_ACTIONS.includes(action) || CONFIRM[action]) { state.open = { jobId: job.id, action }; draw(root, state); return; }
         void act(root, state, job, action);
@@ -179,6 +196,15 @@ function row(root: HTMLElement, state: State, job: JobView): HTMLLIElement {
   }
   if (state.open?.jobId === job.id) li.append(openPanel(root, state, job, state.open.action));
   return li;
+}
+
+// The same action reads differently where it means something different.
+function buttonName(job: JobView, action: JobAction): string {
+  if (action === 'approve' && job.state === 'spec') return 'Build it';
+  if (action === 'approve' && job.state === 'escalated') return 'I fixed it · review again';
+  if (action === 'approve' && job.state === 'approve') return 'Approve merge';
+  if (action === 'take-over' && job.state === 'approve') return 'See the changes';
+  return ACTION_NAMES[action];
 }
 
 function openPanel(root: HTMLElement, state: State, job: JobView, action: JobAction): HTMLElement {
@@ -207,7 +233,7 @@ async function act(root: HTMLElement, state: State, job: JobView, action: JobAct
   if (isIpcError(result)) state.note = { text: result.error, error: true };
   else {
     state.open = null;
-    const after = job.state === 'stalled' ? 'Resume' : job.state === 'escalated' ? 'Review again' : null;
+    const after = job.state === 'stalled' ? 'Resume' : job.state === 'escalated' ? 'I fixed it · review again' : null;
     state.note = action === 'take-over' ? { text: `Opened ${job.title} in a new tab.${after ? ` When you’re done, press ${after}.` : ''}`, error: false } : null;
   }
   const fresh = await factoryJobs.refresh();

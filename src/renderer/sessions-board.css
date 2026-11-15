@@ -134,3 +134,6 @@
 .board-headless { margin: 28px 0 0; }
 .board-headless[hidden] { display: none; }
 .board-reason { font-size: 13px; font-weight: 600; color: var(--decide-ink); }
+
+/* A card with agents and factory jobs: the jobs badge sits right after the agents one, not mid-row. */
+.board-agents + .board-jobs { margin-left: 0; }

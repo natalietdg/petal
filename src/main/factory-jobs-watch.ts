@@ -87,7 +87,8 @@ export function stepJob(repo: string, id: string, all: readonly Job[], now: numb
     try {
       job = shipJob(repo, id, now).job;
     } catch (error) {
-      job = writeJob({ ...job, blocked: `Couldn’t ship: ${(error as Error).message.split('\n')[0]}`, updatedAt: now });
+      console.warn(`[petal] factory merge for ${job.id}:`, (error as Error).message); // the git line stays in the log
+      job = writeJob({ ...job, blocked: job.shipMode === 'pr' ? 'Couldn’t push the branch. Take over to see why.' : 'Couldn’t merge. Take over to see why.', updatedAt: now });
     }
   }
   const progressed = { ...job, progressAt: Math.max(job.progressAt, lastProgress(repo, id)) };

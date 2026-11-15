@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_RISKY, defaultFactory } from '../src/shared/factory';
 import {
-  JOB_STATES, STALL_MS, afterReview, canMove, defaultShipMode, firstLine, globToRegExp, isStalled, isVisualFile, mergeCheck,
+  needsRunner, JOB_STATES, STALL_MS, afterReview, canMove, defaultShipMode, firstLine, globToRegExp, isStalled, isVisualFile, mergeCheck,
   move, newJobId, resumeState, reviewersFor, riskyHits, startable, stateLabel, titleOf, type Job, type JobState,
 } from '../src/shared/factory-jobs';
 
@@ -40,7 +40,7 @@ describe('moves', () => {
 
   it('refuses moves the spine does not have', () => {
     expect(move(job(), 'reviewing', T0).ok).toBe(false);
-    expect(move(job({ state: 'building' }), 'merging', T0)).toEqual({ ok: false, problem: 'A job can’t go from building to merging.' });
+    expect(move(job({ state: 'building' }), 'merging', T0)).toEqual({ ok: false, problem: 'That job moved on. Look at its row again.' });
     expect(canMove(job({ state: 'done' }), 'discarded')).toBe(false);
     expect(canMove(job({ state: 'discarded' }), 'intake')).toBe(false);
     expect(canMove(job({ state: 'approve' }), 'done')).toBe(false); // approval always goes through Merge
@@ -205,6 +205,22 @@ describe('stalls, ship mode, ids and labels', () => {
     expect(stateLabel(job({ state: 'rework', rework: 1 }))).toBe('Rework 1/2');
     expect(stateLabel(job({ state: 'merging', blocked: 'Commit or stash in shop to merge' }))).toBe('Commit or stash in shop to merge');
     expect(stateLabel(job({ state: 'done' }))).toBe('Merged locally · not pushed');
-    expect(stateLabel(job({ state: 'stalled', stalledFrom: 'reviewing' }))).toBe('No progress for 10 min · Resume from reviewing');
+    expect(stateLabel(job({ state: 'stalled', stalledFrom: 'reviewing' }))).toBe('No progress for 10 min · Resume from Review');
+    expect(stateLabel(job({ state: 'queued' }), 2)).toBe('Queued · 2nd in line');
+    expect(stateLabel(job({ state: 'queued' }), 1)).toBe('Queued · next in line');
+    expect(stateLabel(job({ state: 'escalated', rework: 0 }))).toBe('Builder is stuck');
+    expect(stateLabel(job({ state: 'escalated', rework: 2 }))).toBe('Stuck after 2 tries');
+  });
+});
+
+describe('needsRunner', () => {
+  it('only after a move that needs a fresh runner, and only once', () => {
+    const at = (from: JobState, to: JobState, runnerAt?: number) => job({ state: to, events: [{ at: T0, from, to }], runnerAt });
+    expect(needsRunner(at('intake', 'building'))).toBe(true);
+    expect(needsRunner(at('intake', 'building', 1))).toBe(false);
+    expect(needsRunner(at('escalated', 'rework'))).toBe(true);
+    expect(needsRunner(at('reviewing', 'rework'))).toBe(false); // the runner already there loops on
+    expect(needsRunner(at('building', 'reviewing'))).toBe(false);
+    expect(needsRunner(job({ state: 'queued' }))).toBe(false);
   });
 });

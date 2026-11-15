@@ -86,8 +86,12 @@
 .fj-repo { display: flex; flex-direction: column; gap: 12px; }
 .fj-repo-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .fj-repo-name { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.fj-ship { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fj-ship { display: flex; flex-wrap: wrap; flex-basis: 100%; align-items: center; gap: 6px 10px; }
 .fj-ship-toggle { margin: 0; }
+.fj-ship-toggle button[aria-pressed="true"] { background: var(--code-bg); color: var(--reader-fg); }
+.fj-ship-toggle button:focus-visible { outline: 2px solid var(--next-ink); outline-offset: -2px; }
+.fj .cz-quiet-button:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.fj-first .cz-quiet-button { border-color: var(--next-ink); }
 .fj-ship-why { font-size: 12px; color: var(--muted); }
 .fj-first { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; background: var(--next-pill); border-color: transparent; }
 .fj-first-text { margin: 0; font-size: 14px; line-height: 1.45; }
@@ -95,8 +99,9 @@
 .fj-sub { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .fj-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
 .fj-job { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 14px; background: var(--reader-bg); min-width: 0; }
-.fj-job-waiting { border-color: var(--decide-ink); box-shadow: inset 3px 0 0 var(--decide-ink); }
-.fj-job-done, .fj-job-discarded { opacity: 0.85; }
+.fj-job-waiting { box-shadow: inset 3px 0 0 var(--decide-ink); }
+.fj-job:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; }
+.fj-job-done .fj-job-title, .fj-job-discarded .fj-job-title { color: var(--muted); }
 .fj-job-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
 .fj-job-title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .fj-state { flex-shrink: 0; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--why-wash); color: var(--reader-fg); }
@@ -108,6 +113,11 @@
 .fj-verdicts { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 13px; overflow-wrap: anywhere; }
 .fj-verdict-fail { color: var(--decide-ink); }
 .fj-pr { align-self: flex-start; font-size: 13px; color: var(--link); }
+.fj-spec { font-size: 13px; }
+.fj-spec-summary { cursor: pointer; font-weight: 600; }
+.fj-spec-summary:focus-visible { outline: 2px solid var(--next-ink); outline-offset: 2px; border-radius: 4px; }
+.fj-spec-text { max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--code-bg); font: 12px/1.45 var(--mono-font, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
+.fj-files { margin: 6px 0 0; padding-left: 18px; font-family: var(--mono-font, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; }
 .fj-actions { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 2px; }
 .fj-open { flex-direction: column; align-items: stretch; }
 .fj-open .fx-field { width: 100%; }

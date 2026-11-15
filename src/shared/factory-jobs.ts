@@ -68,6 +68,8 @@ export interface Job {
   childSessionIds: string[];
   blocked: string | null; // why Merge is waiting, in her words
   guidance: string | null;
+  takenOver?: boolean; // she opened its copy; "I fixed it" can send it back to review
+  runnerAt?: number; // events.length when Petal last started a runner, so each start happens once
   merge: MergeRecord | null;
   prUrl: string | null;
   events: JobEvent[];
@@ -84,7 +86,7 @@ export function canMove(job: Pick<Job, 'state' | 'stalledFrom'>, to: JobState): 
 
 // A new job, with the moment it moves; the caller writes it.
 export function move(job: Job, to: JobState, now: number, note?: string): Moved {
-  if (!canMove(job, to)) return { ok: false, problem: `A job can’t go from ${job.state} to ${to}.` };
+  if (!canMove(job, to)) return { ok: false, problem: 'That job moved on. Look at its row again.' };
   if (to === 'rework' && job.rework >= job.reworkCap && job.state !== 'escalated' && job.state !== 'approve') {
     return { ok: false, problem: `This job already had ${job.reworkCap} reworks; it goes to you instead.` };
   }
@@ -229,6 +231,19 @@ export function startable(jobs: readonly Job[], max = MAX_RUNNING_PER_REPO): Job
 export const hasFreeSlot = (jobs: readonly Job[], repo: string, max = MAX_RUNNING_PER_REPO): boolean =>
   jobs.filter((j) => j.repo === repo && isRunning(j.state)).length < max;
 
+// Moves that need a fresh runner: into Build from intake, the spec or the queue; into rework from her decision; back to
+// Review after she took over or after a stall. A runner's own moves (Build to Review, Review to rework) keep the same runner.
+const RUNNER_STARTS: readonly (readonly [JobState, JobState])[] = [
+  ['intake', 'building'], ['spec', 'building'], ['queued', 'building'],
+  ['approve', 'rework'], ['escalated', 'rework'], ['escalated', 'reviewing'],
+  ['stalled', 'building'], ['stalled', 'rework'], ['stalled', 'reviewing'],
+];
+export function needsRunner(job: Pick<Job, 'events' | 'runnerAt' | 'state'>): boolean {
+  const last = job.events.at(-1);
+  if (!last || last.to !== job.state || job.runnerAt === job.events.length) return false;
+  return RUNNER_STARTS.some(([from, to]) => last.from === from && last.to === to);
+}
+
 // Silent too long in a state where something should be writing files.
 export const isStalled = (job: Pick<Job, 'state' | 'progressAt'>, now: number): boolean => PROGRESSING.includes(job.state) && now - job.progressAt > STALL_MS;
 
@@ -259,19 +274,25 @@ export const titleOf = (ask: string): string => {
 };
 
 // The words on a job's row and card for each state.
-export function stateLabel(job: Pick<Job, 'state' | 'rework' | 'reworkCap' | 'stalledFrom' | 'shipMode' | 'blocked' | 'merge'>): string {
+// Stage names she sees, never raw state names.
+const STAGE_NAMES: Partial<Record<JobState, string>> = { intake: 'Intake', spec: 'Intake', building: 'Build', rework: 'Build', reviewing: 'Review', merging: 'Merge' };
+const ordinal = (n: number): string => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+// "Stuck after 2 tries" only once the tries ran out; a build that stopped itself is "Builder is stuck".
+const stuckWords = (job: Pick<Job, 'rework' | 'reworkCap'>): string => (job.rework >= job.reworkCap ? `Stuck after ${job.reworkCap} tries` : 'Builder is stuck');
+
+export function stateLabel(job: Pick<Job, 'state' | 'rework' | 'reworkCap' | 'stalledFrom' | 'shipMode' | 'blocked' | 'merge'>, queuePlace = 0): string {
   switch (job.state) {
-    case 'queued': return 'Queued';
+    case 'queued': return queuePlace > 1 ? `Queued · ${ordinal(queuePlace)} in line` : queuePlace === 1 ? 'Queued · next in line' : 'Queued';
     case 'intake': return 'Intake';
     case 'spec': return 'Spec ready for you';
     case 'building': return 'Building';
     case 'reviewing': return 'Reviewing';
     case 'rework': return `Rework ${job.rework}/${job.reworkCap}`;
-    case 'escalated': return `Stuck after ${job.reworkCap} tries`;
+    case 'escalated': return stuckWords(job);
     case 'approve': return 'Approve merge';
     case 'merging': return job.blocked ?? (job.shipMode === 'pr' ? 'Pushing branch' : 'Merging');
     case 'done': return job.shipMode === 'pr' ? 'Branch pushed · open a pull request' : job.merge?.undoneBy ? 'Merge undone' : 'Merged locally · not pushed';
-    case 'stalled': return `No progress for 10 min · Resume from ${job.stalledFrom ?? 'the last step'}`;
+    case 'stalled': return `No progress for 10 min · Resume from ${(job.stalledFrom && STAGE_NAMES[job.stalledFrom]) ?? 'the last step'}`;
     case 'discarded': return 'Discarded';
   }
 }
@@ -353,20 +374,20 @@ export function reconcile(job: Job, h: Handoffs, ctx: ReconcileContext): Step | 
 // ---- what the surfaces show
 
 // Why a job waits on her, as the Waiting lane row reads; null when it doesn't wait on her.
-export function waitReason(job: Pick<Job, 'state' | 'reworkCap' | 'riskyHits' | 'blocked' | 'events'>, handoffs: Handoffs): string | null {
+export function waitReason(job: Pick<Job, 'state' | 'rework' | 'reworkCap' | 'riskyHits' | 'blocked' | 'events'>, handoffs: Handoffs): string | null {
   switch (job.state) {
     case 'escalated': {
       const failed = Object.entries(handoffs).find(([n, f]) => REVIEW_FILE.test(n) && f?.kind === 'VERDICT' && f.value === 'FAIL');
       const last = job.events.at(-1)?.note;
       const detail = failed ? `${REVIEW_FILE.exec(failed[0])?.[1]}: ${failed[1]?.rest || 'asked for changes'}` : last && !last.startsWith('Stuck') ? last : null;
-      return `Stuck after ${job.reworkCap} tries${detail ? ` · ${detail}` : ''}`;
+      return `${stuckWords(job)}${detail ? ` · ${detail}` : ''}`;
     }
     case 'approve': {
       const hit = job.riskyHits[0];
       return hit ? `Approve merge · touches ${hit.label} (${hit.file})` : 'Approve merge';
     }
     case 'spec': return 'Check the spec before it builds';
-    case 'merging': return job.blocked;
+    case 'merging': return job.blocked && /^(Commit or stash|Switch) /.test(job.blocked) ? `${job.blocked} · Petal tries again on its own` : job.blocked;
     default: return null;
   }
 }
@@ -403,6 +424,9 @@ export interface JobView {
   parentSessionId: string | null;
   stalledFrom: JobState | null;
   updatedAt: number;
+  takenOver: boolean;
+  spec: string | null; // spec.md, for Read the spec
+  changes: string[] | null; // files the branch changed, for See the changes (at Approve)
 }
 
 export interface RepoJobs {
@@ -419,11 +443,11 @@ export type JobAction = 'approve' | 'reject' | 'guidance' | 'resume' | 'discard'
 export const JOB_ACTIONS: readonly JobAction[] = ['approve', 'reject', 'guidance', 'resume', 'discard', 'undo-merge', 'take-over'];
 
 // The buttons a job's row offers in its state.
-export function actionsFor(job: Pick<JobView, 'state' | 'shipMode' | 'merged' | 'undone'>): JobAction[] {
+export function actionsFor(job: Pick<JobView, 'state' | 'shipMode' | 'merged' | 'undone' | 'takenOver'>): JobAction[] {
   switch (job.state) {
     case 'spec': return ['approve', 'discard'];
-    case 'approve': return ['approve', 'reject', 'discard'];
-    case 'escalated': return ['guidance', 'take-over', 'approve', 'discard']; // approve: she fixed it by hand, review again
+    case 'approve': return ['take-over', 'approve', 'reject', 'discard'];
+    case 'escalated': return job.takenOver ? ['approve', 'guidance', 'take-over', 'discard'] : ['guidance', 'take-over', 'discard']; // approve: she fixed it by hand
     case 'stalled': return ['resume', 'take-over', 'discard'];
     case 'merging': return ['take-over', 'discard'];
     case 'done': return job.shipMode === 'local-merge' && job.merged && !job.undone ? ['undo-merge'] : [];

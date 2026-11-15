@@ -359,15 +359,15 @@ Each file's first line is what Petal reads. Write the first line exactly, then w
 1. Make the job folder and write \`request.md\`.
 2. Intake: restate the ask, list the acceptance checks, and ask every question at once (one AskUserQuestion). Unless the ask is small enough for three stations or fewer, call the \`token\` agent once to name the model for each role (builder, each reviewer) and write its picks under \`## Models\` in \`spec.md\`.
 3. Write \`spec.md\`. Its first line is \`STATUS: confirm\` if you asked questions, so the user checks the spec before building; otherwise \`STATUS: ready\`.
-4. Read \`state\`. \`building\`: start the job (below). \`queued\`: two jobs already run in this repo; say it waits for \`/factory next\`. \`spec\`: say \`/factory approve <job>\` starts it.
+4. Read \`state\`. \`building\`: Petal has started the job in its own copy; tell the user it is running and go back to what they were doing. \`queued\`: two jobs already run in this repo; Petal starts it when one finishes. \`spec\`: say \`/factory approve <job>\` starts it.
 
-**Starting a job.** In the repo, \`git worktree add -b factory/<job> ~/.petal/worktrees/<repoKey>/<job> <main branch>\` if that copy doesn't exist yet. Then start its runner in the background with Bash (run_in_background): \`cd ~/.petal/worktrees/<repoKey>/<job> && claude -p "Use the factory skill: /factory run <job>" --permission-mode acceptEdits\`. Tell the user the job is running and go back to what they were doing. Petal shows its progress and calls them when it needs them.
+**Runners.** Petal makes each job's copy and starts its runner (a headless Claude in that copy running \`/factory run <job>\`) whenever the job enters Build, a rework the user asked for, or a fresh review. Never start one yourself, and never create the copy. Petal shows progress and calls the user when a job needs them.
 
-**/factory next.** List the job folders, read each \`job.json\`, and start the oldest \`queued\` job. If its \`spec.md\` is missing, run Intake for it first, as for /factory <ask>.
+**/factory next.** Petal starts queued jobs on its own, oldest first, as slots free. List the job folders and say where each queued job stands. If the oldest has no \`spec.md\`, run Intake for it here, as for /factory <ask>.
 
-**/factory approve <job>.** At \`spec\`: change the first line of \`spec.md\` to \`STATUS: approved\`, then start the job. At \`approve\` or \`escalated\`: write \`decision.md\` with \`VERDICT: PASS\`. Petal merges from \`approve\`; from \`escalated\` (after the user took over) start the runner again so it reviews their work.
+**/factory approve <job>.** At \`spec\`: change the first line of \`spec.md\` to \`STATUS: approved\`. At \`approve\`: write \`decision.md\` with \`VERDICT: PASS\`, and Petal merges. At \`escalated\` (the user fixed it by hand): write \`decision.md\` with \`VERDICT: PASS\`, and Petal sends it back to review.
 
-**/factory rework <job> <note>.** Write \`decision.md\` with \`VERDICT: FAIL · <note>\` and start the runner again. The note reaches the builder as \`guidance\`.
+**/factory rework <job> <note>.** Write \`decision.md\` with \`VERDICT: FAIL · <note>\`. Petal restarts the builder, and the note reaches it as \`guidance\`.
 
 **/factory run <job>.** The job's runner, in its copy. Loop on \`state\`:
 - \`building\` or \`rework\`: write \`build.md\` with \`STATUS: working\`. Run the stations between Build and Review in \`stations\`, in order, then Build itself with a subagent briefed with \`spec.md\`, the \`guidance\` and any \`round-*/review-*.md\` from earlier rounds. Commit on \`factory/<job>\` and run the project's unit tests in this copy. Then set \`build.md\` to \`STATUS: done · <one line>\`, or \`STATUS: blocked · <why>\` if it can't be done.

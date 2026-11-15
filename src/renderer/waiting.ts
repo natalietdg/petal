@@ -83,7 +83,9 @@ export async function openNeed(need: Need): Promise<void> {
   if (need.kind === 'job') { // a factory job: its row in Factory › Jobs
     const customize = await import('./customize');
     await customize.open('factory');
-    document.querySelector<HTMLElement>(`#customize .fj-job[data-job="${CSS.escape(need.jobId ?? '')}"] .fj-act`)?.focus();
+    const row = document.querySelector<HTMLElement>(`#customize .fj-job[data-job="${CSS.escape(need.jobId ?? '')}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+    row?.focus(); // the row, not its first button: Enter must never approve a merge by accident
     return;
   }
   if (need.here && need.tabId && tabs.get(need.tabId)) {
@@ -120,7 +122,7 @@ function row(need: Need): HTMLLIElement {
   } else text.textContent = need.reason;
   const meta = el('p', 'waiting-meta');
   meta.append(sessionNameEl('span', 'waiting-session', need.title));
-  if (!need.here) meta.append(el('span', 'waiting-where', 'other window'));
+  if (!need.here && need.kind !== 'job') meta.append(el('span', 'waiting-where', 'other window')); // a job has no window
   const ago = sinceText(need.since);
   if (ago) meta.append(el('span', 'waiting-ago', ago));
   li.append(text, meta);
