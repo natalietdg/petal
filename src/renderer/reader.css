@@ -689,7 +689,7 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
 /* The one-time context line (context-notice.ts): a sentence, not a label, with its Got it on the same line. */
 .context-notice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; text-transform: none; letter-spacing: 0; color: var(--reader-fg); }
 .context-notice[hidden] { display: none; }
-.context-notice-close { padding: 0; border: none; background: none; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
+.context-notice-close { min-height: 24px; padding: 2px 6px; border: none; background: none; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
 .context-notice-close:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 
 /* Following a session Petal did not start (follow.ts): one quiet line under the header, and no reply box. */
@@ -698,6 +698,6 @@ li.callout { list-style-position: inside; margin-left: -1.4em; }
   padding-block: 8px;
   padding-inline: calc(var(--reading-pad-start) + max(0px, (100% - var(--reading-pad-start) - var(--reading-pad-end) - var(--reading-measure)) / 2)) var(--reading-pad-end); border-bottom: 1px solid var(--rule); background: var(--code-bg); color: var(--reader-fg); font: 13px/1.45 var(--ui-font); }
 .follow-banner[hidden] { display: none; }
-.follow-stop { padding: 0; border: none; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.follow-stop { min-height: 24px; padding: 2px 6px; border: none; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .follow-stop:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 body.following-outside #composer { display: none; }
