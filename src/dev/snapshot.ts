@@ -440,8 +440,8 @@ async function runFixture({ js, win, capture, log, pty, feed, themes, applyTheme
     ['clashes', () => clashesCheck(kit, { win, openTab: tabs.openTab })],
     ['customize', () => views.customizeScreens(kit)],
     ['customize styles', () => customizeStylesCheck(kit, win)],
-    ['factory', () => factoryCheck(kit, win)],
-    ['factory jobs', () => factoryJobsCheck(kit, { win, openTab: tabs.openTab })], // a fixture tab; closes it after
+    ['factory', keepingStores(['activity'], () => factoryCheck(kit, win), kit.outDir)], // its job buttons record activity; put back after
+    ['factory jobs', keepingStores(['activity'], () => factoryJobsCheck(kit, { win, openTab: tabs.openTab }), kit.outDir)], // a fixture tab; closes it after
     ['overlays', () => views.overlaysCheck(kit)],
     ['setup empty state', () => setupEmptyCheck(kit)],
     ['tarot', () => tarotCheck(kit, win)],
